@@ -1,0 +1,2 @@
+# jbot
+Jeopardy! daily bot
