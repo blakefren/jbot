@@ -1,0 +1,176 @@
+import sys
+
+
+class Question:
+    """
+    A class to represent a single Jeopardy! question and its associated data.
+    """
+
+    def __init__(
+        self,
+        question: str,
+        answer: str,
+        category: str,
+        clue_value: int,
+        data_source="unknown",
+        metadata={},
+    ):
+        """
+        Initializes a Question object.
+
+        Args:
+            question (str): The text of the Jeopardy! question (the clue).
+            answer (str): The correct answer to the question.
+            category (str): The category of the question (e.g., "WORLD HISTORY").
+            clue_value (int): The point value of the question (e.g., 200, 400).
+            data_source (str, optional): The source from which the question was obtained
+                                         (e.g., "j-archive.com", "custom_set"). Defaults to "unknown".
+            metadata (dict, optional): A dictionary for any additional, flexible metadata
+                                       related to the question (e.g., air_date, episode_number).
+                                       Defaults to an empty dictionary if None is provided.
+        """
+        if not isinstance(question, str) or not question:
+            raise ValueError("Question must be a non-empty string.")
+        if not isinstance(answer, str) or not answer:
+            raise ValueError("Answer must be a non-empty string.")
+        if not isinstance(category, str) or not category:
+            raise ValueError("Category must be a non-empty string.")
+        if not isinstance(clue_value, int) or clue_value < 0:
+            raise ValueError("Clue value must be a positive integer.")
+
+        self.question = question
+        self.answer = answer
+        self.category = category
+        self.clue_value = clue_value
+        self.data_source = data_source
+        self.metadata = metadata
+        # Hash the question and answer to create a unique ID
+        self.id = hash(f"{question.lower()} {answer.lower()}") + sys.maxsize + 1
+
+    def __str__(self):
+        """
+        Returns a human-readable string representation of the Question.
+        """
+        return (
+            f"ID: {self.id}\n"
+            f"Category: {self.category}\n"
+            f"Value: ${self.clue_value}\n"
+            f"Question: {self.question}\n"
+            f"Answer: {self.answer}\n"
+            f"Source: {self.data_source}"
+        )
+
+    def to_dict(self):
+        """
+        Converts the Question object to a dictionary.
+
+        Returns:
+            dict: A dictionary representation of the question.
+        """
+        return {
+            "id": self.id,
+            "question": self.question,
+            "answer": self.answer,
+            "category": self.category,
+            "clue_value": self.clue_value,
+            "data_source": self.data_source,
+            "metadata": self.metadata,
+        }
+    
+    def get_metadata(self, key: str, default=None):
+        """
+        Retrieves a specific metadata value by key.
+
+        Args:
+            key (str): The key to look for in the metadata.
+            default: The default value to return if the key is not found.
+
+        Returns:
+            The value associated with the key, or the default value if the key is not found.
+        """
+        return self.metadata.get(key, default)
+
+    @classmethod
+    def from_dict(cls, data):
+        """
+        Creates a Question object from a dictionary.
+
+        Args:
+            data (dict): A dictionary containing question data.
+
+        Returns:
+            Question: An instance of Question.
+        """
+        return cls(
+            question=data["question"],
+            answer=data["answer"],
+            category=data["category"],
+            clue_value=data["clue_value"],
+            data_source=data.get("data_source", "unknown"),
+            metadata=data.get("metadata", {}),
+        )
+
+
+# --- Example Usage ---
+if __name__ == "__main__":
+    # Create a Question instance
+    q1 = Question(
+        question="This ancient civilization built the Great Pyramid of Giza.",
+        answer="What is Egypt?",
+        category="WORLD HISTORY",
+        clue_value=200,
+        data_source="j-archive.com",
+        metadata={"air_date": "2023-01-15", "episode": 1234},
+    )
+
+    print("--- Question 1 Details ---")
+    print(q1)
+    print(f"Question Text: {q1.question}")
+    print(f"Answer Text: {q1.answer}")
+    print(f"Category: {q1.category}")
+    print(f"Clue Value: ${q1.clue_value}")
+    print(f"Data Source: {q1.data_source}")
+    print(f"Metadata: {q1.metadata}")
+    print(f"Metadata Episode: {q1.metadata.get('episode')}")
+
+    # Convert to dictionary
+    q1_dict = q1.to_dict()
+    print("\n--- Question 1 as Dictionary ---")
+    print(q1_dict)
+
+    # Create a Question instance from a dictionary
+    q2_data = {
+        "question": "The capital of France.",
+        "answer": "What is Paris?",
+        "category": "GEOGRAPHY",
+        "clue_value": 400,
+        "data_source": "custom_set",
+        "metadata": {"difficulty": "easy"},
+    }
+    q2 = Question.from_dict(q2_data)
+    print("\n--- Question 2 Details (from dict) ---")
+    print(q2)
+
+    # Test with minimal data (defaults)
+    q3 = Question(
+        question="A primary color.",
+        answer="What is red?",
+        category="COLORS",
+        clue_value=100,
+    )
+    print("\n--- Question 3 Details (minimal) ---")
+    print(q3)
+    print(f"Data Source: {q3.data_source}")
+    print(f"Metadata: {q3.metadata}")
+
+    # Test invalid input
+    print("\n--- Testing Invalid Input ---")
+    try:
+        Question(question="", answer="A", category="B", clue_value=100)
+    except ValueError as e:
+        print(f"Error creating question: {e}")
+
+    try:
+        Question(question="A", answer="B", category="C", clue_value=-50)
+    except ValueError as e:
+        print(f"Error creating question: {e}")

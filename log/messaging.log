@@ -1,0 +1,3 @@
+2025-07-28 18:34:13,684 - INFO - Message Event - Direction: to, Method: SMS, Recipient: +15551234567, Content: 'Jeopardy! Question: What is the capital of France?', Status: success
+2025-07-28 18:34:13,684 - INFO - Message Event - Direction: from, Method: Discord, Sender: discord_user_id_456, Content: '!guess Paris', Status: success
+2025-07-28 18:34:13,685 - INFO - Message Event - Direction: to, Method: Discord, Recipient: discord_channel_id_789, Content: 'Jeopardy! Answer: What is Paris?', Status: success

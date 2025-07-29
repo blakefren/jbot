@@ -1,3 +1,5 @@
+# TODO: refactor into a class.
+
 import csv
 import re
 

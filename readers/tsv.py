@@ -1,8 +1,23 @@
 import csv
 import random
 
+from readers.question import Question
 
-def read_jeopardy_questions(file_path: str):
+
+def parse_value(value: str) -> int:
+    """
+    Parses a string value to an integer, removing any dollar sign.
+
+    Args:
+        value (str): The string value to parse.
+
+    Returns:
+        int: The parsed integer value.
+    """
+    return int(value.replace("$", "").replace(",", "")) if value else 0
+
+
+def read_jeopardy_questions(file_path: str) -> list[Question]:
     """
     Reads a TSV file containing Jeopardy! questions and returns them as a list of dictionaries.
 
@@ -20,7 +35,21 @@ def read_jeopardy_questions(file_path: str):
             # DictReader is used to map the information in each row to a dictionary with the column headers as keys.
             reader = csv.DictReader(tsvfile, delimiter="\t")
             for row in reader:
-                questions.append(row)
+                metadata = {
+                    "round": row.get("round", "N/A"),
+                    "air_date": row.get("air_date", "N/A"),
+                    "daily_double": row.get("daily_double_value", 0),
+                }
+                questions.append(
+                    Question(
+                        question=row.get("answer", "N/A"),
+                        answer=row.get("question", "N/A"),
+                        category=row.get("category", "N/A"),
+                        clue_value=parse_value(row.get("clue_value", 0)),
+                        data_source="Jeopardy!",
+                        metadata=metadata,
+                    )
+                )
 
     except FileNotFoundError:
         print(f"Error: The file at {file_path} was not found.")
@@ -30,7 +59,7 @@ def read_jeopardy_questions(file_path: str):
     return questions
 
 
-def get_random_question(questions: list):
+def get_random_question(questions: list[Question]) -> Question:
     """
     Selects a random question from the list of questions.
 
@@ -43,3 +72,19 @@ def get_random_question(questions: list):
     if not questions:
         return None
     return random.choice(questions)
+
+
+if __name__ == "__main__":
+    # Example usage
+    import os
+    from cfg.main import ConfigReader
+
+    config = ConfigReader(
+        os.path.join(os.path.dirname(__file__), "..", "cfg", "main.cfg")
+    )
+    questions = read_jeopardy_questions(config.get("JEOPARDY_LOCAL_PATH"))
+    if questions:
+        random_question = get_random_question(questions)
+        print(random_question)
+    else:
+        print("No questions found.")

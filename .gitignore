@@ -1,3 +1,6 @@
+*.pyc
 *.cfg
 *.csv
 *.prompt
+/bot/__pycache__
+/readers/__pycache__

@@ -1,22 +1,52 @@
-import time
+import asyncio
 import discord
+import pytz
+import datetime
 
-from readers.tsv import get_random_question
-from readers.main import ConfigReader
-from discord.ext import commands
+from datetime import timedelta
+from readers.question import Question # Assuming this is your JeopardyQuestion class
+from readers.tsv import get_random_question # Assuming this function exists
+from cfg.main import ConfigReader
+from discord.ext import commands, tasks
+
+TIMEZONE = pytz.timezone("US/Pacific")
+MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
+EVENING_TIME = datetime.time(hour=20, minute=0, tzinfo=TIMEZONE)
+
+
+class Subscriber:
+    """
+    Represents a subscriber to the Jeopardy! bot, which can be a user or a channel.
+    """
+
+    def __init__(self, ctx):
+        self.id = ctx.channel.id if ctx.guild else ctx.author.id
+        self.display_name = ctx.author.display_name
+        self.is_channel = ctx.guild is not None
+        # Store the actual context object for direct sending if needed,
+        # but for scheduled tasks, ID and is_channel are usually sufficient.
+        self.ctx = ctx
+
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, other):
+        return isinstance(other, Subscriber) and self.id == other.id
+
 
 class DiscordBot(commands.Bot):
     """
     A Python library for sending and receiving Discord messages for a Jeopardy! bot.
     """
 
-    def __init__(self, bot_token=None, command_prefix="!"):
+    def __init__(self, bot_token=None, command_prefix="!", questions: list[Question] = None):
         """
         Initializes the DiscordBot with a Discord bot token and command prefix.
 
         Args:
             bot_token (str, optional): Your Discord Bot Token.
             command_prefix (str): The prefix for bot commands (e.g., !question).
+            questions (list[Question]): A list of JeopardyQuestion objects.
         """
         self.bot_token = bot_token
         if not self.bot_token:
@@ -35,21 +65,70 @@ class DiscordBot(commands.Bot):
         super().__init__(command_prefix=command_prefix, intents=intents)
 
         self.ready_event_fired = False  # Flag to ensure on_ready logic runs once
+        _ = self.get_next_question_time() # This call seems to be for initial check, might not be needed here
+        self.subscribed_contexts = set()  # Set to track subscribed contexts
+        self.questions = questions if questions is not None else [] # Store questions
+
         print("DiscordBot initialized successfully.")
+
+    def get_next_question_time(self):
+        """
+        Returns the next scheduled time for the daily question.
+
+        Returns:
+            datetime.time: The next time the daily question should be sent.
+        """
+        current_dt = datetime.datetime.now(TIMEZONE)
+
+        today_morning = current_dt.replace(
+            hour=MORNING_TIME.hour, minute=MORNING_TIME.minute, second=0, microsecond=0
+        )
+        today_evening = current_dt.replace(
+            hour=EVENING_TIME.hour, minute=EVENING_TIME.minute, second=0, microsecond=0
+        )
+        tomorrow_morning = (current_dt + timedelta(days=1)).replace(
+            hour=MORNING_TIME.hour, minute=MORNING_TIME.minute, second=0, microsecond=0
+        )
+
+        if today_morning > current_dt:
+            return today_morning
+        elif today_evening > current_dt:
+            return today_evening
+        elif tomorrow_morning > current_dt:
+            return tomorrow_morning
+        else:
+            # This case should ideally not be reached if times are well-defined
+            # and cover all 24 hours. Adding a fallback or more robust logic
+            # for edge cases might be beneficial.
+            raise ValueError("No valid runtime found for the current datetime.")
 
     async def setup_hook(self):
         # This is called after login but before connecting to Discord
         print("Setup hook called!")
-        self.bg_task = self.loop.create_task(self.on_ready())
+        # It's generally better to start tasks in on_ready, as the bot is fully ready there.
+        # If you need tasks to run immediately after setup, this is the place.
+        # For now, keeping task starting in on_ready for full bot readiness.
+        pass
 
     async def on_ready(self):
         """
         Event handler that runs when the bot successfully connects to Discord.
+        This is where scheduled tasks should be started.
         """
         if not self.ready_event_fired:
             print(f"Logged in as {self.user} (ID: {self.user.id})")
             print("------")
             self.ready_event_fired = True  # Set flag to prevent re-execution
+
+            # Start the scheduled tasks
+            if not self.morning_message.is_running():
+                self.morning_message.start()
+                print("Morning message task started.")
+            if not self.evening_message.is_running():
+                self.evening_message.start()
+                print("Evening message task started.")
+        else:
+            print("Bot reconnected.")
 
     async def on_message(self, message):
         """
@@ -111,7 +190,7 @@ class DiscordBot(commands.Bot):
             print(f"Error sending direct message to user {user_id}: {e}")
 
     async def send_jeopardy_question(
-        self, target_id, is_channel, category, value, question
+        self, target_id=None, is_channel=None, ctx=None, question: Question = None
     ):
         """
         Sends a Jeopardy! question to a specified Discord channel or user.
@@ -119,11 +198,27 @@ class DiscordBot(commands.Bot):
         Args:
             target_id (int): The ID of the channel or user.
             is_channel (bool): True if target_id is a channel ID, False if a user ID.
-            category (str): The category of the Jeopardy! question.
-            value (int or str): The point value of the question.
-            question (str): The Jeopardy! question text.
+            ctx (commands.Context, optional): The context object if sending via a command.
+            question (Question): The Jeopardy! question object.
         """
-        message_body = f"Jeopardy! Question:\nCategory: {category}\nValue: ${value}\nQuestion: {question}"
+        if question is None:
+            print("Error: No question provided to send_jeopardy_question.")
+            return
+
+        # Ensure metadata exists and has 'air_date'
+        air_date_info = question.metadata.get('air_date', 'N/A')
+
+        message_body = (
+            f"**--- Jeopardy Question! ---**\n"
+            f"Category: **{question.category}**\n"
+            f"Value: **${question.clue_value}**\n"
+            f"Air date: **{air_date_info}**\n"
+            f"Question: **{question.question}**\n"
+        )
+        if ctx:
+            await ctx.send(message_body)
+            return
+
         print(
             f"Attempting to send Jeopardy question to {'channel' if is_channel else 'user'} ID {target_id}..."
         )
@@ -133,26 +228,28 @@ class DiscordBot(commands.Bot):
             await self.send_message_to_user(target_id, message_body)
 
     async def send_jeopardy_answer(
-        self, target_id, is_channel, category, value, question, answer
+        self, target_id=None, is_channel=None, ctx=None, question: Question = None
     ):
         """
         Sends the answer to a Jeopardy! question to a specified Discord channel or user.
+        The answer is hidden as a spoiler.
 
         Args:
             target_id (int): The ID of the channel or user.
             is_channel (bool): True if target_id is a channel ID, False if a user ID.
-            category (str): The category of the Jeopardy! question.
-            value (int or str): The point value of the question.
-            question (str): The original Jeopardy! question text.
-            answer (str): The correct answer to the question.
+            ctx (commands.Context, optional): The context object if sending via a command.
+            question (Question): The Jeopardy! question object.
         """
-        message_body = (
-            f"Jeopardy! Answer Time!\n"
-            f"Category: {category}\n"
-            f"Value: ${value}\n"
-            f"Question: {question}\n"
-            f"Correct Answer: {answer}"
-        )
+        if question is None:
+            print("Error: No question provided to send_jeopardy_answer.")
+            return
+
+        message_body = f"Answer: ||**{question.answer}**||\n"
+
+        if ctx:
+            await ctx.send(message_body)
+            return
+
         print(
             f"Attempting to send Jeopardy answer to {'channel' if is_channel else 'user'} ID {target_id}..."
         )
@@ -161,86 +258,130 @@ class DiscordBot(commands.Bot):
         else:
             await self.send_message_to_user(target_id, message_body)
 
-    # Start the bot in a separate asynchronous function
-    async def main(self):
-        # Wait for the bot to be ready before sending messages
-        print("\n--- Waiting until ready ---")
-        await self.wait_until_ready()
-        print("\n--- Testing send_message_to_channel ---")
-        await self.send_message_to_user(
-            config.get("DISCORD_USER_ID"),
-            "This is a test message from the bot!",
-        )
+    @tasks.loop(time=MORNING_TIME)
+    async def morning_message(self):
+        if not self.questions:
+            print("No questions loaded for morning message. Skipping.")
+            return
 
-        print("\n--- Testing send_jeopardy_question to channel ---")
-        await self.send_jeopardy_question(
-            target_id=config.get("DISCORD_USER_ID"),
-            is_channel=True,
-            category="test category",
-            value="test value",
-            question="test question",
-        )
+        # Get a random question based on the current date.
+        # Ensure 'questions' is accessible, e.g., via self.questions
+        current_time = datetime.datetime.now(TIMEZONE)
+        # Using ordinal for index is fine, but ensure it doesn't go out of bounds
+        index = current_time.date().toordinal() % len(self.questions)
+        daily_q = self.questions[index]
 
-        print("\n--- Testing send_jeopardy_answer to user (DM) ---")
-        await self.send_jeopardy_answer(
-            target_id=config.get("DISCORD_USER_ID"),
-            is_channel=False,
-            category="test category",
-            value="test value",
-            question="test question",
-            answer="test answer",
-        )
-
-
-def test_discord_bot(config: ConfigReader, questions: list):
-    import asyncio
-
-    # Load configuration
-    async def run_discord_bot():
-        # Initialize the bot
-        bot = DiscordBot(config.get("DISCORD_BOT_TOKEN"))
-
-        @bot.command(name="shutdown")
-        async def shutdown(ctx):
-            if await bot.is_owner(
-                ctx.author
-            ):  # Ensure only the bot owner can shut down
-                print("Shutting down bot...")
-                await bot.close()
+        for sub in self.subscribed_contexts:
+            ctx = None
+            if sub.is_channel:
+                ctx = self.get_channel(sub.id)
             else:
-                await ctx.send("You do not have permission to shut down the bot.")
-
-        @bot.command(name="ping")
-        async def ping(self, ctx):
-            """Responds with 'Pong!' to test bot latency."""
-            await ctx.send("Pong!")
-
-        # You can add commands here if needed, or other event listeners
-        @bot.command(name="dailyquestion")
-        async def daily_question_command(ctx):
-            # This command could trigger sending the daily Jeopardy question
-            await ctx.send("Fetching today's Jeopardy question...")
-            # In a real scenario, you'd fetch a question and then send it
-            random_q = get_random_question(questions)
-            await bot.send_jeopardy_question(
-                config.get('DISCORD_USER_ID'),
-                False,
-                random_q['category'],
-                random_q['clue_value'],
-                random_q['answer']
-            )
-            time.sleep(10)
-            await bot.send_jeopardy_answer(
-                config.get('DISCORD_USER_ID'),
-                False,
-                random_q['category'],
-                random_q['clue_value'],
-                random_q['answer'],
-                random_q['question']
+                ctx = await self.fetch_user(sub.id)
+            if ctx:
+                await ctx.send(f"Good morning! Here's your daily Jeopardy question:")
+            self.send_jeopardy_question(
+                target_id=sub.id,
+                is_channel=sub.is_channel,
+                question=daily_q
             )
 
-        # Start the bot
-        await bot.start(bot.bot_token)
-        
+    @tasks.loop(time=EVENING_TIME)
+    async def evening_message(self):
+        if not self.questions:
+            print("No questions loaded for evening message. Skipping.")
+            return
+
+        # Get a random question based on the current date.
+        current_time = datetime.datetime.now(TIMEZONE)
+        index = current_time.date().toordinal() % len(self.questions)
+        daily_q = self.questions[index]
+
+        for sub in self.subscribed_contexts:
+            ctx = None
+            if sub.is_channel:
+                ctx = self.get_channel(sub.id)
+            else:
+                ctx = await self.fetch_user(sub.id)
+            if ctx:
+                await ctx.send(f"Good evening! Here's the answer to your daily Jeopardy question:")
+            self.send_jeopardy_question(
+                target_id=sub.id,
+                is_channel=sub.is_channel,
+                question=daily_q
+            )
+            self.send_jeopardy_answer(
+                target_id=sub.id,
+                is_channel=sub.is_channel,
+                question=daily_q
+            )
+
+
+# Load configuration
+async def run_discord_bot(config: ConfigReader, questions: list[Question]):
+    # Initialize the bot, passing the questions list
+    bot = DiscordBot(config.get("DISCORD_BOT_TOKEN"), questions=questions)
+
+    @bot.command(name="shutdown", aliases=["quit", "exit"])
+    async def shutdown(ctx):
+        if await bot.is_owner(
+            ctx.author
+        ):  # Ensure only the bot owner can shut down
+            print("Shutting down...")
+            await ctx.send("Shutting down...")
+            await bot.close()
+        else:
+            await ctx.send("You do not have permission to shut down the bot.")
+
+    @bot.command(name="ping")
+    async def ping(ctx):
+        """Responds with 'Pong!' to test bot latency."""
+        await ctx.send("Pong!")
+
+    @bot.command(name="question", aliases=["q", "query"])
+    async def question(ctx):
+        if not bot.questions:
+            await ctx.send("No questions loaded. Please ensure your question source is configured.")
+            return
+        random_q = get_random_question(bot.questions) # Use bot.questions
+        await bot.send_jeopardy_question(ctx=ctx, question=random_q)
+        await bot.send_jeopardy_answer(ctx=ctx, question=random_q)
+
+    @bot.command(name="when", aliases=["next", "howlong"])
+    async def when(ctx):
+        next_datetime = bot.get_next_question_time()
+        await ctx.send(
+            next_datetime.strftime("Next question time: %Y-%m-%d %H:%M:%S %Z")
+        )
+        await ctx.send(f"Next question will be sent in {next_datetime - datetime.datetime.now(TIMEZONE)}.")
+
+    @bot.command(name="subscribe", aliases=["sub"])
+    async def subscribe(ctx):
+        """Subscribes the context to daily question notifications."""
+        subscriber = Subscriber(ctx)
+        bot.subscribed_contexts.add(subscriber)
+        await ctx.send(
+            f"You have subscribed to daily questions, {subscriber.display_name}!\n"
+            f"There are {len(bot.questions)} questions available and {len(bot.subscribed_contexts)} players."
+        )
+
+    @bot.command(name="unsubscribe", aliases=["unsub"])
+    async def unsubscribe(ctx):
+        """Unsubscribes the context to daily question notifications."""
+        subscriber = Subscriber(ctx)
+        if subscriber in bot.subscribed_contexts:
+            bot.subscribed_contexts.remove(subscriber)
+            await ctx.send(
+                f"You have unsubscribed from daily questions, {subscriber.display_name}!\n"
+                f"There are {len(bot.subscribed_contexts)} players remaining."
+            )
+        else:
+            await ctx.send(f"You were not subscribed, {subscriber.display_name}.")
+
+    # Start the bot
+    # The tasks will be started within the on_ready event
+    await bot.start(bot.bot_token)
+
+
+def test_discord_bot(config: ConfigReader, questions: list[Question]):
     # Run the asynchronous function
-    asyncio.run(run_discord_bot())
+    asyncio.run(run_discord_bot(config, questions))

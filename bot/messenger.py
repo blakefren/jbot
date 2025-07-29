@@ -1,4 +1,4 @@
-from readers.main import ConfigReader
+from cfg.main import ConfigReader
 from twilio.rest import Client
 
 
@@ -102,5 +102,3 @@ class SMSBot(MessagingBot):
             print(f"Message sent successfully: {message.sid}")
         except Exception as e:
             print(f"Failed to send message: {e}")
-
-

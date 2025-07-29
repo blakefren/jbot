@@ -5,8 +5,8 @@ import asyncio
 
 from bot.messenger import SMSBot
 from bot.discord import test_discord_bot
-from readers.main import ConfigReader
-from readers.players import read_and_validate_contacts
+from cfg.main import ConfigReader
+from cfg.players import read_and_validate_contacts
 from readers.tsv import read_jeopardy_questions, get_random_question
 
 # MESSENGER = "sms"
@@ -41,12 +41,8 @@ if __name__ == "__main__":
     print("\n--- Random Question ---")
     random_q = get_random_question(all_questions)
     if random_q:
-        print(
-            f"  Category | Value: {random_q.get('category', 'N/A')} | {random_q.get('clue_value', 'N/A')}'"
-        )
-        print(f"  Answer: {random_q.get('answer', 'N/A')}")
-        print(f"  Question: {random_q.get('question', 'N/A')}")
-        print(f"  Air Date: {random_q.get('air_date', 'N/A')}")
+        print(random_q)
+        print()
     else:
         print("Could not retrieve a random question.")
 
