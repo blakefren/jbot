@@ -8,6 +8,7 @@ from readers.question import Question  # Assuming this is your JeopardyQuestion 
 from readers.tsv import get_random_question  # Assuming this function exists
 from cfg.main import ConfigReader
 from discord.ext import commands, tasks
+from log.logger import Logger
 
 TIMEZONE = ZoneInfo("US/Pacific")
 MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
@@ -68,7 +69,9 @@ class DiscordBot(commands.Bot):
 
         self.ready_event_fired = False  # Flag to ensure on_ready logic runs once
         self.subscribed_contexts = set()  # Set to track subscribed contexts
-        self.questions = questions if questions is not None else []  # Store questions
+        self.questions = questions
+        assert self.questions, "Questions must be provided to the DiscordBot."
+        self.logger = Logger()  # Initialize the logger here
 
         print("DiscordBot initialized successfully.")
 
@@ -93,9 +96,9 @@ class DiscordBot(commands.Bot):
             "`Wake up, players. The dawn has broken, and with it, a new challenge. Do not disappoint us.`",
             "`The morning bell has rung. It's time to play.`",
         ]
-        index = randint(0, len(prompts))
+        index = randint(0, len(prompts) - 1)
         return prompts[index]
-    
+
     def get_evening_message_flavor(self):
         """
         Returns a string representing the morning message flavor.
@@ -106,7 +109,7 @@ class DiscordBot(commands.Bot):
             "`All contests are concluded for the day. Return to your designated quarters. Further instructions await the morning.`",
             "`Night falls. The games cease. Sleep well, or don't.`",
         ]
-        index = randint(0, len(prompts))
+        index = randint(0, len(prompts) - 1)
         return prompts[index]
 
     async def setup_hook(self):
@@ -124,6 +127,13 @@ class DiscordBot(commands.Bot):
         """
         if not self.ready_event_fired:
             print(f"Logged in as {self.user} (ID: {self.user.id})")
+            self.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender=str(self.user.id),
+                content=f"Bot logged in as {self.user.name}",
+                status="success",
+            )
             print("------")
             self.ready_event_fired = True  # Set flag to prevent re-execution
 
@@ -136,6 +146,13 @@ class DiscordBot(commands.Bot):
                 print("Evening message task started.")
         else:
             print("Bot reconnected.")
+            self.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender=str(self.user.id),
+                content="Bot reconnected.",
+                status="success",
+            )
 
     async def on_message(self, message):
         """
@@ -152,13 +169,30 @@ class DiscordBot(commands.Bot):
         print(
             f"Received message from {message.author} in {'DM' if message.guild is None else message.guild.name}: {message.content}"
         )
+        self.logger.log_messaging_event(
+            direction="from",
+            method="Discord",
+            recipient_or_sender=str(message.author.id),
+            content=message.content,
+            status="received",
+        )
 
         # Process commands (if any)
         await self.process_commands(message)
 
         # Example: Respond to a specific message
         if "hello bot" in message.content.lower():
-            await message.channel.send(f"Hello, {message.author.display_name}!")
+            response_content = (
+                f"`Greetings, contestant. Your presence has been registered.`"
+            )
+            await message.channel.send(response_content)
+            self.logger.log_messaging_event(
+                direction="to",
+                method="Discord",
+                recipient_or_sender=str(message.channel.id),
+                content=response_content,
+                status="sent",
+            )
 
     async def send_message_to_channel(self, channel_id, message_body):
         """
@@ -173,10 +207,31 @@ class DiscordBot(commands.Bot):
             if channel:
                 await channel.send(message_body)
                 print(f"Message sent successfully to channel ID {channel_id}.")
+                self.logger.log_messaging_event(
+                    direction="to",
+                    method="Discord",
+                    recipient_or_sender=str(channel_id),
+                    content=message_body,
+                    status="sent",
+                )
             else:
                 print(f"Error: Channel with ID {channel_id} not found or inaccessible.")
+                self.logger.log_messaging_event(
+                    direction="to",
+                    method="Discord",
+                    recipient_or_sender=str(channel_id),
+                    content=message_body,
+                    status="failed - channel not found",
+                )
         except Exception as e:
             print(f"Error sending message to channel {channel_id}: {e}")
+            self.logger.log_messaging_event(
+                direction="to",
+                method="Discord",
+                recipient_or_sender=str(channel_id),
+                content=message_body,
+                status=f"failed - {e}",
+            )
 
     async def send_message_to_user(self, user_id, message_body):
         """
@@ -191,10 +246,31 @@ class DiscordBot(commands.Bot):
             if user:
                 await user.send(message_body)
                 print(f"Direct message sent successfully to user ID {user_id}.")
+                self.logger.log_messaging_event(
+                    direction="to",
+                    method="Discord",
+                    recipient_or_sender=str(user_id),
+                    content=message_body,
+                    status="sent",
+                )
             else:
                 print(f"Error: User with ID {user_id} not found.")
+                self.logger.log_messaging_event(
+                    direction="to",
+                    method="Discord",
+                    recipient_or_sender=str(user_id),
+                    content=message_body,
+                    status="failed - user not found",
+                )
         except Exception as e:
             print(f"Error sending direct message to user {user_id}: {e}")
+            self.logger.log_messaging_event(
+                direction="to",
+                method="Discord",
+                recipient_or_sender=str(user_id),
+                content=message_body,
+                status=f"failed - {e}",
+            )
 
     async def send_jeopardy_question(
         self, target_id=None, is_channel=None, ctx=None, question: Question = None
@@ -224,6 +300,13 @@ class DiscordBot(commands.Bot):
         )
         if ctx:
             await ctx.send(message_body)
+            self.logger.log_messaging_event(
+                direction="to",
+                method="Discord",
+                recipient_or_sender=str(ctx.channel.id),
+                content=message_body,
+                status="sent",
+            )
             return
 
         print(
@@ -255,6 +338,13 @@ class DiscordBot(commands.Bot):
 
         if ctx:
             await ctx.send(message_body)
+            self.logger.log_messaging_event(
+                direction="to",
+                method="Discord",
+                recipient_or_sender=str(ctx.channel.id),
+                content=message_body,
+                status="sent",
+            )
             return
 
         print(
@@ -286,9 +376,21 @@ class DiscordBot(commands.Bot):
             else:
                 ctx = await self.fetch_user(sub.id)
             if ctx:
-                await ctx.send(self.get_morning_message_flavor())
+                flavor_message = self.get_morning_message_flavor()
+                await ctx.send(flavor_message)
+                self.logger.log_messaging_event(
+                    direction="to",
+                    method="Discord",
+                    recipient_or_sender=str(sub.id),
+                    content=flavor_message,
+                    status="sent",
+                )
             await self.send_jeopardy_question(
                 target_id=sub.id, is_channel=sub.is_channel, question=daily_q
+            )
+            self.logger.log_daily_question(
+                question=daily_q,
+                sent_to_users=[str(sub.id)],
             )
 
     @tasks.loop(time=EVENING_TIME)
@@ -310,7 +412,15 @@ class DiscordBot(commands.Bot):
             else:
                 ctx = await self.fetch_user(sub.id)
             if ctx:
-                await ctx.send(self.get_evening_message_flavor())
+                flavor_message = self.get_evening_message_flavor()
+                await ctx.send(flavor_message)
+                self.logger.log_messaging_event(
+                    direction="to",
+                    method="Discord",
+                    recipient_or_sender=str(sub.id),
+                    content=flavor_message,
+                    status="sent",
+                )
             await self.send_jeopardy_question(
                 target_id=sub.id, is_channel=sub.is_channel, question=daily_q
             )
@@ -331,32 +441,56 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
             await ctx.send("Shutting down...")
             await bot.close()
         else:
-            await ctx.send("You do not have permission to shut down the bot.")
+            response_content = "You do not have permission to shut down the bot."
+            await ctx.send(response_content)
+            bot.logger.log_messaging_event(
+                direction="to",
+                method="Discord",
+                recipient_or_sender=str(ctx.channel.id),
+                content=response_content,
+                status="permission denied",
+            )
 
     @bot.command(name="ping")
     async def ping(ctx):
         """Responds with 'Pong!' to test bot latency."""
-        await ctx.send("Pong!")
+        response_content = "Pong!"
+        await ctx.send(response_content)
+        bot.logger.log_messaging_event(
+            direction="to",
+            method="Discord",
+            recipient_or_sender=str(ctx.channel.id),
+            content=response_content,
+            status="sent",
+        )
 
     @bot.command(name="question", aliases=["q", "query"])
     async def question(ctx):
-        if not bot.questions:
-            await ctx.send(
-                "No questions loaded. Please ensure your question source is configured."
-            )
-            return
-        random_q = get_random_question(bot.questions)  # Use bot.questions
+        bot.logger.log_messaging_event(
+            direction="from",
+            method="Discord",
+            recipient_or_sender=str(ctx.author.id),
+            content=ctx.message.content,
+            status="command received",
+        )
+        random_q = get_random_question(bot.questions)
         await bot.send_jeopardy_question(ctx=ctx, question=random_q)
         await bot.send_jeopardy_answer(ctx=ctx, question=random_q)
 
     @bot.command(name="when", aliases=["next", "howlong"])
     async def when(ctx):
         next_datetime = bot.get_next_question_time()
-        await ctx.send(
-            next_datetime.strftime("Next question time: %Y-%m-%d %H:%M:%S %Z")
-        )
-        await ctx.send(
+        reponse_content = (
+            f"Next question time: {next_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
             f"Next question will be sent in {next_datetime - datetime.datetime.now(TIMEZONE)}."
+        )
+        await ctx.send(reponse_content)
+        bot.logger.log_messaging_event(
+            direction="to",
+            method="Discord",
+            recipient_or_sender=str(ctx.channel.id),
+            content=response_content,
+            status="sent",
         )
 
     @bot.command(name="subscribe", aliases=["sub"])
@@ -364,9 +498,25 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
         """Subscribes the context to daily question notifications."""
         subscriber = Subscriber(ctx)
         bot.subscribed_contexts.add(subscriber)
-        await ctx.send(
+        response_content = (
             f"You have subscribed to daily questions, {subscriber.display_name}!\n"
-            f"There are {len(bot.questions)} questions available and {len(bot.subscribed_contexts)} players."
+            f"There are {len(bot.subscribed_contexts)} players subscribed."
+        )
+        await ctx.send(response_content)
+        bot.logger.log_messaging_event(
+            direction="to",
+            method="Discord",
+            recipient_or_sender=str(ctx.channel.id),
+            content=response_content,
+            status="subscribed",
+        )
+
+        bot.logger.log_messaging_event(
+            direction="bot",
+            method="Discord",
+            recipient_or_sender=str(subscriber.id),
+            content=f"User/Channel {subscriber.display_name} subscribed.",
+            status="user_action",
         )
 
     @bot.command(name="unsubscribe", aliases=["unsub"])
@@ -375,12 +525,38 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
         subscriber = Subscriber(ctx)
         if subscriber in bot.subscribed_contexts:
             bot.subscribed_contexts.remove(subscriber)
-            await ctx.send(
+            response_content = (
                 f"You have unsubscribed from daily questions, {subscriber.display_name}!\n"
                 f"There are {len(bot.subscribed_contexts)} players remaining."
             )
+            await ctx.send(response_content)
+            bot.logger.log_messaging_event(
+                direction="to",
+                method="Discord",
+                recipient_or_sender=str(ctx.channel.id),
+                content=response_content,
+                status="unsubscribed",
+            )
+            bot.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender=str(subscriber.id),
+                content=f"User/Channel {subscriber.display_name} unsubscribed.",
+                status="user_action",
+            )
         else:
-            await ctx.send(f"You were not subscribed, {subscriber.display_name}.")
+            response_content = (
+                f"You were not subscribed, {subscriber.display_name}.\n"
+                f"There are still {len(bot.subscribed_contexts)} players subscribed."
+            )
+            await ctx.send(response_content)
+            bot.logger.log_messaging_event(
+                direction="to",
+                method="Discord",
+                recipient_or_sender=str(ctx.channel.id),
+                content=response_content,
+                status="not subscribed",
+            )
 
     # Start the bot
     # The tasks will be started within the on_ready event
