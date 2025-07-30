@@ -3,13 +3,13 @@ import discord
 import pytz
 import datetime
 
-from datetime import timedelta
-from readers.question import Question # Assuming this is your JeopardyQuestion class
-from readers.tsv import get_random_question # Assuming this function exists
+from zoneinfo import ZoneInfo
+from readers.question import Question  # Assuming this is your JeopardyQuestion class
+from readers.tsv import get_random_question  # Assuming this function exists
 from cfg.main import ConfigReader
 from discord.ext import commands, tasks
 
-TIMEZONE = pytz.timezone("US/Pacific")
+TIMEZONE = ZoneInfo("US/Pacific")
 MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
 EVENING_TIME = datetime.time(hour=20, minute=0, tzinfo=TIMEZONE)
 
@@ -39,7 +39,9 @@ class DiscordBot(commands.Bot):
     A Python library for sending and receiving Discord messages for a Jeopardy! bot.
     """
 
-    def __init__(self, bot_token=None, command_prefix="!", questions: list[Question] = None):
+    def __init__(
+        self, bot_token=None, command_prefix="!", questions: list[Question] = None
+    ):
         """
         Initializes the DiscordBot with a Discord bot token and command prefix.
 
@@ -65,9 +67,8 @@ class DiscordBot(commands.Bot):
         super().__init__(command_prefix=command_prefix, intents=intents)
 
         self.ready_event_fired = False  # Flag to ensure on_ready logic runs once
-        _ = self.get_next_question_time() # This call seems to be for initial check, might not be needed here
         self.subscribed_contexts = set()  # Set to track subscribed contexts
-        self.questions = questions if questions is not None else [] # Store questions
+        self.questions = questions if questions is not None else []  # Store questions
 
         print("DiscordBot initialized successfully.")
 
@@ -76,31 +77,11 @@ class DiscordBot(commands.Bot):
         Returns the next scheduled time for the daily question.
 
         Returns:
-            datetime.time: The next time the daily question should be sent.
+            datetime.datetime: The next time the daily question should be sent.
         """
-        current_dt = datetime.datetime.now(TIMEZONE)
-
-        today_morning = current_dt.replace(
-            hour=MORNING_TIME.hour, minute=MORNING_TIME.minute, second=0, microsecond=0
+        return min(
+            self.morning_message.next_iteration, self.evening_message.next_iteration
         )
-        today_evening = current_dt.replace(
-            hour=EVENING_TIME.hour, minute=EVENING_TIME.minute, second=0, microsecond=0
-        )
-        tomorrow_morning = (current_dt + timedelta(days=1)).replace(
-            hour=MORNING_TIME.hour, minute=MORNING_TIME.minute, second=0, microsecond=0
-        )
-
-        if today_morning > current_dt:
-            return today_morning
-        elif today_evening > current_dt:
-            return today_evening
-        elif tomorrow_morning > current_dt:
-            return tomorrow_morning
-        else:
-            # This case should ideally not be reached if times are well-defined
-            # and cover all 24 hours. Adding a fallback or more robust logic
-            # for edge cases might be beneficial.
-            raise ValueError("No valid runtime found for the current datetime.")
 
     async def setup_hook(self):
         # This is called after login but before connecting to Discord
@@ -206,7 +187,7 @@ class DiscordBot(commands.Bot):
             return
 
         # Ensure metadata exists and has 'air_date'
-        air_date_info = question.metadata.get('air_date', 'N/A')
+        air_date_info = question.metadata.get("air_date", "N/A")
 
         message_body = (
             f"**--- Jeopardy Question! ---**\n"
@@ -260,6 +241,7 @@ class DiscordBot(commands.Bot):
 
     @tasks.loop(time=MORNING_TIME)
     async def morning_message(self):
+        print(f"Evening message task running at {datetime.datetime.now()}...")
         if not self.questions:
             print("No questions loaded for morning message. Skipping.")
             return
@@ -279,14 +261,13 @@ class DiscordBot(commands.Bot):
                 ctx = await self.fetch_user(sub.id)
             if ctx:
                 await ctx.send(f"Good morning! Here's your daily Jeopardy question:")
-            self.send_jeopardy_question(
-                target_id=sub.id,
-                is_channel=sub.is_channel,
-                question=daily_q
+            await self.send_jeopardy_question(
+                target_id=sub.id, is_channel=sub.is_channel, question=daily_q
             )
 
     @tasks.loop(time=EVENING_TIME)
     async def evening_message(self):
+        print(f"Evening message task running at {datetime.datetime.now()}...")
         if not self.questions:
             print("No questions loaded for evening message. Skipping.")
             return
@@ -303,16 +284,14 @@ class DiscordBot(commands.Bot):
             else:
                 ctx = await self.fetch_user(sub.id)
             if ctx:
-                await ctx.send(f"Good evening! Here's the answer to your daily Jeopardy question:")
-            self.send_jeopardy_question(
-                target_id=sub.id,
-                is_channel=sub.is_channel,
-                question=daily_q
+                await ctx.send(
+                    f"Good evening! Here's the answer to your daily Jeopardy question:"
+                )
+            await self.send_jeopardy_question(
+                target_id=sub.id, is_channel=sub.is_channel, question=daily_q
             )
-            self.send_jeopardy_answer(
-                target_id=sub.id,
-                is_channel=sub.is_channel,
-                question=daily_q
+            await self.send_jeopardy_answer(
+                target_id=sub.id, is_channel=sub.is_channel, question=daily_q
             )
 
 
@@ -323,9 +302,7 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
 
     @bot.command(name="shutdown", aliases=["quit", "exit"])
     async def shutdown(ctx):
-        if await bot.is_owner(
-            ctx.author
-        ):  # Ensure only the bot owner can shut down
+        if await bot.is_owner(ctx.author):  # Ensure only the bot owner can shut down
             print("Shutting down...")
             await ctx.send("Shutting down...")
             await bot.close()
@@ -340,9 +317,11 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
     @bot.command(name="question", aliases=["q", "query"])
     async def question(ctx):
         if not bot.questions:
-            await ctx.send("No questions loaded. Please ensure your question source is configured.")
+            await ctx.send(
+                "No questions loaded. Please ensure your question source is configured."
+            )
             return
-        random_q = get_random_question(bot.questions) # Use bot.questions
+        random_q = get_random_question(bot.questions)  # Use bot.questions
         await bot.send_jeopardy_question(ctx=ctx, question=random_q)
         await bot.send_jeopardy_answer(ctx=ctx, question=random_q)
 
@@ -352,7 +331,9 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
         await ctx.send(
             next_datetime.strftime("Next question time: %Y-%m-%d %H:%M:%S %Z")
         )
-        await ctx.send(f"Next question will be sent in {next_datetime - datetime.datetime.now(TIMEZONE)}.")
+        await ctx.send(
+            f"Next question will be sent in {next_datetime - datetime.datetime.now(TIMEZONE)}."
+        )
 
     @bot.command(name="subscribe", aliases=["sub"])
     async def subscribe(ctx):
