@@ -15,7 +15,8 @@ Rename and fill out the template files in `/cfg/`, then test with `run_once.py`.
 * [X] Config files
 * [X] Config file readers
 * [X] Run once test script
-* [ ] Question bot
+* [X] Question bot
+* [X] Daily question
 * [X] Discord bot setup
 * [X] Discord API
 * [ ] Messaging API
@@ -25,4 +26,4 @@ Rename and fill out the template files in `/cfg/`, then test with `run_once.py`.
 * [ ] Scoring
 * [ ] Cutthroat mode
 * [ ] Reminders
-* [ ] Solo mode
+* [ ] Solo/study mode

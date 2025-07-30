@@ -1,8 +1,8 @@
 import asyncio
 import discord
-import pytz
 import datetime
 
+from random import randint
 from zoneinfo import ZoneInfo
 from readers.question import Question  # Assuming this is your JeopardyQuestion class
 from readers.tsv import get_random_question  # Assuming this function exists
@@ -82,6 +82,32 @@ class DiscordBot(commands.Bot):
         return min(
             self.morning_message.next_iteration, self.evening_message.next_iteration
         )
+
+    def get_morning_message_flavor(self):
+        """
+        Returns a string representing the morning message flavor.
+        This can be customized based on your bot's theme or personality.
+        """
+        prompts = [
+            "`Attention, players. Today's game begins now. Good luck.`",
+            "`Wake up, players. The dawn has broken, and with it, a new challenge. Do not disappoint us.`",
+            "`The morning bell has rung. It's time to play.`",
+        ]
+        index = randint(0, len(prompts))
+        return prompts[index]
+    
+    def get_evening_message_flavor(self):
+        """
+        Returns a string representing the morning message flavor.
+        This can be customized based on your bot's theme or personality.
+        """
+        prompts = [
+            "`The day's trials are complete. You have survived another round. Rest, for tomorrow brings new games.`",
+            "`All contests are concluded for the day. Return to your designated quarters. Further instructions await the morning.`",
+            "`Night falls. The games cease. Sleep well, or don't.`",
+        ]
+        index = randint(0, len(prompts))
+        return prompts[index]
 
     async def setup_hook(self):
         # This is called after login but before connecting to Discord
@@ -260,7 +286,7 @@ class DiscordBot(commands.Bot):
             else:
                 ctx = await self.fetch_user(sub.id)
             if ctx:
-                await ctx.send(f"Good morning! Here's your daily Jeopardy question:")
+                await ctx.send(self.get_morning_message_flavor())
             await self.send_jeopardy_question(
                 target_id=sub.id, is_channel=sub.is_channel, question=daily_q
             )
@@ -284,9 +310,7 @@ class DiscordBot(commands.Bot):
             else:
                 ctx = await self.fetch_user(sub.id)
             if ctx:
-                await ctx.send(
-                    f"Good evening! Here's the answer to your daily Jeopardy question:"
-                )
+                await ctx.send(self.get_evening_message_flavor())
             await self.send_jeopardy_question(
                 target_id=sub.id, is_channel=sub.is_channel, question=daily_q
             )
