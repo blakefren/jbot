@@ -101,7 +101,7 @@ class DiscordBot(commands.Bot):
 
     def get_evening_message_flavor(self):
         """
-        Returns a string representing the morning message flavor.
+        Returns a string representing the evening message flavor.
         This can be customized based on your bot's theme or personality.
         """
         prompts = [
@@ -292,7 +292,7 @@ class DiscordBot(commands.Bot):
         air_date_info = question.metadata.get("air_date", "N/A")
 
         message_body = (
-            f"**--- Jeopardy Question! ---**\n"
+            f"**--- Jeopardy! Question ---**\n"
             f"Category: **{question.category}**\n"
             f"Value: **${question.clue_value}**\n"
             f"Air date: **{air_date_info}**\n"
@@ -355,19 +355,32 @@ class DiscordBot(commands.Bot):
         else:
             await self.send_message_to_user(target_id, message_body)
 
+    def select_question(self, questions) -> Question:
+        """
+        Selects a random question from the provided list of questions.
+
+        Args:
+            questions (list[Question]): A list of Jeopardy! question objects.
+
+        Returns:
+            Question: A randomly selected Jeopardy! question.
+        """
+        if not questions:
+            raise ValueError("No questions available to select from.")
+        # Get a random question based on the current date.
+        current_time = datetime.datetime.now(TIMEZONE)
+        index = current_time.date().toordinal() % len(self.questions)
+        return self.questions[index]
+
     @tasks.loop(time=MORNING_TIME)
     async def morning_message(self):
-        print(f"Evening message task running at {datetime.datetime.now()}...")
+        print(
+            f"Morning message task running at {datetime.datetime.now(tz=TIMEZONE)}..."
+        )
         if not self.questions:
             print("No questions loaded for morning message. Skipping.")
             return
-
-        # Get a random question based on the current date.
-        # Ensure 'questions' is accessible, e.g., via self.questions
-        current_time = datetime.datetime.now(TIMEZONE)
-        # Using ordinal for index is fine, but ensure it doesn't go out of bounds
-        index = current_time.date().toordinal() % len(self.questions)
-        daily_q = self.questions[index]
+        daily_q = self.select_question(self.questions)
 
         for sub in self.subscribed_contexts:
             ctx = None
@@ -395,15 +408,13 @@ class DiscordBot(commands.Bot):
 
     @tasks.loop(time=EVENING_TIME)
     async def evening_message(self):
-        print(f"Evening message task running at {datetime.datetime.now()}...")
+        print(
+            f"Evening message task running at {datetime.datetime.now(tz=TIMEZONE)}..."
+        )
         if not self.questions:
             print("No questions loaded for evening message. Skipping.")
             return
-
-        # Get a random question based on the current date.
-        current_time = datetime.datetime.now(TIMEZONE)
-        index = current_time.date().toordinal() % len(self.questions)
-        daily_q = self.questions[index]
+        daily_q = self.select_question(self.questions)
 
         for sub in self.subscribed_contexts:
             ctx = None
@@ -436,10 +447,56 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
 
     @bot.command(name="shutdown", aliases=["quit", "exit"])
     async def shutdown(ctx):
-        if await bot.is_owner(ctx.author):  # Ensure only the bot owner can shut down
+        if await bot.is_owner(ctx.author):
             print("Shutting down...")
-            await ctx.send("Shutting down...")
-            await bot.close()
+            # Log initiation first
+            bot.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender=str(ctx.author.id),
+                content="Bot shutdown initiated by owner.",
+                status="initiated",
+            )
+            # Send message and ensure it's sent before proceeding
+            try:
+                await ctx.send("Shutting down...")
+            except Exception as e:
+                print(f"Failed to send shutdown message: {e}")
+                # Log the failure to send the message
+                bot.logger.log_messaging_event(
+                    direction="bot",
+                    method="Discord",
+                    recipient_or_sender=str(ctx.author.id),
+                    content=f"Failed to send shutdown message: {e}",
+                    status="message_send_failed",
+                )
+            # Stop the tasks gracefully
+            # TODO: tasks are still running after this
+            if bot.morning_message.is_running():
+                bot.morning_message.stop()
+                print("Morning task stopped.")
+            if bot.evening_message.is_running():
+                bot.evening_message.stop()
+                print("Evening task stopped.")
+            # Finally, close the bot's connection to Discord
+            try:
+                await bot.close()  # TODO: this crashes
+                bot.logger.log_messaging_event(
+                    direction="bot",
+                    method="Discord",
+                    recipient_or_sender=str(ctx.author.id),
+                    content="Bot gracefully shut down.",
+                    status="completed",
+                )
+            except Exception as e:
+                print(f"Error during bot.close(): {e}")
+                bot.logger.log_messaging_event(
+                    direction="bot",
+                    method="Discord",
+                    recipient_or_sender=str(ctx.author.id),
+                    content=f"Error during bot.close(): {e}",
+                    status="bot_close_failed",
+                )
         else:
             response_content = "You do not have permission to shut down the bot."
             await ctx.send(response_content)
@@ -480,11 +537,11 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
     @bot.command(name="when", aliases=["next", "howlong"])
     async def when(ctx):
         next_datetime = bot.get_next_question_time()
-        reponse_content = (
-            f"Next question time: {next_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
-            f"Next question will be sent in {next_datetime - datetime.datetime.now(TIMEZONE)}."
+        response_content = (
+            f"`The next game is scheduled for {next_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}`\n"
+            f"`You have {next_datetime - datetime.datetime.now(TIMEZONE)} remaining to prepare.`"
         )
-        await ctx.send(reponse_content)
+        await ctx.send(response_content)
         bot.logger.log_messaging_event(
             direction="to",
             method="Discord",
@@ -499,8 +556,8 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
         subscriber = Subscriber(ctx)
         bot.subscribed_contexts.add(subscriber)
         response_content = (
-            f"You have subscribed to daily questions, {subscriber.display_name}!\n"
-            f"There are {len(bot.subscribed_contexts)} players subscribed."
+            f"`Player {subscriber.display_name}, you are now registered for daily games.`\n"
+            f"`{len(bot.subscribed_contexts)} players are now in play.`"
         )
         await ctx.send(response_content)
         bot.logger.log_messaging_event(
@@ -526,8 +583,8 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
         if subscriber in bot.subscribed_contexts:
             bot.subscribed_contexts.remove(subscriber)
             response_content = (
-                f"You have unsubscribed from daily questions, {subscriber.display_name}!\n"
-                f"There are {len(bot.subscribed_contexts)} players remaining."
+                f"`Player {subscriber.display_name}, you have been removed from the games.`\n"
+                f"`{len(bot.subscribed_contexts)} players remain.`"
             )
             await ctx.send(response_content)
             bot.logger.log_messaging_event(
@@ -546,8 +603,8 @@ async def run_discord_bot(config: ConfigReader, questions: list[Question]):
             )
         else:
             response_content = (
-                f"You were not subscribed, {subscriber.display_name}.\n"
-                f"There are still {len(bot.subscribed_contexts)} players subscribed."
+                f"`Player {subscriber.display_name}, you were not registered for the games.`\n"
+                f"`There are still {len(bot.subscribed_contexts)} players in play.`"
             )
             await ctx.send(response_content)
             bot.logger.log_messaging_event(

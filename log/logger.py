@@ -83,6 +83,7 @@ class Logger:
             content (str): The content of the message.
             status (str): The status of the message (e.g., 'success', 'failed').
         """
+        content = content.replace("\n", " ").strip()  # Clean up content for logging
         log_message = (
             f"Message Event - Direction: {direction}, Method: {method}, "
             f"{'Recipient' if direction == 'to' else 'Sender'}: {recipient_or_sender}, "
