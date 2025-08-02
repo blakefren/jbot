@@ -4,20 +4,16 @@ import discord
 import asyncio
 
 from bot.messenger import SMSBot
-from bot.discord import test_discord_bot
+from bot.discord import run_discord_bot
 from cfg.main import ConfigReader
 from cfg.players import read_and_validate_contacts
 from readers.tsv import read_jeopardy_questions, get_random_question
 
-# MESSENGER = "sms"
-MESSENGER = "discord"
-CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), 'cfg', 'main.cfg')
-PLAYER_FILE_PATH = os.path.join(os.path.dirname(__file__), 'cfg', 'players.csv')
+CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), "cfg", "main.cfg")
+PLAYER_FILE_PATH = os.path.join(os.path.dirname(__file__), "cfg", "players.csv")
 
 
-# --- Main execution block ---
-if __name__ == "__main__":
-
+def load_configs():
     ### Read config ###
     print(f"Reading configuration from {CONFIG_FILE_PATH}...")
     config = ConfigReader(CONFIG_FILE_PATH)
@@ -33,20 +29,27 @@ if __name__ == "__main__":
     else:
         print("\nNo valid contacts were loaded.")
 
+def read_questions() -> List[Questions]
     ### Read questions ###
     print("Reading Jeopardy! questions from the file...")
-    all_questions = read_jeopardy_questions(config.get("JEOPARDY_LOCAL_PATH"))
+    questions = read_jeopardy_questions(config.get("JEOPARDY_LOCAL_PATH"))
+    return questions
+
+
+# --- Main execution block ---
+if __name__ == "__main__":
+    # Setup
+    load_configs()
+    questions = read_questions()
 
     ### Print a single random question ###
     print("\n--- Random Question ---")
-    random_q = get_random_question(all_questions)
-    if random_q:
-        print(random_q)
-        print()
-    else:
-        print("Could not retrieve a random question.")
+    random_q = get_random_question(questions)
+    print(random_q)
 
-    if MESSENGER == "sms":
+    # Start game bot, depending on the messenger type.
+    messenger = config.get("MESSENGER")
+    if messenger == "sms":
         try:
             ### Messaging setup ###
             sms_bot = SMSBot(
@@ -58,7 +61,9 @@ if __name__ == "__main__":
             ### Test: send a question ###
             sms_bot.send_question(**random_q)
             time.sleep(10)  # Wait for 2 seconds before sending the answer
-            sms_bot.send_answer(to_phone_number=[c['discord_id'] for c in contacts], **random_q)
+            sms_bot.send_answer(
+                to_phone_number=[c["discord_id"] for c in contacts], **random_q
+            )
 
         except ValueError as e:
             print(f"\nConfiguration Error: {e}")
@@ -71,5 +76,5 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"\nAn unexpected error occurred during example usage: {e}")
 
-    elif MESSENGER == "discord":
-        test_discord_bot(config, all_questions)
+    elif messenger == "discord":
+        run_discord_bot(config, questions)

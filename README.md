@@ -25,11 +25,16 @@ SIMPLE = basic game mode with simple question-answer interaction.
     Players answer the daily question, get 1 point for a correct answer,
     and 0 for incorrect.
 
-SQUID_GAME = themed game mode with a specific set of rules.
+POKER = basic game mode, with betting.
+    Adds point betting to the simple mode.
+
+POWERUP = cutthroat game mode with a specific set of rules.
     Adds more complex scoring and broad power up mechanics to the simple
     mode.
 
-DARK_SOULS = a more complex game mode with additional challenges.
+VEGAS = combo of POKER and POWERUP.
+
+SOULSLIKE = a more complex game mode with additional challenges.
     Adds soulslike scoring, limited powers, and boss fights to the simple
     mode.
 
@@ -65,6 +70,6 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     * [X] Discord bot setup
     * [X] Discord API
 * [ ] Bugs
-    * [ ] Fix shutdown errors
+    * [ ] Fix Discord bot shutdown errors
 * [ ] Setup
     * [ ] Auto-generate config files on first run

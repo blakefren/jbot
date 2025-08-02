@@ -2,29 +2,28 @@ from enum import Enum
 from bot.subscriber import Subscriber
 from readers.question_selector import QuestionSelector
 
-
 class GameType(Enum):
     """
     Enum to represent different game modes.
     """
+    SIMPLE = "simple"  # TODO: split out from BaseGame, or combine?
+    POKER = 'poker'  # TODO
+    POWERUP = "powerup"  # TODO
+    VEGAS = "vegas"  # TODO
+    SOULSLIKE = "soulslike"  # TODO
+    JEOPARDY = "jeopardy"  # TODO
 
-    SIMPLE = "simple"
-    SQUID_GAME = "squid_game"
-    DARK_SOULS = "dark_souls"
-    JEOPARDY = "jeopardy"
-    RANDOM = "random"
 
-
-class BaseGame:
+class GameRunner:
     """
     Base class to represent the game logic.
     Manages the subscribed players and interacts with the question selector.
     """
 
-    def __init__(self, question_selector: QuestionSelector, mode: str = "default"):
+    def __init__(self, question_selector: QuestionSelector, mode: GameType):
         self.question_selector = question_selector
-        self.subscribed_contexts = set()
         self.mode = mode
+        self.subscribed_contexts = set()
 
     def add_subscriber(self, subscriber: Subscriber):
         self.subscribed_contexts.add(subscriber)
@@ -36,7 +35,7 @@ class BaseGame:
     def get_subscribed_users(self):
         return self.subscribed_contexts
 
-    def change_mode(self, new_mode: str):
+    def change_mode(self, new_mode: GameType):
         """
         Change the game mode.
 
