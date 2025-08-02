@@ -7,29 +7,30 @@ from bot.messenger import SMSBot
 from bot.discord import run_discord_bot
 from cfg.main import ConfigReader
 from cfg.players import read_and_validate_contacts
+from readers.question import Question
 from readers.tsv import read_jeopardy_questions, get_random_question
 
-CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), "cfg", "main.cfg")
-PLAYER_FILE_PATH = os.path.join(os.path.dirname(__file__), "cfg", "players.csv")
 
-
-def load_configs():
+def load_configs() -> ConfigReader:
     ### Read config ###
-    print(f"Reading configuration from {CONFIG_FILE_PATH}...")
-    config = ConfigReader(CONFIG_FILE_PATH)
+    print(f"Reading configuration...")
+    config = ConfigReader()
     if config:
         print("Configuration loaded successfully:")
+    return config
 
+def load_players() -> list[dict]:
     ### Read players ###
-    contacts = read_and_validate_contacts(PLAYER_FILE_PATH)
+    contacts = read_and_validate_contacts()
     if contacts:
         print("\n--- Valid Contacts Loaded ---")
         for contact in contacts:
             print(contact)
     else:
         print("\nNo valid contacts were loaded.")
+    return contacts
 
-def read_questions() -> List[Questions]
+def read_questions() -> list[Question]:
     ### Read questions ###
     print("Reading Jeopardy! questions from the file...")
     questions = read_jeopardy_questions(config.get("JEOPARDY_LOCAL_PATH"))
@@ -39,7 +40,8 @@ def read_questions() -> List[Questions]
 # --- Main execution block ---
 if __name__ == "__main__":
     # Setup
-    load_configs()
+    config = load_configs()
+    players = load_players()
     questions = read_questions()
 
     ### Print a single random question ###

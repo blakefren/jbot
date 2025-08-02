@@ -1,19 +1,21 @@
+import os
+
+CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), "main.cfg")
+
 class ConfigReader:
     """
     A class to read configuration files and retrieve settings.
     """
 
-    def __init__(self, file_path: str):
+    def __init__(self):
         """
         Reads a configuration file with 'key: value' format.
-
-        Args:
-            file_path (str): The path to the configuration file.
 
         Returns:
             dict: A dictionary of the configuration settings.
                 Returns an empty dictionary if the file is not found or an error occurs.
         """
+        file_path = CONFIG_FILE_PATH
         self.config = {}
         try:
             with open(file_path, "r", encoding="utf-8") as configfile:

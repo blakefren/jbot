@@ -1,20 +1,21 @@
 # TODO: refactor into a class.
 
 import csv
+import os
 import re
 
+PLAYER_FILE_PATH = os.path.join(os.path.dirname(__file__), "players.csv")
 
-def read_and_validate_contacts(csv_filepath: str):
+
+def read_and_validate_contacts():
     """
     Reads a CSV file containing phone numbers, first names, and last names,
     validates the data, and returns a list of valid contact dictionaries.
 
-    Args:
-        csv_filepath (str): The path to the CSV file.
-
     Returns:
         list: A list of dictionaries, where each dictionary represents a valid contact.
     """
+    csv_filepath = PLAYER_FILE_PATH
     valid_contacts = []
     # Regex for a common North American phone number format: +1XXXXXXXXXX
     phone_number_pattern = re.compile(r"^\+1[\d]{10}$")
