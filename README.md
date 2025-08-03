@@ -54,10 +54,13 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     * [X] Daily question
     * [X] log/logger.py
     * [X] main.py
-    * [ ] Add code review requirements
+    * [ ] Add presubmits
 * [ ] Interaction
-    * [ ] Score tracking
+    * [X] Ask for random question
+    * [X] Subscribe
+    * [X] Time to next event
     * [ ] Answering
+    * [ ] Score tracking
 * [ ] Modes
     * [ ] Simple
     * [ ] Poker
