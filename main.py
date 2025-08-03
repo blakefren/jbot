@@ -48,6 +48,7 @@ if __name__ == "__main__":
     print("\n--- Random Question ---")
     random_q = get_random_question(questions)
     print(random_q)
+    print()
 
     # Start game bot, depending on the messenger type.
     messenger = config.get("MESSENGER")
