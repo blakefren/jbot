@@ -120,7 +120,7 @@ class Logger:
         self.messaging_logger.info(log_message)
         print(f"[Messaging Logged] {log_message}")
 
-    def read_guess_history(self):
+    def read_guess_history(self) -> list[dict]:
         """
         Reads and parses the guess history log file.
 

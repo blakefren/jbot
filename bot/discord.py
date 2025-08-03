@@ -41,6 +41,7 @@ class DiscordBot(commands.Bot):
         self.ready_event_fired = False
         self.daily_q = None
 
+
     async def run(self):
         """Starts the Discord bot."""
         await self.start(self.bot_token)
@@ -73,10 +74,18 @@ class DiscordBot(commands.Bot):
         # Start the tasks
         if not self.morning_message_task.is_running():
             self.morning_message_task.start()
-            print("Morning message task started.")
+            print(f"Morning message task started. Next iteration: {self.morning_message_task.next_iteration}")
         if not self.evening_message_task.is_running():
             self.evening_message_task.start()
-            print("Evening message task started.")
+            print(f"Evening message task started. Next iteration: {self.evening_message_task.next_iteration}")
+        # Set daily question, if bot started after the morning message.
+        now = datetime.datetime.now(TIMEZONE)
+        if now.time() > MORNING_TIME and self.daily_q is None:
+            print("Bot started after morning message time. Setting daily question.")
+            self.daily_q = self.game.question_selector.get_question_for_today()
+            if not self.daily_q:
+                print("No question found for today.")
+
         # Sync commands.
         # TODO: commands don't appear in Discord?
         try:
@@ -360,19 +369,29 @@ def set_bot_commands(bot: DiscordBot):
     @bot.hybrid_command(name="when", aliases=["next", "howlong"])
     async def when(ctx: commands.Context):
         """Get the next event time. Shows the active question, if there is one."""
-        morning_task = bot.morning_message_task
-        evening_task = bot.evening_message_task
-
-        next_datetime = min(morning_task.next_iteration, evening_task.next_iteration)
+        morning_time_next = bot.morning_message_task.next_iteration
+        evening_time_next = bot.evening_message_task.next_iteration
+        next_datetime = min(morning_time_next, evening_time_next)
         time_until = next_datetime - datetime.datetime.now(TIMEZONE)
-        response_content = (
-            f"The next game is scheduled for {next_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}.\n"
-            f"You have {time_until} until the next challenge."
-        )
-        # Remind the daily question, if after the morning send time.
+        response_content = ''
+
+        # Next event is morning question.
+        if morning_time_next < evening_time_next:
+            response_content = (
+                f"The next question is scheduled for {next_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}.\n"
+                f"You have {time_until} until the next challenge."
+            )
+        # Next event is evening answer.
+        else:
+            response_content = (
+                f"Today's answer is scheduled for {next_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}.\n"
+                f"You have {time_until} remaining to play."
+            )
         await bot.send_message(response_content, ctx=ctx)
+        
+        # Remind the daily question, if after the morning send time.
         if bot.daily_q:
-            bot.send_message("Resending today's question:", ctx=ctx)
+            await bot.send_message("Resending today's question:", ctx=ctx)
             await bot.send_question(bot.daily_q, ctx=ctx)
 
     @bot.hybrid_command(name="answer", aliases=["a", "ans"])
@@ -452,6 +471,16 @@ def set_bot_commands(bot: DiscordBot):
             await bot.send_message(
                 response_content, ctx=ctx, success_status="not_subscribed"
             )
+
+    @bot.hybrid_command(name="history", aliases=["h"])
+    async def history(ctx: commands.Context):
+        """Get player guess history."""
+        history = bot.logger.read_guess_history()
+        # TODO: these stats aren't quite right; check question uniquness.
+        num_answered = len(history)
+        num_correct = len([True for a in history if a.get("Correct", False)])
+        response_content = f"Participant {ctx.author.display_name}, you've answered {num_correct} / {num_answered} daily questions correctly."
+        await bot.send_message(response_content, ctx=ctx, success_status="history")
 
 
 async def discord_bot_async(config: ConfigReader, questions: list[Question]):
