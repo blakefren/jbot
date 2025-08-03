@@ -91,7 +91,7 @@ class DiscordBot(commands.Bot):
                 print("No question found for today.")
 
         # Sync commands.
-        # TODO: commands don't appear in Discord?
+        # TODO: commands don't appear in Discord for DMs to bot
         try:
             print("on_ready: syncing commands start")
             await self.tree.sync()
