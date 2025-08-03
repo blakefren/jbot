@@ -1,25 +1,24 @@
-# TODO: log question history
-# TODO: log message history
-
 import logging
 import os
+import re
 
 from readers.question import Question
 
 CURRENT_DIR = os.path.dirname(__file__)
 HISTORY_FILE_PATH = os.path.join(CURRENT_DIR, "history.log")
 MESSAGING_FILE_PATH = os.path.join(CURRENT_DIR, "messaging.log")
+GUESSES_FILE_PATH = os.path.join(CURRENT_DIR, "guesses.log")
 
 
 class Logger:
     """
     A logging class for the Jeopardy! chatbot, designed to log events
-    to specific files based on their type (history or messaging).
+    to specific files based on their type (history, messaging, or guesses).
     """
 
     def __init__(self):
         """
-        Initializes the logger, setting up separate log files for history and messaging.
+        Initializes the logger, setting up separate log files.
         """
         os.makedirs(CURRENT_DIR, exist_ok=True)  # Ensure log directory exists
 
@@ -31,10 +30,9 @@ class Logger:
             "%(asctime)s - %(levelname)s - %(message)s"
         )
         history_handler.setFormatter(history_formatter)
-        # Prevent adding multiple handlers if the logger is re-initialized (e.g., in tests)
         if not self.history_logger.handlers:
             self.history_logger.addHandler(history_handler)
-        self.history_logger.propagate = False  # Prevent logs from going to root logger
+        self.history_logger.propagate = False
 
         # --- Setup Messaging Logger ---
         self.messaging_logger = logging.getLogger("messaging")
@@ -44,12 +42,22 @@ class Logger:
             "%(asctime)s - %(levelname)s - %(message)s"
         )
         messaging_handler.setFormatter(messaging_formatter)
-        # Prevent adding multiple handlers
         if not self.messaging_logger.handlers:
             self.messaging_logger.addHandler(messaging_handler)
-        self.messaging_logger.propagate = (
-            False  # Prevent logs from going to root logger
+        self.messaging_logger.propagate = False
+        
+        # --- Setup Guesses Logger ---
+        self.guesses_logger = logging.getLogger("guesses")
+        self.guesses_logger.setLevel(logging.INFO)
+        guesses_handler = logging.FileHandler(GUESSES_FILE_PATH)
+        # Use a structured, easily parsable format
+        guesses_formatter = logging.Formatter(
+            "%(asctime)s - %(message)s", datefmt='%Y-%m-%d %H:%M:%S'
         )
+        guesses_handler.setFormatter(guesses_formatter)
+        if not self.guesses_logger.handlers:
+            self.guesses_logger.addHandler(guesses_handler)
+        self.guesses_logger.propagate = False
 
         print(f"Logger initialized. Logs will be saved in '{CURRENT_DIR}'.")
 
@@ -70,6 +78,26 @@ class Logger:
         self.history_logger.info(log_message)
         print(f"[History Logged] {log_message}")
 
+    def log_player_guess(self, player_id: str, player_name: str, question_id: str, guess: str, is_correct: bool):
+        """
+        Logs a player's guess for a question in a structured format.
+
+        Args:
+            player_id (str): The unique identifier for the player.
+            player_name (str): The display name of the player.
+            question_id (str): The unique identifier for the question.
+            guess (str): The answer submitted by the player.
+            is_correct (bool): Whether the guess was correct.
+        """
+        # Clean the guess to avoid breaking the log format
+        cleaned_guess = guess.replace("'", "\\'").replace("\n", " ")
+        log_message = (
+            f"PlayerGuess - PlayerID: {player_id}, PlayerName: '{player_name}', "
+            f"QuestionID: {question_id}, Guess: '{cleaned_guess}', Correct: {is_correct}"
+        )
+        self.guesses_logger.info(log_message)
+        print(f"[Guess Logged] {log_message}")
+
     def log_messaging_event(
         self, direction, method, recipient_or_sender, content, status="success"
     ):
@@ -83,7 +111,7 @@ class Logger:
             content (str): The content of the message.
             status (str): The status of the message (e.g., 'success', 'failed').
         """
-        content = content.replace("\n", " ").strip()  # Clean up content for logging
+        content = content.replace("\n", " ").strip()
         log_message = (
             f"Message Event - Direction: {direction}, Method: {method}, "
             f"{'Recipient' if direction == 'to' else 'Sender'}: {recipient_or_sender}, "
@@ -92,46 +120,74 @@ class Logger:
         self.messaging_logger.info(log_message)
         print(f"[Messaging Logged] {log_message}")
 
+    def read_guess_history(self):
+        """
+        Reads and parses the guess history log file.
+
+        Returns:
+            list[dict]: A list of dictionaries, where each dictionary represents a guess.
+                        Returns an empty list if the file doesn't exist or an error occurs.
+        """
+        guess_history = []
+        if not os.path.exists(GUESSES_FILE_PATH):
+            print("Guess history file not found. Returning empty list.")
+            return guess_history
+
+        # Regex to parse the structured log entry
+        log_pattern = re.compile(
+            r"(?P<timestamp>[\d\- :]+) - PlayerGuess - PlayerID: (?P<PlayerID>\S+), PlayerName: '(?P<PlayerName>.*?)', "
+            r"QuestionID: (?P<QuestionID>\S+), Guess: '(?P<Guess>.*?)', Correct: (?P<Correct>\S+)"
+        )
+
+        try:
+            with open(GUESSES_FILE_PATH, "r") as f:
+                for line in f:
+                    match = log_pattern.match(line.strip())
+                    if match:
+                        guess_data = match.groupdict()
+                        # Convert boolean string to actual boolean
+                        guess_data['Correct'] = guess_data['Correct'] == 'True'
+                        guess_history.append(guess_data)
+        except Exception as e:
+            print(f"Error reading or parsing guess history: {e}")
+        
+        return guess_history
+
 
 # --- Example Usage ---
 if __name__ == "__main__":
-    # Create a logger instance
     logger = Logger()
-
-    # Log a daily question event
+    
     q = Question(
-        question="What is the capital of France?",
-        answer="Paris",
-        category="Geography",
-        clue_value=200,
+        id="jeopardy_1234",
+        question="This city is known as the 'Big Apple'.",
+        answer="New York City",
+        category="US CITIES",
+        clue_value=400,
         data_source="local",
-        metadata={"air_date": "2023-10-01"},
-    )
-    logger.log_daily_question(q, sent_to_users=["+15551234567", "discord_user_id_123"])
-
-    # Log an outgoing SMS message
-    logger.log_messaging_event(
-        direction="to",
-        method="SMS",
-        recipient_or_sender="+15551234567",
-        content="Jeopardy! Question: What is the capital of France?",
+        metadata={"air_date": "2023-10-27"},
     )
 
-    # Log an incoming Discord message (e.g., a guess)
-    logger.log_messaging_event(
-        direction="from",
-        method="Discord",
-        recipient_or_sender="discord_user_id_456",
-        content="!guess Paris",
+    # Log a correct guess
+    logger.log_player_guess(
+        player_id="discord_user_123",
+        player_name="PlayerOne",
+        question_id=q.id,
+        guess="New York City",
+        is_correct=True
     )
 
-    # Log an outgoing Discord message (e.g., the answer)
-    logger.log_messaging_event(
-        direction="to",
-        method="Discord",
-        recipient_or_sender="discord_channel_id_789",
-        content="Jeopardy! Answer: What is Paris?",
+    # Log an incorrect guess
+    logger.log_player_guess(
+        player_id="discord_user_456",
+        player_name="PlayerTwo",
+        question_id=q.id,
+        guess="Chicago",
+        is_correct=False
     )
 
-    # You can check the 'log' directory for 'history.log' and 'messaging.log' files.
-    print("\nCheck the 'log' directory for the generated log files.")
+    # Read the history
+    print("\n--- Reading Guess History ---")
+    history = logger.read_guess_history()
+    for entry in history:
+        print(entry)

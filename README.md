@@ -59,7 +59,7 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     * [X] Ask for random question
     * [X] Subscribe
     * [X] Time to next event
-    * [ ] Answering
+    * [X] Answering
     * [ ] Score tracking
 * [ ] Modes
     * [ ] Simple
