@@ -60,6 +60,7 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     * [X] Subscribe
     * [X] Time to next event
     * [X] Answering
+    * [X] Play reminders
     * [ ] Score tracking
 * [ ] Modes
     * [ ] Simple
@@ -68,7 +69,6 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     * [ ] Vegas
     * [ ] Soulslike
     * [ ] Jeopardy
-* [ ] Reminders
 * [ ] Messaging
     * [ ] SMS API
     * [ ] SMS platform integration

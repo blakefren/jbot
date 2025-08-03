@@ -18,6 +18,7 @@ from readers.tsv import get_random_question
 # TODO: read timezone from config
 TIMEZONE = ZoneInfo("US/Pacific")
 MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
+REMINDER_TIME = datetime.time(hour=19, minute=30, tzinfo=TIMEZONE)
 EVENING_TIME = datetime.time(hour=20, minute=0, tzinfo=TIMEZONE)
 
 
@@ -75,6 +76,9 @@ class DiscordBot(commands.Bot):
         if not self.morning_message_task.is_running():
             self.morning_message_task.start()
             print(f"Morning message task started. Next iteration: {self.morning_message_task.next_iteration}")
+        if not self.reminder_message_task.is_running():
+            self.reminder_message_task.start()
+            print(f"Reminder message task started. Next iteration: {self.reminder_message_task.next_iteration}")
         if not self.evening_message_task.is_running():
             self.evening_message_task.start()
             print(f"Evening message task started. Next iteration: {self.evening_message_task.next_iteration}")
@@ -115,6 +119,10 @@ class DiscordBot(commands.Bot):
     @tasks.loop(time=MORNING_TIME)
     async def morning_message_task(self):
         await self.send_morning_message()
+    
+    @tasks.loop(time=REMINDER_TIME)
+    async def reminder_message_task(self):
+        await self.send_reminder_message()
 
     @tasks.loop(time=EVENING_TIME)
     async def evening_message_task(self):
@@ -190,6 +198,36 @@ class DiscordBot(commands.Bot):
                 method="Discord",
                 recipient_or_sender="N/A",
                 content=f"Error in morning message task: {e}",
+                status="failed",
+            )
+
+    async def send_reminder_message(self):
+        """Sends a reminder to all subscribers."""
+        print(f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}...")
+        try:
+            if not self.daily_q:
+                print("No question found for today.")
+                return
+            sent_to_ids = []
+            response_content = "Reminder: your answers are due shortly. Today's question:"
+            for sub in self.game.get_subscribed_users():
+                await self.send_message(
+                    response_content, target_id=sub.id, is_channel=sub.is_channel
+                )
+                await self.send_question(
+                    self.daily_q, target_id=sub.id, is_channel=sub.is_channel
+                )
+                sent_to_ids.append(str(sub.id))
+            self.logger.log_daily_question(
+                question=self.daily_q, sent_to_users=sent_to_ids
+            )
+        except Exception as e:
+            print(f"An error occurred during the reminder message task: {e}")
+            self.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender="N/A",
+                content=f"Error in reminder message task: {e}",
                 status="failed",
             )
 
@@ -275,6 +313,9 @@ def set_bot_commands(bot: DiscordBot):
         if bot.morning_message_task.is_running():
             bot.morning_message_task.stop()
             print("Morning task stopped.")
+        if bot.reminder_message_task.is_running():
+            bot.reminder_message_task.stop()
+            print("Reminder task stopped.")
         if bot.evening_message_task.is_running():
             bot.evening_message_task.stop()
             print("Evening task stopped.")
@@ -388,7 +429,7 @@ def set_bot_commands(bot: DiscordBot):
                 f"You have {time_until} remaining to play."
             )
         await bot.send_message(response_content, ctx=ctx)
-        
+
         # Remind the daily question, if after the morning send time.
         if bot.daily_q:
             await bot.send_message("Resending today's question:", ctx=ctx)
