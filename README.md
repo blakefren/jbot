@@ -1,5 +1,5 @@
 # jbot
-A daily bot for trivia questions.
+A daily bot for group trivia questions and competition.
 
 ## Setup
 
@@ -18,7 +18,7 @@ question selection.
 
 ## Game modes
 
-In any mode, the daily question format is the sane, but the game logic
+In any mode, the daily question format is the same, but the game logic
 and interaction may vary.
 
 SIMPLE = basic game mode with simple question-answer interaction.
@@ -53,16 +53,18 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     * [X] Question bot
     * [X] Daily question
     * [X] log/logger.py
-    * [ ] main.py
+    * [X] main.py
     * [ ] Add code review requirements
 * [ ] Interaction
     * [ ] Score tracking
     * [ ] Answering
 * [ ] Modes
-    * [ ] Simplified
-    * [ ] Squid Game
-    * [ ] Dark Souls
-    * [ ] Solo/study
+    * [ ] Simple
+    * [ ] Poker
+    * [ ] Powerup
+    * [ ] Vegas
+    * [ ] Soulslike
+    * [ ] Jeopardy
 * [ ] Reminders
 * [ ] Messaging
     * [ ] SMS API
@@ -71,5 +73,6 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     * [X] Discord API
 * [ ] Bugs
     * [ ] Fix Discord bot shutdown errors
+    * [ ] Top class should be a game runner
 * [ ] Setup
-    * [ ] Auto-generate config files on first run
+    * [ ] Auto-generate config files on first run, from templates
