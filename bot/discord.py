@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import discord
 import re
+import sys
 
 from discord.ext import commands, tasks
 from zoneinfo import ZoneInfo
@@ -76,6 +77,14 @@ class DiscordBot(commands.Bot):
         if not self.evening_message_task.is_running():
             self.evening_message_task.start()
             print("Evening message task started.")
+        # Sync commands.
+        # TODO: commands don't appear in Discord?
+        try:
+            print("on_ready: syncing commands start")
+            await self.tree.sync()
+            print("on_ready: syncing commands finish")
+        except Exception as e:
+            print(e)
 
     async def on_message(self, message):
         """
@@ -229,84 +238,110 @@ class DiscordBot(commands.Bot):
 
 
 def set_bot_commands(bot: DiscordBot):
-    # TODO: change to hybrid_command (and add sync to on_ready)
-    # TODO: fill help command
 
-    @bot.command(name="shutdown", aliases=["quit", "exit"])
+    @bot.hybrid_command(name="shutdown", aliases=["quit", "exit"])
     async def shutdown(ctx: commands.Context):
-        if await bot.is_owner(ctx.author):
-            print("Shutting down...")
-            try:
-                await bot.send_message("Shutting down...", ctx=ctx)
-            except Exception as e:
-                print(f"Failed to send shutdown message: {e}")
-                bot.logger.log_messaging_event(
-                    direction="bot",
-                    method="Discord",
-                    recipient_or_sender=str(ctx.author.id),
-                    content=f"Failed to send shutdown message: {e}",
-                    status="message_send_failed",
-                )
-
-            # Stop the tasks gracefully
-            if bot.morning_message_task.is_running():
-                bot.morning_message_task.stop()
-                print("Morning task stopped.")
-            if bot.evening_message_task.is_running():
-                bot.evening_message_task.stop()
-                print("Evening task stopped.")
-
-            await asyncio.sleep(0.1)
-
-            if hasattr(bot.http, "session") and not bot.http.session.closed:
-                try:
-                    await bot.http.session.close()
-                    print("aiohttp session closed.")
-                    await asyncio.sleep(0.1)
-                except Exception as e:
-                    print(f"Error closing aiohttp session: {e}")
-                    bot.logger.log_messaging_event(
-                        direction="bot",
-                        method="Discord",
-                        recipient_or_sender="N/A",
-                        content=f"Error closing aiohttp session during shutdown: {e}",
-                        status="aiohttp_close_failed",
-                    )
-
-            try:
-                await bot.close()
-                print("Bot closed successfully.")
-                bot.logger.log_messaging_event(
-                    direction="bot",
-                    method="Discord",
-                    recipient_or_sender=str(ctx.author.id),
-                    content="Bot gracefully shut down.",
-                    status="completed",
-                )
-            except Exception as e:
-                print(f"Error during bot.close(): {e}")
-                bot.logger.log_messaging_event(
-                    direction="bot",
-                    method="Discord",
-                    recipient_or_sender=str(ctx.author.id),
-                    content=f"Error during bot.close(): {e}",
-                    status="bot_close_failed",
-                )
-
-        else:
+        """Shuts down the bot."""
+        if not await bot.is_owner(ctx.author):
             response_content = "You do not have permission to shut down the bot."
             await bot.send_message(
                 response_content, ctx=ctx, success_status="unauthorized"
             )
+            return
 
-    @bot.command(name="ping")
+        print("Shutting down...")
+        try:
+            await bot.send_message("Shutting down...", ctx=ctx)
+        except Exception as e:
+            print(f"Failed to send shutdown message: {e}")
+            bot.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender=str(ctx.author.id),
+                content=f"Failed to send shutdown message: {e}",
+                status="message_send_failed",
+            )
+
+        # Stop the tasks gracefully
+        if bot.morning_message_task.is_running():
+            bot.morning_message_task.stop()
+            print("Morning task stopped.")
+        if bot.evening_message_task.is_running():
+            bot.evening_message_task.stop()
+            print("Evening task stopped.")
+
+        await asyncio.sleep(0.1)
+
+        if hasattr(bot.http, "session") and not bot.http.session.closed:
+            try:
+                await bot.http.session.close()
+                print("aiohttp session closed.")
+                await asyncio.sleep(0.1)
+            except Exception as e:
+                print(f"Error closing aiohttp session: {e}")
+                bot.logger.log_messaging_event(
+                    direction="bot",
+                    method="Discord",
+                    recipient_or_sender="N/A",
+                    content=f"Error closing aiohttp session during shutdown: {e}",
+                    status="aiohttp_close_failed",
+                )
+
+        try:
+            await bot.close()
+            print("Bot closed successfully.")
+            bot.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender=str(ctx.author.id),
+                content="Bot gracefully shut down.",
+                status="completed",
+            )
+        except Exception as e:
+            print(f"Error during bot.close(): {e}")
+            bot.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender=str(ctx.author.id),
+                content=f"Error during bot.close(): {e}",
+                status="bot_close_failed",
+            )
+
+    # TODO: Fix restart command.
+    # https://stackoverflow.com/questions/63180082/discord-py-restart-command
+    @bot.command(name="restart")
+    async def restart(ctx):
+        """Restarts the bot."""
+        if not await bot.is_owner(ctx.author):
+            response_content = "You do not have permission to shut down the bot."
+            await bot.send_message(
+                response_content, ctx=ctx, success_status="unauthorized"
+            )
+            return
+
+        print("Restarting bot...")
+        try:
+            await bot.send_message("Restarting bot...", ctx=ctx)
+        except Exception as e:
+            print(f"Failed to send restart message: {e}")
+            bot.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender=str(ctx.author.id),
+                content=f"Failed to send restart message: {e}",
+                status="message_send_failed",
+            )
+        os.execv(sys.executable, ["python"] + sys.argv)
+
+    @bot.hybrid_command(name="ping")
     async def ping(ctx: commands.Context):
         """Responds with 'Pong!' to test bot latency."""
         response_content = "Pong!"
         await bot.send_message(response_content, ctx=ctx)
 
-    @bot.command(name="question", aliases=["q", "query"])
+    @bot.hybrid_command(name="question", aliases=["q", "query"])
     async def question(ctx: commands.Context):
+        """Get a random question and answer."""
         random_q = bot.game.question_selector.get_random_question()
         if not random_q:
             response_content = (
@@ -322,10 +357,9 @@ def set_bot_commands(bot: DiscordBot):
         await bot.send_question(random_q, ctx=ctx)
         await bot.send_answer(random_q, ctx=ctx)
 
-    @bot.command(name="when", aliases=["next", "howlong"])
+    @bot.hybrid_command(name="when", aliases=["next", "howlong"])
     async def when(ctx: commands.Context):
-        """Tells the user when the next question is scheduled."""
-        # Note: In this refactored design, `next_iteration` is on the task, not the bot.
+        """Get the next event time. Shows the active question, if there is one."""
         morning_task = bot.morning_message_task
         evening_task = bot.evening_message_task
 
@@ -341,7 +375,7 @@ def set_bot_commands(bot: DiscordBot):
             bot.send_message("Resending today's question:", ctx=ctx)
             await bot.send_question(bot.daily_q, ctx=ctx)
 
-    @bot.command(name="answer", aliases=["a", "ans"])
+    @bot.hybrid_command(name="answer", aliases=["a", "ans"])
     async def answer(ctx: commands.Context, *, guess: str, skip_confirmation=False):
         """Submits an answer for the current daily question."""
         if not bot.daily_q:
@@ -376,7 +410,7 @@ def set_bot_commands(bot: DiscordBot):
         await bot.send_message(response_content, ctx=ctx)
         await bot.send_answer(bot.daily_q, ctx=ctx)
 
-    @bot.command(name="subscribe", aliases=["sub"])
+    @bot.hybrid_command(name="subscribe", aliases=["sub"])
     async def subscribe(ctx: commands.Context):
         """Subscribes the context to daily question notifications."""
         subscriber = Subscriber(ctx)
@@ -397,7 +431,7 @@ def set_bot_commands(bot: DiscordBot):
                 response_content, ctx=ctx, success_status="subscribed"
             )
 
-    @bot.command(name="unsubscribe", aliases=["unsub"])
+    @bot.hybrid_command(name="unsubscribe", aliases=["unsub"])
     async def unsubscribe(ctx: commands.Context):
         """Unsubscribes the context from daily question notifications."""
         subscriber = Subscriber(ctx)
