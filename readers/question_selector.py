@@ -1,7 +1,8 @@
 import datetime
 
-from zoneinfo import ZoneInfo
+from random import randint
 from readers.question import Question  # Assuming this is your JeopardyQuestion class
+from zoneinfo import ZoneInfo
 
 # TODO: read timezone from config
 TIMEZONE = ZoneInfo("US/Pacific")
@@ -39,4 +40,5 @@ class QuestionSelector:
         """
         if not self.questions:
             return None
-        return self.questions[randint(0, len(self.questions) - 1)]
+        index = randint(0, len(self.questions) - 1)
+        return self.questions[index]
