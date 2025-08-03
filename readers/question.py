@@ -1,3 +1,4 @@
+import hashlib
 import sys
 
 
@@ -45,7 +46,7 @@ class Question:
         self.data_source = data_source
         self.metadata = metadata
         # Hash the question and answer to create a unique ID
-        self.id = hash(f"{question.lower()} {answer.lower()}") + sys.maxsize + 1
+        self.id = int(hashlib.md5(f"{question.lower()} {answer.lower()}".encode('utf-8')).hexdigest(), 16)
 
     def __str__(self):
         """

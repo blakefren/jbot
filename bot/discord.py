@@ -516,8 +516,7 @@ def set_bot_commands(bot: DiscordBot):
     @bot.hybrid_command(name="history", aliases=["h"])
     async def history(ctx: commands.Context):
         """Get player guess history."""
-        history = bot.logger.read_guess_history()
-        # TODO: these stats aren't quite right; check question uniquness.
+        history = bot.logger.read_guess_history(user_id=ctx.author.id)
         num_answered = len(history)
         num_correct = len([True for a in history if a.get("Correct", False)])
         response_content = f"Participant {ctx.author.display_name}, you've answered {num_correct} / {num_answered} daily questions correctly."

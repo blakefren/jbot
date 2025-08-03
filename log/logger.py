@@ -120,10 +120,13 @@ class Logger:
         self.messaging_logger.info(log_message)
         print(f"[Messaging Logged] {log_message}")
 
-    def read_guess_history(self) -> list[dict]:
+    def read_guess_history(self, user_id: int = -1) -> list[dict]:
         """
         Reads and parses the guess history log file.
 
+        Args:
+            user_id (optional): ID of a user to filter answers for. Otherwise, return full answer history.
+        
         Returns:
             list[dict]: A list of dictionaries, where each dictionary represents a guess.
                         Returns an empty list if the file doesn't exist or an error occurs.
@@ -151,8 +154,30 @@ class Logger:
         except Exception as e:
             print(f"Error reading or parsing guess history: {e}")
         
-        return guess_history
+        # Return full history if no user ID provided.
+        if user_id == -1:
+            return guess_history
 
+        # Otherwise, deduplicate answers + filter to user.
+        print('read_guess_history: deduping + filtering')  # TODO
+        unique_guesses = {}
+        for g in guess_history:
+            print(f'read_guess_history: {g}')  # TODO
+            if int(g.get('PlayerID', -1)) != user_id:
+                print('read_guess_history: wrong user_id')  # TODO
+                continue
+            q_id = g.get('QuestionID', -1)
+            if q_id not in unique_guesses:
+                print('read_guess_history: adding new question')  # TODO
+                unique_guesses[q_id] = g
+            else:
+                print('read_guess_history: updating existing question')  # TODO
+                guess_time_current = unique_guesses[q_id].get('timestamp', None)
+                guess_time_new = g.get('timestamp', None)
+                if guess_time_new > guess_time_current:
+                    unique_guesses[q_id] = g
+        print(f'read_guess_history: {unique_guesses}')  # TODO
+        return unique_guesses.values()
 
 # --- Example Usage ---
 if __name__ == "__main__":
