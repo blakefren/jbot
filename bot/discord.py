@@ -149,7 +149,6 @@ class DiscordBot(commands.Bot):
             if not daily_q:
                 print("No question found for today.")
                 return
-
             sent_to_ids = []
             # TODO: load flavor text from config
             flavor_message = "Attention, players. Today's game begins now. Good luck."
@@ -157,9 +156,8 @@ class DiscordBot(commands.Bot):
                 await self.send_message(
                     flavor_message, recipient_id=sub.id, is_channel=sub.is_channel
                 )
-                await self._send_question(sub.id, sub.is_channel, daily_q)
+                await self.send_question(daily_q, target_id=sub.id, is_channel=sub.is_channel)
                 sent_to_ids.append(str(sub.id))
-
             self.logger.log_daily_question(question=daily_q, sent_to_users=sent_to_ids)
         except Exception as e:
             print(f"An error occurred during the morning message task: {e}")
@@ -179,7 +177,6 @@ class DiscordBot(commands.Bot):
             if not daily_q:
                 print("No question found for today.")
                 return
-
             sent_to_ids = []
             # TODO: load flavor text from config
             flavor_message = "The day's trials are complete. You have survived another round. Rest, for tomorrow brings new games."
@@ -187,9 +184,9 @@ class DiscordBot(commands.Bot):
                 await self.send_message(
                     flavor_message, recipient_id=sub.id, is_channel=sub.is_channel
                 )
-                await self._send_answer(sub.id, sub.is_channel, daily_q)
+                await self.send_question(daily_q, target_id=sub.id, is_channel=sub.is_channel)
+                await self.send_answer(daily_q, target_id=sub.id, is_channel=sub.is_channel)
                 sent_to_ids.append(str(sub.id))
-
             self.logger.log_daily_question(question=daily_q, sent_to_users=sent_to_ids)
         except Exception as e:
             print(f"An error occurred during the evening message task: {e}")
@@ -202,7 +199,7 @@ class DiscordBot(commands.Bot):
             )
 
     # TODO: kwargs?
-    async def _send_question(
+    async def send_question(
         self, question: Question, ctx=None, target_id: int = -1, is_channel: bool = True
     ):
         """Internal helper method to format and send a trivia question."""
@@ -217,11 +214,11 @@ class DiscordBot(commands.Bot):
         )
 
     # TODO: kwargs?
-    async def _send_answer(
+    async def send_answer(
         self, question: Question, ctx=None, target_id: int = -1, is_channel: bool = True
     ):
         """Internal helper method to format and send a trivia answer."""
-        min_display_size = 10
+        min_display_size = 15
         pad_size = max(min_display_size - len(question.answer), 0) // 2
         padded_answer = question.answer.center(len(question.answer) + pad_size * 2, " ")
         message_body = f"Answer: ||**{padded_answer}**||\n"
@@ -239,7 +236,7 @@ def set_bot_commands(bot: DiscordBot):
         if await bot.is_owner(ctx.author):
             print("Shutting down...")
             try:
-                await bot.send_message("Shutting down", ctx=ctx)
+                await bot.send_message("Shutting down...", ctx=ctx)
             except Exception as e:
                 print(f"Failed to send shutdown message: {e}")
                 bot.logger.log_messaging_event(
@@ -321,8 +318,8 @@ def set_bot_commands(bot: DiscordBot):
 
         # TODO: is_channel is set to False during testing, when the bot is only
         # messaging a user. Make this settable at runtime.
-        await bot._send_question(random_q, ctx=ctx)
-        await bot._send_answer(random_q, ctx=ctx)
+        await bot.send_question(random_q, ctx=ctx)
+        await bot.send_answer(random_q, ctx=ctx)
 
     @bot.command(name="when", aliases=["next", "howlong"])
     async def when(ctx: commands.Context):
@@ -337,7 +334,13 @@ def set_bot_commands(bot: DiscordBot):
             f"The next game is scheduled for {next_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}.\n"
             f"You have {time_until} until the next challenge."
         )
+        # Remind the daily question, if after the morning send time.
         await bot.send_message(response_content, ctx=ctx)
+        if next_datetime == evening_task.next_iteration:
+            daily_q = bot.game.question_selector.get_question_for_today()
+            if daily_q:
+                bot.send_message("Resending today's question:", ctx=ctx)
+                await bot.send_question(daily_q, ctx=ctx)
 
     @bot.command(name="subscribe", aliases=["sub"])
     async def subscribe(ctx: commands.Context):
