@@ -120,6 +120,28 @@ class Logger:
         self.messaging_logger.info(log_message)
         print(f"[Messaging Logged] {log_message}")
 
+    def _deduplicate_guesses(self, guess_history: list[dict]) -> list[dict]:
+        """
+        Helper method to deduplicate a list of guess dictionaries, keeping only the most recent entry for each question.
+        
+        Args:
+            guess_history (list[dict]): A list of guess dictionaries.
+            
+        Returns:
+            list[dict]: A deduplicated list of guess dictionaries.
+        """
+        unique_guesses = {}
+        for g in guess_history:
+            q_id = g.get('QuestionID', -1)
+            if q_id not in unique_guesses:
+                unique_guesses[q_id] = g
+            else:
+                guess_time_current = unique_guesses[q_id].get('timestamp', None)
+                guess_time_new = g.get('timestamp', None)
+                if guess_time_new > guess_time_current:
+                    unique_guesses[q_id] = g
+        return list(unique_guesses.values())
+
     def read_guess_history(self, user_id: int = -1) -> list[dict]:
         """
         Reads and parses the guess history log file.
@@ -154,24 +176,71 @@ class Logger:
         except Exception as e:
             print(f"Error reading or parsing guess history: {e}")
         
-        # Return full history if no user ID provided.
+        # Return deduplicated history if no user ID provided.
+        guess_history = self._deduplicate_guesses(guess_history)
         if user_id == -1:
             return guess_history
+        else:
+            unique_guesses = [g for g in guess_history if int(g.get('PlayerID', -1)) == user_id]
+            return unique_guesses
+    
+    def get_guess_metrics(self, history: list[dict], all_questions: list[Question]):
+        """
+        Calculates and returns a dictionary of metrics based on guess history.
 
-        # Otherwise, deduplicate answers + filter to user.
-        unique_guesses = {}
-        for g in guess_history:
-            if int(g.get('PlayerID', -1)) != user_id:
-                continue
-            q_id = g.get('QuestionID', -1)
-            if q_id not in unique_guesses:
-                unique_guesses[q_id] = g
-            else:
-                guess_time_current = unique_guesses[q_id].get('timestamp', None)
-                guess_time_new = g.get('timestamp', None)
-                if guess_time_new > guess_time_current:
-                    unique_guesses[q_id] = g
-        return unique_guesses.values()
+        Args:
+            history (list[dict]): A list of guess dictionaries, typically from read_guess_history.
+            all_questions (list[Question]): A list of all available questions to get clue values.
+
+        Returns:
+            dict: A dictionary of metrics.
+        """
+        metrics = {
+            "total_guesses": len(history),
+            "unique_questions": len(set(g['QuestionID'] for g in history)),
+            "global_correct_rate": 0,
+            "global_score": 0,
+            "players": {},
+        }
+
+        # Map question IDs to their values for scoring
+        question_values = {q.id: q.clue_value for q in all_questions}
+
+        player_data = {}
+        for guess in history:
+            player_id = guess['PlayerID']
+            is_correct = guess['Correct']
+            question_id = guess['QuestionID']
+            clue_value = question_values.get(question_id, 0)
+
+            if player_id not in player_data:
+                player_data[player_id] = {
+                    "total_guesses": 0,
+                    "correct_guesses": 0,
+                    "score": 0,
+                    "player_name": guess['PlayerName']
+                }
+
+            player_data[player_id]["total_guesses"] += 1
+            if is_correct:
+                player_data[player_id]["correct_guesses"] += 1
+                player_data[player_id]["score"] += clue_value
+
+            if is_correct:
+                metrics["global_score"] += clue_value
+
+        # Calculate global rates
+        if metrics["total_guesses"] > 0:
+            total_correct = sum(p["correct_guesses"] for p in player_data.values())
+            metrics["global_correct_rate"] = (total_correct / metrics["total_guesses"])
+
+        # Calculate per-player rates
+        for player_id, data in player_data.items():
+            data["correct_rate"] = data["correct_guesses"] / data["total_guesses"] if data["total_guesses"] > 0 else 0
+            metrics["players"][player_id] = data
+            
+        return metrics
+
 
 # --- Example Usage ---
 if __name__ == "__main__":
