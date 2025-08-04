@@ -180,7 +180,7 @@ class DiscordBot(commands.Bot):
             sent_to_ids = []
             flavor_message = (
                 "Good morning players!\n"
-                f"You have until {bot.evening_message_task.next_iteration} to answer today's trivia question:"
+                f"You have until {self.evening_message_task.next_iteration} to answer today's trivia question:"
             )
             for sub in self.game.get_subscribed_users():
                 await self.send_message(
