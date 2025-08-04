@@ -178,8 +178,10 @@ class DiscordBot(commands.Bot):
                 print("No question found for today.")
                 return
             sent_to_ids = []
-            # TODO: load flavor text from config
-            flavor_message = "Attention, players. Today's game begins now. Good luck."
+            flavor_message = (
+                "Good morning players!\n"
+                f"You have until {bot.evening_message_task.next_iteration} to answer today's trivia question:"
+            )
             for sub in self.game.get_subscribed_users():
                 await self.send_message(
                     flavor_message, target_id=sub.id, is_channel=sub.is_channel
@@ -239,8 +241,10 @@ class DiscordBot(commands.Bot):
                 print("No question found for today.")
                 return
             sent_to_ids = []
-            # TODO: load flavor text from config
-            flavor_message = "The day's trials are complete. You have survived another round. Rest, for tomorrow brings new games."
+            flavor_message = (
+                "Good evening players!\n"
+                f"Here is the answer to today's trivia question:"
+            )
             for sub in self.game.get_subscribed_users():
                 await self.send_message(
                     flavor_message, target_id=sub.id, is_channel=sub.is_channel
