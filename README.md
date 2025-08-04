@@ -69,6 +69,10 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     * [ ] Vegas
     * [ ] Soulslike
     * [ ] Jeopardy
+* [ ] Questions
+    * [X] Jeopardy!
+    * [ ] Pop Culture Jeopardy!
+    * [ ] Riddles
 * [ ] Messaging
     * [ ] SMS API
     * [ ] SMS platform integration
@@ -77,5 +81,6 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
 * [ ] Bugs
     * [ ] Fix Discord bot shutdown errors
     * [ ] Top class should be a game runner
-* [ ] Setup
-    * [ ] Auto-generate config files on first run, from templates
+* [ ] v2
+    * [ ] setup.py
+    * [ ] Add flavor text by game mode
