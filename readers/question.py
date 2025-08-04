@@ -46,6 +46,7 @@ class Question:
         self.data_source = data_source
         self.metadata = metadata
         # Hash the question and answer to create a unique ID
+        # https://stackoverflow.com/questions/2511058/persistent-hashing-of-strings-in-python
         self.id = int(hashlib.md5(f"{question.lower()} {answer.lower()}".encode('utf-8')).hexdigest(), 16)
 
     def __str__(self):
