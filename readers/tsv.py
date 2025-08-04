@@ -41,6 +41,7 @@ def read_jeopardy_questions(file_path: str, final_jeopardy_score: int = 0) -> li
                     "daily_double": row.get("daily_double_value", 0),
                 }
                 # Give final jeopardy a real score.
+                clue_value = parse_value(row.get("clue_value", 0))
                 final_jeopardy = metadata.get('round', 0) == 2
                 clue_value_adj = final_jeopardy_score if final_jeopardy else clue_value
                 questions.append(
@@ -48,7 +49,7 @@ def read_jeopardy_questions(file_path: str, final_jeopardy_score: int = 0) -> li
                         question=row.get("answer", "N/A"),
                         answer=row.get("question", "N/A"),
                         category=row.get("category", "N/A"),
-                        clue_value=parse_value(row.get("clue_value", 0)),
+                        clue_value=clue_value,
                         data_source="Jeopardy!",
                         metadata=metadata,
                     )
