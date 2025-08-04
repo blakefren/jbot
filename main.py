@@ -33,7 +33,7 @@ def load_players() -> list[dict]:
 def read_questions() -> list[Question]:
     ### Read questions ###
     print("Reading Jeopardy! questions from the file...")
-    questions = read_jeopardy_questions(config.get("JEOPARDY_LOCAL_PATH"))
+    questions = read_jeopardy_questions(config.get("JEOPARDY_LOCAL_PATH"), config.get("FINAL_JEOPARDY_SCORE_SUB"))
     return questions
 
 

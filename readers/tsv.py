@@ -17,7 +17,7 @@ def parse_value(value: str) -> int:
     return int(value.replace("$", "").replace(",", "")) if value else 0
 
 
-def read_jeopardy_questions(file_path: str) -> list[Question]:
+def read_jeopardy_questions(file_path: str, final_jeopardy_score: int = 0) -> list[Question]:
     """
     Reads a TSV file containing Jeopardy! questions and returns them as a list of dictionaries.
 
@@ -40,6 +40,9 @@ def read_jeopardy_questions(file_path: str) -> list[Question]:
                     "air_date": row.get("air_date", "N/A"),
                     "daily_double": row.get("daily_double_value", 0),
                 }
+                # Give final jeopardy a real score.
+                final_jeopardy = metadata.get('round', 0) == 2
+                clue_value_adj = final_jeopardy_score if final_jeopardy else clue_value
                 questions.append(
                     Question(
                         question=row.get("answer", "N/A"),
