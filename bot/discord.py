@@ -517,15 +517,30 @@ def set_bot_commands(bot: DiscordBot):
                 response_content, ctx=ctx, success_status="not_subscribed"
             )
 
-    @bot.hybrid_command(name="history", aliases=["h"])
+    @bot.hybrid_command(name="history", aliases=["h", "metrics"])
     async def history(ctx: commands.Context):
         """Get player guess history."""
         history = bot.logger.read_guess_history(user_id=ctx.author.id)
-        num_answered = len(history)
-        num_correct = len([True for a in history if a.get("Correct", False)])
-        response_content = f"Participant {ctx.author.display_name}, you've answered {num_correct} / {num_answered} daily questions correctly."
+        metrics = bot.logger.get_guess_metrics(history, bot.game.question_selector.questions)
+        player_metrics = metrics['players'].get(str(ctx.author.id), None)
+        if player_metrics:
+            response_content = (
+                f"--{ctx.author.display_name}'s data--\n"
+                f"Player guesses:  {player_metrics.get('total_guesses')}\n"
+                f"Correct guesses: {player_metrics.get('correct_guesses')}\n"
+                f"Correct rate:    {player_metrics.get('correct_rate')}\n"
+                f"Total score:     {player_metrics.get('score')}"
+            )
+            await bot.send_message(response_content, ctx=ctx, success_status="history")
+        response_content = (
+            f"--Global data--\n"
+            f"Global guesses:   {metrics.get('total_guesses')}\n"
+            f"Unique questions: {metrics.get('unique_questions')}\n"
+            f"Correct rate:     {metrics.get('correct_rate')}\n"
+            f"Global score:     {metrics.get('global_score')}"
+        )
         await bot.send_message(response_content, ctx=ctx, success_status="history")
-
+    
 
 async def discord_bot_async(config: ConfigReader, questions: list[Question]):
     """Main function to initialize and run the bot."""
