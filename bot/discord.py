@@ -524,19 +524,22 @@ def set_bot_commands(bot: DiscordBot):
         metrics = bot.logger.get_guess_metrics(history, bot.game.question_selector.questions)
         player_metrics = metrics['players'].get(str(ctx.author.id), None)
         if player_metrics:
+            correct_rate = player_metrics.get('correct_rate', 0)
             response_content = (
                 f"--{ctx.author.display_name}'s data--\n"
                 f"Player guesses:  {player_metrics.get('total_guesses')}\n"
                 f"Correct guesses: {player_metrics.get('correct_guesses')}\n"
-                f"Correct rate:    {player_metrics.get('correct_rate')}\n"
+                f"Correct rate:    {correct_rate:.2f}\n"
                 f"Total score:     {player_metrics.get('score')}"
             )
             await bot.send_message(response_content, ctx=ctx, success_status="history")
+        
+        global_correct_rate = metrics.get('global_correct_rate', 0)
         response_content = (
             f"--Global data--\n"
             f"Global guesses:   {metrics.get('total_guesses')}\n"
             f"Unique questions: {metrics.get('unique_questions')}\n"
-            f"Correct rate:     {metrics.get('global_correct_rate')}\n"
+            f"Correct rate:     {global_correct_rate:.2f}\n"
             f"Global score:     {metrics.get('global_score')}"
         )
         await bot.send_message(response_content, ctx=ctx, success_status="history")
