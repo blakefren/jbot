@@ -99,9 +99,9 @@ class DiscordBot(commands.Bot):
         if not self.evening_message_task.is_running():
             self.evening_message_task.start()
             print(f"Evening message task started. Next iteration: {self.evening_message_task.next_iteration}")
-        # Set daily question, if bot started after the morning message.
+        # Set daily question, if bot started after the morning message but before the evening message.
         now = datetime.datetime.now(TIMEZONE)
-        if now.time() > MORNING_TIME and self.daily_q is None:
+        if MORNING_TIME < now.time() < EVENING_TIME and self.daily_q is None:
             print("Bot started after morning message time. Setting daily question.")
             self.daily_q = self.game.question_selector.get_question_for_today()
             if not self.daily_q:
