@@ -67,7 +67,7 @@ This project is being developed with the assistance of an AI programming partner
     * [X] Answering
     * [X] Play reminders
     * [X] Reboot bot from message
-    * [ ] Score tracking
+    * [X] Score tracking
     * [ ] Persistent subscriptions
 * [ ] Modes
     * [ ] Simple

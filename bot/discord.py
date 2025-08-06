@@ -570,6 +570,45 @@ def set_bot_commands(bot: DiscordBot):
             f"Global score:     {metrics.get('global_score')}"
         )
         await bot.send_message(response_content, ctx=ctx, success_status="history")
+
+
+    @bot.hybrid_command(name="scores", aliases=["leaderboard", "s", "score"])
+    async def scores(ctx: commands.Context):
+        """Get all player scores."""
+        history = bot.logger.read_guess_history()
+        metrics = bot.logger.get_guess_metrics(
+            history, bot.game.question_selector.questions
+        )
+        players_data = metrics.get("players", {})
+
+        if not players_data:
+            await bot.send_message("No player scores found.", ctx=ctx)
+            return
+
+        # Sort players by score
+        sorted_players = sorted(
+            players_data.items(), key=lambda item: item[1].get("score", 0), reverse=True
+        )
+
+        if not sorted_players:
+            await bot.send_message("No player scores found.", ctx=ctx)
+            return
+
+        response_content = "-- Player Scores --\n"
+        for i, (user_id, data) in enumerate(sorted_players, 1):
+            try:
+                user = await bot.fetch_user(int(user_id))
+                display_name = user.display_name
+            except discord.NotFound:
+                display_name = f"Unknown User (ID: {user_id})"
+            except Exception as e:
+                display_name = f"Unknown User (ID: {user_id})"
+                print(f"Could not fetch user {user_id}: {e}")
+
+            score = data.get("score", 0)
+            response_content += f"{i}. {display_name}: {score}\n"
+
+        await bot.send_message(response_content, ctx=ctx, success_status="scores")
     
 
 async def discord_bot_async(config: ConfigReader, questions: list[Question]):

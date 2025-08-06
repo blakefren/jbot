@@ -175,6 +175,10 @@ class Logger:
                         guess_data = match.groupdict()
                         # Convert boolean string to actual boolean
                         guess_data['Correct'] = guess_data['Correct'] == 'True'
+                        try:
+                            guess_data['QuestionID'] = int(guess_data['QuestionID'])
+                        except (ValueError, TypeError):
+                            continue
                         guess_history.append(guess_data)
         except Exception as e:
             print(f"Error reading or parsing guess history: {e}")
@@ -211,7 +215,6 @@ class Logger:
 
         player_data = {}
         for guess in history:
-            print(guess)  # TODO
             player_id = guess['PlayerID']
             is_correct = guess['Correct']
             question_id = guess['QuestionID']
