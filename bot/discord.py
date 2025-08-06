@@ -536,7 +536,7 @@ def set_bot_commands(bot: DiscordBot):
             f"--Global data--\n"
             f"Global guesses:   {metrics.get('total_guesses')}\n"
             f"Unique questions: {metrics.get('unique_questions')}\n"
-            f"Correct rate:     {metrics.get('correct_rate')}\n"
+            f"Correct rate:     {metrics.get('global_correct_rate')}\n"
             f"Global score:     {metrics.get('global_score')}"
         )
         await bot.send_message(response_content, ctx=ctx, success_status="history")

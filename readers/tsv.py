@@ -49,7 +49,7 @@ def read_jeopardy_questions(file_path: str, final_jeopardy_score: int = 0) -> li
                         question=row.get("answer", "N/A"),
                         answer=row.get("question", "N/A"),
                         category=row.get("category", "N/A"),
-                        clue_value=clue_value,
+                        clue_value=clue_value_adj,
                         data_source="Jeopardy!",
                         metadata=metadata,
                     )
