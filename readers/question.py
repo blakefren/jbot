@@ -1,5 +1,4 @@
 import hashlib
-import sys
 
 
 class Question:
@@ -47,7 +46,12 @@ class Question:
         self.metadata = metadata
         # Hash the question and answer to create a unique ID
         # https://stackoverflow.com/questions/2511058/persistent-hashing-of-strings-in-python
-        self.id = int(hashlib.md5(f"{question.lower()} {answer.lower()}".encode('utf-8')).hexdigest(), 16)
+        self.id = int(
+            hashlib.md5(
+                f"{question.lower()} {answer.lower()}".encode("utf-8")
+            ).hexdigest(),
+            16,
+        )
 
     def __str__(self):
         """
@@ -78,7 +82,7 @@ class Question:
             "data_source": self.data_source,
             "metadata": self.metadata,
         }
-    
+
     def get_metadata(self, key: str, default=None):
         """
         Retrieves a specific metadata value by key.

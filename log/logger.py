@@ -45,14 +45,14 @@ class Logger:
         if not self.messaging_logger.handlers:
             self.messaging_logger.addHandler(messaging_handler)
         self.messaging_logger.propagate = False
-        
+
         # --- Setup Guesses Logger ---
         self.guesses_logger = logging.getLogger("guesses")
         self.guesses_logger.setLevel(logging.INFO)
         guesses_handler = logging.FileHandler(GUESSES_FILE_PATH)
         # Use a structured, easily parsable format
         guesses_formatter = logging.Formatter(
-            "%(asctime)s - %(message)s", datefmt='%Y-%m-%d %H:%M:%S'
+            "%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
         )
         guesses_handler.setFormatter(guesses_formatter)
         if not self.guesses_logger.handlers:
@@ -78,7 +78,14 @@ class Logger:
         self.history_logger.info(log_message)
         print(f"[History Logged] {log_message}")
 
-    def log_player_guess(self, player_id: str, player_name: str, question_id: str, guess: str, is_correct: bool):
+    def log_player_guess(
+        self,
+        player_id: str,
+        player_name: str,
+        question_id: str,
+        guess: str,
+        is_correct: bool,
+    ):
         """
         Logs a player's guess for a question in a structured format.
 
@@ -132,16 +139,20 @@ class Logger:
         """
         unique_guesses = {}
         for g in guess_history:
-            q_id = g.get('QuestionID', -1)
-            p_id = g.get('PlayerID', -1)
+            q_id = g.get("QuestionID", -1)
+            p_id = g.get("PlayerID", -1)
             unique_key = (q_id, p_id)
-            
+
             if unique_key not in unique_guesses:
                 unique_guesses[unique_key] = g
             else:
-                guess_time_current = unique_guesses[unique_key].get('timestamp', None)
-                guess_time_new = g.get('timestamp', None)
-                if guess_time_new and guess_time_current and guess_time_new > guess_time_current:
+                guess_time_current = unique_guesses[unique_key].get("timestamp", None)
+                guess_time_new = g.get("timestamp", None)
+                if (
+                    guess_time_new
+                    and guess_time_current
+                    and guess_time_new > guess_time_current
+                ):
                     unique_guesses[unique_key] = g
         return list(unique_guesses.values())
 
@@ -174,23 +185,25 @@ class Logger:
                     if match:
                         guess_data = match.groupdict()
                         # Convert boolean string to actual boolean
-                        guess_data['Correct'] = guess_data['Correct'] == 'True'
+                        guess_data["Correct"] = guess_data["Correct"] == "True"
                         try:
-                            guess_data['QuestionID'] = int(guess_data['QuestionID'])
+                            guess_data["QuestionID"] = int(guess_data["QuestionID"])
                         except (ValueError, TypeError):
                             continue
                         guess_history.append(guess_data)
         except Exception as e:
             print(f"Error reading or parsing guess history: {e}")
-        
+
         # Return deduplicated history if no user ID provided.
         guess_history = self._deduplicate_guesses(guess_history)
         if user_id == -1:
             return guess_history
         else:
-            unique_guesses = [g for g in guess_history if int(g.get('PlayerID', -1)) == user_id]
+            unique_guesses = [
+                g for g in guess_history if int(g.get("PlayerID", -1)) == user_id
+            ]
             return unique_guesses
-    
+
     def get_guess_metrics(self, history: list[dict], all_questions: list[Question]):
         """
         Calculates and returns a dictionary of metrics based on guess history.
@@ -204,7 +217,7 @@ class Logger:
         """
         metrics = {
             "total_guesses": len(history),
-            "unique_questions": len(set(g['QuestionID'] for g in history)),
+            "unique_questions": len(set(g["QuestionID"] for g in history)),
             "global_correct_rate": 0,
             "global_score": 0,
             "players": {},
@@ -215,9 +228,9 @@ class Logger:
 
         player_data = {}
         for guess in history:
-            player_id = guess['PlayerID']
-            is_correct = guess['Correct']
-            question_id = guess['QuestionID']
+            player_id = guess["PlayerID"]
+            is_correct = guess["Correct"]
+            question_id = guess["QuestionID"]
             clue_value = question_values.get(question_id, 0)
 
             if player_id not in player_data:
@@ -225,7 +238,7 @@ class Logger:
                     "total_guesses": 0,
                     "correct_guesses": 0,
                     "score": 0,
-                    "player_name": guess['PlayerName']
+                    "player_name": guess["PlayerName"],
                 }
 
             player_data[player_id]["total_guesses"] += 1
@@ -235,26 +248,28 @@ class Logger:
 
         total_correct_guesses = 0
         for player_id, data in player_data.items():
-            total_correct_guesses += data['correct_guesses']
-            metrics['global_score'] += data['score']
-            if data['total_guesses'] > 0:
-                data['correct_rate'] = data['correct_guesses'] / data['total_guesses']
+            total_correct_guesses += data["correct_guesses"]
+            metrics["global_score"] += data["score"]
+            if data["total_guesses"] > 0:
+                data["correct_rate"] = data["correct_guesses"] / data["total_guesses"]
             else:
-                data['correct_rate'] = 0
+                data["correct_rate"] = 0
             metrics["players"][player_id] = data
 
-        if metrics['total_guesses'] > 0:
-            metrics['global_correct_rate'] = total_correct_guesses / metrics['total_guesses']
+        if metrics["total_guesses"] > 0:
+            metrics["global_correct_rate"] = (
+                total_correct_guesses / metrics["total_guesses"]
+            )
         else:
-            metrics['global_correct_rate'] = 0
-            
+            metrics["global_correct_rate"] = 0
+
         return metrics
 
 
 # --- Example Usage ---
 if __name__ == "__main__":
     logger = Logger()
-    
+
     q = Question(
         id="jeopardy_1234",
         question="This city is known as the 'Big Apple'.",
@@ -271,7 +286,7 @@ if __name__ == "__main__":
         player_name="PlayerOne",
         question_id=q.id,
         guess="New York City",
-        is_correct=True
+        is_correct=True,
     )
 
     # Log an incorrect guess
@@ -280,7 +295,7 @@ if __name__ == "__main__":
         player_name="PlayerTwo",
         question_id=q.id,
         guess="Chicago",
-        is_correct=False
+        is_correct=False,
     )
 
     # Read the history

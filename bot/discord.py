@@ -11,10 +11,9 @@ from zoneinfo import ZoneInfo
 from bot.subscriber import Subscriber
 from cfg.main import ConfigReader
 from log.logger import Logger
-from modes.game_runner import GameRunner, GameType
+from modes.game_runner import GameRunner
 from readers.question import Question
 from readers.question_selector import QuestionSelector
-from readers.tsv import get_random_question
 
 # TODO: read timezone from config
 TIMEZONE = ZoneInfo("US/Pacific")
@@ -43,7 +42,6 @@ class DiscordBot(commands.Bot):
         self.ready_event_fired = False
         self.daily_q = None
 
-
     async def run(self):
         """Starts the Discord bot."""
         await self.start(self.bot_token)
@@ -58,7 +56,7 @@ class DiscordBot(commands.Bot):
                 with open("restart.inf", "r") as f:
                     data = f.read()
                 if data:
-                    channel_id, author_id = data.split(',')
+                    channel_id, author_id = data.split(",")
                     channel = self.get_channel(int(channel_id))
                     if channel:
                         author = await self.fetch_user(int(author_id))
@@ -68,7 +66,7 @@ class DiscordBot(commands.Bot):
                 print(f"Error processing restart info: {e}")
             finally:
                 os.remove("restart.inf")
-        
+
         if not self.ready_event_fired:
             print(f"Logged in as {self.user} (ID: {self.user.id})")
             self.logger.log_messaging_event(
@@ -92,13 +90,19 @@ class DiscordBot(commands.Bot):
         # Start the tasks
         if not self.morning_message_task.is_running():
             self.morning_message_task.start()
-            print(f"Morning message task started. Next iteration: {self.morning_message_task.next_iteration}")
+            print(
+                f"Morning message task started. Next iteration: {self.morning_message_task.next_iteration}"
+            )
         if not self.reminder_message_task.is_running():
             self.reminder_message_task.start()
-            print(f"Reminder message task started. Next iteration: {self.reminder_message_task.next_iteration}")
+            print(
+                f"Reminder message task started. Next iteration: {self.reminder_message_task.next_iteration}"
+            )
         if not self.evening_message_task.is_running():
             self.evening_message_task.start()
-            print(f"Evening message task started. Next iteration: {self.evening_message_task.next_iteration}")
+            print(
+                f"Evening message task started. Next iteration: {self.evening_message_task.next_iteration}"
+            )
         # Set daily question, if bot started after the morning message but before the evening message.
         now = datetime.datetime.now(TIMEZONE)
         if MORNING_TIME < now.time() < EVENING_TIME and self.daily_q is None:
@@ -136,7 +140,7 @@ class DiscordBot(commands.Bot):
     @tasks.loop(time=MORNING_TIME)
     async def morning_message_task(self):
         await self.send_morning_message()
-    
+
     @tasks.loop(time=REMINDER_TIME)
     async def reminder_message_task(self):
         await self.send_reminder_message()
@@ -195,7 +199,7 @@ class DiscordBot(commands.Bot):
                 print("No question found for today.")
                 return
             sent_to_ids = []
-            
+
             for sub in self.game.get_subscribed_users():
                 flavor_message = (
                     "Good morning players!\n"
@@ -229,9 +233,11 @@ class DiscordBot(commands.Bot):
                 print("No question found for today.")
                 return
             sent_to_ids = []
-            
+
             for sub in self.game.get_subscribed_users():
-                response_content = "Reminder: your answers are due shortly. Today's question:"
+                response_content = (
+                    "Reminder: your answers are due shortly. Today's question:"
+                )
                 question_part = self.format_question(self.daily_q)
                 full_message = f"{response_content}\n{question_part}"
                 await self.send_message(
@@ -260,7 +266,7 @@ class DiscordBot(commands.Bot):
                 print("No question found for today.")
                 return
             sent_to_ids = []
-            
+
             for sub in self.game.get_subscribed_users():
                 flavor_message = (
                     "Good evening players!\n"
@@ -269,7 +275,7 @@ class DiscordBot(commands.Bot):
                 question_part = self.format_question(self.daily_q)
                 answer_part = self.format_answer(self.daily_q)
                 full_message = f"{flavor_message}\n{question_part}\n{answer_part}"
-                
+
                 await self.send_message(
                     full_message, target_id=sub.id, is_channel=sub.is_channel
                 )
@@ -305,9 +311,7 @@ class DiscordBot(commands.Bot):
         return f"Answer: ||**{padded_answer}**||\n"
 
 
-
 def set_bot_commands(bot: DiscordBot):
-
     @bot.hybrid_command(name="shutdown", aliases=["quit", "exit"])
     async def shutdown(ctx: commands.Context):
         """Shuts down the bot."""
@@ -395,10 +399,10 @@ def set_bot_commands(bot: DiscordBot):
             with open("restart.inf", "w") as f:
                 f.write(f"{ctx.channel.id},{ctx.author.id}")
             await bot.send_message("Restarting bot...", ctx=ctx)
-            
+
             # Cleanly close the bot before restarting
             await bot.close()
-            
+
             # Replace the current process with a new one
             os.execv(sys.executable, ["python"] + sys.argv)
 
@@ -448,7 +452,7 @@ def set_bot_commands(bot: DiscordBot):
         evening_time_next = bot.evening_message_task.next_iteration
         next_datetime = min(morning_time_next, evening_time_next)
         time_until = next_datetime - datetime.datetime.now(TIMEZONE)
-        response_content = ''
+        response_content = ""
 
         # Next event is morning question.
         if morning_time_next < evening_time_next:
@@ -503,7 +507,7 @@ def set_bot_commands(bot: DiscordBot):
             response_content = f"That is correct, {ctx.author.display_name}! Well done."
         else:
             response_content = f"Sorry, '{guess}' is not the correct answer."
-        
+
         answer_part = bot.format_answer(bot.daily_q)
         full_message = f"{response_content}\n{answer_part}"
         await bot.send_message(full_message, ctx=ctx)
@@ -555,12 +559,14 @@ def set_bot_commands(bot: DiscordBot):
     async def history(ctx: commands.Context):
         """Get player guess history."""
         history = bot.logger.read_guess_history(user_id=ctx.author.id)
-        metrics = bot.logger.get_guess_metrics(history, bot.game.question_selector.questions)
-        
+        metrics = bot.logger.get_guess_metrics(
+            history, bot.game.question_selector.questions
+        )
+
         full_message = ""
-        player_metrics = metrics['players'].get(str(ctx.author.id), None)
+        player_metrics = metrics["players"].get(str(ctx.author.id), None)
         if player_metrics:
-            correct_rate = player_metrics.get('correct_rate', 0)
+            correct_rate = player_metrics.get("correct_rate", 0)
             player_part = (
                 f"--{ctx.author.display_name}'s data--\n"
                 f"Player guesses:  {player_metrics.get('total_guesses')}\n"
@@ -570,7 +576,7 @@ def set_bot_commands(bot: DiscordBot):
             )
             full_message += player_part
 
-        global_correct_rate = metrics.get('global_correct_rate', 0)
+        global_correct_rate = metrics.get("global_correct_rate", 0)
         global_part = (
             f"\n\n--Global data--\n"
             f"Global guesses:   {metrics.get('total_guesses')}\n"
@@ -579,9 +585,8 @@ def set_bot_commands(bot: DiscordBot):
             f"Global score:     {metrics.get('global_score')}"
         )
         full_message += global_part
-        
-        await bot.send_message(full_message, ctx=ctx, success_status="history")
 
+        await bot.send_message(full_message, ctx=ctx, success_status="history")
 
     @bot.hybrid_command(name="scores", aliases=["leaderboard", "s", "score"])
     async def scores(ctx: commands.Context):
@@ -620,7 +625,7 @@ def set_bot_commands(bot: DiscordBot):
             response_content += f"{i}. {display_name}: {score}\n"
 
         await bot.send_message(response_content, ctx=ctx, success_status="scores")
-    
+
 
 async def discord_bot_async(config: ConfigReader, questions: list[Question]):
     """Main function to initialize and run the bot."""

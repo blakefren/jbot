@@ -95,9 +95,7 @@ class SMSBot(MessagingBot):
         """
         try:
             message = self.client.messages.create(
-                body=message_body,
-                from_=self.twilio_phone_number,
-                to=to_phone_number,
+                body=message_body, from_=self.twilio_phone_number, to=to_phone_number,
             )
             print(f"Message sent successfully: {message.sid}")
         except Exception as e:

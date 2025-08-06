@@ -2,6 +2,7 @@ class Subscriber:
     """
     Represents a subscriber to the Jeopardy! bot, which can be a user or a channel.
     """
+
     def __init__(self, id, display_name, is_channel, ctx=None):
         self.id = id
         self.display_name = display_name
@@ -29,5 +30,5 @@ class Subscriber:
         # row is a list of strings [id, display_name, is_channel]
         _id = int(row[0])
         display_name = row[1]
-        is_channel = row[2].lower() == 'true'
+        is_channel = row[2].lower() == "true"
         return cls(_id, display_name, is_channel)

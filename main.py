@@ -1,7 +1,4 @@
-import os
 import time
-import discord
-import asyncio
 
 from bot.messenger import SMSBot
 from bot.discord import run_discord_bot
@@ -19,6 +16,7 @@ def load_configs() -> ConfigReader:
         print("Configuration loaded successfully:")
     return config
 
+
 def load_players() -> list[dict]:
     ### Read players ###
     contacts = read_and_validate_contacts()
@@ -30,10 +28,13 @@ def load_players() -> list[dict]:
         print("\nNo valid contacts were loaded.")
     return contacts
 
+
 def read_questions() -> list[Question]:
     ### Read questions ###
     print("Reading Jeopardy! questions from the file...")
-    questions = read_jeopardy_questions(config.get("JEOPARDY_LOCAL_PATH"), config.get("FINAL_JEOPARDY_SCORE_SUB"))
+    questions = read_jeopardy_questions(
+        config.get("JEOPARDY_LOCAL_PATH"), config.get("FINAL_JEOPARDY_SCORE_SUB")
+    )
     return questions
 
 

@@ -2,6 +2,7 @@ import os
 
 CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), "main.cfg")
 
+
 class ConfigReader:
     """
     A class to read configuration files and retrieve settings.

@@ -7,11 +7,13 @@ from zoneinfo import ZoneInfo
 # TODO: read timezone from config
 TIMEZONE = ZoneInfo("US/Pacific")
 
+
 class QuestionSelector:
     """
     Manages the selection of Jeopardy! questions.
     Supports different modes for question selection.
     """
+
     def __init__(self, questions: list[Question], mode: str = "daily"):
         self.questions = questions
         self.mode = mode
@@ -32,7 +34,9 @@ class QuestionSelector:
             return self.questions[index]
         else:
             # TODO: Implement other modes, e.g., "themed", "random_without_repeat", etc.
-            raise NotImplementedError(f"Question selection mode '{self.mode}' is not yet implemented.")
+            raise NotImplementedError(
+                f"Question selection mode '{self.mode}' is not yet implemented."
+            )
 
     def get_random_question(self) -> Question:
         """
