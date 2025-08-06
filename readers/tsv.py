@@ -42,7 +42,7 @@ def read_jeopardy_questions(file_path: str, final_jeopardy_score: int = 0) -> li
                 }
                 # Give final jeopardy a real score.
                 clue_value = parse_value(row.get("clue_value", 0))
-                final_jeopardy = metadata.get('round', 0) == 2
+                final_jeopardy = metadata.get('round', 0) == 3
                 clue_value_adj = final_jeopardy_score if final_jeopardy else clue_value
                 questions.append(
                     Question(
