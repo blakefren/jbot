@@ -68,7 +68,7 @@ This project is being developed with the assistance of an AI programming partner
     * [X] Play reminders
     * [X] Reboot bot from message
     * [X] Score tracking
-    * [ ] Persistent subscriptions
+    * [X] Persistent subscriptions
 * [ ] Modes
     * [ ] Simple
     * [ ] Poker

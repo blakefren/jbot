@@ -511,7 +511,7 @@ def set_bot_commands(bot: DiscordBot):
     @bot.hybrid_command(name="subscribe", aliases=["sub"])
     async def subscribe(ctx: commands.Context):
         """Subscribes the context to daily question notifications."""
-        subscriber = Subscriber(ctx)
+        subscriber = Subscriber.from_ctx(ctx)
         if subscriber in bot.game.get_subscribed_users():
             response_content = (
                 f"Participant {subscriber.display_name}, you are already registered."
@@ -532,7 +532,7 @@ def set_bot_commands(bot: DiscordBot):
     @bot.hybrid_command(name="unsubscribe", aliases=["unsub"])
     async def unsubscribe(ctx: commands.Context):
         """Unsubscribes the context from daily question notifications."""
-        subscriber = Subscriber(ctx)
+        subscriber = Subscriber.from_ctx(ctx)
         if subscriber in bot.game.get_subscribed_users():
             bot.game.remove_subscriber(subscriber)
             response_content = (

@@ -1,6 +1,13 @@
+import csv
+import os
+
 from enum import Enum
 from bot.subscriber import Subscriber
 from readers.question_selector import QuestionSelector
+
+# Construct the absolute path to the project's root directory
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+SUBSCRIBERS_FILE = os.path.join(PROJECT_ROOT, "cfg", "subscribers.csv")
 
 
 class GameType(Enum):
@@ -27,14 +34,38 @@ class GameRunner:
     ):
         self.question_selector = question_selector
         self.mode = mode
-        self.subscribed_contexts = set()
+        self.subscribed_contexts = self._load_subscribers()
+
+    def _load_subscribers(self):
+        subscribers = set()
+        try:
+            with open(SUBSCRIBERS_FILE, mode="r", newline="", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                next(reader)  # Skip header
+                for row in reader:
+                    subscribers.add(Subscriber.from_csv_row(row))
+        except FileNotFoundError:
+            pass  # No subscribers file yet
+        return subscribers
+
+    def _save_subscribers(self):
+        try:
+            with open(SUBSCRIBERS_FILE, mode="w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["id", "display_name", "is_channel"])
+                for sub in self.subscribed_contexts:
+                    writer.writerow(sub.to_csv_row())
+        except Exception as e:
+            print(f"Error saving subscribers: {e}")
 
     def add_subscriber(self, subscriber: Subscriber):
         self.subscribed_contexts.add(subscriber)
+        self._save_subscribers()
 
     def remove_subscriber(self, subscriber: Subscriber):
         if subscriber in self.subscribed_contexts:
             self.subscribed_contexts.remove(subscriber)
+            self._save_subscribers()
 
     def get_subscribed_users(self):
         return self.subscribed_contexts

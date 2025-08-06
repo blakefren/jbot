@@ -2,10 +2,10 @@ class Subscriber:
     """
     Represents a subscriber to the Jeopardy! bot, which can be a user or a channel.
     """
-    def __init__(self, ctx):
-        self.id = ctx.channel.id if ctx.guild else ctx.author.id
-        self.display_name = ctx.author.display_name
-        self.is_channel = ctx.guild is not None
+    def __init__(self, id, display_name, is_channel, ctx=None):
+        self.id = id
+        self.display_name = display_name
+        self.is_channel = is_channel
         self.ctx = ctx
 
     def __hash__(self):
@@ -13,3 +13,21 @@ class Subscriber:
 
     def __eq__(self, other):
         return isinstance(other, Subscriber) and self.id == other.id
+
+    @classmethod
+    def from_ctx(cls, ctx):
+        _id = ctx.channel.id if ctx.guild else ctx.author.id
+        display_name = ctx.author.display_name
+        is_channel = ctx.guild is not None
+        return cls(_id, display_name, is_channel, ctx=ctx)
+
+    def to_csv_row(self):
+        return [self.id, self.display_name, self.is_channel]
+
+    @classmethod
+    def from_csv_row(cls, row):
+        # row is a list of strings [id, display_name, is_channel]
+        _id = int(row[0])
+        display_name = row[1]
+        is_channel = row[2].lower() == 'true'
+        return cls(_id, display_name, is_channel)
