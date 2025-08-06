@@ -195,18 +195,19 @@ class DiscordBot(commands.Bot):
                 print("No question found for today.")
                 return
             sent_to_ids = []
-            flavor_message = (
-                "Good morning players!\n"
-                f"You have until {self.evening_message_task.next_iteration} to answer today's trivia question:"
-            )
+            
             for sub in self.game.get_subscribed_users():
-                await self.send_message(
-                    flavor_message, target_id=sub.id, is_channel=sub.is_channel
+                flavor_message = (
+                    "Good morning players!\n"
+                    f"You have until {self.evening_message_task.next_iteration} to answer today's trivia question:"
                 )
-                await self.send_question(
-                    self.daily_q, target_id=sub.id, is_channel=sub.is_channel
+                question_part = self.format_question(self.daily_q)
+                full_message = f"{flavor_message}\n{question_part}"
+                await self.send_message(
+                    full_message, target_id=sub.id, is_channel=sub.is_channel
                 )
                 sent_to_ids.append(str(sub.id))
+
             self.logger.log_daily_question(
                 question=self.daily_q, sent_to_users=sent_to_ids
             )
@@ -228,15 +229,16 @@ class DiscordBot(commands.Bot):
                 print("No question found for today.")
                 return
             sent_to_ids = []
-            response_content = "Reminder: your answers are due shortly. Today's question:"
+            
             for sub in self.game.get_subscribed_users():
+                response_content = "Reminder: your answers are due shortly. Today's question:"
+                question_part = self.format_question(self.daily_q)
+                full_message = f"{response_content}\n{question_part}"
                 await self.send_message(
-                    response_content, target_id=sub.id, is_channel=sub.is_channel
-                )
-                await self.send_question(
-                    self.daily_q, target_id=sub.id, is_channel=sub.is_channel
+                    full_message, target_id=sub.id, is_channel=sub.is_channel
                 )
                 sent_to_ids.append(str(sub.id))
+
             self.logger.log_daily_question(
                 question=self.daily_q, sent_to_users=sent_to_ids
             )
@@ -258,21 +260,21 @@ class DiscordBot(commands.Bot):
                 print("No question found for today.")
                 return
             sent_to_ids = []
-            flavor_message = (
-                "Good evening players!\n"
-                f"Here is the answer to today's trivia question:"
-            )
+            
             for sub in self.game.get_subscribed_users():
+                flavor_message = (
+                    "Good evening players!\n"
+                    f"Here is the answer to today's trivia question:"
+                )
+                question_part = self.format_question(self.daily_q)
+                answer_part = self.format_answer(self.daily_q)
+                full_message = f"{flavor_message}\n{question_part}\n{answer_part}"
+                
                 await self.send_message(
-                    flavor_message, target_id=sub.id, is_channel=sub.is_channel
-                )
-                await self.send_question(
-                    self.daily_q, target_id=sub.id, is_channel=sub.is_channel
-                )
-                await self.send_answer(
-                    self.daily_q, target_id=sub.id, is_channel=sub.is_channel
+                    full_message, target_id=sub.id, is_channel=sub.is_channel
                 )
                 sent_to_ids.append(str(sub.id))
+
             self.logger.log_daily_question(
                 question=self.daily_q, sent_to_users=sent_to_ids
             )
@@ -286,23 +288,22 @@ class DiscordBot(commands.Bot):
                 status="failed",
             )
 
-    async def send_question(self, question: Question, **kwargs):
-        """Internal helper method to format and send a trivia question."""
-        message_body = (
+    def format_question(self, question: Question) -> str:
+        """Internal helper method to format a trivia question."""
+        return (
             f"**--- Question! ---**\n"
             f"Category: **{question.category}**\n"
             f"Value: **${question.clue_value}**\n"
             f"Question: **{question.question}**\n"
         )
-        await self.send_message(message_body, **kwargs)
 
-    async def send_answer(self, question: Question, **kwargs):
-        """Internal helper method to format and send a trivia answer."""
+    def format_answer(self, question: Question) -> str:
+        """Internal helper method to format a trivia answer."""
         min_display_size = 15
         pad_size = max(min_display_size - len(question.answer), 0) // 2
         padded_answer = question.answer.center(len(question.answer) + pad_size * 2, " ")
-        message_body = f"Answer: ||**{padded_answer}**||\n"
-        await self.send_message(message_body, **kwargs)
+        return f"Answer: ||**{padded_answer}**||\n"
+
 
 
 def set_bot_commands(bot: DiscordBot):
@@ -435,8 +436,10 @@ def set_bot_commands(bot: DiscordBot):
 
         # TODO: is_channel is set to False during testing, when the bot is only
         # messaging a user. Make this settable at runtime.
-        await bot.send_question(random_q, ctx=ctx)
-        await bot.send_answer(random_q, ctx=ctx)
+        question_part = bot.format_question(random_q)
+        answer_part = bot.format_answer(random_q)
+        full_message = f"{question_part}\n{answer_part}"
+        await bot.send_message(full_message, ctx=ctx)
 
     @bot.hybrid_command(name="when", aliases=["next", "howlong"])
     async def when(ctx: commands.Context):
@@ -463,8 +466,10 @@ def set_bot_commands(bot: DiscordBot):
 
         # Remind the daily question, if after the morning send time.
         if bot.daily_q:
-            await bot.send_message("Resending today's question:", ctx=ctx)
-            await bot.send_question(bot.daily_q, ctx=ctx)
+            reminder_message = "Resending today's question:"
+            question_part = bot.format_question(bot.daily_q)
+            full_message = f"{reminder_message}\n{question_part}"
+            await bot.send_message(full_message, ctx=ctx)
 
     @bot.hybrid_command(name="answer", aliases=["a", "ans"])
     async def answer(ctx: commands.Context, *, guess: str, skip_confirmation=False):
@@ -498,8 +503,10 @@ def set_bot_commands(bot: DiscordBot):
             response_content = f"That is correct, {ctx.author.display_name}! Well done."
         else:
             response_content = f"Sorry, '{guess}' is not the correct answer."
-        await bot.send_message(response_content, ctx=ctx)
-        await bot.send_answer(bot.daily_q, ctx=ctx)
+        
+        answer_part = bot.format_answer(bot.daily_q)
+        full_message = f"{response_content}\n{answer_part}"
+        await bot.send_message(full_message, ctx=ctx)
 
     @bot.hybrid_command(name="subscribe", aliases=["sub"])
     async def subscribe(ctx: commands.Context):
@@ -549,27 +556,31 @@ def set_bot_commands(bot: DiscordBot):
         """Get player guess history."""
         history = bot.logger.read_guess_history(user_id=ctx.author.id)
         metrics = bot.logger.get_guess_metrics(history, bot.game.question_selector.questions)
+        
+        full_message = ""
         player_metrics = metrics['players'].get(str(ctx.author.id), None)
         if player_metrics:
             correct_rate = player_metrics.get('correct_rate', 0)
-            response_content = (
+            player_part = (
                 f"--{ctx.author.display_name}'s data--\n"
                 f"Player guesses:  {player_metrics.get('total_guesses')}\n"
                 f"Correct guesses: {player_metrics.get('correct_guesses')}\n"
                 f"Correct rate:    {correct_rate:.2f}\n"
                 f"Total score:     {player_metrics.get('score')}"
             )
-            await bot.send_message(response_content, ctx=ctx, success_status="history")
-        
+            full_message += player_part
+
         global_correct_rate = metrics.get('global_correct_rate', 0)
-        response_content = (
-            f"--Global data--\n"
+        global_part = (
+            f"\n\n--Global data--\n"
             f"Global guesses:   {metrics.get('total_guesses')}\n"
             f"Unique questions: {metrics.get('unique_questions')}\n"
             f"Correct rate:     {global_correct_rate:.2f}\n"
             f"Global score:     {metrics.get('global_score')}"
         )
-        await bot.send_message(response_content, ctx=ctx, success_status="history")
+        full_message += global_part
+        
+        await bot.send_message(full_message, ctx=ctx, success_status="history")
 
 
     @bot.hybrid_command(name="scores", aliases=["leaderboard", "s", "score"])
