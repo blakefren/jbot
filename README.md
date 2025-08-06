@@ -60,7 +60,7 @@ This project is being developed with the assistance of an AI programming partner
     * [X] main.py
     * [ ] Unit tests
     * [ ] Add presubmits
-* [ ] Interaction
+* [X] Interaction
     * [X] Ask for random question
     * [X] Subscribe
     * [X] Time to next event
@@ -88,6 +88,7 @@ This project is being developed with the assistance of an AI programming partner
 * [ ] Bugs
     * [ ] Fix Discord bot shutdown errors
     * [ ] Top class should be a game runner
+    * [ ] History / scores / metrics still seem off
 * [ ] v2
     * [ ] setup.py
     * [ ] Add flavor text by game mode
