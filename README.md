@@ -43,6 +43,10 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     difficulty increases daily, culminating in a challenging final
     Jeopardy! question.
 
+## AI Assistant
+
+This project is being developed with the assistance of an AI programming partner named Sage. Sage's role is to help with coding, suggest improvements, and automate tasks to accelerate development. For more details on Sage's directives and operating procedures, see `.github/instructions/instructions.md`.
+
 ## TODOs
 
 * [ ] Core functions
@@ -54,6 +58,7 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     * [X] Daily question
     * [X] log/logger.py
     * [X] main.py
+    * [ ] Unit tests
     * [ ] Add presubmits
 * [ ] Interaction
     * [X] Ask for random question
@@ -62,6 +67,7 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     * [X] Answering
     * [X] Play reminders
     * [ ] Score tracking
+    * [ ] Persistent subscriptions
 * [ ] Modes
     * [ ] Simple
     * [ ] Poker
