@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import discord
+import os
 import re
 import sys
 
@@ -52,6 +53,22 @@ class DiscordBot(commands.Bot):
         Event handler that runs when the bot successfully connects to Discord.
         This is where scheduled tasks are started.
         """
+        if os.path.exists("restart.inf"):
+            try:
+                with open("restart.inf", "r") as f:
+                    data = f.read()
+                if data:
+                    channel_id, author_id = data.split(',')
+                    channel = self.get_channel(int(channel_id))
+                    if channel:
+                        author = await self.fetch_user(int(author_id))
+                        if author:
+                            await channel.send(f"Bot is back online, {author.mention}.")
+            except Exception as e:
+                print(f"Error processing restart info: {e}")
+            finally:
+                os.remove("restart.inf")
+        
         if not self.ready_event_fired:
             print(f"Logged in as {self.user} (ID: {self.user.id})")
             self.logger.log_messaging_event(
@@ -361,13 +378,11 @@ def set_bot_commands(bot: DiscordBot):
                 status="bot_close_failed",
             )
 
-    # TODO: Fix restart command.
-    # https://stackoverflow.com/questions/63180082/discord-py-restart-command
-    @bot.command(name="restart")
-    async def restart(ctx):
+    @bot.hybrid_command(name="restart", aliases=["reboot", "r", "reset"])
+    async def restart(ctx: commands.Context):
         """Restarts the bot."""
         if not await bot.is_owner(ctx.author):
-            response_content = "You do not have permission to shut down the bot."
+            response_content = "You do not have permission to restart the bot."
             await bot.send_message(
                 response_content, ctx=ctx, success_status="unauthorized"
             )
@@ -375,17 +390,29 @@ def set_bot_commands(bot: DiscordBot):
 
         print("Restarting bot...")
         try:
+            # Create restart info file to be read on next startup
+            with open("restart.inf", "w") as f:
+                f.write(f"{ctx.channel.id},{ctx.author.id}")
             await bot.send_message("Restarting bot...", ctx=ctx)
+            
+            # Cleanly close the bot before restarting
+            await bot.close()
+            
+            # Replace the current process with a new one
+            os.execv(sys.executable, ["python"] + sys.argv)
+
         except Exception as e:
-            print(f"Failed to send restart message: {e}")
+            print(f"Failed to restart bot: {e}")
             bot.logger.log_messaging_event(
                 direction="bot",
                 method="Discord",
                 recipient_or_sender=str(ctx.author.id),
-                content=f"Failed to send restart message: {e}",
-                status="message_send_failed",
+                content=f"Failed to restart bot: {e}",
+                status="restart_failed",
             )
-        os.execv(sys.executable, ["python"] + sys.argv)
+            # Clean up if something went wrong before restart
+            if os.path.exists("restart.inf"):
+                os.remove("restart.inf")
 
     @bot.hybrid_command(name="ping")
     async def ping(ctx: commands.Context):
