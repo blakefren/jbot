@@ -116,16 +116,16 @@ class TestGameRunner(unittest.TestCase):
         """Test handling a guess."""
         game_runner = GameRunner(self.mock_question_selector)
         subscriber = Subscriber("112", "Guesser", False)
-        
+
         # Correct guess
         with patch.object(game_runner, "calculate_scores", MagicMock()) as mock_calc:
-             game_runner.handle_guess(subscriber, "Test Answer")
-             # TODO: Add assertions for score changes when implemented
+            game_runner.handle_guess(subscriber, "Test Answer")
+            # TODO: Add assertions for score changes when implemented
 
         # Incorrect guess
         with patch.object(game_runner, "calculate_scores", MagicMock()) as mock_calc:
-             game_runner.handle_guess(subscriber, "Wrong Answer")
-             # TODO: Add assertions for score changes when implemented
+            game_runner.handle_guess(subscriber, "Wrong Answer")
+            # TODO: Add assertions for score changes when implemented
 
 
 if __name__ == "__main__":
