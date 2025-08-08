@@ -45,9 +45,7 @@ class TestQuestion(unittest.TestCase):
 
     def test_str_representation(self):
         """Tests the string representation of the Question object."""
-        q = Question(
-            question="Q", answer="A", category="C", clue_value=100
-        )
+        q = Question(question="Q", answer="A", category="C", clue_value=100)
         # We don't test the ID as it's a hash, but we check that it's in the string
         self.assertIn(f"ID: {q.id}", str(q))
         self.assertIn("Category: C", str(q))

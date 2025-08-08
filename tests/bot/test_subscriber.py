@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import Mock
 from bot.subscriber import Subscriber
 
+
 class TestSubscriber(unittest.TestCase):
     def test_init(self):
         s = Subscriber(123, "test_user", False)
@@ -27,9 +28,9 @@ class TestSubscriber(unittest.TestCase):
         mock_ctx.guild = None
         mock_ctx.author.id = 456
         mock_ctx.author.display_name = "test_author"
-        
+
         s = Subscriber.from_ctx(mock_ctx)
-        
+
         self.assertEqual(s.id, 456)
         self.assertEqual(s.display_name, "test_author")
         self.assertFalse(s.is_channel)
@@ -40,9 +41,9 @@ class TestSubscriber(unittest.TestCase):
         mock_ctx.guild.id = 789
         mock_ctx.channel.id = 123
         mock_ctx.author.display_name = "test_author_channel"
-        
+
         s = Subscriber.from_ctx(mock_ctx)
-        
+
         self.assertEqual(s.id, 123)
         self.assertEqual(s.display_name, "test_author_channel")
         self.assertTrue(s.is_channel)
@@ -66,5 +67,6 @@ class TestSubscriber(unittest.TestCase):
         self.assertEqual(s.display_name, "csv_user_3")
         self.assertTrue(s.is_channel)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

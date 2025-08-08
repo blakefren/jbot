@@ -3,6 +3,7 @@ from unittest.mock import patch, mock_open
 from readers.tsv import parse_value, read_jeopardy_questions, get_random_question
 from readers.question import Question
 
+
 class TestTsv(unittest.TestCase):
 
     def test_parse_value(self):
@@ -21,16 +22,20 @@ class TestTsv(unittest.TestCase):
             "SCIENCE\t$400\tThe atomic number of Oxygen\tWhat is 8?\t1\t2023-01-01\t0\n"
             "FINAL\t$2000\tThe only planet that rotates clockwise\tWhat is Venus?\t3\t2023-01-01\t0\n"
         )
-        
+
         with patch("builtins.open", mock_open(read_data=mock_data)):
-            questions = read_jeopardy_questions("dummy_path.tsv", final_jeopardy_score=2000)
+            questions = read_jeopardy_questions(
+                "dummy_path.tsv", final_jeopardy_score=2000
+            )
             self.assertEqual(len(questions), 3)
-            
+
             # Test first question
             self.assertIsInstance(questions[0], Question)
             self.assertEqual(questions[0].category, "HISTORY")
             self.assertEqual(questions[0].clue_value, 200)
-            self.assertEqual(questions[0].question, "The year the Magna Carta was signed")
+            self.assertEqual(
+                questions[0].question, "The year the Magna Carta was signed"
+            )
             self.assertEqual(questions[0].answer, "What is 1215?")
             self.assertEqual(questions[0].data_source, "Jeopardy!")
             self.assertEqual(questions[0].metadata["round"], "1")
@@ -54,15 +59,16 @@ class TestTsv(unittest.TestCase):
         q1 = Question(question="q1", answer="a1", category="cat1", clue_value=100)
         q2 = Question(question="q2", answer="a2", category="cat2", clue_value=200)
         questions = [q1, q2]
-        
+
         random_question = get_random_question(questions)
         self.assertIn(random_question, questions)
-        
+
         # Test with empty list
         self.assertIsNone(get_random_question([]))
-        
+
         # Test with None
         self.assertIsNone(get_random_question(None))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
