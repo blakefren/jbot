@@ -1,6 +1,8 @@
 # jbot
 A daily bot for group trivia questions and competition.
 
+![alt text](https://github.com/blakefren/jbot/blob/main/media/icon.png?raw=true)
+
 ## Setup
 
 [Download](https://github.com/jwolle1/jeopardy_clue_dataset) the Jeopardy question bank.
