@@ -87,7 +87,7 @@ class GameRunner:
         question = self.question_selector.get_question_for_today()
         for subscriber in self.subscribed_contexts:
             print(
-                f"Sending morning message to {subscriber.display_name}: {question.text}"
+                f"Sending morning message to {subscriber.display_name}: {question.question}"
             )
             # TODO
 
