@@ -267,6 +267,18 @@ class DiscordBot(commands.Bot):
                 return
             sent_to_ids = []
 
+            # Get all guesses for the daily question
+            all_guesses = self.logger.read_guess_history()
+            daily_guesses = [
+                g for g in all_guesses if g.get("QuestionID") == self.daily_q.id
+            ]
+
+            player_answers = ""
+            if daily_guesses:
+                player_answers += "--Player answers--\n"
+                for guess in daily_guesses:
+                    player_answers += f"{guess['PlayerName']}: {guess['Guess']}\n"
+
             for sub in self.game.get_subscribed_users():
                 flavor_message = (
                     "Good evening players!\n"
@@ -274,7 +286,7 @@ class DiscordBot(commands.Bot):
                 )
                 question_part = self.format_question(self.daily_q)
                 answer_part = self.format_answer(self.daily_q)
-                full_message = f"{flavor_message}\n{question_part}\n{answer_part}"
+                full_message = f"{flavor_message}\n{question_part}\n{answer_part}\n{player_answers}"
 
                 await self.send_message(
                     full_message, target_id=sub.id, is_channel=sub.is_channel
