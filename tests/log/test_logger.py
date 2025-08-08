@@ -2,6 +2,8 @@ import unittest
 import os
 import sys
 from unittest.mock import patch, MagicMock
+import tempfile
+import shutil
 
 # Add project root to path to allow imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -14,7 +16,7 @@ class TestLogger(unittest.TestCase):
 
     def setUp(self):
         """Set up for test cases."""
-        self.log_dir = os.path.join(os.path.dirname(__file__), "..", "..", "log")
+        self.log_dir = tempfile.mkdtemp()
         self.history_log_path = os.path.join(self.log_dir, "history.log")
         self.messaging_log_path = os.path.join(self.log_dir, "messaging.log")
         self.guesses_log_path = os.path.join(self.log_dir, "guesses.log")
@@ -24,7 +26,7 @@ class TestLogger(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.mock_print = patcher.start()
 
-        self.logger = Logger()
+        self.logger = Logger(self.log_dir)
 
         # Clear log files before each test
         for log_file in [
@@ -38,17 +40,11 @@ class TestLogger(unittest.TestCase):
 
     def tearDown(self):
         """Clean up after tests."""
-        for log_file in [
-            self.history_log_path,
-            self.messaging_log_path,
-            self.guesses_log_path,
-        ]:
-            if os.path.exists(log_file):
-                os.remove(log_file)
+        self.logger.close()
+        shutil.rmtree(self.log_dir)
 
     def test_log_daily_question(self):
         question = Question(
-            id="test_id_123",
             category="TESTING",
             clue_value=100,
             question="Is this a test?",
@@ -62,7 +58,7 @@ class TestLogger(unittest.TestCase):
         with open(self.history_log_path, "r") as f:
             content = f.read()
             self.assertIn("Daily Question Sent", content)
-            self.assertIn("ID: test_id_123", content)
+            self.assertIn("ID: 105812140251605244503180177755235425926", content)
             self.assertIn("Category: TESTING", content)
             self.assertIn("Value: $100", content)
             self.assertIn("Question: 'Is this a test?'", content)
@@ -88,14 +84,20 @@ class TestLogger(unittest.TestCase):
             )
 
     def test_read_guess_history(self):
-        self.logger.log_player_guess("player1", "PlayerOne", "1", "A1", True)
-        self.logger.log_player_guess("player2", "PlayerTwo", "1", "A2", False)
-        self.logger.log_player_guess("player1", "PlayerOne", "2", "A3", True)
+        self.logger.log_player_guess("123", "PlayerOne", "1", "A1", True)
+        self.logger.log_player_guess("456", "PlayerTwo", "1", "A2", False)
+        self.logger.log_player_guess("123", "PlayerOne", "2", "A3", True)
 
         history = self.logger.read_guess_history()
         self.assertEqual(len(history), 3)
 
-        user_history = self.logger.read_guess_history(user_id=123)  # Non-existent user
+        user_history = self.logger.read_guess_history(user_id=123)
+        self.assertEqual(len(user_history), 2)
+
+        user_history = self.logger.read_guess_history(user_id=456)
+        self.assertEqual(len(user_history), 1)
+
+        user_history = self.logger.read_guess_history(user_id=999)  # Non-existent user
         self.assertEqual(len(user_history), 0)
 
     def test_deduplicate_guesses(self):
