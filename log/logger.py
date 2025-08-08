@@ -5,9 +5,9 @@ import re
 from readers.question import Question
 
 CURRENT_DIR = os.path.dirname(__file__)
-HISTORY_FILE_PATH = os.path.join(CURRENT_DIR, "history.log")
-MESSAGING_FILE_PATH = os.path.join(CURRENT_DIR, "messaging.log")
-GUESSES_FILE_PATH = os.path.join(CURRENT_DIR, "guesses.log")
+HISTORY_FILE_NAME = "history.log"
+MESSAGING_FILE_NAME = "messaging.log"
+GUESSES_FILE_NAME = "guesses.log"
 
 
 class Logger:
@@ -16,16 +16,19 @@ class Logger:
     to specific files based on their type (history, messaging, or guesses).
     """
 
-    def __init__(self):
+    def __init__(self, base_dir: str = CURRENT_DIR):
         """
         Initializes the logger, setting up separate log files.
         """
-        os.makedirs(CURRENT_DIR, exist_ok=True)  # Ensure log directory exists
+        self.base_dir = base_dir
+        os.makedirs(self.base_dir, exist_ok=True)  # Ensure log directory exists
 
         # --- Setup History Logger ---
         self.history_logger = logging.getLogger("history")
         self.history_logger.setLevel(logging.INFO)
-        history_handler = logging.FileHandler(HISTORY_FILE_PATH)
+        history_handler = logging.FileHandler(
+            os.path.join(self.base_dir, HISTORY_FILE_NAME)
+        )
         history_formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s"
         )
@@ -37,7 +40,9 @@ class Logger:
         # --- Setup Messaging Logger ---
         self.messaging_logger = logging.getLogger("messaging")
         self.messaging_logger.setLevel(logging.INFO)
-        messaging_handler = logging.FileHandler(MESSAGING_FILE_PATH)
+        messaging_handler = logging.FileHandler(
+            os.path.join(self.base_dir, MESSAGING_FILE_NAME)
+        )
         messaging_formatter = logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s"
         )
@@ -49,7 +54,9 @@ class Logger:
         # --- Setup Guesses Logger ---
         self.guesses_logger = logging.getLogger("guesses")
         self.guesses_logger.setLevel(logging.INFO)
-        guesses_handler = logging.FileHandler(GUESSES_FILE_PATH)
+        guesses_handler = logging.FileHandler(
+            os.path.join(self.base_dir, GUESSES_FILE_NAME)
+        )
         # Use a structured, easily parsable format
         guesses_formatter = logging.Formatter(
             "%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
@@ -59,7 +66,7 @@ class Logger:
             self.guesses_logger.addHandler(guesses_handler)
         self.guesses_logger.propagate = False
 
-        print(f"Logger initialized. Logs will be saved in '{CURRENT_DIR}'.")
+        print(f"Logger initialized. Logs will be saved in '{self.base_dir}'.")
 
     def log_daily_question(self, question: Question, sent_to_users):
         """
@@ -130,10 +137,10 @@ class Logger:
     def _deduplicate_guesses(self, guess_history: list[dict]) -> list[dict]:
         """
         Helper method to deduplicate a list of guess dictionaries, keeping only the most recent entry for each player and question.
-        
+
         Args:
             guess_history (list[dict]): A list of guess dictionaries.
-            
+
         Returns:
             list[dict]: A deduplicated list of guess dictionaries.
         """
@@ -162,13 +169,13 @@ class Logger:
 
         Args:
             user_id (optional): ID of a user to filter answers for. Otherwise, return full answer history.
-        
+
         Returns:
             list[dict]: A list of dictionaries, where each dictionary represents a guess.
                         Returns an empty list if the file doesn't exist or an error occurs.
         """
         guess_history = []
-        if not os.path.exists(GUESSES_FILE_PATH):
+        if not os.path.exists(GUESSES_FILE_NAME):
             print("Guess history file not found. Returning empty list.")
             return guess_history
 
@@ -179,7 +186,7 @@ class Logger:
         )
 
         try:
-            with open(GUESSES_FILE_PATH, "r") as f:
+            with open(GUESSES_FILE_NAME, "r") as f:
                 for line in f:
                     match = log_pattern.match(line.strip())
                     if match:
