@@ -27,6 +27,8 @@ class QuestionSelector:
         Args:
             current_date (datetime.date): The date for which to get the question.
         """
+        if not self.questions:
+            raise ValueError("No questions available to select from.")
         if self.mode == "daily":
             # Select a question based on the date's ordinal number for predictable daily questions
             current_time = datetime.datetime.now(TIMEZONE)

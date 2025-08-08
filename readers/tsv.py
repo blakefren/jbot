@@ -46,10 +46,11 @@ def read_jeopardy_questions(
                 clue_value = parse_value(row.get("clue_value", 0))
                 final_jeopardy = metadata.get("round", 0) == 3
                 clue_value_adj = final_jeopardy_score if final_jeopardy else clue_value
+                # Jeopardy! has the answer and question swapped.
                 questions.append(
                     Question(
-                        question=row.get("answer", "N/A"),
-                        answer=row.get("question", "N/A"),
+                        question=row.get("question", "N/A"),
+                        answer=row.get("answer", "N/A"),
                         category=row.get("category", "N/A"),
                         clue_value=clue_value_adj,
                         data_source="Jeopardy!",
