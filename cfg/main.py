@@ -48,3 +48,18 @@ class ConfigReader:
             raise KeyError(f"Configuration key '{key}' not found.")
         else:
             return self.config.get(key, None)
+
+    def get_bool(self, key: str) -> bool:
+        """
+        Retrieves a boolean configuration value by key.
+
+        Args:
+            key (str): The key to look for in the configuration.
+
+        Returns:
+            bool: The boolean value associated with the key.
+        """
+        value = self.get(key)
+        if value is None:
+            return False
+        return value.lower() in ("true", "1", "t", "y", "yes")

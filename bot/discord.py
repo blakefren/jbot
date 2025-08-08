@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from bot.subscriber import Subscriber
 from cfg.main import ConfigReader
+from cfg.players import read_players_into_dict
 from log.logger import Logger
 from modes.game_runner import GameRunner
 from readers.question import Question
@@ -28,7 +29,13 @@ class DiscordBot(commands.Bot):
     Handles Discord-specific functionality like commands and tasks.
     """
 
-    def __init__(self, bot_token: str, game: GameRunner, command_prefix: str = "!"):
+    def __init__(
+        self,
+        bot_token: str,
+        game: GameRunner,
+        config: ConfigReader,
+        command_prefix: str = "!",
+    ):
         # discord.py specific setup
         intents = discord.Intents.default()
         intents.message_content = True
@@ -37,6 +44,7 @@ class DiscordBot(commands.Bot):
         super().__init__(command_prefix=command_prefix, intents=intents)
 
         self.game = game
+        self.config = config
         self.logger = Logger()
         self.bot_token = bot_token
         self.ready_event_fired = False
@@ -226,12 +234,34 @@ class DiscordBot(commands.Bot):
             )
 
     async def send_reminder_message(self):
-        """Sends a reminder to all subscribers."""
+        """Sends a reminder to all subscribers, tagging those who haven't guessed."""
         print(f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
             if not self.daily_q:
                 print("No question found for today.")
                 return
+
+            # Get players who have guessed
+            all_guesses = self.logger.read_guess_history()
+            daily_guesses = [
+                g for g in all_guesses if g.get("QuestionID") == self.daily_q.id
+            ]
+            player_ids_who_guessed = {g.get("PlayerID") for g in daily_guesses}
+
+            # Get all players
+            all_players = read_players_into_dict()
+            player_ids_all = set(all_players.keys())
+
+            # Find players who haven't guessed
+            player_ids_not_guessed = player_ids_all - player_ids_who_guessed
+
+            # Create the @mentions string
+            mentions = ""
+            if self.config.get_bool("TAG_UNANSWERED_PLAYERS") and player_ids_not_guessed:
+                mentions = " ".join(
+                    [f"<@{player_id}>" for player_id in player_ids_not_guessed]
+                )
+
             sent_to_ids = []
 
             for sub in self.game.get_subscribed_users():
@@ -240,6 +270,8 @@ class DiscordBot(commands.Bot):
                 )
                 question_part = self.format_question(self.daily_q)
                 full_message = f"{response_content}\n{question_part}"
+                if sub.is_channel and mentions:
+                    full_message += f"\n{mentions}"
                 await self.send_message(
                     full_message, target_id=sub.id, is_channel=sub.is_channel
                 )
@@ -643,7 +675,7 @@ async def discord_bot_async(config: ConfigReader, questions: list[Question]):
     """Main function to initialize and run the bot."""
     question_selector = QuestionSelector(questions, mode=config.get("QUESTION_MODE"))
     game = GameRunner(question_selector, mode=config.get("GAME_MODE"))
-    bot = DiscordBot(config.get("DISCORD_BOT_TOKEN"), game)
+    bot = DiscordBot(config.get("DISCORD_BOT_TOKEN"), game, config)
     set_bot_commands(bot)
     await bot.run()
 

@@ -7,6 +7,35 @@ import re
 PLAYER_FILE_PATH = os.path.join(os.path.dirname(__file__), "players.csv")
 
 
+def read_players_into_dict():
+    """
+    Reads the players CSV file and returns a dictionary of player data.
+
+    Returns:
+        dict: A dictionary where keys are discord_ids and values are player data.
+    """
+    csv_filepath = PLAYER_FILE_PATH
+    players = {}
+
+    try:
+        with open(csv_filepath, mode="r", newline="", encoding="utf-8") as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                discord_id = row.get("discord_id", "").strip()
+                if discord_id:
+                    players[discord_id] = {
+                        "firstname": row.get("firstname", "").strip(),
+                        "lastname": row.get("lastname", "").strip(),
+                        "phone_number": row.get("phone_number", "").strip(),
+                    }
+    except FileNotFoundError:
+        print(f"Error: The file '{csv_filepath}' was not found.")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    return players
+
+
 def read_and_validate_contacts():
     """
     Reads a CSV file containing phone numbers, first names, and last names,
