@@ -54,9 +54,8 @@ class Logger:
         # --- Setup Guesses Logger ---
         self.guesses_logger = logging.getLogger("guesses")
         self.guesses_logger.setLevel(logging.INFO)
-        guesses_handler = logging.FileHandler(
-            os.path.join(self.base_dir, GUESSES_FILE_NAME)
-        )
+        self.guesses_log_path = os.path.join(self.base_dir, GUESSES_FILE_NAME)
+        guesses_handler = logging.FileHandler(self.guesses_log_path)
         # Use a structured, easily parsable format
         guesses_formatter = logging.Formatter(
             "%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
@@ -67,6 +66,16 @@ class Logger:
         self.guesses_logger.propagate = False
 
         print(f"Logger initialized. Logs will be saved in '{self.base_dir}'.")
+
+    def close(self):
+        """
+        Closes all file handlers associated with the loggers.
+        """
+        for logger in [self.history_logger, self.messaging_logger, self.guesses_logger]:
+            for handler in logger.handlers:
+                handler.close()
+                logger.removeHandler(handler)
+        print("Logger handlers closed.")
 
     def log_daily_question(self, question: Question, sent_to_users):
         """
@@ -105,9 +114,16 @@ class Logger:
         """
         # Clean the guess to avoid breaking the log format
         cleaned_guess = guess.replace("'", "\\'").replace("\n", " ")
-        log_message = (
-            f"PlayerGuess - PlayerID: {player_id}, PlayerName: '{player_name}', "
-            f"QuestionID: {question_id}, Guess: '{cleaned_guess}', Correct: {is_correct}"
+        message_format = (
+            "PlayerGuess - PlayerID: %s, PlayerName: '%s', "
+            "QuestionID: %s, Guess: '%s', Correct: %s"
+        )
+        log_message = message_format % (
+            player_id,
+            player_name,
+            question_id,
+            cleaned_guess,
+            is_correct,
         )
         self.guesses_logger.info(log_message)
         print(f"[Guess Logged] {log_message}")
@@ -175,7 +191,7 @@ class Logger:
                         Returns an empty list if the file doesn't exist or an error occurs.
         """
         guess_history = []
-        if not os.path.exists(GUESSES_FILE_NAME):
+        if not os.path.exists(self.guesses_log_path):
             print("Guess history file not found. Returning empty list.")
             return guess_history
 
@@ -186,7 +202,7 @@ class Logger:
         )
 
         try:
-            with open(GUESSES_FILE_NAME, "r") as f:
+            with open(self.guesses_log_path, "r") as f:
                 for line in f:
                     match = log_pattern.match(line.strip())
                     if match:

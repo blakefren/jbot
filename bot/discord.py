@@ -407,6 +407,7 @@ def set_bot_commands(bot: DiscordBot):
                     status="aiohttp_close_failed",
                 )
 
+        # TODO: should we close the logger here?
         try:
             await bot.close()
             print("Bot closed successfully.")
