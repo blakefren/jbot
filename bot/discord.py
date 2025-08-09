@@ -2,7 +2,6 @@ import asyncio
 import datetime
 import discord
 import os
-import re
 import sys
 
 from discord.ext import commands, tasks
@@ -10,7 +9,6 @@ from zoneinfo import ZoneInfo
 
 from bot.subscriber import Subscriber
 from cfg.main import ConfigReader
-from cfg.players import read_players_into_dict
 from log.logger import Logger
 from modes.game_runner import GameRunner
 from readers.question import Question
@@ -48,7 +46,6 @@ class DiscordBot(commands.Bot):
         self.logger = self.game.logger
         self.bot_token = bot_token
         self.ready_event_fired = False
-        self.daily_q = None
 
     async def run(self):
         """Starts the Discord bot."""
@@ -113,10 +110,10 @@ class DiscordBot(commands.Bot):
             )
         # Set daily question, if bot started after the morning message but before the evening message.
         now = datetime.datetime.now(TIMEZONE)
-        if MORNING_TIME < now.time() < EVENING_TIME and self.daily_q is None:
+        if MORNING_TIME < now.time() < EVENING_TIME and self.game.daily_q is None:
             print("Bot started after morning message time. Setting daily question.")
-            self.daily_q = self.game.question_selector.get_question_for_today()
-            if not self.daily_q:
+            self.game.set_daily_question()
+            if not self.game.daily_q:
                 print("No question found for today.")
 
         # Sync commands.
@@ -147,15 +144,108 @@ class DiscordBot(commands.Bot):
 
     @tasks.loop(time=MORNING_TIME)
     async def morning_message_task(self):
-        await self.send_morning_message()
+        """Sends the morning message and question to all subscribers."""
+        print(f"Morning message task running at {datetime.datetime.now(TIMEZONE)}...")
+        try:
+            self.game.set_daily_question()
+            if not self.game.daily_q:
+                print("No question available for today.")
+                return
+
+            content = self.game.get_morning_message_content()
+            sent_to_ids = []
+
+            for sub in self.game.get_subscribed_users():
+                await self.send_message(
+                    content,
+                    is_channel=sub.is_channel,
+                    target_id=sub.id,
+                    success_status="morning_message",
+                )
+                sent_to_ids.append(sub.id)
+
+            self.logger.log_daily_question(
+                question=self.game.daily_q, sent_to_users=sent_to_ids
+            )
+        except Exception as e:
+            print(f"An error occurred during the morning message task: {e}")
+            self.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender="N/A",
+                content=f"Error in morning message task: {e}",
+                status="failed",
+            )
 
     @tasks.loop(time=REMINDER_TIME)
     async def reminder_message_task(self):
-        await self.send_reminder_message()
+        """Sends a reminder to all subscribers, tagging those who haven't guessed."""
+        print(f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}...")
+        try:
+            if not self.game.daily_q:
+                print("No question to remind about.")
+                return
+
+            content = self.game.get_reminder_message_content(
+                self.config.get_bool("TAG_UNANSWERED_PLAYERS")
+            )
+            sent_to_ids = []
+
+            for sub in self.game.get_subscribed_users():
+                await self.send_message(
+                    content,
+                    is_channel=sub.is_channel,
+                    target_id=sub.id,
+                    success_status="reminder_message",
+                )
+                sent_to_ids.append(sub.id)
+
+            self.logger.log_daily_question(
+                question=self.game.daily_q, sent_to_users=sent_to_ids
+            )
+        except Exception as e:
+            print(f"An error occurred during the reminder message task: {e}")
+            self.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender="N/A",
+                content=f"Error in reminder message task: {e}",
+                status="failed",
+            )
 
     @tasks.loop(time=EVENING_TIME)
     async def evening_message_task(self):
-        await self.send_evening_message()
+        """Sends the evening answer to all subscribers."""
+        print(f"Evening message task running at {datetime.datetime.now(TIMEZONE)}...")
+        try:
+            if not self.game.daily_q:
+                print("No question to answer for today.")
+                return
+
+            content = self.game.get_evening_message_content()
+            sent_to_ids = []
+
+            for sub in self.game.get_subscribed_users():
+                await self.send_message(
+                    content,
+                    is_channel=sub.is_channel,
+                    target_id=sub.id,
+                    success_status="evening_message",
+                )
+                sent_to_ids.append(sub.id)
+
+            self.logger.log_daily_question(
+                question=self.game.daily_q, sent_to_users=sent_to_ids
+            )
+        except Exception as e:
+            print(f"An error occurred during the evening message task: {e}")
+            self.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender="N/A",
+                content=f"Error in evening message task: {e}",
+                status="failed",
+            )
 
     async def send_message(
         self,
@@ -197,165 +287,6 @@ class DiscordBot(commands.Bot):
                 content=content,
                 status=f"failed - {e}",
             )
-
-    async def send_morning_message(self):
-        """Sends the morning message and question to all subscribers."""
-        print(f"Morning message task running at {datetime.datetime.now(TIMEZONE)}...")
-        try:
-            self.daily_q = self.game.question_selector.get_question_for_today()
-            if not self.daily_q:
-                print("No question found for today.")
-                return
-            sent_to_ids = []
-
-            for sub in self.game.get_subscribed_users():
-                flavor_message = (
-                    "Good morning players!\n"
-                    f"You have until <t:{int(self.evening_message_task.next_iteration.timestamp())}> to answer today's trivia question:"
-                )
-                question_part = self.format_question(self.daily_q)
-                full_message = f"{flavor_message}\n{question_part}"
-                await self.send_message(
-                    full_message, target_id=sub.id, is_channel=sub.is_channel
-                )
-                sent_to_ids.append(str(sub.id))
-
-            self.logger.log_daily_question(
-                question=self.daily_q, sent_to_users=sent_to_ids
-            )
-        except Exception as e:
-            print(f"An error occurred during the morning message task: {e}")
-            self.logger.log_messaging_event(
-                direction="bot",
-                method="Discord",
-                recipient_or_sender="N/A",
-                content=f"Error in morning message task: {e}",
-                status="failed",
-            )
-
-    async def send_reminder_message(self):
-        """Sends a reminder to all subscribers, tagging those who haven't guessed."""
-        print(f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}...")
-        try:
-            if not self.daily_q:
-                print("No question found for today.")
-                return
-
-            # Get players who have guessed
-            all_guesses = self.logger.read_guess_history()
-            daily_guesses = [
-                g for g in all_guesses if g.get("QuestionID") == self.daily_q.id
-            ]
-            player_ids_who_guessed = {g.get("PlayerID") for g in daily_guesses}
-
-            # Get all players
-            all_players = read_players_into_dict()
-            player_ids_all = set(all_players.keys())
-
-            # Find players who haven't guessed
-            player_ids_not_guessed = player_ids_all - player_ids_who_guessed
-
-            # Create the @mentions string
-            mentions = ""
-            if (
-                self.config.get_bool("TAG_UNANSWERED_PLAYERS")
-                and player_ids_not_guessed
-            ):
-                mentions = " ".join(
-                    [f"<@{player_id}>" for player_id in player_ids_not_guessed]
-                )
-
-            sent_to_ids = []
-
-            for sub in self.game.get_subscribed_users():
-                response_content = (
-                    "Reminder: your answers are due shortly. Today's question:"
-                )
-                question_part = self.format_question(self.daily_q)
-                full_message = f"{response_content}\n{question_part}"
-                if sub.is_channel and mentions:
-                    full_message += f"\n{mentions}"
-                await self.send_message(
-                    full_message, target_id=sub.id, is_channel=sub.is_channel
-                )
-                sent_to_ids.append(str(sub.id))
-
-            self.logger.log_daily_question(
-                question=self.daily_q, sent_to_users=sent_to_ids
-            )
-        except Exception as e:
-            print(f"An error occurred during the reminder message task: {e}")
-            self.logger.log_messaging_event(
-                direction="bot",
-                method="Discord",
-                recipient_or_sender="N/A",
-                content=f"Error in reminder message task: {e}",
-                status="failed",
-            )
-
-    async def send_evening_message(self):
-        """Sends the evening answer to all subscribers."""
-        print(f"Evening message task running at {datetime.datetime.now(TIMEZONE)}...")
-        try:
-            if not self.daily_q:
-                print("No question found for today.")
-                return
-            sent_to_ids = []
-
-            # Get all guesses for the daily question
-            all_guesses = self.logger.read_guess_history()
-            daily_guesses = [
-                g for g in all_guesses if g.get("QuestionID") == self.daily_q.id
-            ]
-
-            player_answers = ""
-            if daily_guesses:
-                player_answers += "--Player answers--\n"
-                for guess in daily_guesses:
-                    player_answers += f"{guess['PlayerName']}: {guess['Guess']}\n"
-
-            for sub in self.game.get_subscribed_users():
-                flavor_message = (
-                    "Good evening players!\n"
-                    f"Here is the answer to today's trivia question:"
-                )
-                question_part = self.format_question(self.daily_q)
-                answer_part = self.format_answer(self.daily_q)
-                full_message = f"{flavor_message}\n{question_part}\n{answer_part}\n{player_answers}"
-
-                await self.send_message(
-                    full_message, target_id=sub.id, is_channel=sub.is_channel
-                )
-                sent_to_ids.append(str(sub.id))
-
-            self.logger.log_daily_question(
-                question=self.daily_q, sent_to_users=sent_to_ids
-            )
-        except Exception as e:
-            print(f"An error occurred during the evening message task: {e}")
-            self.logger.log_messaging_event(
-                direction="bot",
-                method="Discord",
-                recipient_or_sender="N/A",
-                content=f"Error in evening message task: {e}",
-                status="failed",
-            )
-
-    def format_question(self, question: Question) -> str:
-        """Internal helper method to format a trivia question."""
-        return (
-            f"**--- Question! ---**\n"
-            f"Category: **{question.category}**\n"
-            f"Value: **${question.clue_value}**\n"
-            f"Question: **{question.question}**\n"
-        )
-
-    def format_answer(self, question: Question) -> str:
-        """Internal helper method to format a trivia answer."""
-        min_display_size = 15
-        pad_size = max(min_display_size - len(question.answer), 0) // 2
-        padded_answer = question.answer.center(len(question.answer) + pad_size * 2, " ")
-        return f"Answer: ||**{padded_answer}**||\n"
 
 
 def set_bot_commands(bot: DiscordBot):
@@ -478,18 +409,13 @@ def set_bot_commands(bot: DiscordBot):
         """Get a random question and answer."""
         random_q = bot.game.question_selector.get_random_question()
         if not random_q:
-            response_content = (
-                "No questions available. Please check the question source."
-            )
-            await bot.send_message(
-                response_content, ctx=ctx, success_status="no_questions"
-            )
+            await bot.send_message("Could not find a question.", ctx=ctx)
             return
 
         # TODO: is_channel is set to False during testing, when the bot is only
         # messaging a user. Make this settable at runtime.
-        question_part = bot.format_question(random_q)
-        answer_part = bot.format_answer(random_q)
+        question_part = bot.game.format_question(random_q)
+        answer_part = bot.game.format_answer(random_q)
         full_message = f"{question_part}\n{answer_part}"
         await bot.send_message(full_message, ctx=ctx)
 
@@ -509,55 +435,43 @@ def set_bot_commands(bot: DiscordBot):
             )
         # Next event is evening answer.
         else:
-            response_content = (
-                f"Today's answer is scheduled for <t:{int(next_datetime.timestamp())}>.\n"
-                f"Your answer is due <t:{int(next_datetime.timestamp())}:R>."
-            )
+            response_content += f"The answer will be revealed at {evening_time_next.strftime('%I:%M %p %Z')}."
         await bot.send_message(response_content, ctx=ctx)
 
         # Remind the daily question, if after the morning send time.
-        if bot.daily_q:
-            reminder_message = "Resending today's question:"
-            question_part = bot.format_question(bot.daily_q)
-            full_message = f"{reminder_message}\n{question_part}"
-            await bot.send_message(full_message, ctx=ctx)
+        if bot.game.daily_q:
+            question_part = bot.game.format_question(bot.game.daily_q)
+            await bot.send_message(question_part, ctx=ctx)
 
     @bot.hybrid_command(name="answer", aliases=["a", "ans"])
-    async def answer(ctx: commands.Context, *, guess: str, skip_confirmation=False):
+    async def answer(ctx: commands.Context, *, guess: str):
         """Submits an answer for the current daily question."""
-        if not bot.daily_q:
+        if not bot.game.daily_q:
             await bot.send_message(
-                "There is no active question to answer right now.", ctx=ctx
+                "There is no active question right now.", ctx=ctx
             )
             return
 
-        # Check the answer
-        g = guess.strip().lower()
-        a = bot.daily_q.answer.strip().lower()
-        is_correct = re.search(g, a) is not None
-        bot.logger.log_player_guess(
-            ctx.author.id, ctx.author.name, bot.daily_q.id, g, is_correct
-        )
+        player_id = ctx.author.id
+        player_name = ctx.author.display_name
+        is_correct = bot.game.handle_guess(player_id, player_name, guess)
 
-        # Confirm the answer, if enabled.
-        if skip_confirmation:
-            return
+        # Log the guess submission event
         status = "correct_guess" if is_correct else "incorrect_guess"
         bot.logger.log_messaging_event(
             direction="from",
             method="Discord",
-            recipient_or_sender=str(ctx.author.id),
+            recipient_or_sender=str(player_id),
             content=f"Answer: '{guess}'",
             status=status,
         )
-        if is_correct:
-            response_content = f"That is correct, {ctx.author.display_name}! Well done."
-        else:
-            response_content = f"Sorry, '{guess}' is not the correct answer."
 
-        answer_part = bot.format_answer(bot.daily_q)
-        full_message = f"{response_content}\n{answer_part}"
-        await bot.send_message(full_message, ctx=ctx)
+        # Send a confirmation message
+        if is_correct:
+            response_content = "That is correct! Nicely done."
+        else:
+            response_content = "Sorry, that is not the correct answer."
+        await bot.send_message(response_content, ctx=ctx)
 
     @bot.hybrid_command(name="subscribe", aliases=["sub"])
     async def subscribe(ctx: commands.Context):
@@ -604,88 +518,30 @@ def set_bot_commands(bot: DiscordBot):
 
     @bot.hybrid_command(name="history", aliases=["h", "metrics"])
     async def history(ctx: commands.Context):
-        """Get player guess history."""
-        history = bot.logger.read_guess_history(user_id=ctx.author.id)
-        metrics = bot.logger.get_guess_metrics(
-            history, bot.game.question_selector.questions
-        )
-
-        full_message = ""
-        player_metrics = metrics["players"].get(str(ctx.author.id), None)
-        if player_metrics:
-            correct_rate = player_metrics.get("correct_rate", 0)
-            player_part = (
-                f"--{ctx.author.display_name}'s data--\n"
-                f"Player guesses:  {player_metrics.get('total_guesses')}\n"
-                f"Correct guesses: {player_metrics.get('correct_guesses')}\n"
-                f"Correct rate:    {correct_rate:.2f}\n"
-                f"Total score:     {player_metrics.get('score')}"
-            )
-            full_message += player_part
-
-        global_correct_rate = metrics.get("global_correct_rate", 0)
-        global_part = (
-            f"\n\n--Global data--\n"
-            f"Global guesses:   {metrics.get('total_guesses')}\n"
-            f"Unique questions: {metrics.get('unique_questions')}\n"
-            f"Correct rate:     {global_correct_rate:.2f}\n"
-            f"Global score:     {metrics.get('global_score')}"
-        )
-        full_message += global_part
-
-        await bot.send_message(full_message, ctx=ctx, success_status="history")
+        """Shows your personal game history and stats."""
+        player_id = ctx.author.id
+        player_name = ctx.author.display_name
+        history_text = bot.game.get_player_history(player_id, player_name)
+        await bot.send_message(history_text, ctx=ctx)
 
     @bot.hybrid_command(name="scores", aliases=["leaderboard", "s", "score"])
     async def scores(ctx: commands.Context):
-        """Get all player scores."""
-        history = bot.logger.read_guess_history()
-        metrics = bot.logger.get_guess_metrics(
-            history, bot.game.question_selector.questions
-        )
-        players_data = metrics.get("players", {})
-
-        if not players_data:
-            await bot.send_message("No player scores found.", ctx=ctx)
-            return
-
-        # Sort players by score
-        sorted_players = sorted(
-            players_data.items(), key=lambda item: item[1].get("score", 0), reverse=True
-        )
-
-        if not sorted_players:
-            await bot.send_message("No player scores found.", ctx=ctx)
-            return
-
-        response_content = "-- Player Scores --\n"
-        for i, (user_id, data) in enumerate(sorted_players, 1):
-            try:
-                user = await bot.fetch_user(int(user_id))
-                display_name = user.display_name
-            except discord.NotFound:
-                display_name = f"Unknown User (ID: {user_id})"
-            except Exception as e:
-                display_name = f"Unknown User (ID: {user_id})"
-                print(f"Could not fetch user {user_id}: {e}")
-
-            score = data.get("score", 0)
-            response_content += f"{i}. {display_name}: {score}\n"
-
-        await bot.send_message(response_content, ctx=ctx, success_status="scores")
+        """Displays the current score leaderboard."""
+        leaderboard = bot.game.get_scores_leaderboard()
+        await bot.send_message(leaderboard, ctx=ctx)
 
 
-async def discord_bot_async(config: ConfigReader, questions: list[Question]):
+async def discord_bot_async(config: ConfigReader, questions: list[Question], logger: Logger):
     """Main function to initialize and run the bot."""
     question_selector = QuestionSelector(questions, mode=config.get("QUESTION_MODE"))
-    logger = Logger()
     game = GameRunner(question_selector, logger, mode=config.get("GAME_MODE"))
     bot = DiscordBot(config.get("DISCORD_BOT_TOKEN"), game, config)
     set_bot_commands(bot)
     await bot.run()
 
 
-def run_discord_bot(config: ConfigReader, questions: list[Question]):
+def run_discord_bot(config: ConfigReader, questions: list[Question], logger: Logger):
     try:
-        asyncio.run(discord_bot_async(config, questions))
+        asyncio.run(discord_bot_async(config, questions, logger))
     except KeyboardInterrupt:
         print("Bot shutdown requested by user.")

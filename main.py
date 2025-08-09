@@ -1,6 +1,7 @@
 from bot.discord import run_discord_bot
 from cfg.main import ConfigReader
 from cfg.players import read_and_validate_contacts
+from log.logger import Logger
 from readers.question import Question
 from readers.tsv import read_jeopardy_questions, get_random_question
 
@@ -41,6 +42,7 @@ if __name__ == "__main__":
     config = load_configs()
     players = load_players()
     questions = read_questions()
+    logger = Logger()
 
     ### Print a single random question ###
     print("\n--- Random Question ---")
@@ -51,6 +53,6 @@ if __name__ == "__main__":
     # Start game bot, depending on the messenger type.
     messenger = config.get("MESSENGER")
     if messenger == "discord":
-        run_discord_bot(config, questions)
+        run_discord_bot(config, questions, logger)
     else:
         pass
