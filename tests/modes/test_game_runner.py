@@ -16,7 +16,6 @@ class TestGameRunner(unittest.TestCase):
         self.mock_question_selector = MagicMock()
         self.mock_logger = MagicMock(spec=Logger)
         self.mock_question = Question(
-            id="qid1",
             question="Test Question",
             answer="Test Answer",
             category="Test Category",
@@ -47,7 +46,9 @@ class TestGameRunner(unittest.TestCase):
     def test_initialization(self):
         """Test GameRunner initialization."""
         self.assertEqual(self.game_runner.mode, GameType.SIMPLE)
-        self.assertEqual(self.game_runner.question_selector, self.mock_question_selector)
+        self.assertEqual(
+            self.game_runner.question_selector, self.mock_question_selector
+        )
         self.assertEqual(self.game_runner.subscribed_contexts, set())
         self.assertIsNone(self.game_runner.daily_q)
 
@@ -137,18 +138,23 @@ class TestGameRunner(unittest.TestCase):
         # With tagging enabled
         content = self.game_runner.get_reminder_message_content(tag_unanswered=True)
         self.assertIn(self.mock_question.question, content)
+        self.assertIn("<@1>", content)
         self.assertIn("<@2>", content)
-        self.assertNotIn("<@1>", content)
 
         # With tagging disabled
         content = self.game_runner.get_reminder_message_content(tag_unanswered=False)
+        self.assertNotIn("<@1>", content)
         self.assertNotIn("<@2>", content)
 
     def test_get_evening_message_content(self):
         """Test generating the evening message content."""
         self.game_runner.daily_q = self.mock_question
         self.mock_logger.read_guess_history.return_value = [
-            {"QuestionID": "qid1", "PlayerName": "Player1", "Guess": "A guess"}
+            {
+                "QuestionID": 110004699642252617987064134833407364497,
+                "PlayerName": "Player1",
+                "Guess": "A guess",
+            }
         ]
 
         content = self.game_runner.get_evening_message_content()
@@ -166,7 +172,11 @@ class TestGameRunner(unittest.TestCase):
         )
         self.assertTrue(is_correct)
         self.mock_logger.log_player_guess.assert_called_with(
-            player_id, player_name, "qid1", "test answer", True
+            player_id,
+            player_name,
+            110004699642252617987064134833407364497,
+            "test answer",
+            True,
         )
 
         # Incorrect guess
@@ -175,14 +185,16 @@ class TestGameRunner(unittest.TestCase):
         )
         self.assertFalse(is_correct)
         self.mock_logger.log_player_guess.assert_called_with(
-            player_id, player_name, "qid1", "wrong answer", False
+            player_id,
+            player_name,
+            110004699642252617987064134833407364497,
+            "wrong answer",
+            False,
         )
 
         # No daily question
         self.game_runner.daily_q = None
-        is_correct = self.game_runner.handle_guess(
-            player_id, player_name, "any answer"
-        )
+        is_correct = self.game_runner.handle_guess(player_id, player_name, "any answer")
         self.assertFalse(is_correct)
 
     def test_get_scores_leaderboard(self):
@@ -219,7 +231,6 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("Correct rate:  0.80", history)
         self.assertIn("Score:         4", history)
         self.assertIn("Global score:     7", history)
-
 
 
 if __name__ == "__main__":
