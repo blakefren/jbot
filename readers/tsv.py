@@ -49,8 +49,8 @@ def read_jeopardy_questions(
                 # Jeopardy! has the answer and question swapped.
                 questions.append(
                     Question(
-                        question=row.get("question", "N/A"),
-                        answer=row.get("answer", "N/A"),
+                        question=row.get("answer", "N/A"),
+                        answer=row.get("question", "N/A"),
                         category=row.get("category", "N/A"),
                         clue_value=clue_value_adj,
                         data_source="Jeopardy!",
