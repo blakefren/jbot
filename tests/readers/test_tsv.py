@@ -34,9 +34,9 @@ class TestTsv(unittest.TestCase):
             self.assertEqual(questions[0].category, "HISTORY")
             self.assertEqual(questions[0].clue_value, 200)
             self.assertEqual(
-                questions[0].question, "The year the Magna Carta was signed"
+                questions[0].question, "What is 1215?"
             )
-            self.assertEqual(questions[0].answer, "What is 1215?")
+            self.assertEqual(questions[0].answer, "The year the Magna Carta was signed")
             self.assertEqual(questions[0].data_source, "Jeopardy!")
             self.assertEqual(questions[0].metadata["round"], "1")
 
