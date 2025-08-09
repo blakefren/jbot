@@ -1,6 +1,3 @@
-import time
-
-from bot.messenger import SMSBot
 from bot.discord import run_discord_bot
 from cfg.main import ConfigReader
 from cfg.players import read_and_validate_contacts
@@ -53,32 +50,7 @@ if __name__ == "__main__":
 
     # Start game bot, depending on the messenger type.
     messenger = config.get("MESSENGER")
-    if messenger == "sms":
-        try:
-            ### Messaging setup ###
-            sms_bot = SMSBot(
-                account_sid=config.get("TWILIO_ACCOUNT_SID"),
-                auth_token=config.get("TWILIO_AUTH_TOKEN"),
-                twilio_phone_number=config.get("FROM_NUMBER"),
-            )
-
-            ### Test: send a question ###
-            sms_bot.send_question(**random_q)
-            time.sleep(10)  # Wait for 2 seconds before sending the answer
-            sms_bot.send_answer(
-                to_phone_number=[c["discord_id"] for c in contacts], **random_q
-            )
-
-        except ValueError as e:
-            print(f"\nConfiguration Error: {e}")
-            print(
-                "Please ensure your Twilio Account SID, Auth Token, and Phone Number are correctly set."
-            )
-            print(
-                "You can set them in `/cfg/main.cfg` (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER)"
-            )
-        except Exception as e:
-            print(f"\nAn unexpected error occurred during example usage: {e}")
-
-    elif messenger == "discord":
+    if messenger == "discord":
         run_discord_bot(config, questions)
+    else:
+        pass
