@@ -211,7 +211,7 @@ class DiscordBot(commands.Bot):
             for sub in self.game.get_subscribed_users():
                 flavor_message = (
                     "Good morning players!\n"
-                    f"You have until {self.evening_message_task.next_iteration} to answer today's trivia question:"
+                    f"You have until <t:{int(self.evening_message_task.next_iteration.timestamp())}> to answer today's trivia question:"
                 )
                 question_part = self.format_question(self.daily_q)
                 full_message = f"{flavor_message}\n{question_part}"
@@ -257,7 +257,10 @@ class DiscordBot(commands.Bot):
 
             # Create the @mentions string
             mentions = ""
-            if self.config.get_bool("TAG_UNANSWERED_PLAYERS") and player_ids_not_guessed:
+            if (
+                self.config.get_bool("TAG_UNANSWERED_PLAYERS")
+                and player_ids_not_guessed
+            ):
                 mentions = " ".join(
                     [f"<@{player_id}>" for player_id in player_ids_not_guessed]
                 )
@@ -496,20 +499,19 @@ def set_bot_commands(bot: DiscordBot):
         morning_time_next = bot.morning_message_task.next_iteration
         evening_time_next = bot.evening_message_task.next_iteration
         next_datetime = min(morning_time_next, evening_time_next)
-        time_until = next_datetime - datetime.datetime.now(TIMEZONE)
         response_content = ""
 
         # Next event is morning question.
         if morning_time_next < evening_time_next:
             response_content = (
-                f"The next question is scheduled for {next_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}.\n"
-                f"You have {time_until} until the next challenge."
+                f"The next question is scheduled for <t:{int(next_datetime.timestamp())}>.\n"
+                f"The next challenge is <t:{int(next_datetime.timestamp())}:R>."
             )
         # Next event is evening answer.
         else:
             response_content = (
-                f"Today's answer is scheduled for {next_datetime.strftime('%Y-%m-%d %H:%M:%S %Z')}.\n"
-                f"You have {time_until} remaining to play."
+                f"Today's answer is scheduled for <t:{int(next_datetime.timestamp())}>.\n"
+                f"Your answer is due <t:{int(next_datetime.timestamp())}:R>."
             )
         await bot.send_message(response_content, ctx=ctx)
 
