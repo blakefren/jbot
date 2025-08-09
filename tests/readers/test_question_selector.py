@@ -17,7 +17,7 @@ class TestQuestionSelector(unittest.TestCase):
     def test_init(self):
         selector = QuestionSelector(self.questions, mode="daily")
         self.assertEqual(selector.questions, self.questions)
-        self.assertEqual(selector.mode, "test_break")
+        self.assertEqual(selector.mode, "daily")
 
     @patch("readers.question_selector.datetime")
     def test_get_question_for_today_daily_mode(self, mock_datetime):
