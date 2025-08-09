@@ -201,8 +201,8 @@ class TestGameRunner(unittest.TestCase):
         """Test generating the scores leaderboard."""
         self.mock_logger.get_guess_metrics.return_value = {
             "players": {
-                "1": {"name": "Alice", "score": 10},
-                "2": {"name": "Bob", "score": 5},
+                "1": {"player_name": "Alice", "score": 10},
+                "2": {"player_name": "Bob", "score": 5},
             }
         }
         leaderboard = self.game_runner.get_scores_leaderboard()

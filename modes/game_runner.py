@@ -154,7 +154,7 @@ class GameRunner:
 
         response_content = "-- Player Scores --\n"
         for i, (user_id, data) in enumerate(sorted_players, 1):
-            player_name = data.get('name', user_id)
+            player_name = data.get('player_name', user_id)
             score = data.get('score', 0)
             response_content += f"{i}. {player_name}: {score}\n"
         return response_content
