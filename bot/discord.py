@@ -45,7 +45,7 @@ class DiscordBot(commands.Bot):
 
         self.game = game
         self.config = config
-        self.logger = Logger()
+        self.logger = self.game.logger
         self.bot_token = bot_token
         self.ready_event_fired = False
         self.daily_q = None
@@ -677,7 +677,8 @@ def set_bot_commands(bot: DiscordBot):
 async def discord_bot_async(config: ConfigReader, questions: list[Question]):
     """Main function to initialize and run the bot."""
     question_selector = QuestionSelector(questions, mode=config.get("QUESTION_MODE"))
-    game = GameRunner(question_selector, mode=config.get("GAME_MODE"))
+    logger = Logger()
+    game = GameRunner(question_selector, logger, mode=config.get("GAME_MODE"))
     bot = DiscordBot(config.get("DISCORD_BOT_TOKEN"), game, config)
     set_bot_commands(bot)
     await bot.run()

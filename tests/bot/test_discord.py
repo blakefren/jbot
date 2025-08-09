@@ -5,6 +5,7 @@ from bot.discord import DiscordBot, set_bot_commands
 from bot.subscriber import Subscriber
 from cfg.main import ConfigReader
 from modes.game_runner import GameRunner
+from log.logger import Logger
 from readers.question import Question
 from readers.question_selector import QuestionSelector
 
@@ -14,7 +15,9 @@ class TestDiscordBot(unittest.TestCase):
         self.mock_game_runner = MagicMock(spec=GameRunner)
         self.mock_config_reader = MagicMock(spec=ConfigReader)
         self.mock_question_selector = MagicMock(spec=QuestionSelector)
+        self.mock_logger = MagicMock(spec=Logger)
         self.mock_game_runner.question_selector = self.mock_question_selector
+        self.mock_game_runner.logger = self.mock_logger
 
         self.bot = DiscordBot(
             bot_token="test_token",
