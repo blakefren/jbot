@@ -92,28 +92,6 @@ class GameRunner:
         self.mode = new_mode
         print(f"Game mode changed to: {self.mode}")
 
-    def send_morning_message(self):
-        """
-        Sends the daily question to all subscribers.
-        """
-        question = self.question_selector.get_question_for_today()
-        for subscriber in self.subscribed_contexts:
-            print(
-                f"Sending morning message to {subscriber.display_name}: {question.question}"
-            )
-            # TODO
-
-    def send_evening_message(self):
-        """
-        Sends the daily answer to all subscribers.
-        """
-        question = self.question_selector.get_question_for_today()
-        for subscriber in self.subscribed_contexts:
-            print(
-                f"Sending evening message to {subscriber.display_name}: {question.answer}"
-            )
-            # TODO
-
     def handle_guess(self, player_id: int, player_name: str, guess: str) -> bool:
         """
         Handles the answer submitted by a player, logs it, and returns correctness.
