@@ -9,7 +9,7 @@ from readers.question_selector import QuestionSelector, TIMEZONE
 class TestQuestionSelector(unittest.TestCase):
     def setUp(self):
         self.questions = [
-            Question("Q1", "test_breakage", "C1", 100),
+            Question("Q1", "A1", "C1", 100),
             Question("Q2", "A2", "C2", 200),
             Question("Q3", "A3", "C3", 300),
         ]
@@ -17,7 +17,7 @@ class TestQuestionSelector(unittest.TestCase):
     def test_init(self):
         selector = QuestionSelector(self.questions, mode="daily")
         self.assertEqual(selector.questions, self.questions)
-        self.assertEqual(selector.mode, "daily")
+        self.assertEqual(selector.mode, "test_break")
 
     @patch("readers.question_selector.datetime")
     def test_get_question_for_today_daily_mode(self, mock_datetime):
