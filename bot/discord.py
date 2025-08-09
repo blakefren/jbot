@@ -148,104 +148,71 @@ class DiscordBot(commands.Bot):
         print(f"Morning message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
             self.game.set_daily_question()
-            if not self.game.daily_q:
-                print("No question available for today.")
-                return
-
-            content = self.game.get_morning_message_content()
-            sent_to_ids = []
-
-            for sub in self.game.get_subscribed_users():
-                await self.send_message(
-                    content,
-                    is_channel=sub.is_channel,
-                    target_id=sub.id,
-                    success_status="morning_message",
-                )
-                sent_to_ids.append(sub.id)
-
-            self.logger.log_daily_question(
-                question=self.game.daily_q, sent_to_users=sent_to_ids
+            await self._send_daily_message_to_all_subscribers(
+                self.game.get_morning_message_content, "morning_message"
             )
         except Exception as e:
-            print(f"An error occurred during the morning message task: {e}")
-            self.logger.log_messaging_event(
-                direction="bot",
-                method="Discord",
-                recipient_or_sender="N/A",
-                content=f"Error in morning message task: {e}",
-                status="failed",
-            )
+            self._log_task_error(e, "morning_message_task")
 
     @tasks.loop(time=REMINDER_TIME)
     async def reminder_message_task(self):
         """Sends a reminder to all subscribers, tagging those who haven't guessed."""
         print(f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
-            if not self.game.daily_q:
-                print("No question to remind about.")
-                return
-
-            content = self.game.get_reminder_message_content(
+            content_getter = lambda: self.game.get_reminder_message_content(
                 self.config.get_bool("TAG_UNANSWERED_PLAYERS")
             )
-            sent_to_ids = []
-
-            for sub in self.game.get_subscribed_users():
-                await self.send_message(
-                    content,
-                    is_channel=sub.is_channel,
-                    target_id=sub.id,
-                    success_status="reminder_message",
-                )
-                sent_to_ids.append(sub.id)
-
-            self.logger.log_daily_question(
-                question=self.game.daily_q, sent_to_users=sent_to_ids
+            await self._send_daily_message_to_all_subscribers(
+                content_getter, "reminder_message"
             )
         except Exception as e:
-            print(f"An error occurred during the reminder message task: {e}")
-            self.logger.log_messaging_event(
-                direction="bot",
-                method="Discord",
-                recipient_or_sender="N/A",
-                content=f"Error in reminder message task: {e}",
-                status="failed",
-            )
+            self._log_task_error(e, "reminder_message_task")
 
     @tasks.loop(time=EVENING_TIME)
     async def evening_message_task(self):
         """Sends the evening answer to all subscribers."""
         print(f"Evening message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
-            if not self.game.daily_q:
-                print("No question to answer for today.")
-                return
-
-            content = self.game.get_evening_message_content()
-            sent_to_ids = []
-
-            for sub in self.game.get_subscribed_users():
-                await self.send_message(
-                    content,
-                    is_channel=sub.is_channel,
-                    target_id=sub.id,
-                    success_status="evening_message",
-                )
-                sent_to_ids.append(sub.id)
-
-            self.logger.log_daily_question(
-                question=self.game.daily_q, sent_to_users=sent_to_ids
+            await self._send_daily_message_to_all_subscribers(
+                self.game.get_evening_message_content, "evening_message"
             )
         except Exception as e:
-            print(f"An error occurred during the evening message task: {e}")
-            self.logger.log_messaging_event(
-                direction="bot",
-                method="Discord",
-                recipient_or_sender="N/A",
-                content=f"Error in evening message task: {e}",
-                status="failed",
+            self._log_task_error(e, "evening_message_task")
+
+    async def _send_daily_message_to_all_subscribers(
+        self, content_getter, success_status: str
+    ):
+        """Helper function to send a daily message to all subscribers."""
+        if not self.game.daily_q:
+            print("No question available for today.")
+            return
+
+        content = content_getter()
+        sent_to_ids = []
+
+        for sub in self.game.get_subscribed_users():
+            await self.send_message(
+                content,
+                is_channel=sub.is_channel,
+                target_id=sub.id,
+                success_status=success_status,
             )
+            sent_to_ids.append(sub.id)
+
+        self.logger.log_daily_question(
+            question=self.game.daily_q, sent_to_users=sent_to_ids
+        )
+
+    def _log_task_error(self, e: Exception, task_name: str):
+        """Logs an error for a background task."""
+        print(f"An error occurred during the {task_name}: {e}")
+        self.logger.log_messaging_event(
+            direction="bot",
+            method="Discord",
+            recipient_or_sender="N/A",
+            content=f"Error in {task_name}: {e}",
+            status="failed",
+        )
 
     async def send_message(
         self,
