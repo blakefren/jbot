@@ -66,6 +66,52 @@ def read_jeopardy_questions(
     return questions
 
 
+def read_knowledge_bowl_questions(file_path: str) -> list[Question]:
+    """
+    Reads a TSV file containing Knowledge Bowl questions and returns them as a list of Questions.
+
+    Args:
+        file_path (str): The full path to the TSV file.
+
+    Returns:
+        list: A list of Question objects.
+              Returns an empty list if the file is not found or an error occurs.
+    """
+    questions = []
+    try:
+        with open(file_path, "r", encoding="utf-8") as tsvfile:
+            reader = csv.DictReader(tsvfile, delimiter="\t")
+            for row in reader:
+                subject = row.get("Subject", "N/A")
+                clue_value = 0
+                category = subject
+                if "." in subject:
+                    parts = subject.split(".", 1)
+                    if parts[0].isdigit():
+                        clue_value = int(parts[0])
+                        category = parts[1].strip()
+
+                metadata = {
+                    "number": row.get("Number", "N/A"),
+                }
+                questions.append(
+                    Question(
+                        question=row.get("Question", "N/A"),
+                        answer=row.get("Answer", "N/A"),
+                        category=category,
+                        clue_value=clue_value,
+                        data_source="Knowledge Bowl",
+                        metadata=metadata,
+                    )
+                )
+    except FileNotFoundError:
+        print(f"Error: The file at {file_path} was not found.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    return questions
+
+
 def get_random_question(questions: list[Question]) -> Question:
     """
     Selects a random question from the list of questions.

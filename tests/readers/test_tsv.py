@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch, mock_open
-from readers.tsv import parse_value, read_jeopardy_questions, get_random_question
+from readers.tsv import parse_value, read_jeopardy_questions, get_random_question, read_knowledge_bowl_questions
 from readers.question import Question
 
 
@@ -68,6 +68,47 @@ class TestTsv(unittest.TestCase):
 
         # Test with None
         self.assertIsNone(get_random_question(None))
+
+    def test_read_knowledge_bowl_questions(self):
+        mock_data = (
+            "Number\tSubject\tQuestion\tAnswer\n"
+            "1\t10.General\tWhat is the capital of France?\tParis\n"
+            "2\tHistory\tWho was the first US president?\tGeorge Washington\n"
+            "3\t20.Science\tWhat is H2O?\tWater\n"
+        )
+        with patch("builtins.open", mock_open(read_data=mock_data)):
+            questions = read_knowledge_bowl_questions("dummy_path.tsv")
+            self.assertEqual(len(questions), 3)
+
+            # Test first question
+            q1 = questions[0]
+            self.assertIsInstance(q1, Question)
+            self.assertEqual(q1.question, "What is the capital of France?")
+            self.assertEqual(q1.answer, "Paris")
+            self.assertEqual(q1.category, "General")
+            self.assertEqual(q1.clue_value, 10)
+            self.assertEqual(q1.data_source, "Knowledge Bowl")
+            self.assertEqual(q1.metadata["number"], "1")
+
+            # Test second question
+            q2 = questions[1]
+            self.assertEqual(q2.category, "History")
+            self.assertEqual(q2.clue_value, 0)
+
+            # Test third question
+            q3 = questions[2]
+            self.assertEqual(q3.category, "Science")
+            self.assertEqual(q3.clue_value, 20)
+
+    def test_read_knowledge_bowl_questions_file_not_found(self):
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            questions = read_knowledge_bowl_questions("non_existent_path.tsv")
+            self.assertEqual(questions, [])
+
+    def test_read_knowledge_bowl_questions_exception(self):
+        with patch("builtins.open", side_effect=Exception("Test error")):
+            questions = read_knowledge_bowl_questions("any_path.tsv")
+            self.assertEqual(questions, [])
 
 
 if __name__ == "__main__":
