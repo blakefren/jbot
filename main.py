@@ -4,7 +4,7 @@ from cfg.players import read_and_validate_contacts
 from log.logger import Logger
 from readers.question import Question
 from readers.tsv import read_jeopardy_questions, get_random_question, read_knowledge_bowl_questions
-from readers.csv_reader import read_riddle_questions
+from readers.csv_reader import read_riddle_questions, read_riddle_with_hints_questions
 
 
 def load_configs() -> ConfigReader:
@@ -47,6 +47,8 @@ def read_questions(dataset: str) -> list[Question]:
         return read_knowledge_bowl_questions(config.get("KNOWLEDGE_BOWL_LOCAL_PATH"))
     elif dataset == "riddles_small":
         return read_riddle_questions(config.get("RIDDLE_SMALL_LOCAL_PATH"))
+    elif dataset == "riddles_with_hints":
+        return read_riddle_with_hints_questions(config.get("RIDDLE_HINTS_LOCAL_PATH"))
     else:
         print(f"Unknown dataset: {dataset}")
         return []

@@ -2,7 +2,8 @@
 QUESTION_MODE: daily
 # QUESTION_DATASET: jeopardy
 # QUESTION_DATASET: knowledge_bowl
-QUESTION_DATASET: riddles_small
+# QUESTION_DATASET: riddles_small
+QUESTION_DATASET: riddles_with_hints
 GAME_MODE: simple
 MESSENGER: discord
 TIMEZONE: US/Pacific
@@ -15,6 +16,8 @@ FINAL_JEOPARDY_SCORE_SUB: 10000
 KNOWLEDGE_BOWL_LOCAL_PATH: todo
 ## Riddles (small)
 RIDDLE_SMALL_LOCAL_PATH: todo
+## Riddles with Hints
+RIDDLE_HINTS_LOCAL_PATH: todo
 # Discord
 DISCORD_BOT_TOKEN: todo
 DISCORD_APP_ID: todo
