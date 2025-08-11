@@ -10,6 +10,7 @@ class TestQuestion(unittest.TestCase):
             answer="This is an answer.",
             category="TESTING",
             clue_value=100,
+            hint="This is a hint.",
             data_source="test_suite",
             metadata={"key": "value"},
         )
@@ -17,6 +18,7 @@ class TestQuestion(unittest.TestCase):
         self.assertEqual(q.answer, "This is an answer.")
         self.assertEqual(q.category, "TESTING")
         self.assertEqual(q.clue_value, 100)
+        self.assertEqual(q.hint, "This is a hint.")
         self.assertEqual(q.data_source, "test_suite")
         self.assertEqual(q.metadata, {"key": "value"})
         self.assertIsNotNone(q.id)
@@ -29,6 +31,7 @@ class TestQuestion(unittest.TestCase):
             category="DEFAULTS",
             clue_value=200,
         )
+        self.assertIsNone(q.hint)
         self.assertEqual(q.data_source, "unknown")
         self.assertEqual(q.metadata, {})
 
@@ -53,6 +56,10 @@ class TestQuestion(unittest.TestCase):
         self.assertIn("Question: Q", str(q))
         self.assertIn("Answer: A", str(q))
         self.assertIn("Source: unknown", str(q))
+        self.assertNotIn("Hint:", str(q))
+
+        q_with_hint = Question(question="Q", answer="A", category="C", clue_value=100, hint="H")
+        self.assertIn("Hint: H", str(q_with_hint))
 
     def test_to_dict(self):
         """Tests the conversion of a Question object to a dictionary."""
@@ -61,6 +68,7 @@ class TestQuestion(unittest.TestCase):
             answer="A",
             category="C",
             clue_value=100,
+            hint="H",
             data_source="test",
             metadata={"foo": "bar"},
         )
@@ -71,6 +79,7 @@ class TestQuestion(unittest.TestCase):
             "answer": "A",
             "category": "C",
             "clue_value": 100,
+            "hint": "H",
             "data_source": "test",
             "metadata": {"foo": "bar"},
         }
@@ -96,6 +105,7 @@ class TestQuestion(unittest.TestCase):
             "answer": "Is Correct",
             "category": "SERIALIZATION",
             "clue_value": 500,
+            "hint": "A hint.",
             "data_source": "dict_source",
             "metadata": {"a": 1},
         }
@@ -104,6 +114,7 @@ class TestQuestion(unittest.TestCase):
         self.assertEqual(q.answer, "Is Correct")
         self.assertEqual(q.category, "SERIALIZATION")
         self.assertEqual(q.clue_value, 500)
+        self.assertEqual(q.hint, "A hint.")
         self.assertEqual(q.data_source, "dict_source")
         self.assertEqual(q.metadata, {"a": 1})
 
@@ -116,6 +127,7 @@ class TestQuestion(unittest.TestCase):
             "clue_value": 500,
         }
         q = Question.from_dict(q_data)
+        self.assertIsNone(q.hint)
         self.assertEqual(q.data_source, "unknown")
         self.assertEqual(q.metadata, {})
 

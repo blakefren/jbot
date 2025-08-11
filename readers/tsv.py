@@ -53,6 +53,7 @@ def read_jeopardy_questions(
                         answer=row.get("question", "N/A"),
                         category=row.get("category", "N/A"),
                         clue_value=clue_value_adj,
+                        hint=None,  # Jeopardy! dataset does not have hints
                         data_source="Jeopardy!",
                         metadata=metadata,
                     )
@@ -100,6 +101,7 @@ def read_knowledge_bowl_questions(file_path: str) -> list[Question]:
                         answer=row.get("Answer", "N/A"),
                         category=category,
                         clue_value=clue_value,
+                        hint=None,  # Knowledge Bowl dataset does not have hints
                         data_source="Knowledge Bowl",
                         metadata=metadata,
                     )

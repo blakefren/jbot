@@ -51,15 +51,15 @@ class TestCsvReader(unittest.TestCase):
             self.assertIsInstance(q1, Question)
             self.assertEqual(q1.question, "I speak without a mouth and hear without ears. I have no body, but I come alive with the wind. What am I?")
             self.assertEqual(q1.answer, "An echo")
-            self.assertEqual(q1.category, "Riddle with Hint")
+            self.assertEqual(q1.category, "Riddle")
             self.assertEqual(q1.clue_value, 100)
             self.assertEqual(q1.data_source, "Riddles with Hints")
-            self.assertEqual(q1.metadata["hint"], "Think about a sound that repeats itself in nature")
+            self.assertEqual(q1.hint, "Think about a sound that repeats itself in nature")
 
             q2 = questions[1]
             self.assertEqual(q2.question, "The more you take, the more you leave behind. What am I?")
             self.assertEqual(q2.answer, "Footsteps")
-            self.assertEqual(q2.metadata["hint"], "Consider what you create as you walk along a beach")
+            self.assertEqual(q2.hint, "Consider what you create as you walk along a beach")
 
     def test_read_riddle_with_hints_questions_file_not_found(self):
         with patch("builtins.open", side_effect=FileNotFoundError):

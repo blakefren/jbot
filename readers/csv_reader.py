@@ -53,10 +53,10 @@ def read_riddle_with_hints_questions(file_path: str) -> list[Question]:
                 question = Question(
                     question=question_text,
                     answer=answer_text,
-                    category="Riddle with Hint",
+                    category="Riddle",
                     clue_value=100,  # Default value for riddles
+                    hint=hint_text,
                     data_source="Riddles with Hints",
-                    metadata={"hint": hint_text},
                 )
                 questions.append(question)
     except FileNotFoundError:

@@ -132,19 +132,28 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.daily_q = self.mock_question
         mock_read_players.return_value = {"1": "Player1", "2": "Player2"}
         self.mock_logger.read_guess_history.return_value = [
-            {"QuestionID": "qid1", "PlayerID": "1"}
+            {"QuestionID": self.mock_question.id, "PlayerID": "1"}
         ]
 
-        # With tagging enabled
+        # With tagging enabled, with hint
         content = self.game_runner.get_reminder_message_content(tag_unanswered=True)
         self.assertIn(self.mock_question.question, content)
-        self.assertIn("<@1>", content)
         self.assertIn("<@2>", content)
-
-        # With tagging disabled
-        content = self.game_runner.get_reminder_message_content(tag_unanswered=False)
         self.assertNotIn("<@1>", content)
-        self.assertNotIn("<@2>", content)
+        self.assertNotIn("Hint:", content)
+
+        # With tagging disabled, no hint
+        content = self.game_runner.get_reminder_message_content(tag_unanswered=False)
+        self.assertNotIn("<@", content)
+        self.assertNotIn("Hint:", content)
+
+        # With hint
+        self.mock_question.hint = "This is a test hint."
+        content_with_hint = self.game_runner.get_reminder_message_content(
+            tag_unanswered=False
+        )
+        self.assertIn("Hint: ||**This is a test hint.**||", content_with_hint)
+        self.mock_question.hint = None  # Reset for other tests
 
     def test_get_evening_message_content(self):
         """Test generating the evening message content."""

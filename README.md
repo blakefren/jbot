@@ -51,7 +51,7 @@ You'll have to download these yourself and update their paths in `/cfg/`. Some a
 
 [Download](https://github.com/jwolle1/jeopardy_clue_dataset) the Jeopardy question bank.
 
-### Synthetic riddles
+### Synthetic riddles (with hints)
 
 Download [this generated riddle dataset](https://www.kaggle.com/datasets/prajwaldongre/riddles-a-synthetic-riddle-dataset-for-nlp) from Kaggle.
 

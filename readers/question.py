@@ -12,6 +12,7 @@ class Question:
         answer: str,
         category: str,
         clue_value: int,
+        hint: str = None,
         data_source="unknown",
         metadata={},
     ):
@@ -23,6 +24,7 @@ class Question:
             answer (str): The correct answer to the question.
             category (str): The category of the question (e.g., "WORLD HISTORY").
             clue_value (int): The point value of the question (e.g., 200, 400).
+            hint (str, optional): A hint for the question. Defaults to None.
             data_source (str, optional): The source from which the question was obtained
                                          (e.g., "j-archive.com", "custom_set"). Defaults to "unknown".
             metadata (dict, optional): A dictionary for any additional, flexible metadata
@@ -42,6 +44,7 @@ class Question:
         self.answer = answer
         self.category = category
         self.clue_value = clue_value
+        self.hint = hint
         self.data_source = data_source
         self.metadata = metadata
         # Hash the question and answer to create a unique ID
@@ -57,14 +60,17 @@ class Question:
         """
         Returns a human-readable string representation of the Question.
         """
-        return (
-            f"ID: {self.id}\n"
-            f"Category: {self.category}\n"
-            f"Value: ${self.clue_value}\n"
-            f"Question: {self.question}\n"
-            f"Answer: {self.answer}\n"
-            f"Source: {self.data_source}"
-        )
+        parts = [
+            f"ID: {self.id}",
+            f"Category: {self.category}",
+            f"Value: ${self.clue_value}",
+            f"Question: {self.question}",
+            f"Answer: {self.answer}",
+        ]
+        if self.hint:
+            parts.append(f"Hint: {self.hint}")
+        parts.append(f"Source: {self.data_source}")
+        return "\\n".join(parts)
 
     def to_dict(self):
         """
@@ -79,6 +85,7 @@ class Question:
             "answer": self.answer,
             "category": self.category,
             "clue_value": self.clue_value,
+            "hint": self.hint,
             "data_source": self.data_source,
             "metadata": self.metadata,
         }
@@ -88,11 +95,11 @@ class Question:
         Retrieves a specific metadata value by key.
 
         Args:
-            key (str): The key to look for in the metadata.
+            key (str): The metadata key to retrieve.
             default: The default value to return if the key is not found.
 
         Returns:
-            The value associated with the key, or the default value if the key is not found.
+            The metadata value associated with the given key, or the default value if the key is not found.
         """
         return self.metadata.get(key, default)
 
@@ -112,6 +119,7 @@ class Question:
             answer=data["answer"],
             category=data["category"],
             clue_value=data["clue_value"],
+            hint=data.get("hint"),
             data_source=data.get("data_source", "unknown"),
             metadata=data.get("metadata", {}),
         )
@@ -125,6 +133,7 @@ if __name__ == "__main__":
         answer="What is Egypt?",
         category="WORLD HISTORY",
         clue_value=200,
+        hint="They were ruled by Pharaohs.",
         data_source="j-archive.com",
         metadata={"air_date": "2023-01-15", "episode": 1234},
     )
@@ -150,6 +159,7 @@ if __name__ == "__main__":
         "answer": "What is Paris?",
         "category": "GEOGRAPHY",
         "clue_value": 400,
+        "hint": "City of Love",
         "data_source": "custom_set",
         "metadata": {"difficulty": "easy"},
     }

@@ -209,11 +209,18 @@ class GameRunner:
         # Create the @mentions string
         mentions = ""
         if tag_unanswered and player_ids_not_guessed:
-            mentions = " ".join([f"<@{player_id}>" for player_id in player_ids_not_guessed])
+            mentions = " ".join(
+                [f"<@{player_id}>" for player_id in player_ids_not_guessed]
+            )
+
+        hint_part = ""
+        if self.daily_q.hint:
+            hint_part = f"\nHint: ||**{self.daily_q.hint}**||"
 
         flavor_message = (
             "Friendly reminder to get your guesses in!\n"
             f"Today's question is:\n{self.format_question(self.daily_q)}"
+            f"{hint_part}"
         )
         return f"{flavor_message}\n{mentions}"
 
