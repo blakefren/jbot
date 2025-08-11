@@ -5,9 +5,7 @@ A daily bot for group trivia questions and competition.
 
 ## Setup
 
-[Download](https://github.com/jwolle1/jeopardy_clue_dataset) the Jeopardy question bank.
-
-Rename and fill out the template files in `/cfg/`, then test with `run_once.py`.
+Fill out `/cfg/main.cfg` for the features you want to use.
 
 ## Daily format
 
@@ -45,6 +43,26 @@ JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
     difficulty increases daily, culminating in a challenging final
     Jeopardy! question.
 
+## Datasets
+
+You'll have to download these yourself and update their paths in `/cfg/`. Some assembly required. No guarantees on licensing, etc.
+
+### Jeopardy!
+
+[Download](https://github.com/jwolle1/jeopardy_clue_dataset) the Jeopardy question bank.
+
+### Synthetic riddles
+
+Download [this generated riddle dataset](https://www.kaggle.com/datasets/prajwaldongre/riddles-a-synthetic-riddle-dataset-for-nlp) from Kaggle.
+
+### Knowledge Bowl
+
+Knowledge Bowl offers a dataset here (last accessed 2025-08-10): https://www.kbpractice.com/complete_online_list
+
+### Random dataset
+
+I found [this dataset on Reddit](https://www.reddit.com/r/trivia/comments/3wzpvt/free_database_of_50000_trivia_questions/) containing some questions from *Who Wants to Be a Millionaire*, *Are You Smarter Than a Fifth Grader?*, and some other random questions. Some cleanup/formatting required.
+
 ## AI Assistant
 
 This project is being developed with the assistance of an AI programming partner named Sage. Sage's role is to help with coding, suggest improvements, and automate tasks to accelerate development. For more details on Sage's directives and operating procedures, see `.github/instructions/instructions.md`.
@@ -60,8 +78,8 @@ This project is being developed with the assistance of an AI programming partner
     * [X] Daily question
     * [X] log/logger.py
     * [X] main.py
-    * [ ] Unit tests
-    * [ ] Add presubmits
+    * [X] Unit tests
+    * [X] Add presubmits
 * [X] Interaction
     * [X] Ask for random question
     * [X] Subscribe
@@ -83,13 +101,12 @@ This project is being developed with the assistance of an AI programming partner
     * [ ] Pop Culture Jeopardy!
     * [ ] Riddles
 * [ ] Messaging
-    * [ ] SMS API
-    * [ ] SMS platform integration
     * [X] Discord bot setup
     * [X] Discord API
+    * [ ] SMS API
+    * [ ] SMS platform integration
 * [ ] Bugs
     * [ ] Fix Discord bot shutdown errors
-    * [ ] Top class should be a game runner
     * [ ] History / scores / metrics still seem off
 * [ ] v2
     * [ ] setup.py

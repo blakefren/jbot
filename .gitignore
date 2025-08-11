@@ -1,5 +1,7 @@
 *.pyc
 *.cfg
 *.csv
+*.tsv
 *.prompt
 *.log
+./datasets/
