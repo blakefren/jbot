@@ -221,14 +221,23 @@ class DiscordBot(commands.Bot):
         is_channel: bool = False,
         target_id: int = -1,
         ctx=None,
+        interaction=None,
+        ephemeral=False,
         success_status="sent",
     ):
-        """Sends a message to a Discord user, channel, or context."""
+        """Sends a message to a Discord user, channel, or context. Supports ephemeral for interaction responses."""
         assert (
-            target_id >= 0 or ctx is not None
-        ), "Either target_id or ctx must be provided."
+            target_id >= 0 or ctx is not None or interaction is not None
+        ), "Either target_id, ctx, or interaction must be provided."
         try:
-            if ctx is not None:
+            if interaction is not None:
+                # If responding to an interaction, support ephemeral
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(content, ephemeral=ephemeral)
+                else:
+                    await interaction.followup.send(content, ephemeral=ephemeral)
+                target_id = interaction.user.id if hasattr(interaction, 'user') else target_id
+            elif ctx is not None:
                 await ctx.send(content)
                 target_id = ctx.channel.id if ctx.guild else ctx.author.id
             elif is_channel:
@@ -263,9 +272,13 @@ def set_bot_commands(bot: DiscordBot):
     async def streak_breaker(ctx: commands.Context, target_id: str):
         """Break another player's answer streak (POWERUP mode only)."""
         if bot.game.mode.name != "POWERUP":
-            await bot.send_message("Streak breaker is only available in POWERUP mode.", ctx=ctx)
+            await bot.send_message(
+                "Streak breaker is only available in POWERUP mode.", ctx=ctx
+            )
             return
-        players = bot.game.logger.get_guess_metrics([], bot.game.question_selector.questions).get("players", {})
+        players = bot.game.logger.get_guess_metrics(
+            [], bot.game.question_selector.questions
+        ).get("players", {})
         manager = PowerUpManager(players)
         result = manager.streak_breaker(str(ctx.author.id), target_id)
         await bot.send_message(result, ctx=ctx)
@@ -276,7 +289,9 @@ def set_bot_commands(bot: DiscordBot):
         if bot.game.mode.name != "POWERUP":
             await bot.send_message("Shield is only available in POWERUP mode.", ctx=ctx)
             return
-        players = bot.game.logger.get_guess_metrics([], bot.game.question_selector.questions).get("players", {})
+        players = bot.game.logger.get_guess_metrics(
+            [], bot.game.question_selector.questions
+        ).get("players", {})
         manager = PowerUpManager(players)
         result = manager.use_shield(str(ctx.author.id))
         await bot.send_message(result, ctx=ctx)
@@ -285,9 +300,13 @@ def set_bot_commands(bot: DiscordBot):
     async def bet(ctx: commands.Context, amount: int):
         """Bet points for the current question (POWERUP mode only)."""
         if bot.game.mode.name != "POWERUP":
-            await bot.send_message("Betting is only available in POWERUP mode.", ctx=ctx)
+            await bot.send_message(
+                "Betting is only available in POWERUP mode.", ctx=ctx
+            )
             return
-        players = bot.game.logger.get_guess_metrics([], bot.game.question_selector.questions).get("players", {})
+        players = bot.game.logger.get_guess_metrics(
+            [], bot.game.question_selector.questions
+        ).get("players", {})
         manager = PowerUpManager(players)
         result = manager.bet_points(str(ctx.author.id), amount)
         await bot.send_message(result, ctx=ctx)
@@ -449,8 +468,8 @@ def set_bot_commands(bot: DiscordBot):
     async def answer(ctx: commands.Context, *, guess: str):
         """Submits an answer for the current daily question."""
         if not bot.game.daily_q:
-            await bot.send_message(
-                "There is no active question right now.", ctx=ctx
+            await ctx.interaction.response.send_message(
+                "There is no active question right now.", ephemeral=True
             )
             return
 
@@ -473,7 +492,7 @@ def set_bot_commands(bot: DiscordBot):
             response_content = "That is correct! Nicely done."
         else:
             response_content = "Sorry, that is not the correct answer."
-        await bot.send_message(response_content, ctx=ctx)
+        await ctx.interaction.response.send_message(response_content, ephemeral=True)
 
     @bot.hybrid_command(name="subscribe", aliases=["sub"])
     async def subscribe(ctx: commands.Context):
@@ -533,7 +552,9 @@ def set_bot_commands(bot: DiscordBot):
         await bot.send_message(leaderboard, ctx=ctx)
 
 
-async def discord_bot_async(config: ConfigReader, questions: list[Question], logger: Logger):
+async def discord_bot_async(
+    config: ConfigReader, questions: list[Question], logger: Logger
+):
     """Main function to initialize and run the bot."""
     question_selector = QuestionSelector(questions, mode=config.get("QUESTION_MODE"))
     game = GameRunner(question_selector, logger, mode=config.get("GAME_MODE"))
