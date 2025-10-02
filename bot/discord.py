@@ -233,10 +233,14 @@ class DiscordBot(commands.Bot):
             if interaction is not None:
                 # If responding to an interaction, support ephemeral
                 if not interaction.response.is_done():
-                    await interaction.response.send_message(content, ephemeral=ephemeral)
+                    await interaction.response.send_message(
+                        content, ephemeral=ephemeral
+                    )
                 else:
                     await interaction.followup.send(content, ephemeral=ephemeral)
-                target_id = interaction.user.id if hasattr(interaction, 'user') else target_id
+                target_id = (
+                    interaction.user.id if hasattr(interaction, "user") else target_id
+                )
             elif ctx is not None:
                 await ctx.send(content)
                 target_id = ctx.channel.id if ctx.guild else ctx.author.id
@@ -468,8 +472,10 @@ def set_bot_commands(bot: DiscordBot):
     async def answer(ctx: commands.Context, *, guess: str):
         """Submits an answer for the current daily question."""
         if not bot.game.daily_q:
-            await ctx.interaction.response.send_message(
-                "There is no active question right now.", ephemeral=True
+            await bot.send_message(
+                "There is no active question right now.",
+                interaction=ctx.interaction,
+                ephemeral=True,
             )
             return
 
@@ -492,7 +498,9 @@ def set_bot_commands(bot: DiscordBot):
             response_content = "That is correct! Nicely done."
         else:
             response_content = "Sorry, that is not the correct answer."
-        await ctx.interaction.response.send_message(response_content, ephemeral=True)
+        await bot.send_message(
+            response_content, interaction=ctx.interaction, ephemeral=True
+        )
 
     @bot.hybrid_command(name="subscribe", aliases=["sub"])
     async def subscribe(ctx: commands.Context):
