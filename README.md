@@ -81,51 +81,32 @@ This project is being developed with the assistance of an AI programming partner
 * [ ] Scale up
     * [ ] discord.py cogs
     * [ ] update environment vars: python-dotenv, .env file with flags, etc.
-    * [ ] setup.py
-* [ ] Modes
-    * [ ] Poker
-    * [X] Powerup
-    * [ ] Vegas
-    * [ ] Soulslike
-    * [ ] Jeopardy
+    * [ ] setup.py on first run
+* [ ] Cleaner UI
+    * [ ] Stop spamming answers: discord.ui.Modal
+    * [ ] Don't spam commands: discord.ui.View()
+    * [ ] Explore discord.Embed for message formatting
+* [ ] Player interactions
+    * [X] Attack: streak breaker
+    * [X] Attack: steal
+    * [X] Defense: shield
+    * [X] Defense: teamup
+    * [X] Betting: basic bets
+    * [ ] Extra points for answering before the hint
+    * [ ] Extra points for answering first
+    * [ ] Betting: advanced bets
 * [ ] Questions
     * [ ] Pop Culture Jeopardy!
     * [ ] Test dataset
-* [ ] Messaging
-    * [ ] SMS API
-    * [ ] SMS platform integration
-* [ ] Bugs
-    * [ ] Fix Discord bot shutdown errors
-    * [ ] History / scores / metrics still seem off
 
-## v1 burndown
+## Bugs
 
+* [ ] Fix Discord bot shutdown errors
+* [ ] History / scores / metrics still seem off
+* [ ] Add more game modes (soulslike, Jeopardy!)
+* [ ] Support multi-channel play
 
-* [X] Core functions
-    * [X] File reader
-    * [X] Config files
-    * [X] Config file readers
-    * [X] Run once test script
-    * [X] Question bot
-    * [X] Daily question
-    * [X] log/logger.py
-    * [X] main.py
-    * [X] Unit tests
-    * [X] Add presubmits
-* [X] Interaction
-    * [X] Ask for random question
-    * [X] Subscribe
-    * [X] Time to next event
-    * [X] Answering
-    * [X] Play reminders
-    * [X] Reboot bot from message
-    * [X] Score tracking
-    * [X] Persistent subscriptions
-* [X] Messaging
-    * [X] Discord bot setup
-    * [X] Discord API
-* [X] Questions
-    * [X] Jeopardy!
-    * [X] Riddles
-* [X] Modes
-    * [X] Simple
+## Future ideas
+
+* [ ] SMS messaging
+* [ ] Chatbot hints, guesser, etc.
