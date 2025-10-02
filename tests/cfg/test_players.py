@@ -11,8 +11,8 @@ class TestPlayers(unittest.TestCase):
         with patch("builtins.open", mock_open(read_data=csv_data)):
             result = players.read_players_into_dict()
             expected = {
-                "123": {"firstname": "John", "lastname": "Doe", "phone_number": "+15551234567"},
-                "456": {"firstname": "Jane", "lastname": "Smith", "phone_number": "+15557654321"}
+                "123": {"firstname": "John", "lastname": "Doe", "phone_number": "+15551234567", "answer_streak": 0, "active_shield": False},
+                "456": {"firstname": "Jane", "lastname": "Smith", "phone_number": "+15557654321", "answer_streak": 0, "active_shield": False}
             }
             self.assertEqual(result, expected)
 
@@ -37,7 +37,7 @@ class TestPlayers(unittest.TestCase):
         with patch("builtins.open", mock_open(read_data=csv_data)):
             result = players.read_players_into_dict()
             expected = {
-                "456": {"firstname": "Jane", "lastname": "Smith", "phone_number": "+15557654321"}
+                "456": {"firstname": "Jane", "lastname": "Smith", "phone_number": "+15557654321", "answer_streak": 0, "active_shield": False}
             }
             self.assertEqual(result, expected)
 

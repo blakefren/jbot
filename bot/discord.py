@@ -1,3 +1,4 @@
+from modes.powerup import PowerUpManager
 import asyncio
 import datetime
 import discord
@@ -257,6 +258,40 @@ class DiscordBot(commands.Bot):
 
 
 def set_bot_commands(bot: DiscordBot):
+
+    @bot.hybrid_command(name="streak_breaker", aliases=["breakstreak", "break_streak"])
+    async def streak_breaker(ctx: commands.Context, target_id: str):
+        """Break another player's answer streak (POWERUP mode only)."""
+        if bot.game.mode.name != "POWERUP":
+            await bot.send_message("Streak breaker is only available in POWERUP mode.", ctx=ctx)
+            return
+        players = bot.game.logger.get_guess_metrics([], bot.game.question_selector.questions).get("players", {})
+        manager = PowerUpManager(players)
+        result = manager.streak_breaker(str(ctx.author.id), target_id)
+        await bot.send_message(result, ctx=ctx)
+
+    @bot.hybrid_command(name="shield")
+    async def shield(ctx: commands.Context):
+        """Activate a shield to block the next attack (POWERUP mode only)."""
+        if bot.game.mode.name != "POWERUP":
+            await bot.send_message("Shield is only available in POWERUP mode.", ctx=ctx)
+            return
+        players = bot.game.logger.get_guess_metrics([], bot.game.question_selector.questions).get("players", {})
+        manager = PowerUpManager(players)
+        result = manager.use_shield(str(ctx.author.id))
+        await bot.send_message(result, ctx=ctx)
+
+    @bot.hybrid_command(name="bet")
+    async def bet(ctx: commands.Context, amount: int):
+        """Bet points for the current question (POWERUP mode only)."""
+        if bot.game.mode.name != "POWERUP":
+            await bot.send_message("Betting is only available in POWERUP mode.", ctx=ctx)
+            return
+        players = bot.game.logger.get_guess_metrics([], bot.game.question_selector.questions).get("players", {})
+        manager = PowerUpManager(players)
+        result = manager.bet_points(str(ctx.author.id), amount)
+        await bot.send_message(result, ctx=ctx)
+
     @bot.hybrid_command(name="shutdown", aliases=["quit", "exit"])
     async def shutdown(ctx: commands.Context):
         """Shuts down the bot."""

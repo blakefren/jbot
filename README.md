@@ -28,9 +28,14 @@ SIMPLE = basic game mode with simple question-answer interaction.
 POKER = basic game mode, with betting.
     Adds point betting to the simple mode.
 
-POWERUP = cutthroat game mode with a specific set of rules.
-    Adds more complex scoring and broad power up mechanics to the simple
-    mode.
+POWERUP = cutthroat game mode with power-up actions and more complex scoring.
+    - Players can use special commands:
+        - `/attack <player_id>`: Reset another player's answer streak (blocked if they have a shield).
+        - `/shield`: Activate a shield to block the next attack.
+        - `/bet <amount>`: Bet points for the current question. Winnings use diminishing returns: winnings = bet × (100 / (score + 100)), rounded down.
+    - Shields and answer streaks are tracked per player.
+    - Betting is capped at 25% of your current score (minimum 1 point).
+    - These actions are only available in POWERUP mode.
 
 VEGAS = combo of POKER and POWERUP.
 
@@ -80,6 +85,7 @@ This project is being developed with the assistance of an AI programming partner
     * [X] main.py
     * [X] Unit tests
     * [X] Add presubmits
+    * [ ] Track player metrics (e.g. streaks)
 * [X] Interaction
     * [X] Ask for random question
     * [X] Subscribe
@@ -100,6 +106,7 @@ This project is being developed with the assistance of an AI programming partner
     * [X] Jeopardy!
     * [ ] Pop Culture Jeopardy!
     * [ ] Riddles
+    * [ ] Test dataset
 * [ ] Messaging
     * [X] Discord bot setup
     * [X] Discord API

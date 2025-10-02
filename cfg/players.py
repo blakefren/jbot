@@ -27,6 +27,9 @@ def read_players_into_dict():
                         "firstname": row.get("firstname", "").strip(),
                         "lastname": row.get("lastname", "").strip(),
                         "phone_number": row.get("phone_number", "").strip(),
+                        # POWERUP mode fields
+                        "answer_streak": int(row.get("answer_streak", 0)),
+                        "active_shield": row.get("active_shield", "False").strip().lower() == "true",
                     }
     except FileNotFoundError:
         print(f"Error: The file '{csv_filepath}' was not found.")

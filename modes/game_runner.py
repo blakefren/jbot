@@ -21,7 +21,7 @@ class GameType(Enum):
 
     SIMPLE = "simple"  # TODO: split out from BaseGame, or combine?
     POKER = "poker"  # TODO
-    POWERUP = "powerup"  # TODO
+    POWERUP = "powerup"
     VEGAS = "vegas"  # TODO
     SOULSLIKE = "soulslike"  # TODO
     JEOPARDY = "jeopardy"  # TODO
@@ -94,7 +94,7 @@ class GameRunner:
 
     def handle_guess(self, player_id: int, player_name: str, guess: str) -> bool:
         """
-        Handles the answer submitted by a player, logs it, and returns correctness.
+        Handles the answer submitted by a player, logs it, and returns correctness. In POWERUP mode, also resolves bets and attack effects.
 
         Args:
             player_id (int): The Discord ID of the player.
@@ -111,6 +111,16 @@ class GameRunner:
         a = self.daily_q.answer.strip().lower()
         is_correct = re.search(g, a) is not None
         self.logger.log_player_guess(player_id, player_name, self.daily_q.id, g, is_correct)
+
+        # POWERUP mode: resolve bet and attack effects
+        if self.mode.name == "POWERUP":
+            from modes.powerup import PowerUpManager
+            # Get all players (simulate persistent state)
+            players = self.logger.get_guess_metrics([], self.question_selector.questions).get("players", {})
+            manager = PowerUpManager(players)
+            # Call resolve_bet for this player
+            manager.resolve_bet(str(player_id), is_correct)
+        
         return is_correct
 
     def get_scores_leaderboard(self) -> str:
