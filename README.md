@@ -82,6 +82,7 @@ This project is being developed with the assistance of an AI programming partner
     * [ ] discord.py cogs
     * [ ] update environment vars: python-dotenv, .env file with flags, etc.
     * [ ] setup.py on first run
+    * [ ] CI/CD
 * [ ] Cleaner UI
     * [ ] Stop spamming answers: discord.ui.Modal
     * [ ] Don't spam commands: discord.ui.View()
@@ -103,10 +104,11 @@ This project is being developed with the assistance of an AI programming partner
 
 * [ ] Fix Discord bot shutdown errors
 * [ ] History / scores / metrics still seem off
-* [ ] Add more game modes (soulslike, Jeopardy!)
-* [ ] Support multi-channel play
 
 ## Future ideas
 
 * [ ] SMS messaging
 * [ ] Chatbot hints, guesser, etc.
+* [ ] Add more game modes (soulslike, Jeopardy!)
+* [ ] Support multi-channel play
+* [ ] Cloud hosting
