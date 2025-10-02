@@ -72,9 +72,36 @@ I found [this dataset on Reddit](https://www.reddit.com/r/trivia/comments/3wzpvt
 
 This project is being developed with the assistance of an AI programming partner named Sage. Sage's role is to help with coding, suggest improvements, and automate tasks to accelerate development. For more details on Sage's directives and operating procedures, see `.github/instructions/instructions.md`.
 
-## TODOs
+## v2 burndown
 
-* [ ] Core functions
+* [ ] Database
+    * [ ] Design table stucture
+    * [ ] Migrate each use case
+    * [ ] Add metrics
+* [ ] Scale up
+    * [ ] discord.py cogs
+    * [ ] update environment vars: python-dotenv, .env file with flags, etc.
+    * [ ] setup.py
+* [ ] Modes
+    * [ ] Poker
+    * [X] Powerup
+    * [ ] Vegas
+    * [ ] Soulslike
+    * [ ] Jeopardy
+* [ ] Questions
+    * [ ] Pop Culture Jeopardy!
+    * [ ] Test dataset
+* [ ] Messaging
+    * [ ] SMS API
+    * [ ] SMS platform integration
+* [ ] Bugs
+    * [ ] Fix Discord bot shutdown errors
+    * [ ] History / scores / metrics still seem off
+
+## v1 burndown
+
+
+* [X] Core functions
     * [X] File reader
     * [X] Config files
     * [X] Config file readers
@@ -85,7 +112,6 @@ This project is being developed with the assistance of an AI programming partner
     * [X] main.py
     * [X] Unit tests
     * [X] Add presubmits
-    * [ ] Track player metrics (e.g. streaks)
 * [X] Interaction
     * [X] Ask for random question
     * [X] Subscribe
@@ -95,26 +121,11 @@ This project is being developed with the assistance of an AI programming partner
     * [X] Reboot bot from message
     * [X] Score tracking
     * [X] Persistent subscriptions
-* [ ] Modes
-    * [ ] Simple
-    * [ ] Poker
-    * [ ] Powerup
-    * [ ] Vegas
-    * [ ] Soulslike
-    * [ ] Jeopardy
-* [ ] Questions
-    * [X] Jeopardy!
-    * [ ] Pop Culture Jeopardy!
-    * [ ] Riddles
-    * [ ] Test dataset
-* [ ] Messaging
+* [X] Messaging
     * [X] Discord bot setup
     * [X] Discord API
-    * [ ] SMS API
-    * [ ] SMS platform integration
-* [ ] Bugs
-    * [ ] Fix Discord bot shutdown errors
-    * [ ] History / scores / metrics still seem off
-* [ ] v2
-    * [ ] setup.py
-    * [ ] Add flavor text by game mode
+* [X] Questions
+    * [X] Jeopardy!
+    * [X] Riddles
+* [X] Modes
+    * [X] Simple
