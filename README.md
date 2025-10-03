@@ -116,7 +116,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
     * [X] Migrate each use case
     * [ ] Add metrics
 * [ ] Scale up
-    * [ ] discord.py cogs
+    * [X] discord.py cogs
     * [ ] update environment vars: python-dotenv, .env file with flags, etc.
     * [ ] setup.py on first run
     * [ ] CI/CD
