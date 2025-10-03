@@ -53,6 +53,7 @@ class Database:
         """
         if self.conn:
             self.conn.close()
+            self.conn = None
             print("Database connection closed.")
 
     def execute_query(self, query, params=()):
