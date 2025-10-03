@@ -36,7 +36,7 @@ question selection.
 
 The bot's features are organized into three distinct "tracks" that can be enabled or disabled independently, allowing for customized game experiences.
 
-### Attacking & Defending Track
+### Fight Track
 
 This track adds direct player-vs-player interactions.
 
@@ -49,7 +49,7 @@ This track adds direct player-vs-player interactions.
 *   **Steal**: An offensive action that allows a player to steal half of the points another player has earned *for that day*.
     *   **Command**: `/steal <player_id>`
 
-### Streaks & Buffs Track
+### Power-up Track
 
 This track introduces mechanics that reward consistent play or provide other advantages.
 
@@ -58,7 +58,7 @@ This track introduces mechanics that reward consistent play or provide other adv
     *   **Command**: `/bet <amount>`
     *   **Details**: Bets are capped at 25% of a player's current score (minimum 1 point).
 
-### Cooperative Play Track
+### Coop Track
 
 This track focuses on collaborative features.
 
@@ -98,7 +98,7 @@ I found [this dataset on Reddit](https://www.reddit.com/r/trivia/comments/3wzpvt
 
 ## AI Assistant
 
-This project is being developed with the assistance of an AI programming partner named Sage. Sage's role is to help with coding, suggest improvements, and automate tasks to accelerate development. For more details on Sage's directives and operating procedures, see `.github/copilot-instructions.md`.
+This project is being developed with the assistance of an AI programming partner named Lex. Lex's role is to help with coding, suggest improvements, and automate tasks to accelerate development. For more details on Lex's directives and operating procedures, see `.github/copilot-instructions.md`.
 
 ## License
 
@@ -128,7 +128,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
     * [ ] Extra points for answering before the hint
     * [ ] Extra points for answering first
     * [ ] Betting: advanced bets
-* [ ] Cooperative Play
+* [ ] Coop
     * [X] Team Up
 * [ ] Questions
     * [ ] Pop Culture Jeopardy!
