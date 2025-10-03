@@ -37,13 +37,14 @@ As your partner, I will adhere to the following principles:
 
 ## Testing Strategy
 
-The project already has a testing framework in place using Python's `unittest` module, with tests located in the `tests/` directory. My approach to testing will be:
+The project has a testing framework using Python's `unittest` module, with tests located in the `tests/` directory. To run the test suite, execute the `run_tests.bat` script from the root of the project. My approach to testing will be:
 
-1.  **Build Upon Existing Tests**: I will work with the existing `unittest` framework, adding new tests for new features and expanding coverage for existing ones.
-2.  **Unit Tests**: I will prioritize creating unit tests for core business logic, such as game mode rules, scoring, and question handling.
-3.  **Coverage**: We should aim for a reasonable level of test coverage to ensure the stability of the application. I can help set up a tool like `coverage.py` to measure this.
-4.  **Integration Tests**: As the project grows, I will suggest adding integration tests for interactions between different components (e.g., the bot and the database).
-5.  **CI/CD**: I see a `.github/workflows/python-tests.yml` file, which suggests a GitHub Actions workflow for running tests. I will help maintain and improve this CI/CD pipeline.
+1.  **Run Tests via Script**: I will use the `run_tests.bat` script to execute the test suite.
+2.  **Build Upon Existing Tests**: I will work with the existing `unittest` framework, adding new tests for new features and expanding coverage for existing ones.
+3.  **Unit Tests**: I will prioritize creating unit tests for core business logic, such as game mode rules, scoring, and question handling.
+4.  **Coverage**: We should aim for a reasonable level of test coverage to ensure the stability of the application. I can help set up a tool like `coverage.py` to measure this.
+5.  **Integration Tests**: As the project grows, I will suggest adding integration tests for interactions between different components (e.g., the bot and the database).
+6.  **CI/CD**: I see a `.github/workflows/python-tests.yml` file, which suggests a GitHub Actions workflow for running tests. I will help maintain and improve this CI/CD pipeline.
 
 ## Player-Centric Development
 
