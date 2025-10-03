@@ -5,7 +5,19 @@ A daily bot for group trivia questions and competition.
 
 ## Setup
 
-Fill out `/cfg/main.cfg` for the features you want to use.
+1.  Install the required Python packages:
+    ```
+    pip install -r requirements.txt
+    ```
+2.  Fill out `/cfg/main.cfg` for the features you want to use.
+
+## Running the Bot
+
+Once the setup is complete, you can run the bot with the following command:
+
+```
+python main.py
+```
 
 ## Daily format
 
@@ -16,37 +28,39 @@ the answer is revealed.
 There are several settings and game modes that control scoring, player actions, and
 question selection.
 
-## Game modes
+## Game Features
 
-In any mode, the daily question format is the same, but the game logic
-and interaction may vary.
+The bot's features are organized into three distinct "tracks" that can be enabled or disabled independently, allowing for customized game experiences.
 
-SIMPLE = basic game mode with simple question-answer interaction.
-    Players answer the daily question, get 1 point for a correct answer,
-    and 0 for incorrect.
+### Attacking & Defending Track
 
-POKER = basic game mode, with betting.
-    Adds point betting to the simple mode.
+This track adds direct player-vs-player interactions.
 
-POWERUP = cutthroat game mode with power-up actions and more complex scoring.
-    - Players can use special commands:
-        - `/attack <player_id>`: Reset another player's answer streak (blocked if they have a shield).
-        - `/shield`: Activate a shield to block the next attack.
-        - `/bet <amount>`: Bet points for the current question. Winnings use diminishing returns: winnings = bet × (100 / (score + 100)), rounded down.
-    - Shields and answer streaks are tracked per player.
-    - Betting is capped at 25% of your current score (minimum 1 point).
-    - These actions are only available in POWERUP mode.
+*   **Streak Breaker**: An offensive action that allows a player to attack another. If the target answers the daily question incorrectly, their answer streak is reset to zero.
+    *   **Command**: `/streak_breaker <player_id>`
+    *   **Cost**: 50 points.
+*   **Shield**: A defensive action that protects a player from the next incoming attack.
+    *   **Command**: `/shield`
+    *   **Cost**: 25 points.
+*   **Steal**: An offensive action that allows a player to steal half of the points another player has earned *for that day*.
+    *   **Command**: `/steal <player_id>`
 
-VEGAS = combo of POKER and POWERUP.
+### Streaks & Buffs Track
 
-SOULSLIKE = a more complex game mode with additional challenges.
-    Adds soulslike scoring, limited powers, and boss fights to the simple
-    mode.
+This track introduces mechanics that reward consistent play or provide other advantages.
 
-JEOPARDY = the classic Jeopardy! game mode with categories and clue values.
-    Similar to the Jeopardy! calendar game, with a weekly format where
-    difficulty increases daily, culminating in a challenging final
-    Jeopardy! question.
+*   **Answer Streaks**: Players build up a "streak" for each consecutive correct answer. This can be used for scoring bonuses or as a target for other players' attacks.
+*   **Betting**: Players can bet a portion of their points on whether their answer is correct. Winnings are calculated based on a diminishing returns formula to keep the game balanced.
+    *   **Command**: `/bet <amount>`
+    *   **Details**: Bets are capped at 25% of a player's current score (minimum 1 point).
+
+### Cooperative Play Track
+
+This track focuses on collaborative features.
+
+*   **Team Up**: Two players can form a temporary alliance for the day. If either player answers correctly, both receive full points.
+    *   **Command**: `/team_up <player_id>`
+    *   **Cost**: 25 points for each player.
 
 ## Datasets
 
@@ -72,6 +86,10 @@ I found [this dataset on Reddit](https://www.reddit.com/r/trivia/comments/3wzpvt
 
 This project is being developed with the assistance of an AI programming partner named Sage. Sage's role is to help with coding, suggest improvements, and automate tasks to accelerate development. For more details on Sage's directives and operating procedures, see `.github/instructions/instructions.md`.
 
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
 ## v2 burndown
 
 * [ ] Database
@@ -91,11 +109,13 @@ This project is being developed with the assistance of an AI programming partner
     * [X] Attack: streak breaker
     * [X] Attack: steal
     * [X] Defense: shield
-    * [X] Defense: teamup
+    * [ ] Defense: reveal letters in answer
     * [X] Betting: basic bets
     * [ ] Extra points for answering before the hint
     * [ ] Extra points for answering first
     * [ ] Betting: advanced bets
+* [ ] Cooperative Play
+    * [X] Team Up
 * [ ] Questions
     * [ ] Pop Culture Jeopardy!
     * [ ] Test dataset
