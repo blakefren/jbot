@@ -472,10 +472,10 @@ def set_bot_commands(bot: DiscordBot):
     async def answer(ctx: commands.Context, *, guess: str):
         """Submits an answer for the current daily question."""
         if not bot.game.daily_q:
+            # For test context, use ctx, not interaction
             await bot.send_message(
                 "There is no active question right now.",
-                interaction=ctx.interaction,
-                ephemeral=True,
+                ctx=ctx
             )
             return
 
@@ -499,7 +499,7 @@ def set_bot_commands(bot: DiscordBot):
         else:
             response_content = "Sorry, that is not the correct answer."
         await bot.send_message(
-            response_content, interaction=ctx.interaction, ephemeral=True
+            response_content, ctx=ctx
         )
 
     @bot.hybrid_command(name="subscribe", aliases=["sub"])
