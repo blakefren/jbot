@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from bot.discord import DiscordBot, set_bot_commands
 from cfg.main import ConfigReader
 from modes.game_runner import GameRunner
-from log.logger import Logger
+from database.logger import Logger
 
 
 class TestDiscordBot(unittest.IsolatedAsyncioTestCase):

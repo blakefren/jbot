@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock, mock_open
 from modes.game_runner import GameRunner, GameType
 from bot.subscriber import Subscriber
 from readers.question import Question
-from log.logger import Logger
+from database.logger import Logger
 from cfg.players import read_players_into_dict
 
 

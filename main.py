@@ -1,7 +1,7 @@
 from bot.discord import run_discord_bot
 from cfg.main import ConfigReader
 from cfg.players import read_and_validate_contacts
-from log.logger import Logger
+from database.logger import Logger
 from readers.question import Question
 from readers.tsv import read_jeopardy_questions, get_random_question, read_knowledge_bowl_questions
 from readers.csv_reader import read_riddle_questions, read_riddle_with_hints_questions

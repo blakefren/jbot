@@ -4,7 +4,7 @@ import re
 
 from enum import Enum
 from bot.subscriber import Subscriber
-from log.logger import Logger
+from database.logger import Logger
 from readers.question_selector import QuestionSelector
 from cfg.players import read_players_into_dict
 from readers.question import Question

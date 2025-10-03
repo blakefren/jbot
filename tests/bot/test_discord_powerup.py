@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock
 from bot.discord import DiscordBot, set_bot_commands
 from modes.game_runner import GameRunner, GameType
-from log.logger import Logger
+from database.logger import Logger
 from readers.question_selector import QuestionSelector
 from readers.question import Question
 

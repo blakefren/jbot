@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from bot.subscriber import Subscriber
 from cfg.main import ConfigReader
-from log.logger import Logger
+from database.logger import Logger
 from modes.game_runner import GameRunner
 from readers.question import Question
 from readers.question_selector import QuestionSelector

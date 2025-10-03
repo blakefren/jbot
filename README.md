@@ -10,6 +10,10 @@ A daily bot for group trivia questions and competition.
     pip install -r requirements.txt
     ```
 2.  Fill out `/cfg/main.cfg` for the features you want to use.
+3.  Initialize the database by running the setup script:
+    ```
+    python database/database.py
+    ```
 
 ## Running the Bot
 
@@ -62,6 +66,16 @@ This track focuses on collaborative features.
     *   **Command**: `/team_up <player_id>`
     *   **Cost**: 25 points for each player.
 
+## Database
+
+The bot uses a SQLite database (`jbot.db`) to store all persistent data, including:
+*   Questions and answers
+*   Player information
+*   Daily guesses
+*   Message logs
+
+The database schema is defined in `database/schema.sql`. When the bot is run for the first time, it will create the database file in the `database/` directory.
+
 ## Datasets
 
 You'll have to download these yourself and update their paths in `/cfg/`. Some assembly required. No guarantees on licensing, etc.
@@ -84,7 +98,7 @@ I found [this dataset on Reddit](https://www.reddit.com/r/trivia/comments/3wzpvt
 
 ## AI Assistant
 
-This project is being developed with the assistance of an AI programming partner named Sage. Sage's role is to help with coding, suggest improvements, and automate tasks to accelerate development. For more details on Sage's directives and operating procedures, see `.github/instructions/instructions.md`.
+This project is being developed with the assistance of an AI programming partner named Sage. Sage's role is to help with coding, suggest improvements, and automate tasks to accelerate development. For more details on Sage's directives and operating procedures, see `.github/copilot-instructions.md`.
 
 ## License
 
@@ -92,9 +106,9 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## v2 burndown
 
-* [ ] Database
-    * [ ] Design table stucture
-    * [ ] Migrate each use case
+* [X] Database
+    * [X] Design table stucture
+    * [X] Migrate each use case
     * [ ] Add metrics
 * [ ] Scale up
     * [ ] discord.py cogs
