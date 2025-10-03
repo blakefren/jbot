@@ -5,9 +5,9 @@ import re
 from enum import Enum
 from bot.subscriber import Subscriber
 from database.logger import Logger
-from readers.question_selector import QuestionSelector
+from bot.readers.question_selector import QuestionSelector
 from cfg.players import read_players_into_dict
-from readers.question import Question
+from bot.readers.question import Question
 
 # Construct the absolute path to the project's root directory
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -116,7 +116,7 @@ class GameRunner:
 
         # POWERUP mode: resolve bet and attack effects
         if self.mode.name == "POWERUP":
-            from modes.powerup import PowerUpManager
+            from bot.modes.powerup import PowerUpManager
 
             # Get all players (simulate persistent state)
             players = self.logger.get_guess_metrics(

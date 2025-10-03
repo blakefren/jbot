@@ -1,5 +1,5 @@
 from discord.ext import commands
-from modes.powerup import PowerUpManager
+from bot.modes.powerup import PowerUpManager
 
 
 class Powerup(commands.Cog):

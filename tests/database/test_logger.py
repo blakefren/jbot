@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from database.logger import Logger
-from readers.question import Question
+from bot.readers.question import Question
 from database.database import Database
 
 

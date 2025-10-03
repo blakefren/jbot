@@ -1,7 +1,7 @@
 import os
 from datetime import date
 from database.database import Database
-from readers.question import Question
+from bot.readers.question import Question
 
 
 class Logger:

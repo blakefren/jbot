@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from bot.discord import DiscordBot
 from bot.cogs.trivia import Trivia
 from cfg.main import ConfigReader
-from modes.game_runner import GameRunner
+from bot.modes.game_runner import GameRunner
 from database.logger import Logger
 
 

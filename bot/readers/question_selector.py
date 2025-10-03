@@ -1,6 +1,6 @@
 import datetime
 from random import randint
-from readers.question import Question
+from bot.readers.question import Question
 from zoneinfo import ZoneInfo
 
 # TODO: This should be handled more centrally

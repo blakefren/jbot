@@ -8,9 +8,9 @@ from zoneinfo import ZoneInfo
 
 from cfg.main import ConfigReader
 from database.logger import Logger
-from modes.game_runner import GameRunner
-from readers.question import Question
-from readers.question_selector import QuestionSelector
+from bot.modes.game_runner import GameRunner
+from bot.readers.question import Question
+from bot.readers.question_selector import QuestionSelector
 
 # Timezone Configuration
 try:

@@ -1,5 +1,5 @@
 import csv
-from readers.question import Question
+from bot.readers.question import Question
 
 
 def read_riddle_questions(file_path: str) -> list[Question]:

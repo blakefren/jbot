@@ -4,10 +4,10 @@ from bot.discord import DiscordBot
 from bot.cogs.fight import Fight
 from bot.cogs.powerup import Powerup
 from bot.cogs.coop import Coop
-from modes.game_runner import GameRunner, GameType
+from bot.modes.game_runner import GameRunner, GameType
 from database.logger import Logger
-from readers.question_selector import QuestionSelector
-from readers.question import Question
+from bot.readers.question_selector import QuestionSelector
+from bot.readers.question import Question
 
 
 class DummyCtx:

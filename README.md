@@ -9,11 +9,8 @@ A daily bot for group trivia questions and competition.
     ```
     pip install -r requirements.txt
     ```
-2.  Fill out `/cfg/main.cfg` for the features you want to use.
-3.  Initialize the database by running the setup script:
-    ```
-    python database/database.py
-    ```
+2.  Create a `main.cfg` file in the `cfg/` directory by copying the `main.cfg.template` file. Fill out the required fields, such as your Discord bot token and the paths to your question datasets.
+3.  The database will be created automatically when you run the bot for the first time.
 
 ## Running the Bot
 
@@ -79,11 +76,11 @@ The bot uses a SQLite database (`jbot.db`) to store all persistent data, includi
 *   Daily guesses
 *   Message logs
 
-The database schema is defined in `database/schema.sql`. When the bot is run for the first time, it will create the database file in the `database/` directory.
+The database schema is defined in `database/schema.sql`. When the bot is run for the first time, it will create the database file in the root directory.
 
 ## Datasets
 
-You'll have to download these yourself and update their paths in `/cfg/`. Some assembly required. No guarantees on licensing, etc.
+You'll have to download these yourself and update their paths in `cfg/main.cfg`. Some assembly required. No guarantees on licensing, etc.
 
 ### Jeopardy!
 
@@ -125,17 +122,19 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
     * [ ] Don't spam commands: discord.ui.View()
     * [ ] Explore discord.Embed for message formatting
 * [ ] Player interactions
-    * [X] Attack: disrupt
-    * [X] Attack: steal
-    * [X] Defense: shield
-    * [X] Wager: basic bets
-    * [ ] Extra points for answering before the hint
-    * [ ] Extra points for answering first
-    * [ ] Weekly boss fight
-* [ ] Coop
-    * [X] Reinforce
-    * [ ] Reveal answer letters
-    * [ ] Red vs. blue teams
+    * [ ] Fight
+        * [X] Disrupt
+        * [X] Steal
+        * [X] Shield
+    * [ ] Powerup
+        * [X] Wager: basic bets
+        * [ ] Extra points for answering before the hint
+        * [ ] Extra points for answering first
+        * [ ] Weekly boss fight
+    * [ ] Coop
+        * [X] Reinforce
+        * [ ] Reveal answer letters
+        * [ ] Red vs. blue teams
 * [ ] Questions
     * [ ] Pop Culture Jeopardy!
     * [ ] Test dataset

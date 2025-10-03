@@ -19,7 +19,7 @@ class TestQuestionSelector(unittest.TestCase):
         self.assertEqual(selector.questions, self.questions)
         self.assertEqual(selector.mode, "daily")
 
-    @patch("readers.question_selector.datetime")
+    @patch("bot.readers.question_selector.datetime")
     def test_get_question_for_today_daily_mode(self, mock_datetime):
         # Mock the current time
         mock_now = datetime.datetime(2023, 10, 27, 12, 0, 0, tzinfo=TIMEZONE)
@@ -37,7 +37,7 @@ class TestQuestionSelector(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             selector.get_question_for_today()
 
-    @patch("readers.question_selector.randint")
+    @patch("bot.readers.question_selector.randint")
     def test_get_random_question(self, mock_randint):
         mock_randint.return_value = 1  # Mock the random index
         selector = QuestionSelector(self.questions)

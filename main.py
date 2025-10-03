@@ -1,13 +1,13 @@
 from bot.discord import run_discord_bot
 from cfg.main import ConfigReader
 from database.logger import Logger
-from readers.question import Question
-from readers.tsv import (
+from bot.readers.question import Question
+from bot.readers.tsv import (
     read_jeopardy_questions,
     get_random_question,
     read_knowledge_bowl_questions,
 )
-from readers.csv_reader import (
+from bot.readers.csv_reader import (
     read_riddle_questions,
     read_riddle_with_hints_questions,
 )

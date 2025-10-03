@@ -30,7 +30,7 @@ class TestGameRunner(unittest.TestCase):
 
         # Patch SUBSCRIBERS_FILE before initializing GameRunner
         self.subscribers_patcher = patch(
-            "modes.game_runner.SUBSCRIBERS_FILE", self.test_subscribers_file
+            "bot.modes.game_runner.SUBSCRIBERS_FILE", self.test_subscribers_file
         )
         self.subscribers_patcher.start()
 
@@ -125,7 +125,7 @@ class TestGameRunner(unittest.TestCase):
         content = self.game_runner.get_morning_message_content()
         self.assertIn(self.mock_question.question, content)
 
-    @patch("modes.game_runner.read_players_into_dict")
+    @patch("bot.modes.game_runner.read_players_into_dict")
     def test_get_reminder_message_content(self, mock_read_players):
         """Test generating the reminder message content."""
         self.game_runner.daily_q = self.mock_question
@@ -286,7 +286,7 @@ def test_handle_guess_powerup_correct():
         def resolve_wager(self, pid, correct):
             called["resolve_wager"] = (pid, correct)
 
-    with patch("modes.game_runner.PowerUpManager", DummyPowerUpManager):
+    with patch("bot.modes.game_runner.PowerUpManager", DummyPowerUpManager):
         result = game.handle_guess(1, "Player1", "test")
         assert result is True
         assert called["resolve_wager"] == ("1", True)
@@ -306,7 +306,7 @@ def test_handle_guess_powerup_incorrect():
         def resolve_wager(self, pid, correct):
             called["resolve_wager"] = (pid, correct)
 
-    with patch("modes.game_runner.PowerUpManager", DummyPowerUpManager):
+    with patch("bot.modes.game_runner.PowerUpManager", DummyPowerUpManager):
         result = game.handle_guess(1, "Player1", "wrong")
         assert result is False
         assert called["resolve_wager"] == ("1", False)

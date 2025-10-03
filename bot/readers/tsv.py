@@ -1,7 +1,7 @@
 import csv
 import random
 
-from readers.question import Question
+from bot.readers.question import Question
 
 
 def parse_value(value: str) -> int:
