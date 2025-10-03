@@ -3,7 +3,7 @@ import hashlib
 
 class Question:
     """
-    A class to represent a single Jeopardy! question and its associated data.
+    A class to represent a single trivia question and its associated data.
     """
 
     def __init__(
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     # Create a Question instance
     q1 = Question(
         question="This ancient civilization built the Great Pyramid of Giza.",
-        answer="What is Egypt?",
+        answer="Egypt",
         category="WORLD HISTORY",
         clue_value=200,
         hint="They were ruled by Pharaohs.",
@@ -140,13 +140,6 @@ if __name__ == "__main__":
 
     print("--- Question 1 Details ---")
     print(q1)
-    print(f"Question Text: {q1.question}")
-    print(f"Answer Text: {q1.answer}")
-    print(f"Category: {q1.category}")
-    print(f"Clue Value: ${q1.clue_value}")
-    print(f"Data Source: {q1.data_source}")
-    print(f"Metadata: {q1.metadata}")
-    print(f"Metadata Episode: {q1.metadata.get('episode')}")
 
     # Convert to dictionary
     q1_dict = q1.to_dict()
@@ -156,7 +149,7 @@ if __name__ == "__main__":
     # Create a Question instance from a dictionary
     q2_data = {
         "question": "The capital of France.",
-        "answer": "What is Paris?",
+        "answer": "Paris",
         "category": "GEOGRAPHY",
         "clue_value": 400,
         "hint": "City of Love",
@@ -170,14 +163,12 @@ if __name__ == "__main__":
     # Test with minimal data (defaults)
     q3 = Question(
         question="A primary color.",
-        answer="What is red?",
+        answer="Red",
         category="COLORS",
         clue_value=100,
     )
     print("\n--- Question 3 Details (minimal) ---")
     print(q3)
-    print(f"Data Source: {q3.data_source}")
-    print(f"Metadata: {q3.metadata}")
 
     # Test invalid input
     print("\n--- Testing Invalid Input ---")

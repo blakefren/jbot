@@ -36,7 +36,9 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         self.mock_game_runner.handle_guess.return_value = True
         self.mock_game_runner.daily_q = MagicMock()
 
-        await self.trivia_cog.answer.callback(self.trivia_cog, mock_ctx, guess="test answer")
+        await self.trivia_cog.answer.callback(
+            self.trivia_cog, mock_ctx, guess="test answer"
+        )
 
         self.mock_game_runner.handle_guess.assert_called_once_with(
             123, "Test User", "test answer"
@@ -57,7 +59,9 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         self.mock_game_runner.handle_guess.return_value = False
         self.mock_game_runner.daily_q = MagicMock()
 
-        await self.trivia_cog.answer.callback(self.trivia_cog, mock_ctx, guess="wrong answer")
+        await self.trivia_cog.answer.callback(
+            self.trivia_cog, mock_ctx, guess="wrong answer"
+        )
 
         self.mock_game_runner.handle_guess.assert_called_once_with(
             123, "Test User", "wrong answer"
@@ -74,7 +78,9 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx = AsyncMock()
         self.mock_game_runner.daily_q = None
 
-        await self.trivia_cog.answer.callback(self.trivia_cog, mock_ctx, guess="any answer")
+        await self.trivia_cog.answer.callback(
+            self.trivia_cog, mock_ctx, guess="any answer"
+        )
 
         self.mock_game_runner.handle_guess.assert_not_called()
         self.bot.send_message.assert_called_once_with(

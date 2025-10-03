@@ -1,6 +1,7 @@
 import csv
 from readers.question import Question
 
+
 def read_riddle_questions(file_path: str) -> list[Question]:
     """
     Reads riddle questions from a CSV file.
@@ -16,21 +17,21 @@ def read_riddle_questions(file_path: str) -> list[Question]:
         with open(file_path, mode="r", encoding="utf-8") as file:
             reader = csv.DictReader(file)
             for row in reader:
-                question_text = row["QUESTIONS"]
-                answer_text = row["ANSWERS"]
-                question = Question(
-                    question=question_text,
-                    answer=answer_text,
-                    category="Riddle",
-                    clue_value=100, # Default value for riddles
-                    data_source="Riddles (small)",
+                questions.append(
+                    Question(
+                        question=row["QUESTIONS"],
+                        answer=row["ANSWERS"],
+                        category="Riddle",
+                        clue_value=100,  # Default value for riddles
+                        data_source="Riddles (small)",
+                    )
                 )
-                questions.append(question)
     except FileNotFoundError:
         print(f"Error: The file at {file_path} was not found.")
     except Exception as e:
         print(f"An error occurred: {e}")
     return questions
+
 
 def read_riddle_with_hints_questions(file_path: str) -> list[Question]:
     """
@@ -47,18 +48,16 @@ def read_riddle_with_hints_questions(file_path: str) -> list[Question]:
         with open(file_path, mode="r", encoding="utf-8") as file:
             reader = csv.DictReader(file)
             for row in reader:
-                question_text = row["Riddle"]
-                answer_text = row["Answer"]
-                hint_text = row["Hint"]
-                question = Question(
-                    question=question_text,
-                    answer=answer_text,
-                    category="Riddle",
-                    clue_value=100,  # Default value for riddles
-                    hint=hint_text,
-                    data_source="Riddles with Hints",
+                questions.append(
+                    Question(
+                        question=row["Riddle"],
+                        answer=row["Answer"],
+                        category="Riddle",
+                        clue_value=100,  # Default value for riddles
+                        hint=row["Hint"],
+                        data_source="Riddles with Hints",
+                    )
                 )
-                questions.append(question)
     except FileNotFoundError:
         print(f"Error: The file at {file_path} was not found.")
     except Exception as e:

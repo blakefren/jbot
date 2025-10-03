@@ -1,13 +1,12 @@
 import unittest
 import os
 import csv
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock
 
 from modes.game_runner import GameRunner, GameType
 from bot.subscriber import Subscriber
 from readers.question import Question
 from database.logger import Logger
-from cfg.players import read_players_into_dict
 
 
 class TestGameRunner(unittest.TestCase):
@@ -71,7 +70,7 @@ class TestGameRunner(unittest.TestCase):
         game_runner = GameRunner(self.mock_question_selector, self.mock_logger)
         self.assertEqual(len(game_runner.subscribed_contexts), 1)
         subscriber = list(game_runner.subscribed_contexts)[0]
-        self.assertEqual(subscriber.id, 123)
+        self.assertEqual(subscriber.sub_id, 123)
         self.assertEqual(subscriber.display_name, "Test User")
         self.assertFalse(subscriber.is_channel)
 
@@ -247,58 +246,71 @@ if __name__ == "__main__":
 
 
 # --- Additional POWERUP mode tests ---
-import pytest
 from unittest.mock import MagicMock
 from modes.game_runner import GameRunner, GameType
+
 
 class DummyLoggerPowerup:
     def log_player_guess(self, *a, **kw):
         pass
+
     def get_guess_metrics(self, *a, **kw):
         return {"players": {"1": {"score": 100, "bet": 0, "under_attack": False}}}
+
     def read_guess_history(self, *a, **kw):
         return []
+
 
 class DummyQuestionSelectorPowerup:
     def __init__(self):
         self.questions = []
+
     def get_question_for_today(self):
         q = MagicMock()
         q.id = "q1"
         q.answer = "test"
         return q
 
-def test_handle_guess_powerup_correct(monkeypatch):
-    logger = DummyLoggerPowerup()
-    selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, logger, mode=GameType.POWERUP)
-    game.daily_q = selector.get_question_for_today()
-    called = {}
-    class DummyPowerUpManager:
-        def __init__(self, players):
-            pass
-        def resolve_bet(self, pid, correct):
-            called["resolve_bet"] = (pid, correct)
-    monkeypatch.setattr("modes.game_runner.PowerUpManager", DummyPowerUpManager)
-    result = game.handle_guess(1, "Player1", "test")
-    assert result is True
-    assert called["resolve_bet"] == ("1", True)
 
-def test_handle_guess_powerup_incorrect(monkeypatch):
+def test_handle_guess_powerup_correct():
     logger = DummyLoggerPowerup()
     selector = DummyQuestionSelectorPowerup()
     game = GameRunner(selector, logger, mode=GameType.POWERUP)
     game.daily_q = selector.get_question_for_today()
     called = {}
+
     class DummyPowerUpManager:
         def __init__(self, players):
             pass
-        def resolve_bet(self, pid, correct):
-            called["resolve_bet"] = (pid, correct)
-    monkeypatch.setattr("modes.game_runner.PowerUpManager", DummyPowerUpManager)
-    result = game.handle_guess(1, "Player1", "wrong")
-    assert result is False
-    assert called["resolve_bet"] == ("1", False)
+
+        def resolve_wager(self, pid, correct):
+            called["resolve_wager"] = (pid, correct)
+
+    with patch("modes.game_runner.PowerUpManager", DummyPowerUpManager):
+        result = game.handle_guess(1, "Player1", "test")
+        assert result is True
+        assert called["resolve_wager"] == ("1", True)
+
+
+def test_handle_guess_powerup_incorrect():
+    logger = DummyLoggerPowerup()
+    selector = DummyQuestionSelectorPowerup()
+    game = GameRunner(selector, logger, mode=GameType.POWERUP)
+    game.daily_q = selector.get_question_for_today()
+    called = {}
+
+    class DummyPowerUpManager:
+        def __init__(self, players):
+            pass
+
+        def resolve_wager(self, pid, correct):
+            called["resolve_wager"] = (pid, correct)
+
+    with patch("modes.game_runner.PowerUpManager", DummyPowerUpManager):
+        result = game.handle_guess(1, "Player1", "wrong")
+        assert result is False
+        assert called["resolve_wager"] == ("1", False)
+
 
 def test_handle_guess_non_powerup():
     logger = DummyLoggerPowerup()
@@ -307,6 +319,7 @@ def test_handle_guess_non_powerup():
     game.daily_q = selector.get_question_for_today()
     result = game.handle_guess(1, "Player1", "test")
     assert result is True
+
 
 def test_handle_guess_no_question():
     logger = DummyLoggerPowerup()

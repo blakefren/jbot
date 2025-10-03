@@ -3,9 +3,10 @@ from datetime import date
 from database.database import Database
 from readers.question import Question
 
+
 class Logger:
     """
-    A logging class for the Jeopardy! chatbot, designed to log events to a SQLite database.
+    A logging class for the trivia bot, designed to log events to a SQLite database.
     """
 
     def __init__(self, db_path: str):
@@ -31,34 +32,48 @@ class Logger:
             sent_to_users (list): A list of user identifiers.
         """
         # First, ensure the question exists in the 'questions' table
-        question_query = "SELECT id FROM questions WHERE question_text = ? AND answer_text = ?"
-        existing_question = self.db.execute_query(question_query, (question.question, question.answer))
+        question_query = (
+            "SELECT id FROM questions WHERE question_text = ? AND answer_text = ?"
+        )
+        existing_question = self.db.execute_query(
+            question_query, (question.question, question.answer)
+        )
 
         if existing_question:
-            question_id = existing_question[0]['id']
+            question_id = existing_question[0]["id"]
         else:
             # Insert the new question and get its ID
             insert_query = """
                 INSERT INTO questions (question_text, answer_text, category, value, source)
                 VALUES (?, ?, ?, ?, ?)
             """
-            self.db.execute_update(insert_query, (
-                question.question, question.answer, question.category, question.clue_value, question.data_source
-            ))
-            question_id = self.db.execute_query("SELECT last_insert_rowid() as id")[0]['id']
-        
-        # Log the daily question event
-        daily_question_query = "INSERT INTO daily_questions (question_id, sent_at) VALUES (?, ?)"
-        self.db.execute_update(daily_question_query, (question_id, date.today()))
-        
-        print(f"[History Logged] Daily Question Sent - ID: {question_id}")
+            self.db.execute_update(
+                insert_query,
+                (
+                    question.question,
+                    question.answer,
+                    question.category,
+                    question.clue_value,
+                    question.data_source,
+                ),
+            )
+            question_id = self.db.execute_query("SELECT last_insert_rowid() as id")[0][
+                "id"
+            ]
 
+        # Log the daily question event
+        daily_question_query = (
+            "INSERT INTO daily_questions (question_id, sent_at) VALUES (?, ?)"
+        )
+        self.db.execute_update(daily_question_query, (question_id, date.today()))
+
+        print(f"[History Logged] Daily Question Sent - ID: {question_id}")
 
     def log_player_guess(
         self,
         player_id: str,
         player_name: str,
-        question_id: str, # This should now be the daily_question_id
+        question_id: str,  # This should now be the daily_question_id
         guess: str,
         is_correct: bool,
     ):
@@ -72,16 +87,19 @@ class Logger:
             guess (str): The answer submitted by the player.
             is_correct (bool): Whether the guess was correct.
         """
-        # Ensure player exists
-        self.db.execute_update("INSERT OR IGNORE INTO players (id, name) VALUES (?, ?)", (player_id, player_name))
+        self.db.execute_update(
+            "INSERT OR IGNORE INTO players (id, name) VALUES (?, ?)",
+            (player_id, player_name),
+        )
 
         query = """
             INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct)
             VALUES (?, ?, ?, ?)
         """
         self.db.execute_update(query, (question_id, player_id, guess, is_correct))
-        print(f"[Guess Logged] Player {player_name} guessed '{guess}' for question {question_id}. Correct: {is_correct}")
-
+        print(
+            f"[Guess Logged] Player {player_name} guessed '{guess}' for question {question_id}. Correct: {is_correct}"
+        )
 
     def log_messaging_event(
         self, direction, method, recipient_or_sender, content, status="success"
@@ -93,8 +111,12 @@ class Logger:
             INSERT INTO messages (direction, method, recipient_sender, content, status)
             VALUES (?, ?, ?, ?, ?)
         """
-        self.db.execute_update(query, (direction, method, recipient_or_sender, content, status))
-        print(f"[Messaging Logged] {direction} message via {method} to/from {recipient_or_sender}")
+        self.db.execute_update(
+            query, (direction, method, recipient_or_sender, content, status)
+        )
+        print(
+            f"[Messaging Logged] {direction} message via {method} to/from {recipient_or_sender}"
+        )
 
     def read_guess_history(self, user_id: int = -1) -> list[dict]:
         """
@@ -105,7 +127,7 @@ class Logger:
         if user_id != -1:
             query += " WHERE player_id = ?"
             params = (user_id,)
-        
+
         return self.db.execute_query(query, params)
 
     def get_guess_metrics(self, all_questions: list[Question]):
@@ -121,7 +143,7 @@ class Logger:
 
 # --- Example Usage ---
 if __name__ == "__main__":
-    db_path = os.path.join(os.path.dirname(__file__), '..', 'database', 'jbot.db')
+    db_path = os.path.join(os.path.dirname(__file__), "..", "database", "jbot.db")
     logger = Logger(db_path=db_path)
 
     q = Question(
@@ -133,12 +155,14 @@ if __name__ == "__main__":
         data_source="local",
         metadata={"air_date": "2023-10-27"},
     )
-    
+
     # Log a daily question
-    logger.log_daily_question(q, ['user1', 'user2'])
-    
+    logger.log_daily_question(q, ["user1", "user2"])
+
     # Get the ID of the daily question we just logged
-    daily_question_id = logger.db.execute_query("SELECT id FROM daily_questions ORDER BY id DESC LIMIT 1")[0]['id']
+    daily_question_id = logger.db.execute_query(
+        "SELECT id FROM daily_questions ORDER BY id DESC LIMIT 1"
+    )[0]["id"]
 
     # Log a correct guess
     logger.log_player_guess(
@@ -163,5 +187,5 @@ if __name__ == "__main__":
     history = logger.read_guess_history()
     for entry in history:
         print(entry)
-        
+
     logger.close()

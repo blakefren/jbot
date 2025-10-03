@@ -1,106 +1,99 @@
 import unittest
 from unittest.mock import patch, mock_open
-from cfg import players
+from cfg.players import PlayerManager
 
-class TestPlayers(unittest.TestCase):
 
-    @patch("cfg.players.PLAYER_FILE_PATH", "dummy/path/players.csv")
-    def test_read_players_into_dict_success(self):
-        """Test successful reading of players into a dictionary."""
-        csv_data = "discord_id,firstname,lastname,phone_number\n123,John,Doe,+15551234567\n456,Jane,Smith,+15557654321"
+class TestPlayerManager(unittest.TestCase):
+    def test_load_players_success(self):
+        """Test successful loading of players."""
+        csv_data = "discord_id,firstname,lastname,phone_number,answer_streak,active_shield\n123,John,Doe,+15551234567,5,True\n456,Jane,Smith,+15557654321,0,False"
         with patch("builtins.open", mock_open(read_data=csv_data)):
-            result = players.read_players_into_dict()
-            expected = {
-                "123": {"firstname": "John", "lastname": "Doe", "phone_number": "+15551234567", "answer_streak": 0, "active_shield": False},
-                "456": {"firstname": "Jane", "lastname": "Smith", "phone_number": "+15557654321", "answer_streak": 0, "active_shield": False}
-            }
-            self.assertEqual(result, expected)
+            manager = PlayerManager()
+            self.assertIn("123", manager.players)
+            self.assertEqual(manager.players["123"]["firstname"], "John")
+            self.assertEqual(manager.players["123"]["answer_streak"], 5)
+            self.assertTrue(manager.players["123"]["active_shield"])
+            self.assertIn("456", manager.players)
+            self.assertEqual(manager.players["456"]["lastname"], "Smith")
+            self.assertFalse(manager.players["456"]["active_shield"])
 
-    @patch("cfg.players.PLAYER_FILE_PATH", "dummy/path/players.csv")
-    def test_read_players_into_dict_file_not_found(self):
-        """Test FileNotFoundError for read_players_into_dict."""
+    def test_load_players_file_not_found(self):
+        """Test FileNotFoundError during player loading."""
         with patch("builtins.open", side_effect=FileNotFoundError):
-            result = players.read_players_into_dict()
-            self.assertEqual(result, {})
+            manager = PlayerManager()
+            self.assertEqual(manager.players, {})
 
-    @patch("cfg.players.PLAYER_FILE_PATH", "dummy/path/players.csv")
-    def test_read_players_into_dict_empty_file(self):
-        """Test read_players_into_dict with an empty file."""
-        with patch("builtins.open", mock_open(read_data="")):
-            result = players.read_players_into_dict()
-            self.assertEqual(result, {})
+    def test_load_players_empty_file(self):
+        """Test loading from an empty or header-only file."""
+        with patch(
+            "builtins.open", mock_open(read_data="discord_id,firstname,lastname\n")
+        ):
+            manager = PlayerManager()
+            self.assertEqual(manager.players, {})
 
-    @patch("cfg.players.PLAYER_FILE_PATH", "dummy/path/players.csv")
-    def test_read_players_into_dict_missing_discord_id(self):
+    def test_load_players_missing_discord_id(self):
         """Test that rows with missing discord_id are skipped."""
-        csv_data = "discord_id,firstname,lastname,phone_number\n,John,Doe,+15551234567\n456,Jane,Smith,+15557654321"
+        csv_data = "discord_id,firstname,lastname\n,John,Doe\n456,Jane,Smith"
         with patch("builtins.open", mock_open(read_data=csv_data)):
-            result = players.read_players_into_dict()
-            expected = {
-                "456": {"firstname": "Jane", "lastname": "Smith", "phone_number": "+15557654321", "answer_streak": 0, "active_shield": False}
+            manager = PlayerManager()
+            self.assertNotIn("", manager.players)
+            self.assertNotIn(None, manager.players)
+            self.assertIn("456", manager.players)
+            self.assertEqual(len(manager.players), 1)
+
+    def test_get_player(self):
+        """Test retrieving a single player."""
+        csv_data = "discord_id,firstname\n123,John"
+        with patch("builtins.open", mock_open(read_data=csv_data)):
+            manager = PlayerManager()
+            player = manager.get_player("123")
+            self.assertIsNotNone(player)
+            self.assertEqual(player["firstname"], "John")
+            self.assertIsNone(manager.get_player("nonexistent"))
+
+    def test_get_all_players(self):
+        """Test retrieving all players."""
+        csv_data = "discord_id,firstname\n123,John\n456,Jane"
+        with patch("builtins.open", mock_open(read_data=csv_data)):
+            manager = PlayerManager()
+            all_players = manager.get_all_players()
+            self.assertEqual(len(all_players), 2)
+            self.assertIn("123", all_players)
+            self.assertIn("456", all_players)
+
+    def test_save_players(self):
+        """Test writing player data back to the CSV file."""
+        m = mock_open()
+        with patch("builtins.open", m):
+            manager = PlayerManager("dummy/path/players.csv")
+            m.assert_called_once_with(
+                "dummy/path/players.csv", mode="r", newline="", encoding="utf-8"
+            )
+            m.reset_mock()
+            manager.players = {
+                "123": {
+                    "firstname": "John",
+                    "lastname": "Doe",
+                    "phone_number": "",
+                    "answer_streak": 1,
+                    "active_shield": True,
+                }
             }
-            self.assertEqual(result, expected)
+            manager.save_players()
+            m.assert_called_once_with(
+                "dummy/path/players.csv", mode="w", newline="", encoding="utf-8"
+            )
 
-    @patch("cfg.players.PLAYER_FILE_PATH", "dummy/path/players.csv")
-    def test_read_and_validate_contacts_success(self):
-        """Test successful reading and validation of contacts."""
-        csv_data = "firstname,lastname,phone_number,discord_id\nJohn,Doe,+15551234567,123\nJane,Smith,+15557654321,456"
-        with patch("builtins.open", mock_open(read_data=csv_data)):
-            result = players.read_and_validate_contacts()
-            expected = [
-                {"firstname": "John", "lastname": "Doe", "phone_number": "+15551234567", "discord_id": "123"},
-                {"firstname": "Jane", "lastname": "Smith", "phone_number": "+15557654321", "discord_id": "456"}
-            ]
-            self.assertEqual(result, expected)
+        handle = m()
 
-    @patch("cfg.players.PLAYER_FILE_PATH", "dummy/path/players.csv")
-    def test_read_and_validate_contacts_file_not_found(self):
-        """Test FileNotFoundError for read_and_validate_contacts."""
-        with patch("builtins.open", side_effect=FileNotFoundError):
-            result = players.read_and_validate_contacts()
-            self.assertEqual(result, [])
+        # Check that writeheader() was called
+        handle.write.assert_any_call(
+            "discord_id,firstname,lastname,phone_number,answer_streak,active_shield\r\n"
+        )
 
-    @patch("cfg.players.PLAYER_FILE_PATH", "dummy/path/players.csv")
-    def test_read_and_validate_contacts_missing_headers(self):
-        """Test CSV with missing required headers."""
-        csv_data = "firstname,lastname\nJohn,Doe"
-        with patch("builtins.open", mock_open(read_data=csv_data)):
-            result = players.read_and_validate_contacts()
-            self.assertEqual(result, [])
+        # Check that writerow() was called with the correct data
+        handle.write.assert_any_call("123,John,Doe,,1,True\r\n")
 
-    @patch("cfg.players.PLAYER_FILE_PATH", "dummy/path/players.csv")
-    def test_read_and_validate_contacts_invalid_phone(self):
-        """Test validation of rows with invalid phone numbers."""
-        csv_data = "firstname,lastname,phone_number,discord_id\nJohn,Doe,555-1234,123\nJane,Smith,+15557654321,456"
-        with patch("builtins.open", mock_open(read_data=csv_data)):
-            result = players.read_and_validate_contacts()
-            expected = [
-                {"firstname": "Jane", "lastname": "Smith", "phone_number": "+15557654321", "discord_id": "456"}
-            ]
-            self.assertEqual(result, expected)
-
-    @patch("cfg.players.PLAYER_FILE_PATH", "dummy/path/players.csv")
-    def test_read_and_validate_contacts_sanitized_names(self):
-        """Test sanitization of names with non-alphabetic characters."""
-        csv_data = "firstname,lastname,phone_number,discord_id\nJohn123,Doe-Smith,+15551234567,123"
-        with patch("builtins.open", mock_open(read_data=csv_data)):
-            result = players.read_and_validate_contacts()
-            expected = [
-                {"firstname": "John", "lastname": "DoeSmith", "phone_number": "+15551234567", "discord_id": "123"}
-            ]
-            self.assertEqual(result, expected)
-
-    @patch("cfg.players.PLAYER_FILE_PATH", "dummy/path/players.csv")
-    def test_read_and_validate_contacts_missing_names(self):
-        """Test handling of missing first and last names."""
-        csv_data = "firstname,lastname,phone_number,discord_id\n,Smith,+15551234567,123\nJohn,,+15557654321,456"
-        with patch("builtins.open", mock_open(read_data=csv_data)):
-            result = players.read_and_validate_contacts()
-            expected = [
-                {"firstname": "Unknown", "lastname": "Smith", "phone_number": "+15551234567", "discord_id": "123"},
-                {"firstname": "John", "lastname": "Unknown", "phone_number": "+15557654321", "discord_id": "456"}
-            ]
-            self.assertEqual(result, expected)
 
 if __name__ == "__main__":
     unittest.main()

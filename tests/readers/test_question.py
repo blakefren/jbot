@@ -58,7 +58,9 @@ class TestQuestion(unittest.TestCase):
         self.assertIn("Source: unknown", str(q))
         self.assertNotIn("Hint:", str(q))
 
-        q_with_hint = Question(question="Q", answer="A", category="C", clue_value=100, hint="H")
+        q_with_hint = Question(
+            question="Q", answer="A", category="C", clue_value=100, hint="H"
+        )
         self.assertIn("Hint: H", str(q_with_hint))
 
     def test_to_dict(self):

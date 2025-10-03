@@ -1,11 +1,11 @@
-import discord
 from discord.ext import commands
+
 
 class Metrics(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="history", aliases=["h", "metrics"])
+    @commands.hybrid_command(name="history")
     async def history(self, ctx: commands.Context):
         """Shows your personal game history and stats."""
         player_id = ctx.author.id
@@ -15,8 +15,8 @@ class Metrics(commands.Cog):
             history_text, interaction=ctx.interaction, ephemeral=True
         )
 
-    @commands.hybrid_command(name="scores", aliases=["leaderboard", "s", "score"])
-    async def scores(self, ctx: commands.Context):
+    @commands.hybrid_command(name="leaderboard")
+    async def leaderboard(self, ctx: commands.Context):
         """Displays the current score leaderboard."""
         leaderboard = self.bot.game.get_scores_leaderboard()
         await self.bot.send_message(leaderboard, interaction=ctx.interaction)

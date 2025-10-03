@@ -1,6 +1,7 @@
 import sqlite3
 import os
 
+
 class Database:
     """
     Manages the connection to the SQLite database and provides an interface for database operations.
@@ -35,8 +36,8 @@ class Database:
         Creates the necessary database tables from the schema.sql file.
         """
         try:
-            schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
-            with open(schema_path, 'r') as f:
+            schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
+            with open(schema_path, "r") as f:
                 schema = f.read()
             self.conn.executescript(schema)
             self.conn.commit()
@@ -45,7 +46,6 @@ class Database:
             print(f"Error creating tables: {e}")
         except FileNotFoundError:
             print(f"Error: 'schema.sql' not found in '{os.path.dirname(__file__)}'.")
-
 
     def close(self):
         """
@@ -96,11 +96,10 @@ class Database:
             print(f"Error executing update: {e}")
             return 0
 
-if __name__ == '__main__':
-    # Example usage:
-    db_file = os.path.join(os.path.dirname(__file__), 'jbot.db')
+
+if __name__ == "__main__":
+    # When run as a script, this will initialize the database.
+    db_file = os.path.join(os.path.dirname(__file__), "jbot.db")
     db = Database(db_path=db_file)
-    
-    # You can add some test queries here if you want
-    
+    print("Database initialized.")
     db.close()

@@ -1,6 +1,6 @@
 import datetime
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from readers.question import Question
 from readers.question_selector import QuestionSelector, TIMEZONE

@@ -110,23 +110,30 @@ class GameRunner:
         g = guess.strip().lower()
         a = self.daily_q.answer.strip().lower()
         is_correct = re.search(g, a) is not None
-        self.logger.log_player_guess(player_id, player_name, self.daily_q.id, g, is_correct)
+        self.logger.log_player_guess(
+            player_id, player_name, self.daily_q.id, g, is_correct
+        )
 
         # POWERUP mode: resolve bet and attack effects
         if self.mode.name == "POWERUP":
             from modes.powerup import PowerUpManager
+
             # Get all players (simulate persistent state)
-            players = self.logger.get_guess_metrics([], self.question_selector.questions).get("players", {})
+            players = self.logger.get_guess_metrics(
+                [], self.question_selector.questions
+            ).get("players", {})
             manager = PowerUpManager(players)
             # Call resolve_wager for this player
             manager.resolve_wager(str(player_id), is_correct)
-        
+
         return is_correct
 
     def get_scores_leaderboard(self) -> str:
         """Computes and formats the leaderboard string."""
         history = self.logger.read_guess_history()
-        metrics = self.logger.get_guess_metrics(history, self.question_selector.questions)
+        metrics = self.logger.get_guess_metrics(
+            history, self.question_selector.questions
+        )
         players_data = metrics.get("players", {})
 
         if not players_data:
@@ -142,15 +149,17 @@ class GameRunner:
 
         response_content = "-- Player Scores --\n"
         for i, (user_id, data) in enumerate(sorted_players, 1):
-            player_name = data.get('player_name', user_id)
-            score = data.get('score', 0)
+            player_name = data.get("player_name", user_id)
+            score = data.get("score", 0)
             response_content += f"{i}. {player_name}: {score}\n"
         return response_content
 
     def get_player_history(self, player_id: int, player_name: str) -> str:
         """Computes and formats the history/metrics string for a given player."""
         history = self.logger.read_guess_history(user_id=player_id)
-        metrics = self.logger.get_guess_metrics(history, self.question_selector.questions)
+        metrics = self.logger.get_guess_metrics(
+            history, self.question_selector.questions
+        )
 
         full_message = ""
         player_metrics = metrics["players"].get(str(player_id), None)
@@ -252,8 +261,7 @@ class GameRunner:
                 player_answers += f"{guess['PlayerName']}: {guess['Guess']}\n"
 
         flavor_message = (
-            "Good evening players!\n"
-            f"Here is the answer to today's trivia question:"
+            "Good evening players!\n" f"Here is the answer to today's trivia question:"
         )
         answer_part = self.format_answer(self.daily_q)
         return f"{flavor_message}\n{answer_part}\n{player_answers}"

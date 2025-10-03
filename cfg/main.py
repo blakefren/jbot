@@ -34,20 +34,18 @@ class ConfigReader:
         except Exception as e:
             print(f"An error occurred while reading the config file: {e}")
 
-    def get(self, key: str):
+    def get(self, key: str, default=None):
         """
-        Retrieves a configuration value by key. Throws error if the key is not found.
+        Retrieves a configuration value by key.
 
         Args:
             key (str): The key to look for in the configuration.
+            default: The default value to return if the key is not found.
 
         Returns:
             The value associated with the key, or the default value if the key is not found.
         """
-        if key not in self.config:
-            raise KeyError(f"Configuration key '{key}' not found.")
-        else:
-            return self.config.get(key, None)
+        return self.config.get(key, default)
 
     def get_bool(self, key: str) -> bool:
         """
@@ -59,7 +57,7 @@ class ConfigReader:
         Returns:
             bool: The boolean value associated with the key.
         """
+        if key not in self.config:
+            raise KeyError
         value = self.get(key)
-        if value is None:
-            return False
         return value.lower() in ("true", "1", "t", "y", "yes")

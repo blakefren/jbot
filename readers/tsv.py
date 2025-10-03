@@ -21,20 +21,11 @@ def read_jeopardy_questions(
     file_path: str, final_jeopardy_score: int = 0
 ) -> list[Question]:
     """
-    Reads a TSV file containing Jeopardy! questions and returns them as a list of dictionaries.
-
-    Args:
-        file_path (str): The full path to the TSV file.
-
-    Returns:
-        list: A list of dictionaries, where each dictionary represents a question.
-              Returns an empty list if the file is not found or an error occurs.
+    Reads a TSV file of Jeopardy! questions and returns a list of Question objects.
     """
     questions = []
     try:
         with open(file_path, "r", encoding="utf-8") as tsvfile:
-            # The csv.reader can handle TSV by specifying the delimiter as a tab character.
-            # DictReader is used to map the information in each row to a dictionary with the column headers as keys.
             reader = csv.DictReader(tsvfile, delimiter="\t")
             for row in reader:
                 metadata = {
@@ -42,41 +33,35 @@ def read_jeopardy_questions(
                     "air_date": row.get("air_date", "N/A"),
                     "daily_double": row.get("daily_double_value", 0),
                 }
-                # Give final jeopardy a real score.
-                clue_value = parse_value(row.get("clue_value", 0))
-                final_jeopardy = metadata.get("round", 0) == 3
-                clue_value_adj = final_jeopardy_score if final_jeopardy else clue_value
-                # Jeopardy! has the answer and question swapped.
+                is_final_jeopardy = metadata.get("round") == "Final Jeopardy!"
+                clue_value = (
+                    final_jeopardy_score
+                    if is_final_jeopardy
+                    else parse_value(row.get("clue_value", 0))
+                )
+
+                # The dataset has 'answer' as the clue and 'question' as the response.
                 questions.append(
                     Question(
                         question=row.get("answer", "N/A"),
                         answer=row.get("question", "N/A"),
                         category=row.get("category", "N/A"),
-                        clue_value=clue_value_adj,
-                        hint=None,  # Jeopardy! dataset does not have hints
+                        clue_value=clue_value,
                         data_source="Jeopardy!",
                         metadata=metadata,
                     )
                 )
-
     except FileNotFoundError:
         print(f"Error: The file at {file_path} was not found.")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred while reading Jeopardy questions: {e}")
 
     return questions
 
 
 def read_knowledge_bowl_questions(file_path: str) -> list[Question]:
     """
-    Reads a TSV file containing Knowledge Bowl questions and returns them as a list of Questions.
-
-    Args:
-        file_path (str): The full path to the TSV file.
-
-    Returns:
-        list: A list of Question objects.
-              Returns an empty list if the file is not found or an error occurs.
+    Reads a TSV file of Knowledge Bowl questions and returns a list of Questions.
     """
     questions = []
     try:
@@ -92,24 +77,20 @@ def read_knowledge_bowl_questions(file_path: str) -> list[Question]:
                         clue_value = int(parts[0])
                         category = parts[1].strip()
 
-                metadata = {
-                    "number": row.get("Number", "N/A"),
-                }
                 questions.append(
                     Question(
                         question=row.get("Question", "N/A"),
                         answer=row.get("Answer", "N/A"),
                         category=category,
                         clue_value=clue_value,
-                        hint=None,  # Knowledge Bowl dataset does not have hints
                         data_source="Knowledge Bowl",
-                        metadata=metadata,
+                        metadata={"number": row.get("Number", "N/A")},
                     )
                 )
     except FileNotFoundError:
         print(f"Error: The file at {file_path} was not found.")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred while reading Knowledge Bowl questions: {e}")
 
     return questions
 
@@ -130,16 +111,39 @@ def get_random_question(questions: list[Question]) -> Question:
 
 
 if __name__ == "__main__":
-    # Example usage
+    # Example usage for testing the question readers
     import os
     from cfg.main import ConfigReader
 
-    config = ConfigReader(
-        os.path.join(os.path.dirname(__file__), "..", "cfg", "main.cfg")
-    )
-    questions = read_jeopardy_questions(config.get("JEOPARDY_LOCAL_PATH"))
-    if questions:
-        random_question = get_random_question(questions)
-        print(random_question)
+    # Create a dummy config for testing
+    config_path = os.path.join(os.path.dirname(__file__), "..", "cfg", "main.cfg")
+    if os.path.exists(config_path):
+        config = ConfigReader()
+
+        # Test Jeopardy reader
+        jeopardy_path = config.get("JEOPARDY_LOCAL_PATH")
+        if jeopardy_path and jeopardy_path != "todo":
+            jeopardy_questions = read_jeopardy_questions(jeopardy_path)
+            if jeopardy_questions:
+                print("\n--- Random Jeopardy Question ---")
+                print(get_random_question(jeopardy_questions))
+            else:
+                print("No Jeopardy questions found or file path is a placeholder.")
+        else:
+            print("Jeopardy file path not configured or is 'todo'.")
+
+        # Test Knowledge Bowl reader
+        kb_path = config.get("KNOWLEDGE_BOWL_LOCAL_PATH")
+        if kb_path and kb_path != "todo":
+            kb_questions = read_knowledge_bowl_questions(kb_path)
+            if kb_questions:
+                print("\n--- Random Knowledge Bowl Question ---")
+                print(get_random_question(kb_questions))
+            else:
+                print(
+                    "No Knowledge Bowl questions found or file path is a placeholder."
+                )
+        else:
+            print("Knowledge Bowl file path not configured or is 'todo'.")
     else:
-        print("No questions found.")
+        print(f"Config file not found at {config_path}, skipping example usage.")

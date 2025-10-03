@@ -1,22 +1,28 @@
-from modes.powerup import PowerUpManager
 import asyncio
 import datetime
 import discord
 import os
-import sys
 
 from discord.ext import commands, tasks
 from zoneinfo import ZoneInfo
 
-from bot.subscriber import Subscriber
 from cfg.main import ConfigReader
 from database.logger import Logger
 from modes.game_runner import GameRunner
 from readers.question import Question
 from readers.question_selector import QuestionSelector
 
-# TODO: read timezone from config
-TIMEZONE = ZoneInfo("US/Pacific")
+# Timezone Configuration
+try:
+    # This is a bit of a hack to get the timezone here.
+    # Ideally, the config would be passed into the bot.
+    config_reader = ConfigReader()
+    TIMEZONE_STR = config_reader.get("TIMEZONE") or "US/Pacific"
+    TIMEZONE = ZoneInfo(TIMEZONE_STR)
+except Exception as e:
+    print(f"Error reading timezone from config, defaulting to US/Pacific. Error: {e}")
+    TIMEZONE = ZoneInfo("US/Pacific")
+
 MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
 REMINDER_TIME = datetime.time(hour=19, minute=30, tzinfo=TIMEZONE)
 EVENING_TIME = datetime.time(hour=20, minute=0, tzinfo=TIMEZONE)

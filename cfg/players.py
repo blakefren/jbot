@@ -1,139 +1,73 @@
-# TODO: refactor into a class.
-
 import csv
 import os
-import re
 
 PLAYER_FILE_PATH = os.path.join(os.path.dirname(__file__), "players.csv")
 
 
-def read_players_into_dict():
-    """
-    Reads the players CSV file and returns a dictionary of player data.
+class PlayerManager:
+    def __init__(self, file_path=PLAYER_FILE_PATH):
+        self.file_path = file_path
+        self.players = self._load_players()
 
-    Returns:
-        dict: A dictionary where keys are discord_ids and values are player data.
-    """
-    csv_filepath = PLAYER_FILE_PATH
-    players = {}
-
-    try:
-        with open(csv_filepath, mode="r", newline="", encoding="utf-8") as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                discord_id = row.get("discord_id", "").strip()
-                if discord_id:
-                    players[discord_id] = {
-                        "firstname": row.get("firstname", "").strip(),
-                        "lastname": row.get("lastname", "").strip(),
-                        "phone_number": row.get("phone_number", "").strip(),
-                        # POWERUP mode fields
-                        "answer_streak": int(row.get("answer_streak", 0)),
-                        "active_shield": row.get("active_shield", "False").strip().lower() == "true",
-                    }
-    except FileNotFoundError:
-        print(f"Error: The file '{csv_filepath}' was not found.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
-    return players
-
-
-def read_and_validate_contacts():
-    """
-    Reads a CSV file containing phone numbers, first names, and last names,
-    validates the data, and returns a list of valid contact dictionaries.
-
-    Returns:
-        list: A list of dictionaries, where each dictionary represents a valid contact.
-    """
-    csv_filepath = PLAYER_FILE_PATH
-    valid_contacts = []
-    # Regex for a common North American phone number format: +1XXXXXXXXXX
-    phone_number_pattern = re.compile(r"^\+1[\d]{10}$")
-
-    try:
-        with open(csv_filepath, mode="r", newline="", encoding="utf-8") as file:
-            # Use DictReader to access columns by their header names
-            reader = csv.DictReader(file)
-
-            # Check if required headers exist
-            required_headers = ["firstname", "lastname", "phone_number", "discord_id"]
-            if not all(header in reader.fieldnames for header in required_headers):
-                print(
-                    f"Error: CSV file must contain all required headers: {', '.join(required_headers)}"
-                )
-                return []
-
-            for i, row in enumerate(reader):
-                row_num = i + 2  # +2 because of 0-indexing and header row
-                firstname = row.get("firstname", "").strip()
-                lastname = row.get("lastname", "").strip()
-                phone_number = row.get("phone_number", "").strip()
-                discord_id = row.get("discord_id", "").strip()
-
-                is_valid_row = True
-
-                # 1. Validate Phone Number
-                if not phone_number and not discord_id:
-                    print(
-                        f"Warning: Row {row_num}: contact info is missing. Skipping row."
-                    )
-                    is_valid_row = False
-                elif not phone_number_pattern.match(phone_number):
-                    print(
-                        f"Warning: Row {row_num}: Invalid phone number format '{phone_number}'. Skipping row."
-                    )
-                    is_valid_row = False
-
-                # 2. Validate First Name
-                if not firstname:
-                    print(
-                        f"Warning: Row {row_num}: First name is missing. Using 'Unknown'."
-                    )
-                    firstname = "Unknown"
-                elif (
-                    not firstname.isalpha()
-                ):  # Check if it contains only alphabetic characters
-                    print(
-                        f"Warning: Row {row_num}: First name '{firstname}' contains non-alphabetic characters. Sanitizing."
-                    )
-                    firstname = "".join(
-                        filter(str.isalpha, firstname)
-                    )  # Remove non-alphabetic characters
-                    if not firstname:  # If sanitization results in empty string
-                        firstname = "Unknown"
-
-                # 3. Validate Last Name
-                if not lastname:
-                    print(
-                        f"Warning: Row {row_num}: Last name is missing. Using 'Unknown'."
-                    )
-                    lastname = "Unknown"
-                elif (
-                    not lastname.isalpha()
-                ):  # Check if it contains only alphabetic characters
-                    print(
-                        f"Warning: Row {row_num}: Last name '{lastname}' contains non-alphabetic characters. Sanitizing."
-                    )
-                    lastname = "".join(
-                        filter(str.isalpha, lastname)
-                    )  # Remove non-alphabetic characters
-                    if not lastname:  # If sanitization results in empty string
-                        lastname = "Unknown"
-
-                if is_valid_row:
-                    valid_contacts.append(
-                        {
-                            "firstname": firstname,
-                            "lastname": lastname,
-                            "phone_number": phone_number,
-                            "discord_id": discord_id,
+    def _load_players(self):
+        """
+        Reads the players CSV file and returns a dictionary of player data.
+        """
+        players = {}
+        try:
+            with open(self.file_path, mode="r", newline="", encoding="utf-8") as file:
+                reader = csv.DictReader(file)
+                for row in reader:
+                    discord_id = row.get("discord_id", "").strip()
+                    if discord_id:
+                        players[discord_id] = {
+                            "firstname": row.get("firstname", "").strip(),
+                            "lastname": row.get("lastname", "").strip(),
+                            "phone_number": row.get("phone_number", "").strip(),
+                            "answer_streak": int(row.get("answer_streak", 0)),
+                            "active_shield": row.get("active_shield", "False")
+                            .strip()
+                            .lower()
+                            == "true",
                         }
-                    )
-    except FileNotFoundError:
-        print(f"Error: The file '{csv_filepath}' was not found.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        except FileNotFoundError:
+            print(
+                f"Warning: Player file not found at '{self.file_path}'. Starting with an empty player list."
+            )
+        except Exception as e:
+            print(f"An unexpected error occurred while loading players: {e}")
+        return players
 
-    return valid_contacts
+    def get_player(self, discord_id: str):
+        return self.players.get(discord_id)
+
+    def get_all_players(self):
+        return self.players
+
+    def save_players(self):
+        """
+        Writes the current player data back to the CSV file.
+        """
+        try:
+            with open(self.file_path, mode="w", newline="", encoding="utf-8") as file:
+                fieldnames = [
+                    "discord_id",
+                    "firstname",
+                    "lastname",
+                    "phone_number",
+                    "answer_streak",
+                    "active_shield",
+                ]
+                writer = csv.DictWriter(file, fieldnames=fieldnames)
+                writer.writeheader()
+                for discord_id, data in self.players.items():
+                    row = {"discord_id": discord_id, **data}
+                    writer.writerow(row)
+        except Exception as e:
+            print(f"An unexpected error occurred while saving players: {e}")
+
+
+# For backwards compatibility
+def read_players_into_dict():
+    manager = PlayerManager()
+    return manager.get_all_players()

@@ -1,6 +1,11 @@
 import unittest
 from unittest.mock import patch, mock_open
-from readers.tsv import parse_value, read_jeopardy_questions, get_random_question, read_knowledge_bowl_questions
+from readers.tsv import (
+    parse_value,
+    read_jeopardy_questions,
+    get_random_question,
+    read_knowledge_bowl_questions,
+)
 from readers.question import Question
 
 
@@ -33,9 +38,7 @@ class TestTsv(unittest.TestCase):
             self.assertIsInstance(questions[0], Question)
             self.assertEqual(questions[0].category, "HISTORY")
             self.assertEqual(questions[0].clue_value, 200)
-            self.assertEqual(
-                questions[0].question, "What is 1215?"
-            )
+            self.assertEqual(questions[0].question, "What is 1215?")
             self.assertEqual(questions[0].answer, "The year the Magna Carta was signed")
             self.assertEqual(questions[0].data_source, "Jeopardy!")
             self.assertEqual(questions[0].metadata["round"], "1")

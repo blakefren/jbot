@@ -1,16 +1,15 @@
 import datetime
-
 from random import randint
-from readers.question import Question  # Assuming this is your JeopardyQuestion class
+from readers.question import Question
 from zoneinfo import ZoneInfo
 
-# TODO: read timezone from config
+# TODO: This should be handled more centrally
 TIMEZONE = ZoneInfo("US/Pacific")
 
 
 class QuestionSelector:
     """
-    Manages the selection of Jeopardy! questions.
+    Manages the selection of trivia questions.
     Supports different modes for question selection.
     """
 
@@ -23,19 +22,19 @@ class QuestionSelector:
     def get_question_for_today(self) -> Question:
         """
         Selects a question based on the current mode and date.
-        
-        Args:
-            current_date (datetime.date): The date for which to get the question.
         """
         if not self.questions:
             raise ValueError("No questions available to select from.")
+
         if self.mode == "daily":
-            # Select a question based on the date's ordinal number for predictable daily questions
-            current_time = datetime.datetime.now(TIMEZONE)
-            index = current_time.date().toordinal() % len(self.questions)
+            # Use the date's ordinal number for a predictable daily question
+            today = datetime.datetime.now(TIMEZONE).date()
+            index = today.toordinal() % len(self.questions)
             return self.questions[index]
+        elif self.mode == "random":
+            return self.get_random_question()
         else:
-            # TODO: Implement other modes, e.g., "themed", "random_without_repeat", etc.
+            # TODO: Implement other modes like "themed", "random_without_repeat"
             raise NotImplementedError(
                 f"Question selection mode '{self.mode}' is not yet implemented."
             )

@@ -1,12 +1,12 @@
-import discord
 from discord.ext import commands
 from bot.subscriber import Subscriber
+
 
 class Trivia(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="question", aliases=["q", "query"])
+    @commands.hybrid_command(name="question")
     async def question(self, ctx: commands.Context):
         """Get a random question and answer."""
         random_q = self.bot.game.question_selector.get_random_question()
@@ -23,35 +23,45 @@ class Trivia(commands.Cog):
         full_message = f"{question_part}\n{answer_part}"
         await self.bot.send_message(full_message, interaction=ctx.interaction)
 
-    @commands.hybrid_command(name="when", aliases=["next", "howlong"])
+    @commands.hybrid_command(name="when")
     async def when(self, ctx: commands.Context):
         """Get the next event time. Shows the active question, if there is one."""
-        morning_time_next = self.bot.morning_message_task.next_iteration
-        evening_time_next = self.bot.evening_message_task.next_iteration
-        next_datetime = min(morning_time_next, evening_time_next)
-        response_content = ""
+        morning_task = self.bot.morning_message_task
+        evening_task = self.bot.evening_message_task
 
-        # Next event is morning question.
-        if morning_time_next < evening_time_next:
-            response_content = (
-                f"The next question is scheduled for <t:{int(next_datetime.timestamp())}>.\n"
-                f"The next challenge is <t:{int(next_datetime.timestamp())}:R>."
+        if not morning_task.is_running() or not evening_task.is_running():
+            await self.bot.send_message(
+                "Tasks are not running.", interaction=ctx.interaction, ephemeral=True
             )
-        # Next event is evening answer.
+            return
+
+        morning_time_next = morning_task.next_iteration
+        evening_time_next = evening_task.next_iteration
+
+        if morning_time_next < evening_time_next:
+            event_name = "next question"
+            next_datetime = morning_time_next
         else:
-            response_content += f"The answer will be revealed at {evening_time_next.strftime('%I:%M %p %Z')}."
-        await self.bot.send_message(
-            response_content, interaction=ctx.interaction
+            event_name = "answer reveal"
+            next_datetime = evening_time_next
+
+        response_content = (
+            f"The {event_name} is <t:{int(next_datetime.timestamp())}:R> "
+            f"(at <t:{int(next_datetime.timestamp())}:T>)."
         )
 
-        # Remind the daily question, if after the morning send time.
-        if self.bot.game.daily_q:
-            question_part = self.bot.game.format_question(self.bot.game.daily_q)
-            await self.bot.send_message(
-                question_part, interaction=ctx.interaction
+        # If there's an active question, show it.
+        if self.bot.game.daily_q and morning_time_next > evening_time_next:
+            response_content += (
+                "\n\n**Today's Question:**\n"
+                + self.bot.game.format_question(self.bot.game.daily_q)
             )
 
-    @commands.hybrid_command(name="answer", aliases=["a", "ans"])
+        await self.bot.send_message(
+            response_content, interaction=ctx.interaction, ephemeral=True
+        )
+
+    @commands.hybrid_command(name="answer")
     async def answer(self, ctx: commands.Context, *, guess: str):
         """Submits an answer for the current daily question."""
         if not self.bot.game.daily_q:
@@ -88,7 +98,7 @@ class Trivia(commands.Cog):
             ephemeral=True,
         )
 
-    @commands.hybrid_command(name="subscribe", aliases=["sub"])
+    @commands.hybrid_command(name="subscribe")
     async def subscribe(self, ctx: commands.Context):
         """Subscribes the context to daily question notifications."""
         subscriber = Subscriber.from_ctx(ctx)
@@ -114,7 +124,7 @@ class Trivia(commands.Cog):
                 success_status="subscribed",
             )
 
-    @commands.hybrid_command(name="unsubscribe", aliases=["unsub"])
+    @commands.hybrid_command(name="unsubscribe")
     async def unsubscribe(self, ctx: commands.Context):
         """Unsubscribes the context from daily question notifications."""
         subscriber = Subscriber.from_ctx(ctx)

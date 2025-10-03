@@ -6,7 +6,7 @@ from bot.subscriber import Subscriber
 class TestSubscriber(unittest.TestCase):
     def test_init(self):
         s = Subscriber(123, "test_user", False)
-        self.assertEqual(s.id, 123)
+        self.assertEqual(s.sub_id, 123)
         self.assertEqual(s.display_name, "test_user")
         self.assertFalse(s.is_channel)
         self.assertIsNone(s.ctx)
@@ -31,7 +31,7 @@ class TestSubscriber(unittest.TestCase):
 
         s = Subscriber.from_ctx(mock_ctx)
 
-        self.assertEqual(s.id, 456)
+        self.assertEqual(s.sub_id, 456)
         self.assertEqual(s.display_name, "test_author")
         self.assertFalse(s.is_channel)
         self.assertEqual(s.ctx, mock_ctx)
@@ -44,7 +44,7 @@ class TestSubscriber(unittest.TestCase):
 
         s = Subscriber.from_ctx(mock_ctx)
 
-        self.assertEqual(s.id, 123)
+        self.assertEqual(s.sub_id, 123)
         self.assertEqual(s.display_name, "test_author_channel")
         self.assertTrue(s.is_channel)
         self.assertEqual(s.ctx, mock_ctx)
@@ -56,14 +56,14 @@ class TestSubscriber(unittest.TestCase):
     def test_from_csv_row(self):
         row = ["789", "csv_user_2", "False"]
         s = Subscriber.from_csv_row(row)
-        self.assertEqual(s.id, 789)
+        self.assertEqual(s.sub_id, 789)
         self.assertEqual(s.display_name, "csv_user_2")
         self.assertFalse(s.is_channel)
 
     def test_from_csv_row_true(self):
         row = ["987", "csv_user_3", "True"]
         s = Subscriber.from_csv_row(row)
-        self.assertEqual(s.id, 987)
+        self.assertEqual(s.sub_id, 987)
         self.assertEqual(s.display_name, "csv_user_3")
         self.assertTrue(s.is_channel)
 

@@ -1,7 +1,4 @@
-import discord
 from discord.ext import commands
-
-from modes.powerup import PowerUpManager
 
 
 class Coop(commands.Cog):
@@ -18,12 +15,12 @@ class Coop(commands.Cog):
                 ephemeral=True,
             )
             return
-        players = self.bot.game.logger.get_guess_metrics(
-            [], self.bot.game.question_selector.questions
-        ).get("players", {})
-        manager = PowerUpManager(players)
-        result = manager.reinforce(str(ctx.author.id), target_id)
-        await self.bot.send_message(result, interaction=ctx.interaction)
+        # TODO: Implement reinforce logic
+        await self.bot.send_message(
+            "This command is not yet implemented.",
+            interaction=ctx.interaction,
+            ephemeral=True,
+        )
 
     @commands.hybrid_command(name="reveal")
     async def reveal(self, ctx: commands.Context):
@@ -34,8 +31,8 @@ class Coop(commands.Cog):
             ephemeral=True,
         )
 
-    @commands.hybrid_command(name="red_vs_blue_teams")
-    async def red_vs_blue_teams(self, ctx: commands.Context):
+    @commands.hybrid_command(name="teams")
+    async def teams(self, ctx: commands.Context):
         """Placeholder for red vs blue teams."""
         await self.bot.send_message(
             "This command is not yet implemented.",
