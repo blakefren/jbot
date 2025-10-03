@@ -25,8 +25,8 @@ class Coop(commands.Cog):
         result = manager.reinforce(str(ctx.author.id), target_id)
         await self.bot.send_message(result, interaction=ctx.interaction)
 
-    @commands.hybrid_command(name="reveal_answer_letters")
-    async def reveal_answer_letters(self, ctx: commands.Context):
+    @commands.hybrid_command(name="reveal")
+    async def reveal(self, ctx: commands.Context):
         """Placeholder for revealing answer letters."""
         await self.bot.send_message(
             "This command is not yet implemented.",
