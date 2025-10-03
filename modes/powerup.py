@@ -6,6 +6,10 @@ Implements power-up actions: attack, shield, and bet.
 from typing import Dict
 
 class PowerUpManager:
+    """
+    Manages power-up actions for POWERUP game mode, including attacking streaks, using shields, and betting points.
+    """
+
     def __init__(self, players: Dict[str, dict]):
         """
         Initialize the PowerUpManager.
@@ -14,7 +18,7 @@ class PowerUpManager:
         """
         self.players = players
 
-    def team_up(self, player1_id: str, player2_id: str) -> str:
+    def reinforce(self, player1_id: str, player2_id: str) -> str:
         """
         Team up two players for a cost of 25 points each. If either is correct, both get full points for the day.
         Args:
@@ -37,7 +41,7 @@ class PowerUpManager:
         p2["team_partner"] = player1_id
         return f"{player1_id} and {player2_id} are now teamed up! If either answers correctly, both get full points."
 
-    def resolve_team_up(self, player_id: str, correct: bool) -> str:
+    def resolve_reinforce(self, player_id: str, correct: bool) -> str:
         """
         Resolve team up effect after a player's answer. If either partner is correct, both get full points for the day.
         Args:
@@ -88,19 +92,8 @@ class PowerUpManager:
         thief["score"] += stolen
         target["earned_today"] -= stolen
         return f"{thief_id} stole {stolen} points from {target_id}!"
-    """
-    Manages power-up actions for POWERUP game mode, including attacking streaks, using shields, and betting points.
-    """
 
-    def __init__(self, players: Dict[str, dict]):
-        """
-        Initialize the PowerUpManager.
-        Args:
-            players (Dict[str, dict]): Dictionary of player data keyed by player ID.
-        """
-        self.players = players
-
-    def streak_breaker(self, attacker_id: str, target_id: str) -> str:
+    def disrupt(self, attacker_id: str, target_id: str) -> str:
         """
         Break another player's answer streak. Costs 50 points. If the target has an active shield, the shield is broken instead (shield only protects once per day). If the target answers correctly that day, their streak is not reset.
         Args:
@@ -142,7 +135,7 @@ class PowerUpManager:
         player["active_shield"] = True
         return f"{player_id} activated a shield!"
 
-    def bet_points(self, player_id: str, amount: int) -> str:
+    def wager_points(self, player_id: str, amount: int) -> str:
         """
         Place a bet with points for the current question. Bet is capped at 25% of current score (min 1 point).
         Args:
@@ -163,7 +156,7 @@ class PowerUpManager:
         player["bet"] = final_bet
         return f"{player_id} bet {final_bet} points! (Max allowed: {max_bet})"
 
-    def resolve_bet(self, player_id: str, correct: bool) -> str:
+    def resolve_wager(self, player_id: str, correct: bool) -> str:
         """
         Resolve a player's bet after answering a question. Also resolves attack effect if player was attacked. Winning returns diminishing returns. If attacked and incorrect, streak is reset.
         Args:
@@ -193,3 +186,33 @@ class PowerUpManager:
                 msg += f"{player_id} was attacked but got the answer right. Streak preserved!"
             player["under_attack"] = False
         return msg.strip()
+
+    def weekly_boss_fight(self, player_id: str) -> str:
+        """
+        Engage in a weekly boss fight. Not implemented yet.
+        Args:
+            player_id (str): The ID of the player engaging in the boss fight.
+        Returns:
+            str: Result message of the boss fight action.
+        """
+        return "Not implemented"
+
+    def reveal_answer_letters(self, player_id: str) -> str:
+        """
+        Reveal the letters of the correct answer. Not implemented yet.
+        Args:
+            player_id (str): The ID of the player revealing answer letters.
+        Returns:
+            str: Result message of the reveal answer letters action.
+        """
+        return "Not implemented"
+
+    def red_vs_blue_teams(self, player_id: str) -> str:
+        """
+        Participate in red vs blue teams activity. Not implemented yet.
+        Args:
+            player_id (str): The ID of the player participating in the teams activity.
+        Returns:
+            str: Result message of the red vs blue teams action.
+        """
+        return "Not implemented"

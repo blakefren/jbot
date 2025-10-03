@@ -14,6 +14,8 @@ class DummyCtx:
         self.guild = None
         self.channel = MagicMock()
         self.channel.id = 123
+        self.interaction = MagicMock()
+
     async def send(self, content):
         self.last_message = content
 
@@ -43,16 +45,16 @@ import asyncio
 import pytest
 
 @pytest.mark.asyncio
-async def test_streak_breaker_command():
+async def test_disrupt_command():
     bot = make_bot()
     ctx = DummyCtx()
     # Patch PowerUpManager
     with pytest.MonkeyPatch.context() as m:
         class DummyManager:
             def __init__(self, players): pass
-            def streak_breaker(self, aid, tid): return "broken!"
+            def disrupt(self, aid, tid): return "disrupted!"
         m.setattr("modes.powerup.PowerUpManager", DummyManager)
-        await bot.tree.get_command("streak_breaker").callback(ctx, "2")
+        await bot.tree.get_command("disrupt").callback(ctx, "2")
         # No exception = pass
 
 @pytest.mark.asyncio
@@ -67,29 +69,29 @@ async def test_shield_command():
         await bot.tree.get_command("shield").callback(ctx)
 
 @pytest.mark.asyncio
-async def test_bet_command():
+async def test_wager_command():
     bot = make_bot()
     ctx = DummyCtx()
     with pytest.MonkeyPatch.context() as m:
         class DummyManager:
             def __init__(self, players): pass
-            def bet_points(self, pid, amt): return "bet!"
+            def wager_points(self, pid, amt): return "wagered!"
         m.setattr("modes.powerup.PowerUpManager", DummyManager)
-        await bot.tree.get_command("bet").callback(ctx, 10)
+        await bot.tree.get_command("wager").callback(ctx, 10)
 
 
 @pytest.mark.asyncio
-async def test_team_up_command():
+async def test_reinforce_command():
     bot = make_bot()
     ctx = DummyCtx()
     with pytest.MonkeyPatch.context() as m:
         class DummyManager:
             def __init__(self, players): pass
-            def team_up(self, pid1, pid2): return "teamed!"
+            def reinforce(self, pid1, pid2): return "reinforced!"
         m.setattr("modes.powerup.PowerUpManager", DummyManager)
         # Simulate command (if implemented)
-        if bot.tree.get_command("team_up"):
-            await bot.tree.get_command("team_up").callback(ctx, "2")
+        if bot.tree.get_command("reinforce"):
+            await bot.tree.get_command("reinforce").callback(ctx, "2")
 
 @pytest.mark.asyncio
 async def test_steal_command():

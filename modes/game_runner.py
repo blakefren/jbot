@@ -118,8 +118,8 @@ class GameRunner:
             # Get all players (simulate persistent state)
             players = self.logger.get_guess_metrics([], self.question_selector.questions).get("players", {})
             manager = PowerUpManager(players)
-            # Call resolve_bet for this player
-            manager.resolve_bet(str(player_id), is_correct)
+            # Call resolve_wager for this player
+            manager.resolve_wager(str(player_id), is_correct)
         
         return is_correct
 

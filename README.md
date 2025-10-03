@@ -40,8 +40,8 @@ The bot's features are organized into three distinct "tracks" that can be enable
 
 This track adds direct player-vs-player interactions.
 
-*   **Streak Breaker**: An offensive action that allows a player to attack another. If the target answers the daily question incorrectly, their answer streak is reset to zero.
-    *   **Command**: `/streak_breaker <player_id>`
+*   **Disrupt**: An offensive action that allows a player to attack another. If the target answers the daily question incorrectly, their answer streak is reset to zero.
+    *   **Command**: `/disrupt <player_id>`
     *   **Cost**: 50 points.
 *   **Shield**: A defensive action that protects a player from the next incoming attack.
     *   **Command**: `/shield`
@@ -54,17 +54,22 @@ This track adds direct player-vs-player interactions.
 This track introduces mechanics that reward consistent play or provide other advantages.
 
 *   **Answer Streaks**: Players build up a "streak" for each consecutive correct answer. This can be used for scoring bonuses or as a target for other players' attacks.
-*   **Betting**: Players can bet a portion of their points on whether their answer is correct. Winnings are calculated based on a diminishing returns formula to keep the game balanced.
-    *   **Command**: `/bet <amount>`
+*   **Wager**: Players can wager a portion of their points on whether their answer is correct. Winnings are calculated based on a diminishing returns formula to keep the game balanced.
+    *   **Command**: `/wager <amount>`
     *   **Details**: Bets are capped at 25% of a player's current score (minimum 1 point).
+*   **Answering First**: The first player to answer the daily question correctly receives a point bonus.
+*   **Answering Before the Hint**: Players who answer correctly before the daily hint is revealed receive a point bonus.
+*   **Weekly Boss Fight**: A challenging weekly question with a large point reward.
 
 ### Coop Track
 
 This track focuses on collaborative features.
 
-*   **Team Up**: Two players can form a temporary alliance for the day. If either player answers correctly, both receive full points.
-    *   **Command**: `/team_up <player_id>`
+*   **Reinforce**: Two players can form a temporary alliance for the day. If either player answers correctly, both receive full points.
+    *   **Command**: `/reinforce <player_id>`
     *   **Cost**: 25 points for each player.
+*   **Reveal Answer Letters**: Players can vote to reveal letters in the answer. Each vote costs points, and the cost increases with each revealed letter.
+*   **Red vs. Blue Teams**: Players are divided into two teams (either by choice or randomly). The team with the most correct responses at the end of the day gets bonus points.
 
 ## Database
 
@@ -120,16 +125,17 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
     * [ ] Don't spam commands: discord.ui.View()
     * [ ] Explore discord.Embed for message formatting
 * [ ] Player interactions
-    * [X] Attack: streak breaker
+    * [X] Attack: disrupt
     * [X] Attack: steal
     * [X] Defense: shield
-    * [ ] Defense: reveal letters in answer
-    * [X] Betting: basic bets
+    * [X] Wager: basic bets
     * [ ] Extra points for answering before the hint
     * [ ] Extra points for answering first
-    * [ ] Betting: advanced bets
+    * [ ] Weekly boss fight
 * [ ] Coop
-    * [X] Team Up
+    * [X] Reinforce
+    * [ ] Reveal answer letters
+    * [ ] Red vs. blue teams
 * [ ] Questions
     * [ ] Pop Culture Jeopardy!
     * [ ] Test dataset

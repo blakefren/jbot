@@ -118,7 +118,6 @@ class DiscordBot(commands.Bot):
                 print("No question found for today.")
 
         # Sync commands.
-        # TODO: commands don't appear in Discord for DMs to bot
         try:
             print("on_ready: syncing commands start")
             await self.tree.sync()
@@ -272,48 +271,100 @@ class DiscordBot(commands.Bot):
 
 def set_bot_commands(bot: DiscordBot):
 
-    @bot.hybrid_command(name="streak_breaker", aliases=["breakstreak", "break_streak"])
-    async def streak_breaker(ctx: commands.Context, target_id: str):
+    @bot.hybrid_command(name="disrupt", aliases=["disruptstreak", "disrupt_streak"])
+    async def disrupt(ctx: commands.Context, target_id: str):
         """Break another player's answer streak (POWERUP mode only)."""
         if bot.game.mode.name != "POWERUP":
             await bot.send_message(
-                "Streak breaker is only available in POWERUP mode.", ctx=ctx
+                "Disrupt is only available in POWERUP mode.",
+                interaction=ctx.interaction,
+                ephemeral=True,
             )
             return
         players = bot.game.logger.get_guess_metrics(
             [], bot.game.question_selector.questions
         ).get("players", {})
         manager = PowerUpManager(players)
-        result = manager.streak_breaker(str(ctx.author.id), target_id)
-        await bot.send_message(result, ctx=ctx)
+        result = manager.disrupt(str(ctx.author.id), target_id)
+        await bot.send_message(result, interaction=ctx.interaction)
 
     @bot.hybrid_command(name="shield")
     async def shield(ctx: commands.Context):
         """Activate a shield to block the next attack (POWERUP mode only)."""
         if bot.game.mode.name != "POWERUP":
-            await bot.send_message("Shield is only available in POWERUP mode.", ctx=ctx)
+            await bot.send_message(
+                "Shield is only available in POWERUP mode.",
+                interaction=ctx.interaction,
+                ephemeral=True,
+            )
             return
         players = bot.game.logger.get_guess_metrics(
             [], bot.game.question_selector.questions
         ).get("players", {})
         manager = PowerUpManager(players)
         result = manager.use_shield(str(ctx.author.id))
-        await bot.send_message(result, ctx=ctx)
+        await bot.send_message(result, interaction=ctx.interaction)
 
-    @bot.hybrid_command(name="bet")
-    async def bet(ctx: commands.Context, amount: int):
-        """Bet points for the current question (POWERUP mode only)."""
+    @bot.hybrid_command(name="wager")
+    async def wager(ctx: commands.Context, amount: int):
+        """Wager points for the current question (POWERUP mode only)."""
         if bot.game.mode.name != "POWERUP":
             await bot.send_message(
-                "Betting is only available in POWERUP mode.", ctx=ctx
+                "Wagering is only available in POWERUP mode.",
+                interaction=ctx.interaction,
+                ephemeral=True,
             )
             return
         players = bot.game.logger.get_guess_metrics(
             [], bot.game.question_selector.questions
         ).get("players", {})
         manager = PowerUpManager(players)
-        result = manager.bet_points(str(ctx.author.id), amount)
-        await bot.send_message(result, ctx=ctx)
+        result = manager.wager_points(str(ctx.author.id), amount)
+        await bot.send_message(result, interaction=ctx.interaction)
+
+    @bot.hybrid_command(name="reinforce")
+    async def reinforce(ctx: commands.Context, target_id: str):
+        """Reinforce another player for the day (COOP mode only)."""
+        if bot.game.mode.name != "COOP":
+            await bot.send_message(
+                "Reinforce is only available in COOP mode.",
+                interaction=ctx.interaction,
+                ephemeral=True,
+            )
+            return
+        players = bot.game.logger.get_guess_metrics(
+            [], bot.game.question_selector.questions
+        ).get("players", {})
+        manager = PowerUpManager(players)
+        result = manager.reinforce(str(ctx.author.id), target_id)
+        await bot.send_message(result, interaction=ctx.interaction)
+
+    @bot.hybrid_command(name="weekly_boss_fight")
+    async def weekly_boss_fight(ctx: commands.Context):
+        """Placeholder for weekly boss fight."""
+        await bot.send_message(
+            "This command is not yet implemented.",
+            interaction=ctx.interaction,
+            ephemeral=True,
+        )
+
+    @bot.hybrid_command(name="reveal_answer_letters")
+    async def reveal_answer_letters(ctx: commands.Context):
+        """Placeholder for revealing answer letters."""
+        await bot.send_message(
+            "This command is not yet implemented.",
+            interaction=ctx.interaction,
+            ephemeral=True,
+        )
+
+    @bot.hybrid_command(name="red_vs_blue_teams")
+    async def red_vs_blue_teams(ctx: commands.Context):
+        """Placeholder for red vs blue teams."""
+        await bot.send_message(
+            "This command is not yet implemented.",
+            interaction=ctx.interaction,
+            ephemeral=True,
+        )
 
     @bot.hybrid_command(name="shutdown", aliases=["quit", "exit"])
     async def shutdown(ctx: commands.Context):
@@ -321,13 +372,18 @@ def set_bot_commands(bot: DiscordBot):
         if not await bot.is_owner(ctx.author):
             response_content = "You do not have permission to shut down the bot."
             await bot.send_message(
-                response_content, ctx=ctx, success_status="unauthorized"
+                response_content,
+                interaction=ctx.interaction,
+                ephemeral=True,
+                success_status="unauthorized",
             )
             return
 
         print("Shutting down...")
         try:
-            await bot.send_message("Shutting down...", ctx=ctx)
+            await bot.send_message(
+                "Shutting down...", interaction=ctx.interaction
+            )
         except Exception as e:
             print(f"Failed to send shutdown message: {e}")
             bot.logger.log_messaging_event(
@@ -393,7 +449,10 @@ def set_bot_commands(bot: DiscordBot):
         if not await bot.is_owner(ctx.author):
             response_content = "You do not have permission to restart the bot."
             await bot.send_message(
-                response_content, ctx=ctx, success_status="unauthorized"
+                response_content,
+                interaction=ctx.interaction,
+                ephemeral=True,
+                success_status="unauthorized",
             )
             return
 
@@ -402,7 +461,9 @@ def set_bot_commands(bot: DiscordBot):
             # Create restart info file to be read on next startup
             with open("restart.inf", "w") as f:
                 f.write(f"{ctx.channel.id},{ctx.author.id}")
-            await bot.send_message("Restarting bot...", ctx=ctx)
+            await bot.send_message(
+                "Restarting bot...", interaction=ctx.interaction
+            )
 
             # Cleanly close the bot before restarting
             await bot.close()
@@ -427,22 +488,26 @@ def set_bot_commands(bot: DiscordBot):
     async def ping(ctx: commands.Context):
         """Responds with 'Pong!' to test bot latency."""
         response_content = "Pong!"
-        await bot.send_message(response_content, ctx=ctx)
+        await bot.send_message(
+            response_content, interaction=ctx.interaction
+        )
 
     @bot.hybrid_command(name="question", aliases=["q", "query"])
     async def question(ctx: commands.Context):
         """Get a random question and answer."""
         random_q = bot.game.question_selector.get_random_question()
         if not random_q:
-            await bot.send_message("Could not find a question.", ctx=ctx)
+            await bot.send_message(
+                "Could not find a question.",
+                interaction=ctx.interaction,
+                ephemeral=True,
+            )
             return
 
-        # TODO: is_channel is set to False during testing, when the bot is only
-        # messaging a user. Make this settable at runtime.
         question_part = bot.game.format_question(random_q)
         answer_part = bot.game.format_answer(random_q)
         full_message = f"{question_part}\n{answer_part}"
-        await bot.send_message(full_message, ctx=ctx)
+        await bot.send_message(full_message, interaction=ctx.interaction)
 
     @bot.hybrid_command(name="when", aliases=["next", "howlong"])
     async def when(ctx: commands.Context):
@@ -461,12 +526,16 @@ def set_bot_commands(bot: DiscordBot):
         # Next event is evening answer.
         else:
             response_content += f"The answer will be revealed at {evening_time_next.strftime('%I:%M %p %Z')}."
-        await bot.send_message(response_content, ctx=ctx)
+        await bot.send_message(
+            response_content, interaction=ctx.interaction
+        )
 
         # Remind the daily question, if after the morning send time.
         if bot.game.daily_q:
             question_part = bot.game.format_question(bot.game.daily_q)
-            await bot.send_message(question_part, ctx=ctx)
+            await bot.send_message(
+                question_part, interaction=ctx.interaction
+            )
 
     @bot.hybrid_command(name="answer", aliases=["a", "ans"])
     async def answer(ctx: commands.Context, *, guess: str):
@@ -475,7 +544,8 @@ def set_bot_commands(bot: DiscordBot):
             # For test context, use ctx, not interaction
             await bot.send_message(
                 "There is no active question right now.",
-                ctx=ctx
+                interaction=ctx.interaction,
+                ephemeral=True,
             )
             return
 
@@ -499,7 +569,9 @@ def set_bot_commands(bot: DiscordBot):
         else:
             response_content = "Sorry, that is not the correct answer."
         await bot.send_message(
-            response_content, ctx=ctx
+            response_content,
+            interaction=ctx.interaction,
+            ephemeral=True,
         )
 
     @bot.hybrid_command(name="subscribe", aliases=["sub"])
@@ -511,7 +583,10 @@ def set_bot_commands(bot: DiscordBot):
                 f"Participant {subscriber.display_name}, you are already registered."
             )
             await bot.send_message(
-                response_content, ctx=ctx, success_status="already_subscribed"
+                response_content,
+                interaction=ctx.interaction,
+                ephemeral=True,
+                success_status="already_subscribed",
             )
         else:
             bot.game.add_subscriber(subscriber)
@@ -520,7 +595,9 @@ def set_bot_commands(bot: DiscordBot):
                 f"{len(bot.game.get_subscribed_users())} players are now in play."
             )
             await bot.send_message(
-                response_content, ctx=ctx, success_status="subscribed"
+                response_content,
+                interaction=ctx.interaction,
+                success_status="subscribed",
             )
 
     @bot.hybrid_command(name="unsubscribe", aliases=["unsub"])
@@ -534,7 +611,9 @@ def set_bot_commands(bot: DiscordBot):
                 f"There are {len(bot.game.get_subscribed_users())} players remaining."
             )
             await bot.send_message(
-                response_content, ctx=ctx, success_status="unsubscribed"
+                response_content,
+                interaction=ctx.interaction,
+                success_status="unsubscribed",
             )
         else:
             response_content = (
@@ -542,7 +621,10 @@ def set_bot_commands(bot: DiscordBot):
                 f"There are still {len(bot.game.get_subscribed_users())} players in play."
             )
             await bot.send_message(
-                response_content, ctx=ctx, success_status="not_subscribed"
+                response_content,
+                interaction=ctx.interaction,
+                ephemeral=True,
+                success_status="not_subscribed",
             )
 
     @bot.hybrid_command(name="history", aliases=["h", "metrics"])
@@ -551,13 +633,15 @@ def set_bot_commands(bot: DiscordBot):
         player_id = ctx.author.id
         player_name = ctx.author.display_name
         history_text = bot.game.get_player_history(player_id, player_name)
-        await bot.send_message(history_text, ctx=ctx)
+        await bot.send_message(
+            history_text, interaction=ctx.interaction, ephemeral=True
+        )
 
     @bot.hybrid_command(name="scores", aliases=["leaderboard", "s", "score"])
     async def scores(ctx: commands.Context):
         """Displays the current score leaderboard."""
         leaderboard = bot.game.get_scores_leaderboard()
-        await bot.send_message(leaderboard, ctx=ctx)
+        await bot.send_message(leaderboard, interaction=ctx.interaction)
 
 
 async def discord_bot_async(

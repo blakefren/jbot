@@ -41,7 +41,9 @@ class TestDiscordBot(unittest.IsolatedAsyncioTestCase):
             123, "Test User", "test answer"
         )
         self.bot.send_message.assert_called_once_with(
-            "That is correct! Nicely done.", ctx=mock_ctx
+            "That is correct! Nicely done.",
+            interaction=mock_ctx.interaction,
+            ephemeral=True,
         )
 
     async def test_answer_command_incorrect(self):
@@ -60,7 +62,9 @@ class TestDiscordBot(unittest.IsolatedAsyncioTestCase):
             123, "Test User", "wrong answer"
         )
         self.bot.send_message.assert_called_once_with(
-            "Sorry, that is not the correct answer.", ctx=mock_ctx
+            "Sorry, that is not the correct answer.",
+            interaction=mock_ctx.interaction,
+            ephemeral=True,
         )
 
     async def test_answer_command_no_question(self):
@@ -73,7 +77,9 @@ class TestDiscordBot(unittest.IsolatedAsyncioTestCase):
 
         self.mock_game_runner.handle_guess.assert_not_called()
         self.bot.send_message.assert_called_once_with(
-            "There is no active question right now.", ctx=mock_ctx
+            "There is no active question right now.",
+            interaction=mock_ctx.interaction,
+            ephemeral=True,
         )
 
 
