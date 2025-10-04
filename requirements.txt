@@ -1,2 +1,7 @@
 discord
 pytest
+# For dashboard notebook.
+pandas
+plotly
+openpyxl
+kaleido
