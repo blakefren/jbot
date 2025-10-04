@@ -9,10 +9,6 @@ from bot.readers.question_selector import QuestionSelector
 from cfg.players import read_players_into_dict
 from bot.readers.question import Question
 
-# Construct the absolute path to the project's root directory
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-SUBSCRIBERS_FILE = os.path.join(PROJECT_ROOT, "cfg", "subscribers.csv")
-
 
 class GameType(Enum):
     """
@@ -50,13 +46,13 @@ class GameRunner:
         self.daily_q = self.question_selector.get_question_for_today()
 
     def add_subscriber(self, subscriber: Subscriber):
+        subscriber.db_conn = self.logger.db
         subscriber.save()
         self.subscribed_contexts.add(subscriber)
 
     def remove_subscriber(self, subscriber: Subscriber):
         subscriber.delete()
-        if subscriber in self.subscribed_contexts:
-            self.subscribed_contexts.remove(subscriber)
+        self.subscribed_contexts.discard(subscriber)
 
     def get_subscribed_users(self):
         return self.subscribed_contexts
@@ -107,9 +103,11 @@ class GameRunner:
         elif self.mode.name == "ROLES":
             from bot.modes.roles import RolesGameMode
             from database.database import Database
+
             db = Database()
             # TODO: this is a hack, config should be passed in
             from cfg.main import ConfigReader
+
             config = ConfigReader()
             roles_game_mode = RolesGameMode(db, config)
             roles_game_mode.run()
