@@ -52,7 +52,6 @@ class Admin(commands.Cog):
         member: discord.Member = None,
         channel: discord.TextChannel = None,
     ):
-        print("Subscribe command invoked")
         await ctx.defer()
         """Subscribes or unsubscribes a user or channel from daily questions."""
         if not member and not channel:
@@ -64,13 +63,11 @@ class Admin(commands.Cog):
             return
 
         if member:
-            print(f"Member info - ID: {member.id}, Name: {member.display_name}, Server: {member.guild}")
             subscriber = Subscriber(
                 member.id, member.display_name, is_channel=False, db_conn=self.bot.logger.db
             )
             target_name = member.display_name
         else:  # channel
-            print(f"Channel info - ID: {channel.id}, Name: {channel.name}, Server: {channel.guild}")
             subscriber = Subscriber(
                 channel.id, channel.name, is_channel=True, db_conn=self.bot.logger.db
             )
