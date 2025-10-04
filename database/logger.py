@@ -43,6 +43,7 @@ class Logger:
             question_id = existing_question[0]["id"]
         else:
             # Insert the new question and get its ID
+            # TODO: insert hint as well
             insert_query = """
                 INSERT INTO questions (question_text, answer_text, category, value, source)
                 VALUES (?, ?, ?, ?, ?)
