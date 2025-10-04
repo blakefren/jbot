@@ -25,6 +25,7 @@ class GameType(Enum):
     VEGAS = "vegas"  # TODO
     SOULSLIKE = "soulslike"  # TODO
     JEOPARDY = "jeopardy"  # TODO
+    ROLES = "roles"
 
 
 class GameRunner:
@@ -125,6 +126,15 @@ class GameRunner:
             manager = PowerUpManager(players)
             # Call resolve_wager for this player
             manager.resolve_wager(str(player_id), is_correct)
+        elif self.mode.name == "ROLES":
+            from bot.modes.roles import RolesGameMode
+            from database.database import Database
+            db = Database()
+            # TODO: this is a hack, config should be passed in
+            from cfg.main import ConfigReader
+            config = ConfigReader()
+            roles_game_mode = RolesGameMode(db, config)
+            roles_game_mode.run()
 
         return is_correct
 

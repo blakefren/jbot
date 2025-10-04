@@ -49,3 +49,19 @@ CREATE TABLE IF NOT EXISTS messages (
     status TEXT, -- 'success', 'failed', etc.
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- This table defines the roles that can be assigned to players.
+CREATE TABLE IF NOT EXISTS roles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT
+);
+
+-- This table links players to their assigned roles.
+CREATE TABLE IF NOT EXISTS player_roles (
+    player_id TEXT NOT NULL,
+    role_id INTEGER NOT NULL,
+    PRIMARY KEY (player_id, role_id),
+    FOREIGN KEY (player_id) REFERENCES players (id),
+    FOREIGN KEY (role_id) REFERENCES roles (id)
+);
