@@ -1,11 +1,12 @@
 -- database/schema.sql
 
 -- This table stores all the trivia questions available to the bot.
--- TODO: add hints, question_set
 CREATE TABLE IF NOT EXISTS questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_hash TEXT UNIQUE,
     question_text TEXT NOT NULL,
     answer_text TEXT NOT NULL,
+    hint_text TEXT,
     category TEXT,
     value INTEGER,
     source TEXT,
