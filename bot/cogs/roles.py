@@ -16,7 +16,7 @@ class RolesCog(commands.Cog):
     def cog_unload(self):
         self.update_roles_task.cancel()
 
-    @commands.command(
+    @commands.hybrid_command(
         name="updateroles", help="Manually update player roles based on scores."
     )
     @commands.has_permissions(administrator=True)

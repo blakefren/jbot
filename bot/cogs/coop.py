@@ -5,7 +5,7 @@ class Coop(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="reinforce")
+    @commands.hybrid_command(name="reinforce")
     async def reinforce(self, ctx: commands.Context, target_id: str):
         """Reinforce another player for the day (COOP mode only)."""
         if self.bot.game.mode.name != "COOP":
@@ -22,7 +22,7 @@ class Coop(commands.Cog):
             ephemeral=True,
         )
 
-    @commands.command(name="reveal")
+    @commands.hybrid_command(name="reveal")
     async def reveal(self, ctx: commands.Context):
         """Placeholder for revealing answer letters."""
         await self.bot.send_message(
@@ -31,7 +31,7 @@ class Coop(commands.Cog):
             ephemeral=True,
         )
 
-    @commands.command(name="teams")
+    @commands.hybrid_command(name="teams")
     async def teams(self, ctx: commands.Context):
         """Placeholder for red vs blue teams."""
         await self.bot.send_message(

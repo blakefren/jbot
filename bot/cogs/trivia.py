@@ -6,7 +6,7 @@ class Trivia(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="question")
+    @commands.hybrid_command(name="question")
     async def question(self, ctx: commands.Context):
         """Get a random question and answer."""
         random_q = self.bot.game.question_selector.get_random_question()
@@ -23,7 +23,7 @@ class Trivia(commands.Cog):
         full_message = f"{question_part}\n{answer_part}"
         await self.bot.send_message(full_message, interaction=ctx.interaction)
 
-    @commands.command(name="when")
+    @commands.hybrid_command(name="when")
     async def when(self, ctx: commands.Context):
         """Get the next event time. Shows the active question, if there is one."""
         morning_task = self.bot.morning_message_task
@@ -61,7 +61,7 @@ class Trivia(commands.Cog):
             response_content, interaction=ctx.interaction, ephemeral=True
         )
 
-    @commands.command(name="answer")
+    @commands.hybrid_command(name="answer")
     async def answer(self, ctx: commands.Context, *, guess: str):
         """Submits an answer for the current daily question."""
         if not self.bot.game.daily_q:
@@ -97,59 +97,6 @@ class Trivia(commands.Cog):
             interaction=ctx.interaction,
             ephemeral=True,
         )
-
-    @commands.command(name="subscribe")
-    async def subscribe(self, ctx: commands.Context):
-        """Subscribes the context to daily question notifications."""
-        subscriber = Subscriber.from_ctx(ctx)
-        if subscriber in self.bot.game.get_subscribed_users():
-            response_content = (
-                f"Participant {subscriber.display_name}, you are already registered."
-            )
-            await self.bot.send_message(
-                response_content,
-                interaction=ctx.interaction,
-                ephemeral=True,
-                success_status="already_subscribed",
-            )
-        else:
-            self.bot.game.add_subscriber(subscriber)
-            response_content = (
-                f"Participant {subscriber.display_name}, you are now registered for the daily games.\n"
-                f"{len(self.bot.game.get_subscribed_users())} players are now in play."
-            )
-            await self.bot.send_message(
-                response_content,
-                interaction=ctx.interaction,
-                success_status="subscribed",
-            )
-
-    @commands.command(name="unsubscribe")
-    async def unsubscribe(self, ctx: commands.Context):
-        """Unsubscribes the context from daily question notifications."""
-        subscriber = Subscriber.from_ctx(ctx)
-        if subscriber in self.bot.game.get_subscribed_users():
-            self.bot.game.remove_subscriber(subscriber)
-            response_content = (
-                f"Participant {subscriber.display_name}, you have been removed from the games.\n"
-                f"There are {len(self.bot.game.get_subscribed_users())} players remaining."
-            )
-            await self.bot.send_message(
-                response_content,
-                interaction=ctx.interaction,
-                success_status="unsubscribed",
-            )
-        else:
-            response_content = (
-                f"Participant {subscriber.display_name}, you were not registered for the games.\n"
-                f"There are still {len(self.bot.game.get_subscribed_users())} players in play."
-            )
-            await self.bot.send_message(
-                response_content,
-                interaction=ctx.interaction,
-                ephemeral=True,
-                success_status="not_subscribed",
-            )
 
 
 async def setup(bot):

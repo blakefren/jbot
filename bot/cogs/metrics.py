@@ -5,7 +5,7 @@ class Metrics(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(name="history")
+    @commands.hybrid_command(name="history")
     async def history(self, ctx: commands.Context):
         """Shows your personal game history and stats."""
         player_id = ctx.author.id
@@ -15,7 +15,7 @@ class Metrics(commands.Cog):
             history_text, interaction=ctx.interaction, ephemeral=True
         )
 
-    @commands.command(name="leaderboard")
+    @commands.hybrid_command(name="leaderboard")
     async def leaderboard(self, ctx: commands.Context):
         """Displays the current score leaderboard."""
         leaderboard = self.bot.game.get_scores_leaderboard()
