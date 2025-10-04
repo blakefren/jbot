@@ -23,8 +23,10 @@ CREATE TABLE IF NOT EXISTS daily_questions (
 
 -- This table stores information about the players.
 CREATE TABLE IF NOT EXISTS players (
-    id TEXT PRIMARY KEY, -- Using TEXT to accommodate various ID formats (e.g., Discord IDs)
-    name TEXT NOT NULL,
+    id TEXT PRIMARY KEY, -- Corresponds to discord_id
+    name TEXT,
+    answer_streak INTEGER DEFAULT 0,
+    active_shield BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

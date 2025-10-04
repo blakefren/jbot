@@ -1,41 +1,32 @@
-import csv
 import os
+import sys
 
-PLAYER_FILE_PATH = os.path.join(os.path.dirname(__file__), "players.csv")
+# Add the project root to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, project_root)
+
+from database.database import Database
 
 
 class PlayerManager:
-    def __init__(self, file_path=PLAYER_FILE_PATH):
-        self.file_path = file_path
+    def __init__(self, db: Database):
+        self.db = db
         self.players = self._load_players()
 
     def _load_players(self):
         """
-        Reads the players CSV file and returns a dictionary of player data.
+        Reads the players table and returns a dictionary of player data.
         """
         players = {}
-        try:
-            with open(self.file_path, mode="r", newline="", encoding="utf-8") as file:
-                reader = csv.DictReader(file)
-                for row in reader:
-                    discord_id = row.get("discord_id", "").strip()
-                    if discord_id:
-                        players[discord_id] = {
-                            "firstname": row.get("firstname", "").strip(),
-                            "lastname": row.get("lastname", "").strip(),
-                            "phone_number": row.get("phone_number", "").strip(),
-                            "answer_streak": int(row.get("answer_streak", 0)),
-                            "active_shield": row.get("active_shield", "False")
-                            .strip()
-                            .lower()
-                            == "true",
-                        }
-        except FileNotFoundError:
-            print(
-                f"Warning: Player file not found at '{self.file_path}'. Starting with an empty player list."
-            )
-        except Exception as e:
-            print(f"An unexpected error occurred while loading players: {e}")
+        query = "SELECT id, name, answer_streak, active_shield FROM players"
+        player_records = self.db.execute_query(query)
+        for record in player_records:
+            discord_id = record["id"]
+            players[discord_id] = {
+                "name": record["name"],
+                "answer_streak": record["answer_streak"],
+                "active_shield": bool(record["active_shield"]),
+            }
         return players
 
     def get_player(self, discord_id: str):
@@ -46,28 +37,28 @@ class PlayerManager:
 
     def save_players(self):
         """
-        Writes the current player data back to the CSV file.
+        Writes the current player data back to the database.
         """
-        try:
-            with open(self.file_path, mode="w", newline="", encoding="utf-8") as file:
-                fieldnames = [
-                    "discord_id",
-                    "firstname",
-                    "lastname",
-                    "phone_number",
-                    "answer_streak",
-                    "active_shield",
-                ]
-                writer = csv.DictWriter(file, fieldnames=fieldnames)
-                writer.writeheader()
-                for discord_id, data in self.players.items():
-                    row = {"discord_id": discord_id, **data}
-                    writer.writerow(row)
-        except Exception as e:
-            print(f"An unexpected error occurred while saving players: {e}")
+        for discord_id, data in self.players.items():
+            query = """
+                INSERT INTO players (id, name, answer_streak, active_shield)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    answer_streak = excluded.answer_streak,
+                    active_shield = excluded.active_shield;
+            """
+            params = (
+                discord_id,
+                data["name"],
+                data["answer_streak"],
+                data["active_shield"],
+            )
+            self.db.execute_update(query, params)
 
 
 # For backwards compatibility
 def read_players_into_dict():
-    manager = PlayerManager()
+    db = Database()
+    manager = PlayerManager(db)
     return manager.get_all_players()
