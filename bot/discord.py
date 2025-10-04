@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 from cfg.main import ConfigReader
 from database.logger import Logger
-from bot.modes.game_runner import GameRunner
+from bot.managers.game_runner import GameRunner
 from bot.readers.question import Question
 from bot.readers.question_selector import QuestionSelector
 
@@ -291,7 +291,14 @@ async def discord_bot_async(
 ):
     """Main function to initialize and run the bot."""
     question_selector = QuestionSelector(questions, mode=config.get("QUESTION_MODE"))
-    game = GameRunner(question_selector, logger, mode=config.get("GAME_MODE"))
+    game = GameRunner(question_selector, logger)
+
+    # Register managers
+    from bot.managers.powerup import PowerUpManager
+    from bot.managers.roles import RolesGameMode
+    game.register_manager("powerup", PowerUpManager)
+    game.register_manager("roles", RolesGameMode)
+
     bot = DiscordBot(config.get("DISCORD_BOT_TOKEN"), game, config)
     await bot.run()
 

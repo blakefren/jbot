@@ -3,7 +3,7 @@ import sys
 
 from discord.ext import commands
 
-from bot.modes.powerup import PowerUpManager
+from bot.managers.powerup import PowerUpManager
 
 
 async def get_powerup_manager(bot, interaction):

@@ -4,7 +4,7 @@ from bot.discord import DiscordBot
 from bot.cogs.fight import Fight
 from bot.cogs.powerup import Powerup
 from bot.cogs.coop import Coop
-from bot.modes.game_runner import GameRunner, GameType
+from bot.managers.game_runner import GameRunner
 from database.logger import Logger
 from bot.readers.question_selector import QuestionSelector
 from bot.readers.question import Question
@@ -28,8 +28,7 @@ class DummyGame(GameRunner):
     def __init__(self):
         selector = MagicMock(spec=QuestionSelector)
         logger = MagicMock(spec=Logger)
-        super().__init__(selector, logger, mode=GameType.POWERUP)
-        self.mode = GameType.POWERUP
+        super().__init__(selector, logger)
         self.logger.get_guess_metrics.return_value = {
             "players": {
                 "1": {
@@ -83,7 +82,7 @@ async def test_disrupt_command():
             def disrupt(self, aid, tid):
                 return "disrupted!"
 
-        m.setattr("modes.powerup.PowerUpManager", DummyManager)
+        m.setattr("bot.managers.powerup.PowerUpManager", DummyManager)
         await fight_cog.disrupt.callback(fight_cog, ctx, "2")
         bot.send_message.assert_called_with("disrupted!", interaction=ctx.interaction)
 
@@ -101,7 +100,7 @@ async def test_shield_command():
             def use_shield(self, pid):
                 return "shielded!"
 
-        m.setattr("modes.powerup.PowerUpManager", DummyManager)
+        m.setattr("bot.managers.powerup.PowerUpManager", DummyManager)
         await fight_cog.shield.callback(fight_cog, ctx)
         bot.send_message.assert_called_with("shielded!", interaction=ctx.interaction)
 
@@ -119,7 +118,7 @@ async def test_wager_command():
             def wager_points(self, pid, amt):
                 return "wagered!"
 
-        m.setattr("modes.powerup.PowerUpManager", DummyManager)
+        m.setattr("bot.managers.powerup.PowerUpManager", DummyManager)
         await powerup_cog.wager.callback(powerup_cog, ctx, 10)
         bot.send_message.assert_called_with("wagered!", interaction=ctx.interaction)
 
@@ -127,7 +126,6 @@ async def test_wager_command():
 @pytest.mark.asyncio
 async def test_reinforce_command():
     bot, _, _, coop_cog = make_bot_and_cogs()
-    bot.game.mode.name = "COOP"  # Set mode to COOP for this test
     ctx = DummyCtx()
     with pytest.MonkeyPatch.context() as m:
 
@@ -138,7 +136,7 @@ async def test_reinforce_command():
             def reinforce(self, pid1, pid2):
                 return "reinforced!"
 
-        m.setattr("modes.powerup.PowerUpManager", DummyManager)
+        m.setattr("bot.managers.powerup.PowerUpManager", DummyManager)
         await coop_cog.reinforce.callback(coop_cog, ctx, "2")
         bot.send_message.assert_called_with("reinforced!", interaction=ctx.interaction)
 
@@ -156,6 +154,6 @@ async def test_steal_command():
             def steal(self, thief, target):
                 return "stolen!"
 
-        m.setattr("modes.powerup.PowerUpManager", DummyManager)
+        m.setattr("bot.managers.powerup.PowerUpManager", DummyManager)
         await fight_cog.steal.callback(fight_cog, ctx, "2")
         bot.send_message.assert_called_with("stolen!", interaction=ctx.interaction)

@@ -98,5 +98,36 @@ class Admin(commands.Cog):
         else:
             await ctx.send("Invalid message type. Use 'morning', 'reminder', or 'evening'.")
 
+    @commands.hybrid_group(name="feature", description="Manage game features.")
+    @commands.is_owner()
+    async def feature(self, ctx: commands.Context):
+        """A group of commands to manage game features."""
+        if ctx.invoked_subcommand is None:
+            await ctx.send("Invalid feature command. Use `enable` or `disable`.")
+
+    @feature.command(name="enable", description="Enable a game feature.")
+    async def enable_feature(self, ctx: commands.Context, feature_name: str):
+        """Enables a game feature by name."""
+        # You might need to pass arguments to the manager's constructor
+        kwargs = {}
+        if feature_name == "powerup":
+            players = self.bot.logger.get_guess_metrics(
+                [], self.bot.game.question_selector.questions
+            ).get("players", {})
+            kwargs['players'] = players
+        elif feature_name == "roles":
+            kwargs['db'] = self.bot.logger.db
+            from cfg.main import ConfigReader
+            kwargs['config'] = ConfigReader()
+
+        self.bot.game.enable_manager(feature_name, **kwargs)
+        await ctx.send(f"Feature '{feature_name}' enabled.")
+
+    @feature.command(name="disable", description="Disable a game feature.")
+    async def disable_feature(self, ctx: commands.Context, feature_name: str):
+        """Disables a game feature by name."""
+        self.bot.game.disable_manager(feature_name)
+        await ctx.send(f"Feature '{feature_name}' disabled.")
+
 async def setup(bot):
     await bot.add_cog(Admin(bot))

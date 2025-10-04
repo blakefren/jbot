@@ -1,7 +1,7 @@
 # bot/cogs/roles.py
 import discord
 from discord.ext import commands, tasks
-from bot.modes.roles import RolesGameMode
+from bot.managers.roles import RolesGameMode
 from database.database import Database
 
 

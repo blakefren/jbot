@@ -10,18 +10,7 @@ from cfg.players import read_players_into_dict
 from bot.readers.question import Question
 
 
-class GameType(Enum):
-    """
-    Enum to represent different game modes.
-    """
 
-    SIMPLE = "simple"  # TODO: split out from BaseGame, or combine?
-    POKER = "poker"  # TODO
-    POWERUP = "powerup"
-    VEGAS = "vegas"  # TODO
-    SOULSLIKE = "soulslike"  # TODO
-    JEOPARDY = "jeopardy"  # TODO
-    ROLES = "roles"
 
 
 class GameRunner:
@@ -34,13 +23,38 @@ class GameRunner:
         self,
         question_selector: QuestionSelector,
         logger: Logger,
-        mode: GameType = GameType.SIMPLE,
     ):
         self.question_selector = question_selector
         self.logger = logger
-        self.mode = mode
         self.subscribed_contexts = Subscriber.get_all(self.logger.db)
         self.daily_q = None
+        self.managers = {}
+
+    def register_manager(self, name: str, manager_class):
+        """
+        Registers a manager class.
+        """
+        self.managers[name] = manager_class
+
+    def enable_manager(self, name: str, **kwargs):
+        """
+        Enables a manager by creating an instance of its class.
+        """
+        if name in self.managers:
+            self.managers[name] = self.managers[name](**kwargs)
+            print(f"Manager '{name}' enabled.")
+        else:
+            print(f"Manager '{name}' not found.")
+
+    def disable_manager(self, name: str):
+        """
+        Disables a manager.
+        """
+        if name in self.managers and self.managers[name] is not None:
+            self.managers[name] = None
+            print(f"Manager '{name}' disabled.")
+        else:
+            print(f"Manager '{name}' is not enabled or not found.")
 
     def set_daily_question(self):
         self.daily_q = self.question_selector.get_question_for_today()
@@ -57,15 +71,7 @@ class GameRunner:
     def get_subscribed_users(self):
         return self.subscribed_contexts
 
-    def change_mode(self, new_mode: GameType):
-        """
-        Change the game mode.
 
-        Args:
-            new_mode (str): The new mode to switch to.
-        """
-        self.mode = new_mode
-        print(f"Game mode changed to: {self.mode}")
 
     def handle_guess(self, player_id: int, player_name: str, guess: str) -> bool:
         """
@@ -89,28 +95,10 @@ class GameRunner:
             player_id, player_name, self.daily_q.id, g, is_correct
         )
 
-        # POWERUP mode: resolve bet and attack effects
-        if self.mode.name == "POWERUP":
-            from bot.modes.powerup import PowerUpManager
-
-            # Get all players (simulate persistent state)
-            players = self.logger.get_guess_metrics(
-                [], self.question_selector.questions
-            ).get("players", {})
-            manager = PowerUpManager(players)
-            # Call resolve_wager for this player
-            manager.resolve_wager(str(player_id), is_correct)
-        elif self.mode.name == "ROLES":
-            from bot.modes.roles import RolesGameMode
-            from database.database import Database
-
-            db = Database()
-            # TODO: this is a hack, config should be passed in
-            from cfg.main import ConfigReader
-
-            config = ConfigReader()
-            roles_game_mode = RolesGameMode(db, config)
-            roles_game_mode.run()
+        # Resolve with active managers
+        for manager in self.managers.values():
+            if manager is not None:
+                manager.on_guess(player_id, player_name, guess, is_correct)
 
         return is_correct
 

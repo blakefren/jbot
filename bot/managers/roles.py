@@ -1,5 +1,6 @@
-# bot/modes/roles.py
+# bot/managers/roles.py
 from database.database import Database
+from bot.managers.base import BaseManager
 
 # TODO: use these role names
 ROLE_NAMES = {
@@ -9,10 +10,16 @@ ROLE_NAMES = {
     "BLUE_TEAM": "blue team",
 }
 
-class RolesGameMode:
+class RolesGameMode(BaseManager):
     def __init__(self, db: Database, config):
         self.db = db
         self.config = config
+
+    def on_guess(self, player_id: int, player_name: str, guess: str, is_correct: bool):
+        # Role assignments are typically run at the end of a cycle, not on every guess.
+        # We can call run() here, or have a separate trigger.
+        # For now, let's assume it's run manually or on a schedule.
+        pass
 
     def get_player_scores(self):
         """

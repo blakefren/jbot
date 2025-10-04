@@ -1,7 +1,7 @@
-# tests/bot/modes/test_roles.py
+# tests/bot/managers/test_roles.py
 import unittest
 from unittest.mock import MagicMock
-from bot.modes.roles import RolesGameMode
+from bot.managers.roles import RolesGameMode
 from database.database import Database
 
 

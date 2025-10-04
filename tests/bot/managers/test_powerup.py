@@ -1,5 +1,5 @@
 import unittest
-from bot.modes.powerup import PowerUpManager
+from bot.managers.powerup import PowerUpManager
 
 
 class TestPowerUpManager(unittest.TestCase):

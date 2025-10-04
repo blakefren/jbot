@@ -3,10 +3,11 @@ POWERUP mode logic for jbot trivia game.
 Implements power-up actions: attack, shield, and wager.
 """
 
+from bot.managers.base import BaseManager
 from typing import Dict
 
 
-class PowerUpManager:
+class PowerUpManager(BaseManager):
     """
     Manages power-up actions for POWERUP game mode, including attacking streaks,
     using shields, and wagering points.
@@ -19,6 +20,9 @@ class PowerUpManager:
             players (Dict[str, dict]): Dictionary of player data keyed by player ID.
         """
         self.players = players
+
+    def on_guess(self, player_id: int, player_name: str, guess: str, is_correct: bool):
+        self.resolve_wager(str(player_id), is_correct)
 
     def reinforce(self, player1_id: str, player2_id: str) -> str:
         """

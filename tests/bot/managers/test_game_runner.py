@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock, call
 
-from bot.modes.game_runner import GameRunner, GameType
+from bot.managers.game_runner import GameRunner
 from bot.subscriber import Subscriber
 from bot.readers.question import Question
 from database.logger import Logger
@@ -25,7 +25,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_question_selector.questions = {"qid1": self.mock_question}
 
         # Patch Subscriber class
-        self.subscriber_patcher = patch("bot.modes.game_runner.Subscriber")
+        self.subscriber_patcher = patch("bot.managers.game_runner.Subscriber")
         self.MockSubscriber = self.subscriber_patcher.start()
 
         self.game_runner = GameRunner(self.mock_question_selector, self.mock_logger)
@@ -36,7 +36,7 @@ class TestGameRunner(unittest.TestCase):
 
     def test_initialization(self):
         """Test GameRunner initialization."""
-        self.assertEqual(self.game_runner.mode, GameType.SIMPLE)
+        self.assertEqual(self.game_runner.managers, {})
         self.assertEqual(
             self.game_runner.question_selector, self.mock_question_selector
         )
@@ -67,12 +67,6 @@ class TestGameRunner(unittest.TestCase):
         mock_subscriber.delete.assert_called_once()
         self.assertNotIn(mock_subscriber, self.game_runner.subscribed_contexts)
 
-    def test_change_mode(self):
-        """Test changing the game mode."""
-        self.assertEqual(self.game_runner.mode, GameType.SIMPLE)
-        self.game_runner.change_mode(GameType.POKER)
-        self.assertEqual(self.game_runner.mode, GameType.POKER)
-
     def test_format_question_and_answer(self):
         """Test the formatting of questions and answers."""
         formatted_q = self.game_runner.format_question(self.mock_question)
@@ -98,7 +92,7 @@ class TestGameRunner(unittest.TestCase):
         content = self.game_runner.get_morning_message_content()
         self.assertIn(self.mock_question.question, content)
 
-    @patch("bot.modes.game_runner.read_players_into_dict")
+    @patch("bot.managers.game_runner.read_players_into_dict")
     def test_get_reminder_message_content(self, mock_read_players):
         """Test generating the reminder message content."""
         self.game_runner.daily_q = self.mock_question
@@ -118,6 +112,14 @@ class TestGameRunner(unittest.TestCase):
         content = self.game_runner.get_reminder_message_content(tag_unanswered=False)
         self.assertNotIn("<@", content)
         self.assertNotIn("Hint:", content)
+
+        # With hint
+        self.mock_question.hint = "This is a test hint."
+        content_with_hint = self.game_runner.get_reminder_message_content(
+            tag_unanswered=False
+        )
+        self.assertIn("Hint: ||**This is a test hint.**||", content_with_hint)
+        self.mock_question.hint = None  # Reset for other tests
 
         # With hint
         self.mock_question.hint = "This is a test hint."
@@ -213,6 +215,108 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("Score:         4", history)
         self.assertIn("Global score:     7", history)
 
+    def test_manager_registration_and_enabling(self):
+        """Test registering, enabling, and disabling a manager."""
+        mock_manager_class = MagicMock()
+        self.game_runner.register_manager("test_manager", mock_manager_class)
+        self.assertIn("test_manager", self.game_runner.managers)
+        self.assertEqual(self.game_runner.managers["test_manager"], mock_manager_class)
+
+        # Enable the manager
+        self.game_runner.enable_manager("test_manager", arg1="value1")
+        mock_manager_class.assert_called_once_with(arg1="value1")
+        self.assertIsNotNone(self.game_runner.managers["test_manager"])
+
+        # Disable the manager
+        self.game_runner.disable_manager("test_manager")
+        self.assertIsNone(self.game_runner.managers["test_manager"])
+
+    def test_get_evening_message_content(self):
+        """Test generating the evening message content."""
+        self.game_runner.daily_q = self.mock_question
+        self.mock_logger.read_guess_history.return_value = [
+            {
+                "QuestionID": 110004699642252617987064134833407364497,
+                "PlayerName": "Player1",
+                "Guess": "A guess",
+            }
+        ]
+
+        content = self.game_runner.get_evening_message_content()
+        self.assertIn(self.mock_question.answer, content)
+        self.assertIn("Player1: A guess", content)
+
+    def test_handle_guess(self):
+        """Test handling a player's guess."""
+        self.game_runner.daily_q = self.mock_question
+        player_id, player_name = 123, "Test Guesser"
+
+        # Correct guess
+        is_correct = self.game_runner.handle_guess(
+            player_id, player_name, "test answer"
+        )
+        self.assertTrue(is_correct)
+        self.mock_logger.log_player_guess.assert_called_with(
+            player_id,
+            player_name,
+            110004699642252617987064134833407364497,
+            "test answer",
+            True,
+        )
+
+        # Incorrect guess
+        is_correct = self.game_runner.handle_guess(
+            player_id, player_name, "wrong answer"
+        )
+        self.assertFalse(is_correct)
+        self.mock_logger.log_player_guess.assert_called_with(
+            player_id,
+            player_name,
+            110004699642252617987064134833407364497,
+            "wrong answer",
+            False,
+        )
+
+        # No daily question
+        self.game_runner.daily_q = None
+        is_correct = self.game_runner.handle_guess(player_id, player_name, "any answer")
+        self.assertFalse(is_correct)
+
+    def test_get_scores_leaderboard(self):
+        """Test generating the scores leaderboard."""
+        self.mock_logger.get_guess_metrics.return_value = {
+            "players": {
+                "1": {"player_name": "Alice", "score": 10},
+                "2": {"player_name": "Bob", "score": 5},
+            }
+        }
+        leaderboard = self.game_runner.get_scores_leaderboard()
+        self.assertIn("1. Alice: 10", leaderboard)
+        self.assertIn("2. Bob: 5", leaderboard)
+        self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Bob"))
+
+    def test_get_player_history(self):
+        """Test generating a player's history."""
+        self.mock_logger.get_guess_metrics.return_value = {
+            "players": {
+                "123": {
+                    "guesses": 5,
+                    "correct_rate": 0.8,
+                    "score": 4,
+                }
+            },
+            "global_correct_rate": 0.75,
+            "total_guesses": 10,
+            "unique_questions": 8,
+            "global_score": 7,
+        }
+        history = self.game_runner.get_player_history(123, "Alice")
+        self.assertIn("--Your stats, Alice--", history)
+        self.assertIn("Total guesses: 5", history)
+        self.assertIn("Correct rate:  0.80", history)
+        self.assertIn("Score:         4", history)
+        self.assertIn("Global score:     7", history)
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -220,7 +324,7 @@ if __name__ == "__main__":
 
 # --- Additional POWERUP mode tests ---
 from unittest.mock import MagicMock
-from bot.modes.game_runner import GameRunner, GameType
+from bot.managers.game_runner import GameRunner
 
 
 class DummyLoggerPowerup:
@@ -248,7 +352,7 @@ class DummyQuestionSelectorPowerup:
 def test_handle_guess_powerup_correct():
     logger = DummyLoggerPowerup()
     selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, logger, mode=GameType.POWERUP)
+    game = GameRunner(selector, logger)
     game.daily_q = selector.get_question_for_today()
     called = {}
 
@@ -256,19 +360,22 @@ def test_handle_guess_powerup_correct():
         def __init__(self, players):
             pass
 
-        def resolve_wager(self, pid, correct):
-            called["resolve_wager"] = (pid, correct)
+        def on_guess(self, pid, pname, guess, correct):
+            called["on_guess"] = (pid, correct)
 
-    with patch("bot.modes.game_runner.PowerUpManager", DummyPowerUpManager):
+    game.register_manager("powerup", DummyPowerUpManager)
+    game.enable_manager("powerup", players={})
+
+    with patch("bot.managers.game_runner.PowerUpManager", DummyPowerUpManager):
         result = game.handle_guess(1, "Player1", "test")
         assert result is True
-        assert called["resolve_wager"] == ("1", True)
+        assert called["on_guess"] == (1, True)
 
 
 def test_handle_guess_powerup_incorrect():
     logger = DummyLoggerPowerup()
     selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, logger, mode=GameType.POWERUP)
+    game = GameRunner(selector, logger)
     game.daily_q = selector.get_question_for_today()
     called = {}
 
@@ -276,19 +383,22 @@ def test_handle_guess_powerup_incorrect():
         def __init__(self, players):
             pass
 
-        def resolve_wager(self, pid, correct):
-            called["resolve_wager"] = (pid, correct)
+        def on_guess(self, pid, pname, guess, correct):
+            called["on_guess"] = (pid, correct)
 
-    with patch("bot.modes.game_runner.PowerUpManager", DummyPowerUpManager):
+    game.register_manager("powerup", DummyPowerUpManager)
+    game.enable_manager("powerup", players={})
+
+    with patch("bot.managers.game_runner.PowerUpManager", DummyPowerUpManager):
         result = game.handle_guess(1, "Player1", "wrong")
         assert result is False
-        assert called["resolve_wager"] == ("1", False)
+        assert called["on_guess"] == (1, False)
 
 
 def test_handle_guess_non_powerup():
     logger = DummyLoggerPowerup()
     selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, logger, mode=GameType.SIMPLE)
+    game = GameRunner(selector, logger)
     game.daily_q = selector.get_question_for_today()
     result = game.handle_guess(1, "Player1", "test")
     assert result is True
@@ -297,7 +407,7 @@ def test_handle_guess_non_powerup():
 def test_handle_guess_no_question():
     logger = DummyLoggerPowerup()
     selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, logger, mode=GameType.POWERUP)
+    game = GameRunner(selector, logger)
     game.daily_q = None
     result = game.handle_guess(1, "Player1", "test")
     assert result is False
