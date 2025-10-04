@@ -6,7 +6,7 @@ class Trivia(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="question")
+    @commands.command(name="question")
     async def question(self, ctx: commands.Context):
         """Get a random question and answer."""
         random_q = self.bot.game.question_selector.get_random_question()
@@ -23,7 +23,7 @@ class Trivia(commands.Cog):
         full_message = f"{question_part}\n{answer_part}"
         await self.bot.send_message(full_message, interaction=ctx.interaction)
 
-    @commands.hybrid_command(name="when")
+    @commands.command(name="when")
     async def when(self, ctx: commands.Context):
         """Get the next event time. Shows the active question, if there is one."""
         morning_task = self.bot.morning_message_task
@@ -61,7 +61,7 @@ class Trivia(commands.Cog):
             response_content, interaction=ctx.interaction, ephemeral=True
         )
 
-    @commands.hybrid_command(name="answer")
+    @commands.command(name="answer")
     async def answer(self, ctx: commands.Context, *, guess: str):
         """Submits an answer for the current daily question."""
         if not self.bot.game.daily_q:
@@ -98,7 +98,7 @@ class Trivia(commands.Cog):
             ephemeral=True,
         )
 
-    @commands.hybrid_command(name="subscribe")
+    @commands.command(name="subscribe")
     async def subscribe(self, ctx: commands.Context):
         """Subscribes the context to daily question notifications."""
         subscriber = Subscriber.from_ctx(ctx)
@@ -124,7 +124,7 @@ class Trivia(commands.Cog):
                 success_status="subscribed",
             )
 
-    @commands.hybrid_command(name="unsubscribe")
+    @commands.command(name="unsubscribe")
     async def unsubscribe(self, ctx: commands.Context):
         """Unsubscribes the context from daily question notifications."""
         subscriber = Subscriber.from_ctx(ctx)

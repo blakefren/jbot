@@ -1,45 +1,31 @@
 from discord.ext import commands
-from bot.modes.powerup import PowerUpManager
+from bot.cogs.utils import get_powerup_manager
 
 
 class Fight(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def _get_powerup_manager(self, interaction):
-        if self.bot.game.mode.name != "POWERUP":
-            await self.bot.send_message(
-                "This command is only available in POWERUP mode.",
-                interaction=interaction,
-                ephemeral=True,
-            )
-            return None
-
-        players = self.bot.game.logger.get_guess_metrics(
-            [], self.bot.game.question_selector.questions
-        ).get("players", {})
-        return PowerUpManager(players)
-
-    @commands.hybrid_command(name="disrupt")
+    @commands.command(name="disrupt")
     async def disrupt(self, ctx: commands.Context, target_id: str):
         """Break another player's answer streak (POWERUP mode only)."""
-        manager = await self._get_powerup_manager(ctx.interaction)
+        manager = await get_powerup_manager(self.bot, ctx.interaction)
         if manager:
             result = manager.disrupt(str(ctx.author.id), target_id)
             await self.bot.send_message(result, interaction=ctx.interaction)
 
-    @commands.hybrid_command(name="shield")
+    @commands.command(name="shield")
     async def shield(self, ctx: commands.Context):
         """Activate a shield to block the next attack (POWERUP mode only)."""
-        manager = await self._get_powerup_manager(ctx.interaction)
+        manager = await get_powerup_manager(self.bot, ctx.interaction)
         if manager:
             result = manager.use_shield(str(ctx.author.id))
             await self.bot.send_message(result, interaction=ctx.interaction)
 
-    @commands.hybrid_command(name="steal")
+    @commands.command(name="steal")
     async def steal(self, ctx: commands.Context, target_id: str):
         """Steal half of another player's points earned today (POWERUP mode only)."""
-        manager = await self._get_powerup_manager(ctx.interaction)
+        manager = await get_powerup_manager(self.bot, ctx.interaction)
         if manager:
             result = manager.steal(str(ctx.author.id), target_id)
             await self.bot.send_message(result, interaction=ctx.interaction)

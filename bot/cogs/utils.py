@@ -3,12 +3,29 @@ import sys
 
 from discord.ext import commands
 
+from bot.modes.powerup import PowerUpManager
+
+
+async def get_powerup_manager(bot, interaction):
+    if bot.game.mode.name != "POWERUP":
+        await bot.send_message(
+            "This command is only available in POWERUP mode.",
+            interaction=interaction,
+            ephemeral=True,
+        )
+        return None
+
+    players = bot.game.logger.get_guess_metrics(
+        [], bot.game.question_selector.questions
+    ).get("players", {})
+    return PowerUpManager(players)
+
 
 class Utils(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="shutdown", aliases=["quit", "exit"])
+    @commands.hybrid_command(name="shutdown")
     @commands.is_owner()
     async def shutdown(self, ctx: commands.Context):
         """Shuts down the bot."""
@@ -35,7 +52,7 @@ class Utils(commands.Cog):
         else:
             await ctx.send(f"An error occurred: {error}", ephemeral=True)
 
-    @commands.hybrid_command(name="restart", aliases=["reboot", "r", "reset"])
+    @commands.hybrid_command(name="restart")
     @commands.is_owner()
     async def restart(self, ctx: commands.Context):
         """Restarts the bot."""
