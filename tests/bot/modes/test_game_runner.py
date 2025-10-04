@@ -1,7 +1,5 @@
 import unittest
-import os
-import csv
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 
 from bot.modes.game_runner import GameRunner, GameType
 from bot.subscriber import Subscriber
@@ -14,6 +12,7 @@ class TestGameRunner(unittest.TestCase):
         """Set up for the tests."""
         self.mock_question_selector = MagicMock()
         self.mock_logger = MagicMock(spec=Logger)
+        self.mock_logger.db = MagicMock()
         self.mock_question = Question(
             question="Test Question",
             answer="Test Answer",
@@ -25,22 +24,15 @@ class TestGameRunner(unittest.TestCase):
         )
         self.mock_question_selector.questions = {"qid1": self.mock_question}
 
-        # Create a dummy subscribers file path
-        self.test_subscribers_file = "test_subscribers.csv"
-
-        # Patch SUBSCRIBERS_FILE before initializing GameRunner
-        self.subscribers_patcher = patch(
-            "bot.modes.game_runner.SUBSCRIBERS_FILE", self.test_subscribers_file
-        )
-        self.subscribers_patcher.start()
+        # Patch Subscriber class
+        self.subscriber_patcher = patch("bot.modes.game_runner.Subscriber")
+        self.MockSubscriber = self.subscriber_patcher.start()
 
         self.game_runner = GameRunner(self.mock_question_selector, self.mock_logger)
 
     def tearDown(self):
         """Tear down after tests."""
-        if os.path.exists(self.test_subscribers_file):
-            os.remove(self.test_subscribers_file)
-        self.subscribers_patcher.stop()
+        self.subscriber_patcher.stop()
 
     def test_initialization(self):
         """Test GameRunner initialization."""
@@ -48,7 +40,11 @@ class TestGameRunner(unittest.TestCase):
         self.assertEqual(
             self.game_runner.question_selector, self.mock_question_selector
         )
-        self.assertEqual(self.game_runner.subscribed_contexts, set())
+        self.MockSubscriber.get_all.assert_called_once_with(self.mock_logger.db)
+        self.assertEqual(
+            self.game_runner.subscribed_contexts,
+            self.MockSubscriber.get_all.return_value,
+        )
         self.assertIsNone(self.game_runner.daily_q)
 
     def test_set_daily_question(self):
@@ -58,41 +54,18 @@ class TestGameRunner(unittest.TestCase):
         self.mock_question_selector.get_question_for_today.assert_called_once()
         self.assertEqual(self.game_runner.daily_q, self.mock_question)
 
-    def test_load_subscribers(self):
-        """Test loading subscribers from a CSV file."""
-        # Create a dummy subscribers csv
-        with open(self.test_subscribers_file, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["id", "display_name", "is_channel"])
-            writer.writerow(["123", "Test User", "False"])
-
-        # Re-initialize to load the new file
-        game_runner = GameRunner(self.mock_question_selector, self.mock_logger)
-        self.assertEqual(len(game_runner.subscribed_contexts), 1)
-        subscriber = list(game_runner.subscribed_contexts)[0]
-        self.assertEqual(subscriber.sub_id, 123)
-        self.assertEqual(subscriber.display_name, "Test User")
-        self.assertFalse(subscriber.is_channel)
-
     def test_add_and_remove_subscriber(self):
         """Test adding and removing a subscriber."""
-        subscriber = Subscriber("456", "Another User", True)
+        mock_subscriber = MagicMock(spec=Subscriber)
+        self.game_runner.subscribed_contexts = set()
 
-        self.game_runner.add_subscriber(subscriber)
-        self.assertIn(subscriber, self.game_runner.subscribed_contexts)
+        self.game_runner.add_subscriber(mock_subscriber)
+        mock_subscriber.save.assert_called_once()
+        self.assertIn(mock_subscriber, self.game_runner.subscribed_contexts)
 
-        # Verify it was saved
-        with open(self.test_subscribers_file, "r") as f:
-            content = f.read()
-            self.assertIn("456,Another User,True", content)
-
-        self.game_runner.remove_subscriber(subscriber)
-        self.assertNotIn(subscriber, self.game_runner.subscribed_contexts)
-
-        # Verify it was removed from file
-        with open(self.test_subscribers_file, "r") as f:
-            content = f.read()
-            self.assertNotIn("456,Another User,True", content)
+        self.game_runner.remove_subscriber(mock_subscriber)
+        mock_subscriber.delete.assert_called_once()
+        self.assertNotIn(mock_subscriber, self.game_runner.subscribed_contexts)
 
     def test_change_mode(self):
         """Test changing the game mode."""

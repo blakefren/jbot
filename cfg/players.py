@@ -18,12 +18,13 @@ class PlayerManager:
         Reads the players table and returns a dictionary of player data.
         """
         players = {}
-        query = "SELECT id, name, answer_streak, active_shield FROM players"
+        query = "SELECT id, name, score, answer_streak, active_shield FROM players"
         player_records = self.db.execute_query(query)
         for record in player_records:
             discord_id = record["id"]
             players[discord_id] = {
                 "name": record["name"],
+                "score": record["score"],
                 "answer_streak": record["answer_streak"],
                 "active_shield": bool(record["active_shield"]),
             }
@@ -41,16 +42,18 @@ class PlayerManager:
         """
         for discord_id, data in self.players.items():
             query = """
-                INSERT INTO players (id, name, answer_streak, active_shield)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO players (id, name, score, answer_streak, active_shield)
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
+                    score = excluded.score,
                     answer_streak = excluded.answer_streak,
                     active_shield = excluded.active_shield;
             """
             params = (
                 discord_id,
                 data["name"],
+                data["score"],
                 data["answer_streak"],
                 data["active_shield"],
             )

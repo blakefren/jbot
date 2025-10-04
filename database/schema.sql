@@ -25,9 +25,22 @@ CREATE TABLE IF NOT EXISTS daily_questions (
 CREATE TABLE IF NOT EXISTS players (
     id TEXT PRIMARY KEY, -- Corresponds to discord_id
     name TEXT,
+    score INTEGER DEFAULT 0,
     answer_streak INTEGER DEFAULT 0,
     active_shield BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- This table logs manual score adjustments for players.
+CREATE TABLE IF NOT EXISTS score_adjustments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_id TEXT NOT NULL,
+    admin_id TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    reason TEXT,
+    adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (player_id) REFERENCES players (id),
+    FOREIGN KEY (admin_id) REFERENCES players (id)
 );
 
 -- This table logs the guesses made by players.
@@ -67,4 +80,12 @@ CREATE TABLE IF NOT EXISTS player_roles (
     PRIMARY KEY (player_id, role_id),
     FOREIGN KEY (player_id) REFERENCES players (id),
     FOREIGN KEY (role_id) REFERENCES roles (id)
+);
+
+-- This table stores the subscribers for daily questions.
+CREATE TABLE IF NOT EXISTS subscribers (
+    id TEXT PRIMARY KEY, -- Corresponds to user_id or channel_id
+    display_name TEXT NOT NULL,
+    is_channel BOOLEAN NOT NULL,
+    subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

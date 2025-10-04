@@ -43,42 +43,20 @@ class GameRunner:
         self.question_selector = question_selector
         self.logger = logger
         self.mode = mode
-        self.subscribed_contexts = self._load_subscribers()
+        self.subscribed_contexts = Subscriber.get_all(self.logger.db)
         self.daily_q = None
 
     def set_daily_question(self):
         self.daily_q = self.question_selector.get_question_for_today()
 
-    def _load_subscribers(self):
-        subscribers = set()
-        try:
-            with open(SUBSCRIBERS_FILE, mode="r", newline="", encoding="utf-8") as f:
-                reader = csv.reader(f)
-                next(reader)  # Skip header
-                for row in reader:
-                    subscribers.add(Subscriber.from_csv_row(row))
-        except FileNotFoundError:
-            pass  # No subscribers file yet
-        return subscribers
-
-    def _save_subscribers(self):
-        try:
-            with open(SUBSCRIBERS_FILE, mode="w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(["id", "display_name", "is_channel"])
-                for sub in self.subscribed_contexts:
-                    writer.writerow(sub.to_csv_row())
-        except Exception as e:
-            print(f"Error saving subscribers: {e}")
-
     def add_subscriber(self, subscriber: Subscriber):
+        subscriber.save()
         self.subscribed_contexts.add(subscriber)
-        self._save_subscribers()
 
     def remove_subscriber(self, subscriber: Subscriber):
+        subscriber.delete()
         if subscriber in self.subscribed_contexts:
             self.subscribed_contexts.remove(subscriber)
-            self._save_subscribers()
 
     def get_subscribed_users(self):
         return self.subscribed_contexts
