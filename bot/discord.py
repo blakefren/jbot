@@ -57,7 +57,7 @@ class DiscordBot(commands.Bot):
     async def setup_hook(self):
         """This is called when the bot is setting up."""
         print("setup_hook: loading cogs")
-        for filename in os.listdir(os.path.join([".", "bot", "cogs"])):
+        for filename in os.listdir(os.path.join(".", "bot", "cogs")):
             if filename.endswith(".py") and not filename.startswith("__"):
                 try:
                     await self.load_extension(f"bot.cogs.{filename[:-3]}")
