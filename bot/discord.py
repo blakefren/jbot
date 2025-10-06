@@ -211,10 +211,10 @@ class DiscordBot(commands.Bot):
             await self.send_message(
                 content,
                 is_channel=sub.is_channel,
-                target_id=sub.id,
+                target_id=sub.sub_id,
                 success_status=success_status,
             )
-            sent_to_ids.append(sub.id)
+            sent_to_ids.append(sub.sub_id)
 
         self.logger.log_daily_question(
             question=self.game.daily_q, sent_to_users=sent_to_ids
@@ -287,9 +287,10 @@ class DiscordBot(commands.Bot):
 
 
 async def discord_bot_async(
-    config: ConfigReader, questions: list[Question], logger: Logger
+    config: ConfigReader, questions: list[Question], db: "Database"
 ):
     """Main function to initialize and run the bot."""
+    logger = Logger(db)
     question_selector = QuestionSelector(questions, mode=config.get("QUESTION_MODE"))
     game = GameRunner(question_selector, logger)
 
@@ -300,11 +301,14 @@ async def discord_bot_async(
     game.register_manager("roles", RolesGameMode)
 
     bot = DiscordBot(config.get("DISCORD_BOT_TOKEN"), game, config)
+    bot.db = db  # Attach the database connection to the bot
     await bot.run()
 
 
-def run_discord_bot(config: ConfigReader, questions: list[Question], logger: Logger):
+def run_discord_bot(config: ConfigReader, questions: list[Question], db: "Database"):
     try:
-        asyncio.run(discord_bot_async(config, questions, logger))
+        # TODO: try this instead
+        # asyncio.get_event_loop().run_until_complete(discord_bot_async(config, questions, db))
+        asyncio.run(discord_bot_async(config, questions, db))
     except KeyboardInterrupt:
         print("Bot shutdown requested by user.")

@@ -41,7 +41,12 @@ class Utils(commands.Cog):
             if task.is_running():
                 task.cancel()
 
+        # Close the database connection before shutting down the bot
+        if hasattr(self.bot, "db") and self.bot.db.conn:
+            self.bot.db.close()
+
         await self.bot.close()
+        sys.exit(0)
 
     @shutdown.error
     async def shutdown_error(self, ctx, error):
@@ -61,6 +66,11 @@ class Utils(commands.Cog):
         with open("restart.inf", "w") as f:
             f.write(f"{ctx.channel.id},{ctx.author.id}")
         await self.bot.send_message("Restarting bot...", interaction=ctx.interaction)
+        
+        # Close the database connection before shutting down the bot
+        if hasattr(self.bot, "db") and self.bot.db.conn:
+            self.bot.db.close()
+
         await self.bot.close()
         os.execv(sys.executable, ["python"] + sys.argv)
 

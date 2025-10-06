@@ -9,12 +9,12 @@ class Logger:
     A logging class for the trivia bot, designed to log events to a SQLite database.
     """
 
-    def __init__(self, db_path: str):
+    def __init__(self, db: "Database"):
         """
         Initializes the logger, connecting to the database.
         """
-        self.db = Database(db_path)
-        print(f"Logger initialized. Using database at '{db_path}'.")
+        self.db = db
+        print(f"Logger initialized. Using database at '{self.db.db_path}'.")
 
     def close(self):
         """
@@ -145,7 +145,8 @@ class Logger:
 # --- Example Usage ---
 if __name__ == "__main__":
     db_path = os.path.join(os.path.dirname(__file__), "..", "database", "jbot.db")
-    logger = Logger(db_path=db_path)
+    db = Database(db_path=db_path)
+    logger = Logger(db=db)
 
     q = Question(
         id="jeopardy_1234",

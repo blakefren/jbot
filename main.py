@@ -1,5 +1,6 @@
 from bot.discord import run_discord_bot
 from cfg.main import ConfigReader
+from database.database import Database
 from database.logger import Logger
 from bot.readers.question import Question
 from bot.readers.tsv import (
@@ -65,7 +66,8 @@ if __name__ == "__main__":
     config = load_configs()
     questions = read_questions(config)
     db_path = os.path.join(os.path.dirname(__file__), "database", "jbot.db")
-    logger = Logger(db_path)
+    db = Database(db_path)
+    logger = Logger(db)
 
     # Print a single random question for verification
     if questions:
@@ -77,6 +79,6 @@ if __name__ == "__main__":
     # Start the game bot based on the messenger type
     messenger = config.get("MESSENGER")
     if messenger == "discord":
-        run_discord_bot(config, questions, logger)
+        run_discord_bot(config, questions, db)
     else:
         print(f"Messenger '{messenger}' is not supported.")

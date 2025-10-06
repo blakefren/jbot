@@ -4,7 +4,7 @@ class Subscriber:
     """
 
     def __init__(self, sub_id, display_name, is_channel, db_conn):
-        self.sub_id = sub_id
+        self.sub_id = int(sub_id)
         self.display_name = display_name
         self.is_channel = is_channel
         self.db_conn = db_conn
