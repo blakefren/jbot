@@ -18,10 +18,7 @@ class TestLogger(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.mock_print = patcher.start()
 
-        self.logger = Logger(self.db_path)
-        # Since we're using the same db path, the logger will reuse the connection.
-        # For full isolation, we could give it a different path, but for :memory:, this is fine.
-        self.logger.db = self.db
+        self.logger = Logger(self.db)
 
     def tearDown(self):
         """Clean up after tests."""
