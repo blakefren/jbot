@@ -3,7 +3,10 @@ import unittest
 from unittest.mock import patch
 
 from bot.readers.question import Question
-from bot.readers.question_selector import QuestionSelector, TIMEZONE
+from bot.readers.question_selector import QuestionSelector
+from zoneinfo import ZoneInfo
+
+TIMEZONE = ZoneInfo("US/Pacific")
 
 
 class TestQuestionSelector(unittest.TestCase):

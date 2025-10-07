@@ -1,5 +1,6 @@
 discord
 pytest
+python-dotenv
 # For dashboard notebook.
 pandas
 plotly

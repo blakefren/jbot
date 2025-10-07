@@ -1,51 +1,44 @@
 import os
+import shutil
+from dotenv import load_dotenv
 
-CONFIG_FILE_PATH = os.path.join(os.path.dirname(__file__), "main.cfg")
+# Define the paths for the .env files
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ENV_PATH = os.path.join(BASE_DIR, ".env")
+ENV_TEMPLATE_PATH = os.path.join(BASE_DIR, ".env.template")
 
+def load_config():
+    """
+    Load the .env file. If it doesn't exist, create it from the template.
+    """
+    if not os.path.exists(ENV_PATH):
+        print(f"Creating .env file from template: {ENV_TEMPLATE_PATH}")
+        shutil.copy(ENV_TEMPLATE_PATH, ENV_PATH)
+    load_dotenv(dotenv_path=ENV_PATH)
 
 class ConfigReader:
     """
-    A class to read configuration files and retrieve settings.
+    A class to read configuration from environment variables.
     """
 
     def __init__(self):
         """
-        Reads a configuration file with 'key: value' format.
-
-        Returns:
-            dict: A dictionary of the configuration settings.
-                Returns an empty dictionary if the file is not found or an error occurs.
+        Loads configuration from environment variables.
         """
-        file_path = CONFIG_FILE_PATH
-        self.config = {}
-        try:
-            with open(file_path, "r", encoding="utf-8") as configfile:
-                for line in configfile:
-                    # Skip empty lines or lines that are comments (e.g., starting with #)
-                    if line.strip() and not line.strip().startswith("#"):
-                        # Split only on the first occurrence of ':'
-                        parts = line.strip().split(":", 1)
-                        if len(parts) == 2:
-                            key = parts[0].strip()
-                            value = parts[1].strip()
-                            self.config[key] = value
-        except FileNotFoundError:
-            print(f"Error: The config file at {file_path} was not found.")
-        except Exception as e:
-            print(f"An error occurred while reading the config file: {e}")
+        load_config()
 
     def get(self, key: str, default=None):
         """
-        Retrieves a configuration value by key.
+        Retrieves a configuration value by key from environment variables.
 
         Args:
-            key (str): The key to look for in the configuration.
+            key (str): The key to look for in the environment variables.
             default: The default value to return if the key is not found.
 
         Returns:
             The value associated with the key, or the default value if the key is not found.
         """
-        return self.config.get(key, default)
+        return os.environ.get(key, default)
 
     def get_bool(self, key: str) -> bool:
         """
@@ -57,7 +50,7 @@ class ConfigReader:
         Returns:
             bool: The boolean value associated with the key.
         """
-        if key not in self.config:
-            raise KeyError
         value = self.get(key)
+        if value is None:
+            raise KeyError(f"Key '{key}' not found in environment variables.")
         return value.lower() in ("true", "1", "t", "y", "yes")

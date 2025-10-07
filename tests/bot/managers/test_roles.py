@@ -76,7 +76,7 @@ class TestRolesGameMode(unittest.TestCase):
             self.assertEqual(first_place_player[0], "1")
 
             # Check for 'Top 10%' role
-            self.mock_config.get.assert_called_with("TOP_PLAYER_PERCENTAGE", 10)
+            self.mock_config.get.assert_called_with("JBOT_TOP_PLAYER_PERCENTAGE", 10)
             cursor = conn.execute(
                 """
                 SELECT pr.player_id FROM player_roles pr

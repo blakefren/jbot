@@ -55,7 +55,7 @@ class RolesGameMode(BaseManager):
             self.assign_role_to_player(first_place_player_id, "First Place")
 
         # Assign 'Top X%' role
-        top_percentage = self.config.get("TOP_PLAYER_PERCENTAGE", 10)
+        top_percentage = self.config.get("JBOT_TOP_PLAYER_PERCENTAGE", 10)
         top_n_count = len(sorted_players) * top_percentage // 100
         if top_n_count == 0 and len(sorted_players) > 1:
             top_n_count = 1

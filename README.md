@@ -9,7 +9,7 @@ A daily bot for group trivia questions and competition.
     ```
     pip install -r requirements.txt
     ```
-2.  Create a `main.cfg` file in the `cfg/` directory by copying the `main.cfg.template` file. Fill out the required fields, such as your Discord bot token and the paths to your question datasets.
+2.  Create a `.env` file in the root directory by copying the `.env.template` file. Fill out the required fields, such as your Discord bot token and the paths to your question datasets.
 3.  The database will be created automatically when you run the bot for the first time.
 
 ## Running the Bot
@@ -80,7 +80,7 @@ The database schema is defined in `database/schema.sql`. When the bot is run for
 
 ## Datasets
 
-You'll have to download these yourself and update their paths in `cfg/main.cfg`. Some assembly required. No guarantees on licensing, etc.
+You'll have to download these yourself and update their paths in `.env`. Some assembly required. No guarantees on licensing, etc.
 
 ### Jeopardy!
 

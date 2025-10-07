@@ -5,6 +5,9 @@ Implements power-up actions: attack, shield, and wager.
 
 from bot.managers.base import BaseManager
 from typing import Dict
+from cfg.main import ConfigReader
+
+config = ConfigReader()
 
 
 class PowerUpManager(BaseManager):
@@ -38,12 +41,14 @@ class PowerUpManager(BaseManager):
         p2 = self.players.get(player2_id)
         if not p1 or not p2:
             return "Invalid player(s)."
-        if p1.get("score", 0) < 25 or p2.get("score", 0) < 25:
-            return "Both players need at least 25 points to team up."
+
+        cost = int(config.get("JBOT_REINFORCE_COST", 25))
+        if p1.get("score", 0) < cost or p2.get("score", 0) < cost:
+            return f"Both players need at least {cost} points to team up."
         if p1.get("team_partner") or p2.get("team_partner"):
             return "One or both players are already teamed up today."
-        p1["score"] -= 25
-        p2["score"] -= 25
+        p1["score"] -= cost
+        p2["score"] -= cost
         p1["team_partner"] = player2_id
         p2["team_partner"] = player1_id
         return (
@@ -121,9 +126,11 @@ class PowerUpManager(BaseManager):
         target = self.players.get(target_id)
         if not attacker or not target:
             return "Invalid player(s)."
-        if attacker.get("score", 0) < 50:
-            return "Not enough points to use disrupt (need 50)."
-        attacker["score"] -= 50
+
+        cost = int(config.get("JBOT_DISRUPT_COST", 50))
+        if attacker.get("score", 0) < cost:
+            return f"Not enough points to use disrupt (need {cost})."
+        attacker["score"] -= cost
         if target.get("active_shield", False):
             target["active_shield"] = False
             return f"{target_id}'s shield blocked the disrupt! " "Shield is now broken."
@@ -147,9 +154,11 @@ class PowerUpManager(BaseManager):
             return "Invalid player."
         if player.get("active_shield", False):
             return "Shield already active."
-        if player.get("score", 0) < 25:
-            return "Not enough points to activate shield (need 25)."
-        player["score"] -= 25
+
+        cost = int(config.get("JBOT_SHIELD_COST", 25))
+        if player.get("score", 0) < cost:
+            return f"Not enough points to activate shield (need {cost})."
+        player["score"] -= cost
         player["active_shield"] = True
         return f"{player_id} activated a shield!"
 
@@ -167,7 +176,10 @@ class PowerUpManager(BaseManager):
         if not player:
             return "Invalid player."
         score = player.get("score", 0)
-        max_wager = max(1, score // 4)
+
+        # TODO: play with the percentage cap
+        cap_percentage = int(config.get("JBOT_WAGER_CAP_PERCENTAGE", 25))
+        max_wager = max(1, score // (100 // cap_percentage))
         if amount <= 0 or amount > score:
             return "Invalid wager amount."
         final_wager = min(amount, max_wager)

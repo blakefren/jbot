@@ -13,19 +13,34 @@ from bot.readers.question import Question
 from bot.readers.question_selector import QuestionSelector
 
 # Timezone Configuration
-try:
-    # This is a bit of a hack to get the timezone here.
-    # Ideally, the config would be passed into the bot.
-    config_reader = ConfigReader()
-    TIMEZONE_STR = config_reader.get("TIMEZONE") or "US/Pacific"
-    TIMEZONE = ZoneInfo(TIMEZONE_STR)
-except Exception as e:
-    print(f"Error reading timezone from config, defaulting to US/Pacific. Error: {e}")
-    TIMEZONE = ZoneInfo("US/Pacific")
+def parse_time(time_str: str, default_time: datetime.time) -> datetime.time:
+    """Parse a time string in HH:MM format."""
+    try:
+        h, m = map(int, time_str.split(":"))
+        return datetime.time(hour=h, minute=m)
+    except (ValueError, TypeError):
+        return default_time
 
-MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
-REMINDER_TIME = datetime.time(hour=19, minute=30, tzinfo=TIMEZONE)
-EVENING_TIME = datetime.time(hour=20, minute=0, tzinfo=TIMEZONE)
+try:
+    config_reader = ConfigReader()
+    TIMEZONE_STR = config_reader.get("JBOT_TIMEZONE") or "US/Pacific"
+    TIMEZONE = ZoneInfo(TIMEZONE_STR)
+    
+    MORNING_TIME_STR = config_reader.get("JBOT_MORNING_TIME")
+    REMINDER_TIME_STR = config_reader.get("JBOT_REMINDER_TIME")
+    EVENING_TIME_STR = config_reader.get("JBOT_EVENING_TIME")
+
+    MORNING_TIME = parse_time(MORNING_TIME_STR, datetime.time(hour=8, minute=0)).replace(tzinfo=TIMEZONE)
+    REMINDER_TIME = parse_time(REMINDER_TIME_STR, datetime.time(hour=19, minute=30)).replace(tzinfo=TIMEZONE)
+    EVENING_TIME = parse_time(EVENING_TIME_STR, datetime.time(hour=20, minute=0)).replace(tzinfo=TIMEZONE)
+
+except Exception as e:
+    print(f"Error reading time configuration, defaulting to hardcoded times. Error: {e}")
+    TIMEZONE = ZoneInfo("US/Pacific")
+    MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
+    REMINDER_TIME = datetime.time(hour=19, minute=30, tzinfo=TIMEZONE)
+    EVENING_TIME = datetime.time(hour=20, minute=0, tzinfo=TIMEZONE)
+
 
 
 class DiscordBot(commands.Bot):
@@ -177,7 +192,7 @@ class DiscordBot(commands.Bot):
         print(f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
             content_getter = lambda: self.game.get_reminder_message_content(
-                self.config.get_bool("TAG_UNANSWERED_PLAYERS")
+                self.config.get_bool("JBOT_TAG_UNANSWERED_PLAYERS")
             )
             await self._send_daily_message_to_all_subscribers(
                 content_getter, "reminder_message"
@@ -291,7 +306,7 @@ async def discord_bot_async(
 ):
     """Main function to initialize and run the bot."""
     logger = Logger(db)
-    question_selector = QuestionSelector(questions, mode=config.get("QUESTION_MODE"))
+    question_selector = QuestionSelector(questions, mode=config.get("JBOT_QUESTION_MODE"))
     game = GameRunner(question_selector, logger)
 
     # Register managers
@@ -300,7 +315,7 @@ async def discord_bot_async(
     game.register_manager("powerup", PowerUpManager)
     game.register_manager("roles", RolesGameMode)
 
-    bot = DiscordBot(config.get("DISCORD_BOT_TOKEN"), game, config)
+    bot = DiscordBot(config.get("JBOT_DISCORD_BOT_TOKEN"), game, config)
     bot.db = db  # Attach the database connection to the bot
     await bot.run()
 

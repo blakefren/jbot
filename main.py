@@ -27,28 +27,28 @@ def read_questions(config: ConfigReader) -> list[Question]:
     """
     Reads questions from the dataset specified in the config.
     """
-    dataset = config.get("QUESTION_DATASET")
+    dataset = config.get("JBOT_QUESTION_DATASET")
     print(f"Reading '{dataset}' questions from file...")
 
     dataset_map = {
         "jeopardy": (
             read_jeopardy_questions,
             [
-                config.get("JEOPARDY_LOCAL_PATH"),
-                config.get("FINAL_JEOPARDY_SCORE_SUB"),
+                config.get("JBOT_JEOPARDY_LOCAL_PATH"),
+                config.get("JBOT_FINAL_JEOPARDY_SCORE_SUB"),
             ],
         ),
         "knowledge_bowl": (
             read_knowledge_bowl_questions,
-            [config.get("KNOWLEDGE_BOWL_LOCAL_PATH")],
+            [config.get("JBOT_KNOWLEDGE_BOWL_LOCAL_PATH")],
         ),
         "riddles_small": (
             read_riddle_questions,
-            [config.get("RIDDLE_SMALL_LOCAL_PATH")],
+            [config.get("JBOT_RIDDLE_SMALL_LOCAL_PATH")],
         ),
         "riddles_with_hints": (
             read_riddle_with_hints_questions,
-            [config.get("RIDDLE_HINTS_LOCAL_PATH")],
+            [config.get("JBOT_RIDDLE_HINTS_LOCAL_PATH")],
         ),
     }
 
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     # Setup
     config = load_configs()
     questions = read_questions(config)
-    db_path = os.path.join(os.path.dirname(__file__), "database", "jbot.db")
+    db_path = config.get("JBOT_DB_PATH", "jbot.db")
     db = Database(db_path)
     logger = Logger(db)
 
@@ -77,7 +77,7 @@ if __name__ == "__main__":
         print()
 
     # Start the game bot based on the messenger type
-    messenger = config.get("MESSENGER")
+    messenger = config.get("JBOT_MESSENGER")
     if messenger == "discord":
         run_discord_bot(config, questions, db)
     else:
