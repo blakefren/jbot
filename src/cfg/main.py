@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Define the paths for the .env files
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
 ENV_PATH = os.path.join(BASE_DIR, ".env")
-ENV_TEMPLATE_PATH = ".env.template"
+ENV_TEMPLATE_PATH = os.path.join('.', ".env.template")
 
 def load_config():
     """
