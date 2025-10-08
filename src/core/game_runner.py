@@ -105,8 +105,16 @@ class GameRunner:
 
         # Resolve with active managers
         for manager in self.managers.values():
-            if manager is not None:
-                manager.on_guess(player_id, player_name, guess, is_correct)
+            if manager is not None and not isinstance(manager, type):
+                try:
+                    manager.on_guess(player_id, player_name, guess, is_correct)
+                except TypeError as e:
+                    print(f"Error calling on_guess for {type(manager).__name__}: {e}")
+                    # Attempt to call with fewer arguments for backward compatibility
+                    try:
+                        manager.on_guess(player_id, is_correct)
+                    except TypeError:
+                        pass  # Or log that this also failed
 
         return is_correct, num_guesses
 

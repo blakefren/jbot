@@ -63,20 +63,24 @@ class Trivia(commands.Cog):
     @commands.hybrid_command(name="answer")
     async def answer(self, ctx: commands.Context, *, guess: str):
         """Submits an answer for the current daily question."""
+        # Defer the response to prevent timeouts, making it ephemeral so only the user sees it.
+        await ctx.interaction.response.defer(ephemeral=True)
+
         if not self.bot.game.daily_q:
-            # For test context, use ctx, not interaction
-            await self.bot.send_message(
-                "There is no active question right now.",
-                interaction=ctx.interaction,
-                ephemeral=True,
-            )
+            await ctx.interaction.followup.send("There is no active question right now.")
             return
 
-        player_id = ctx.author.id
-        player_name = ctx.author.display_name
-        is_correct, num_guesses = self.bot.game.handle_guess(
-            player_id, player_name, guess
-        )
+        try:
+            player_id = ctx.author.id
+            player_name = ctx.author.display_name
+            is_correct, num_guesses = self.bot.game.handle_guess(
+                player_id, player_name, guess
+            )
+        except Exception as e:
+            await ctx.interaction.followup.send(
+                "An error occurred while processing your answer. Please try again later."
+            )
+            return
 
         # Log the guess submission event
         status = "correct_guess" if is_correct else "incorrect_guess"
@@ -90,27 +94,15 @@ class Trivia(commands.Cog):
 
         # Send a confirmation message
         if is_correct:
-            response_content = "That is correct! Nicely done."
-            await self.bot.send_message(
-                response_content,
-                interaction=ctx.interaction,
-                ephemeral=True,
-            )
-            # Announce the correct answer publicly
-            await self.bot.send_message(
-                f"{ctx.author.mention} got the correct answer in {num_guesses} guess(es)!",
-                interaction=ctx.interaction,
-                ephemeral=False,
-                is_followup=True,
+            # Send the private confirmation
+            await ctx.interaction.followup.send("That is correct! Nicely done.")
+            # Announce the correct answer publicly in the channel
+            await ctx.channel.send(
+                f"{ctx.author.mention} got the correct answer in {num_guesses} guess(es)!"
             )
         else:
-            response_content = "Sorry, that is not the correct answer."
-            await self.bot.send_message(
-                response_content,
-                interaction=ctx.interaction,
-                ephemeral=True,
-            )
-
+            # Send the private confirmation for an incorrect answer
+            await ctx.interaction.followup.send("Sorry, that is not the correct answer.")
 
 async def setup(bot):
     await bot.add_cog(Trivia(bot))

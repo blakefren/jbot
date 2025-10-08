@@ -227,7 +227,7 @@ class DiscordBot(commands.Bot):
 
         content = content_getter()
         sent_to_ids = []
-        leaderboard = self.bot.game.get_scores_leaderboard()
+        leaderboard = self.game.get_scores_leaderboard()
 
         for sub in self.game.get_subscribed_users():
             await self.send_message(
