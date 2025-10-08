@@ -16,7 +16,8 @@ class Database:
         """
         # If db_path is not in memory, join with the directory of this file
         if db_path != ":memory:":
-            db_path = os.path.join(os.path.dirname(__file__), db_path)
+            # Go up one level from `core` to `src`, then into `database`
+            db_path = os.path.join(os.path.dirname(__file__), "jbot.db")
 
         self.db_path = db_path
         self.conn = None
