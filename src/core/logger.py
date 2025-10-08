@@ -125,6 +125,13 @@ class Logger:
             f"[Messaging Logged] {direction} message via {method} to/from {recipient_or_sender}"
         )
 
+    def get_player_scores(self) -> list[dict]:
+        """
+        Retrieves player names and scores from the database, ordered by score.
+        """
+        query = "SELECT name, score FROM players WHERE score > 0 ORDER BY score DESC"
+        return self.db.execute_query(query)
+
     def read_guess_history(self, user_id: int = -1) -> list[dict]:
         """
         Reads and parses the guess history from the database.
@@ -195,5 +202,11 @@ if __name__ == "__main__":
     history = logger.read_guess_history()
     for entry in history:
         print(entry)
+
+    # Get player scores
+    print("\n--- Player Scores ---")
+    scores = logger.get_player_scores()
+    for score in scores:
+        print(score)
 
     logger.close()

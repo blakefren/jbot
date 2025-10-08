@@ -104,28 +104,22 @@ class GameRunner:
 
     def get_scores_leaderboard(self) -> str:
         """Computes and formats the leaderboard string."""
-        history = self.logger.read_guess_history()
-        metrics = self.logger.get_guess_metrics(
-            history, self.question_selector.questions
-        )
-        players_data = metrics.get("players", {})
+        player_scores = self.logger.get_player_scores()
 
-        if not players_data:
+        if not player_scores:
             return "No scores available yet."
 
         # Sort players by score
         sorted_players = sorted(
-            players_data.items(), key=lambda item: item[1].get("score", 0), reverse=True
+            player_scores, key=lambda item: item["score"], reverse=True
         )
 
         if not sorted_players:
             return "No scores available yet."
 
         response_content = "-- Player Scores --\n"
-        for i, (user_id, data) in enumerate(sorted_players, 1):
-            player_name = data.get("player_name", user_id)
-            score = data.get("score", 0)
-            response_content += f"{i}. {player_name}: {score}\n"
+        for i, player in enumerate(sorted_players, 1):
+            response_content += f"{i}. {player['name']}: {player['score']}\n"
         return response_content
 
     def get_player_history(self, player_id: int, player_name: str) -> str:
