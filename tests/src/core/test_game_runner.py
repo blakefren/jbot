@@ -182,12 +182,10 @@ class TestGameRunner(unittest.TestCase):
 
     def test_get_scores_leaderboard(self):
         """Test generating the scores leaderboard."""
-        self.mock_logger.get_guess_metrics.return_value = {
-            "players": {
-                "1": {"player_name": "Alice", "score": 10},
-                "2": {"player_name": "Bob", "score": 5},
-            }
-        }
+        self.mock_logger.get_player_scores.return_value = [
+            {"name": "Alice", "score": 10},
+            {"name": "Bob", "score": 5},
+        ]
         leaderboard = self.game_runner.get_scores_leaderboard()
         self.assertIn("1. Alice: 10", leaderboard)
         self.assertIn("2. Bob: 5", leaderboard)
@@ -230,92 +228,6 @@ class TestGameRunner(unittest.TestCase):
         # Disable the manager
         self.game_runner.disable_manager("test_manager")
         self.assertIsNone(self.game_runner.managers["test_manager"])
-
-    def test_get_evening_message_content(self):
-        """Test generating the evening message content."""
-        self.game_runner.daily_q = self.mock_question
-        self.mock_logger.read_guess_history.return_value = [
-            {
-                "QuestionID": 110004699642252617987064134833407364497,
-                "PlayerName": "Player1",
-                "Guess": "A guess",
-            }
-        ]
-
-        content = self.game_runner.get_evening_message_content()
-        self.assertIn(self.mock_question.answer, content)
-        self.assertIn("Player1: A guess", content)
-
-    def test_handle_guess(self):
-        """Test handling a player's guess."""
-        self.game_runner.daily_q = self.mock_question
-        player_id, player_name = 123, "Test Guesser"
-
-        # Correct guess
-        is_correct = self.game_runner.handle_guess(
-            player_id, player_name, "test answer"
-        )
-        self.assertTrue(is_correct)
-        self.mock_logger.log_player_guess.assert_called_with(
-            player_id,
-            player_name,
-            110004699642252617987064134833407364497,
-            "test answer",
-            True,
-        )
-
-        # Incorrect guess
-        is_correct = self.game_runner.handle_guess(
-            player_id, player_name, "wrong answer"
-        )
-        self.assertFalse(is_correct)
-        self.mock_logger.log_player_guess.assert_called_with(
-            player_id,
-            player_name,
-            110004699642252617987064134833407364497,
-            "wrong answer",
-            False,
-        )
-
-        # No daily question
-        self.game_runner.daily_q = None
-        is_correct = self.game_runner.handle_guess(player_id, player_name, "any answer")
-        self.assertFalse(is_correct)
-
-    def test_get_scores_leaderboard(self):
-        """Test generating the scores leaderboard."""
-        self.mock_logger.get_guess_metrics.return_value = {
-            "players": {
-                "1": {"player_name": "Alice", "score": 10},
-                "2": {"player_name": "Bob", "score": 5},
-            }
-        }
-        leaderboard = self.game_runner.get_scores_leaderboard()
-        self.assertIn("1. Alice: 10", leaderboard)
-        self.assertIn("2. Bob: 5", leaderboard)
-        self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Bob"))
-
-    def test_get_player_history(self):
-        """Test generating a player's history."""
-        self.mock_logger.get_guess_metrics.return_value = {
-            "players": {
-                "123": {
-                    "guesses": 5,
-                    "correct_rate": 0.8,
-                    "score": 4,
-                }
-            },
-            "global_correct_rate": 0.75,
-            "total_guesses": 10,
-            "unique_questions": 8,
-            "global_score": 7,
-        }
-        history = self.game_runner.get_player_history(123, "Alice")
-        self.assertIn("--Your stats, Alice--", history)
-        self.assertIn("Total guesses: 5", history)
-        self.assertIn("Correct rate:  0.80", history)
-        self.assertIn("Score:         4", history)
-        self.assertIn("Global score:     7", history)
 
 
 if __name__ == "__main__":

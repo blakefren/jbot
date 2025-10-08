@@ -218,7 +218,7 @@ class DiscordBot(commands.Bot):
             self._log_task_error(e, "evening_message_task")
 
     async def _send_daily_message_to_all_subscribers(
-        self, content_getter, success_status: str
+        self, content_getter, success_status: str, send_leaderboard: bool = True
     ):
         """Helper function to send a daily message to all subscribers."""
         if not self.game.daily_q:
@@ -227,6 +227,7 @@ class DiscordBot(commands.Bot):
 
         content = content_getter()
         sent_to_ids = []
+        leaderboard = self.bot.game.get_scores_leaderboard()
 
         for sub in self.game.get_subscribed_users():
             await self.send_message(
@@ -236,6 +237,13 @@ class DiscordBot(commands.Bot):
                 success_status=success_status,
             )
             sent_to_ids.append(sub.sub_id)
+            if send_leaderboard and leaderboard:
+                await self.send_message(
+                    leaderboard,
+                    is_channel=sub.is_channel,
+                    target_id=sub.sub_id,
+                    success_status=success_status,
+                )
 
         self.logger.log_daily_question(
             question=self.game.daily_q, sent_to_users=sent_to_ids
