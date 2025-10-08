@@ -11,8 +11,6 @@ def load_configs() -> ConfigReader:
     """Reads and returns the main configuration."""
     print("Reading configuration...")
     config = ConfigReader()
-    # Adjust path for the new structure
-    config.data["JBOT_DB_PATH"] = os.path.join(project_root, "database", "jbot.db")
     print("Configuration loaded.")
     return config
 
