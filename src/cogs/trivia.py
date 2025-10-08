@@ -1,5 +1,4 @@
 from discord.ext import commands
-from src.core.subscriber import Subscriber
 
 
 class Trivia(commands.Cog):
@@ -75,7 +74,9 @@ class Trivia(commands.Cog):
 
         player_id = ctx.author.id
         player_name = ctx.author.display_name
-        is_correct = self.bot.game.handle_guess(player_id, player_name, guess)
+        is_correct, num_guesses = self.bot.game.handle_guess(
+            player_id, player_name, guess
+        )
 
         # Log the guess submission event
         status = "correct_guess" if is_correct else "incorrect_guess"
@@ -90,13 +91,25 @@ class Trivia(commands.Cog):
         # Send a confirmation message
         if is_correct:
             response_content = "That is correct! Nicely done."
+            await self.bot.send_message(
+                response_content,
+                interaction=ctx.interaction,
+                ephemeral=True,
+            )
+            # Announce the correct answer publicly
+            await self.bot.send_message(
+                f"{ctx.author.mention} got the correct answer in {num_guesses} guess(es)!",
+                interaction=ctx.interaction,
+                ephemeral=False,
+                is_followup=True,
+            )
         else:
             response_content = "Sorry, that is not the correct answer."
-        await self.bot.send_message(
-            response_content,
-            interaction=ctx.interaction,
-            ephemeral=True,
-        )
+            await self.bot.send_message(
+                response_content,
+                interaction=ctx.interaction,
+                ephemeral=True,
+            )
 
 
 async def setup(bot):

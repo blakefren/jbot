@@ -73,9 +73,9 @@ class GameRunner:
 
 
 
-    def handle_guess(self, player_id: int, player_name: str, guess: str) -> bool:
+    def handle_guess(self, player_id: int, player_name: str, guess: str) -> tuple[bool, int]:
         """
-        Handles the answer submitted by a player, logs it, and returns correctness. In POWERUP mode, also resolves bets and attack effects.
+        Handles the answer submitted by a player, logs it, and returns correctness.
 
         Args:
             player_id (int): The Discord ID of the player.
@@ -83,10 +83,18 @@ class GameRunner:
             guess (str): The player's guess.
 
         Returns:
-            bool: True if the guess was correct, False otherwise.
+            tuple[bool, int]: A tuple containing:
+                - bool: True if the guess was correct, False otherwise.
+                - int: The number of guesses the player has made for this question.
         """
         if not self.daily_q:
-            return False  # No active question
+            return False, 0  # No active question
+
+        # Get the number of guesses for this question
+        player_guesses = self.logger.read_guess_history(user_id=player_id)
+        num_guesses = (
+            sum(1 for g in player_guesses if g.get("QuestionID") == self.daily_q.id) + 1
+        )
 
         g = guess.strip().lower()
         a = self.daily_q.answer.strip().lower()
@@ -100,7 +108,7 @@ class GameRunner:
             if manager is not None:
                 manager.on_guess(player_id, player_name, guess, is_correct)
 
-        return is_correct
+        return is_correct, num_guesses
 
     def get_scores_leaderboard(self) -> str:
         """Computes and formats the leaderboard string."""

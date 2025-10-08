@@ -1,6 +1,7 @@
 import unittest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
+
 
 from src.core.discord import DiscordBot
 from src.cogs.trivia import Trivia
@@ -32,8 +33,10 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx = AsyncMock()
         mock_ctx.author.id = 123
         mock_ctx.author.display_name = "Test User"
+        mock_ctx.author.mention = "<@123>"
 
-        self.mock_game_runner.handle_guess.return_value = True
+        # Mock the return value of handle_guess to be (is_correct, num_guesses)
+        self.mock_game_runner.handle_guess.return_value = (True, 1)
         self.mock_game_runner.daily_q = MagicMock()
 
         await self.trivia_cog.answer.callback(
@@ -43,11 +46,22 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         self.mock_game_runner.handle_guess.assert_called_once_with(
             123, "Test User", "test answer"
         )
-        self.bot.send_message.assert_called_once_with(
-            "That is correct! Nicely done.",
-            interaction=mock_ctx.interaction,
-            ephemeral=True,
-        )
+
+        # Check for the two calls to send_message
+        expected_calls = [
+            call(
+                "That is correct! Nicely done.",
+                interaction=mock_ctx.interaction,
+                ephemeral=True,
+            ),
+            call(
+                f"{mock_ctx.author.mention} got the correct answer in 1 guess(es)!",
+                interaction=mock_ctx.interaction,
+                ephemeral=False,
+                is_followup=True,
+            ),
+        ]
+        self.bot.send_message.assert_has_calls(expected_calls, any_order=False)
 
     async def test_answer_command_incorrect(self):
         """Test the answer command with an incorrect guess."""
@@ -56,7 +70,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx.author.id = 123
         mock_ctx.author.display_name = "Test User"
 
-        self.mock_game_runner.handle_guess.return_value = False
+        self.mock_game_runner.handle_guess.return_value = (False, 2)
         self.mock_game_runner.daily_q = MagicMock()
 
         await self.trivia_cog.answer.callback(

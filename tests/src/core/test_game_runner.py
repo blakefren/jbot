@@ -149,11 +149,15 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.daily_q = self.mock_question
         player_id, player_name = 123, "Test Guesser"
 
+        # Mock the logger's read_guess_history to simulate an empty history initially
+        self.mock_logger.read_guess_history.return_value = []
+
         # Correct guess
-        is_correct = self.game_runner.handle_guess(
+        is_correct, num_guesses = self.game_runner.handle_guess(
             player_id, player_name, "test answer"
         )
         self.assertTrue(is_correct)
+        self.assertEqual(num_guesses, 1)  # One guess made
         self.mock_logger.log_player_guess.assert_called_with(
             player_id,
             player_name,
@@ -162,11 +166,17 @@ class TestGameRunner(unittest.TestCase):
             True,
         )
 
+        # Update the mock to simulate that one guess has been made
+        self.mock_logger.read_guess_history.return_value = [
+            {"QuestionID": self.mock_question.id}
+        ]
+
         # Incorrect guess
-        is_correct = self.game_runner.handle_guess(
+        is_correct, num_guesses = self.game_runner.handle_guess(
             player_id, player_name, "wrong answer"
         )
         self.assertFalse(is_correct)
+        self.assertEqual(num_guesses, 2)  # Two guesses made
         self.mock_logger.log_player_guess.assert_called_with(
             player_id,
             player_name,
@@ -177,8 +187,9 @@ class TestGameRunner(unittest.TestCase):
 
         # No daily question
         self.game_runner.daily_q = None
-        is_correct = self.game_runner.handle_guess(player_id, player_name, "any answer")
+        is_correct, num_guesses = self.game_runner.handle_guess(player_id, player_name, "any answer")
         self.assertFalse(is_correct)
+        self.assertEqual(num_guesses, 0)
 
     def test_get_scores_leaderboard(self):
         """Test generating the scores leaderboard."""
