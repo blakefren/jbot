@@ -12,7 +12,7 @@ import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
-from database.database import Database
+from db.database import Database
 from src.core.logger import Logger
 from src.core.game_runner import GameRunner
 from data.readers.question import Question

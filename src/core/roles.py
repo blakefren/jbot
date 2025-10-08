@@ -5,7 +5,7 @@ import os
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
-from database.database import Database
+from db.database import Database
 from src.core.base_manager import BaseManager
 
 # TODO: use these role names

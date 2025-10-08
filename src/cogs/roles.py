@@ -2,7 +2,7 @@
 import discord
 from discord.ext import commands, tasks
 from core.roles import RolesGameMode
-from database.database import Database
+from db.database import Database
 
 import sys
 import os

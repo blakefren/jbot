@@ -2,7 +2,7 @@
 import unittest
 from unittest.mock import MagicMock
 from src.core.roles import RolesGameMode
-from database.database import Database
+from db.database import Database
 
 
 class TestRolesGameMode(unittest.TestCase):

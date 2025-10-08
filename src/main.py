@@ -1,6 +1,6 @@
 from core.discord import run_discord_bot
 from cfg.main import ConfigReader
-from database.database import Database
+from db.database import Database
 from core.logger import Logger
 from data.readers.question import Question
 from data.readers.tsv import get_random_question

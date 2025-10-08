@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from src.core.logger import Logger
 from data.readers.question import Question
-from database.database import Database
+from db.database import Database
 
 
 class TestLogger(unittest.TestCase):

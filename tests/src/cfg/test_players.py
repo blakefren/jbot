@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
 from src.cfg.players import PlayerManager
-from database.database import Database
+from db.database import Database
 
 
 class TestPlayerManager(unittest.TestCase):
