@@ -71,6 +71,15 @@ class GameRunner:
     def get_subscribed_users(self):
         return self.subscribed_contexts
 
+    def _is_correct_guess(self, guess: str, answer: str) -> bool:
+        """
+        Internal helper method to determine if a guess matches the answer.
+        Currently uses simple substring matching (case insensitive).
+        """
+        # TODO: Improve matching logic (e.g., fuzzy matching, ignore punctuation, etc.)
+        g = guess.strip().lower()
+        a = answer.strip().lower()
+        return re.search(g, a) is not None
 
 
     def handle_guess(self, player_id: int, player_name: str, guess: str) -> tuple[bool, int]:
@@ -98,7 +107,7 @@ class GameRunner:
 
         g = guess.strip().lower()
         a = self.daily_q.answer.strip().lower()
-        is_correct = re.search(g, a) is not None
+        is_correct = self._is_correct_guess(g, a)
         self.logger.log_player_guess(
             player_id, player_name, self.daily_q.id, g, is_correct
         )
