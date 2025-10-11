@@ -77,6 +77,7 @@ class Trivia(commands.Cog):
                 player_id, player_name, guess
             )
         except Exception as e:
+            print(f"Error handling guess: {e}")
             await ctx.interaction.followup.send(
                 "An error occurred while processing your answer. Please try again later."
             )

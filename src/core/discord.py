@@ -158,7 +158,7 @@ class DiscordBot(commands.Bot):
         # Set daily question, if bot started after the morning message but before the evening message.
         now = datetime.datetime.now(TIMEZONE)
         if MORNING_TIME < now.time() < EVENING_TIME and self.game.daily_q is None:
-            print("Bot started after morning message time. Setting daily question.")
+            print(f"Bot started after morning message time. Setting daily question with hash {self.game.daily_q.id}.")
             self.game.set_daily_question()
             if not self.game.daily_q:
                 print("No question found for today.")
