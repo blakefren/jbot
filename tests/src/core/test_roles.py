@@ -81,7 +81,7 @@ class TestRolesGameMode(unittest.TestCase):
                 """
                 SELECT pr.player_id FROM player_roles pr
                 JOIN roles r ON pr.role_id = r.id
-                WHERE r.name = 'Top 10%'
+                WHERE r.name = 'top player'
             """
             )
             top_10_player = cursor.fetchone()

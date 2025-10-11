@@ -32,6 +32,7 @@ class RolesGameMode(BaseManager):
         Calculates the score for each player based on the number of correct guesses.
         """
         scores = {}
+        # TODO: get from players table instead
         query = "SELECT player_id, COUNT(*) FROM guesses WHERE is_correct = 1 GROUP BY player_id"
         with self.db.get_conn() as conn:
             cursor = conn.execute(query)
@@ -68,7 +69,7 @@ class RolesGameMode(BaseManager):
         
         for i in range(top_n_count):
             player_id = sorted_players[i][0]
-            self.assign_role_to_player(player_id, f"Top {top_percentage}%")
+            self.assign_role_to_player(player_id, f"top player")
 
     def assign_role_to_player(self, player_id, role_name):
         """
@@ -84,8 +85,9 @@ class RolesGameMode(BaseManager):
                 # If role doesn't exist, create it
                 cursor = conn.execute("INSERT INTO roles (name, description) VALUES (?, ?)", (role_name, f"Dynamically created role for {role_name}"))
                 role_id = cursor.lastrowid
-
-            conn.execute("INSERT OR IGNORE INTO player_roles (player_id, role_id) VALUES (?, ?)", (player_id, role_id))
+            
+            if role_id:
+                conn.execute("INSERT OR IGNORE INTO player_roles (player_id, role_id) VALUES (?, ?)", (player_id, role_id))
 
     def run(self):
         """
