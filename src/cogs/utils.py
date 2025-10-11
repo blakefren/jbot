@@ -47,15 +47,6 @@ class Utils(commands.Cog):
         await self.bot.close()
         sys.exit(0)
 
-    @shutdown.error
-    async def shutdown_error(self, ctx, error):
-        if isinstance(error, commands.NotOwner):
-            await ctx.send(
-                "You do not have permission to shut down the bot.", ephemeral=True
-            )
-        else:
-            await ctx.send(f"An error occurred: {error}", ephemeral=True)
-
     @commands.hybrid_command(name="restart")
     @commands.is_owner()
     async def restart(self, ctx: commands.Context):
@@ -72,17 +63,6 @@ class Utils(commands.Cog):
 
         await self.bot.close()
         os.execv(sys.executable, ["python"] + sys.argv)
-
-    @restart.error
-    async def restart_error(self, ctx, error):
-        if isinstance(error, commands.NotOwner):
-            await ctx.send(
-                "You do not have permission to restart the bot.", ephemeral=True
-            )
-        else:
-            await ctx.send(f"An error occurred during restart: {error}", ephemeral=True)
-            if os.path.exists("restart.inf"):
-                os.remove("restart.inf")
 
     @commands.hybrid_command(name="ping")
     async def ping(self, ctx: commands.Context):

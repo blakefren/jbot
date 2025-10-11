@@ -163,6 +163,39 @@ class DiscordBot(commands.Bot):
             if not self.game.daily_q:
                 print("No question found for today.")
 
+    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
+        """Global error handler for all commands."""
+        # Check if the error is a CommandInvokeError, and get the original exception
+        if isinstance(error, commands.CommandInvokeError):
+            error = error.original
+
+        if isinstance(error, commands.CommandNotFound):
+            # Silently ignore commands that are not found to avoid spam.
+            return
+        elif isinstance(error, commands.MissingRequiredArgument):
+            message = f"You're missing the `{error.param.name}` argument. Try `!help {ctx.command.name}` for more info."
+        elif isinstance(error, commands.BadArgument):
+            message = f"I couldn't understand one of your arguments. Try `!help {ctx.command.name}` for more info."
+        elif isinstance(error, (commands.NotOwner, commands.MissingPermissions)):
+            message = "You don't have permission to use this command."
+        elif isinstance(error, commands.CheckFailure):
+            # A generic message for other checks that might fail.
+            message = "You don't meet the requirements to run this command."
+        else:
+            # For any other errors, log them and send a generic failure message.
+            print(f"An unexpected error occurred in command '{ctx.command}': {error}")
+            self.logger.log_messaging_event(
+                direction="bot",
+                method="Discord",
+                recipient_or_sender=str(ctx.author.id),
+                content=f"Error in command {ctx.command}: {error}",
+                status="failed",
+            )
+            message = "An unexpected error occurred while running the command."
+
+        # Send the error message. We use send_message to handle both interactions and regular commands.
+        await self.send_message(message, ctx=ctx, interaction=ctx.interaction, ephemeral=True)
+
     async def on_message(self, message):
         """
         Processes incoming messages and dispatches commands.
