@@ -187,7 +187,8 @@ class DiscordBot(commands.Bot):
         try:
             self.game.set_daily_question()
             await self._send_daily_message_to_all_subscribers(
-                self.game.get_morning_message_content, "morning_message", send_leaderboard=True
+                self.game.get_morning_message_content, "morning_message",
+                send_leaderboard=True
             )
             self.logger.log_daily_question(
                 question=self.game.daily_q, sent_to_users=sent_to_ids
@@ -215,7 +216,8 @@ class DiscordBot(commands.Bot):
         print(f"Evening message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
             await self._send_daily_message_to_all_subscribers(
-                self.game.get_evening_message_content, "evening_message", send_leaderboard=True
+                self.game.get_evening_message_content, "evening_message",
+                send_leaderboard=True
             )
         except Exception as e:
             self._log_task_error(e, "evening_message_task")
