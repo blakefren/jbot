@@ -13,6 +13,12 @@ class Admin(commands.Cog):
     @commands.is_owner()
     async def sync(self, ctx: commands.Context):
         """Syncs the command tree."""
+        # TODO: error when running this command:
+        # An unexpected error occurred in command 'sync':
+        # Hybrid command raised an error:
+        # Command 'sync' raised an exception:
+        # NotFound: 404 Not Found (error code: 10062):
+        # Unknown interaction
         await self.bot.tree.sync()
         await ctx.send("Command tree synced.")
 
