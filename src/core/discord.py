@@ -189,6 +189,9 @@ class DiscordBot(commands.Bot):
             await self._send_daily_message_to_all_subscribers(
                 self.game.get_morning_message_content, "morning_message"
             )
+            self.logger.log_daily_question(
+                question=self.game.daily_q, sent_to_users=sent_to_ids
+            )
         except Exception as e:
             self._log_task_error(e, "morning_message_task")
 
@@ -244,10 +247,6 @@ class DiscordBot(commands.Bot):
                     target_id=sub.sub_id,
                     success_status=success_status,
                 )
-
-        self.logger.log_daily_question(
-            question=self.game.daily_q, sent_to_users=sent_to_ids
-        )
 
     def _log_task_error(self, e: Exception, task_name: str):
         """Logs an error for a background task."""

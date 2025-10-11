@@ -39,22 +39,21 @@ class Logger:
         """
         # First, ensure the question exists in the 'questions' table
         question_query = (
-            "SELECT id FROM questions WHERE question_text = ? AND answer_text = ?"
+            "SELECT id FROM questions WHERE question_hash = ?"
         )
         existing_question = self.db.execute_query(
-            question_query, (question.question, question.answer)
+            question_query, (str(question.id),)
         )
 
         if existing_question:
             question_id = existing_question[0]["id"]
         else:
             # Insert the new question and get its ID
-            # TODO: insert hint as well
             insert_query = """
-                INSERT INTO questions (question_text, answer_text, category, value, source)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO questions (question_text, answer_text, category, value, source, hint_text)
+                VALUES (?, ?, ?, ?, ?, ?)
             """
-            self.db.execute_update(
+            _, question_id = self.db.execute_update(
                 insert_query,
                 (
                     question.question,
@@ -62,11 +61,9 @@ class Logger:
                     question.category,
                     question.clue_value,
                     question.data_source,
+                    question.hint,
                 ),
             )
-            question_id = self.db.execute_query("SELECT last_insert_rowid() as id")[0][
-                "id"
-            ]
 
         # Log the daily question event
         daily_question_query = (
@@ -75,12 +72,13 @@ class Logger:
         self.db.execute_update(daily_question_query, (question_id, date.today()))
 
         print(f"[History Logged] Daily Question Sent - ID: {question_id}")
+        return question_id
 
     def log_player_guess(
         self,
         player_id: str,
         player_name: str,
-        question_id: str,  # This should now be the daily_question_id
+        question_id: str,  # This should now be the question table's row ID (daily_question_id)
         guess: str,
         is_correct: bool,
     ):
@@ -157,7 +155,7 @@ class Logger:
 
 # --- Example Usage ---
 if __name__ == "__main__":
-    db_path = os.path.join(os.path.dirname(__file__), "..", "database", "jbot.db")
+    db_path = os.path.join(os.path.dirname(__file__), "..", "..", "db", "jbot.db")
     db = Database(db_path=db_path)
     logger = Logger(db=db)
 
@@ -172,12 +170,7 @@ if __name__ == "__main__":
     )
 
     # Log a daily question
-    logger.log_daily_question(q, ["user1", "user2"])
-
-    # Get the ID of the daily question we just logged
-    daily_question_id = logger.db.execute_query(
-        "SELECT id FROM daily_questions ORDER BY id DESC LIMIT 1"
-    )[0]["id"]
+    daily_question_id = logger.log_daily_question(q, ["user1", "user2"])
 
     # Log a correct guess
     logger.log_player_guess(

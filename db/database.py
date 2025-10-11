@@ -97,15 +97,16 @@ class Database:
 
         Returns:
             int: The number of rows affected.
+            int: The ID of the newly inserted row.
         """
         try:
             with self.conn:
                 cursor = self.conn.cursor()
                 cursor.execute(query, params)
-                return cursor.rowcount
+                return cursor.rowcount, cursor.lastrowid
         except sqlite3.Error as e:
             print(f"Error executing update: {e}")
-            return 0
+            return 0, None
 
 
 if __name__ == "__main__":
