@@ -215,6 +215,8 @@ class DiscordBot(commands.Bot):
         """Sends the evening answer to all subscribers."""
         print(f"Evening message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
+            self.game.player_manager.save_players()
+            print("Player scores saved.")
             await self._send_daily_message_to_all_subscribers(
                 self.game.get_evening_message_content, "evening_message",
                 send_leaderboard=True

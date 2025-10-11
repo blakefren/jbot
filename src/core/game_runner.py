@@ -3,7 +3,7 @@ import os
 import re
 
 from enum import Enum
-from src.cfg.players import read_players_into_dict
+from src.cfg.players import PlayerManager
 from src.core.subscriber import Subscriber
 from src.core.logger import Logger
 from data.readers.question_selector import QuestionSelector
@@ -26,6 +26,7 @@ class GameRunner:
     ):
         self.question_selector = question_selector
         self.logger = logger
+        self.player_manager = PlayerManager(logger.db)
         self.subscribed_contexts = Subscriber.get_all(self.logger.db)
         self.daily_q = None
         self.managers = {}
@@ -111,6 +112,16 @@ class GameRunner:
         self.logger.log_player_guess(
             player_id, player_name, self.daily_q.id, g, is_correct
         )
+
+        if is_correct:
+            player = self.player_manager.get_player(str(player_id))
+            if player:
+                try:
+                    score_value = self.daily_q.clue_value
+                    player["score"] += score_value
+                except (TypeError, AttributeError):
+                    # Fallback to a default score if parsing fails
+                    player["score"] += 100
 
         # Resolve with active managers
         for manager in self.managers.values():
@@ -212,8 +223,8 @@ class GameRunner:
         player_ids_who_guessed = {g.get("PlayerID") for g in daily_guesses}
 
         # Get all players
-        all_players = read_players_into_dict()
-        player_ids_all = set(all_players.keys())
+        all_players = self.player_manager.get_all_players()
+        player_ids_all = set(int(k) for k in all_players.keys())
 
         # Find players who haven't guessed
         player_ids_not_guessed = player_ids_all - player_ids_who_guessed
