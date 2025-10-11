@@ -39,7 +39,7 @@ class TestDatabase(unittest.TestCase):
         """Test inserting data with execute_update."""
         query = "INSERT INTO players (id, name) VALUES (?, ?)"
         params = ("test_player_id", "Test Player")
-        affected_rows = self.db.execute_update(query, params)
+        affected_rows, _ = self.db.execute_update(query, params)
         self.assertEqual(affected_rows, 1)
 
         # Verify the data was inserted
@@ -71,7 +71,7 @@ class TestDatabase(unittest.TestCase):
 
         query = "UPDATE players SET name = ? WHERE id = ?"
         params = ("Updated Name", "update_player")
-        affected_rows = self.db.execute_update(query, params)
+        affected_rows, _ = self.db.execute_update(query, params)
         self.assertEqual(affected_rows, 1)
 
         # Verify the data was updated
@@ -88,7 +88,7 @@ class TestDatabase(unittest.TestCase):
 
         query = "DELETE FROM players WHERE id = ?"
         params = ("delete_player",)
-        affected_rows = self.db.execute_update(query, params)
+        affected_rows, _ = self.db.execute_update(query, params)
         self.assertEqual(affected_rows, 1)
 
         # Verify the data was deleted

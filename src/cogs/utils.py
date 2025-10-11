@@ -3,6 +3,7 @@ import sys
 
 from discord.ext import commands
 
+from src.cfg.players import read_players_into_dict
 from src.core.powerup import PowerUpManager
 
 
@@ -15,9 +16,7 @@ async def get_powerup_manager(bot, interaction):
         )
         return None
 
-    players = bot.game.logger.get_guess_metrics(
-        [], bot.game.question_selector.questions
-    ).get("players", {})
+    players = read_players_into_dict()
     return PowerUpManager(players)
 
 

@@ -3,6 +3,7 @@ from discord.ext import commands
 
 from cfg.players import PlayerManager
 from core.subscriber import Subscriber
+from src.cfg.players import read_players_into_dict
 
 class Admin(commands.Cog):
     def __init__(self, bot):
@@ -111,10 +112,7 @@ class Admin(commands.Cog):
         # You might need to pass arguments to the manager's constructor
         kwargs = {}
         if feature_name == "powerup":
-            players = self.bot.logger.get_guess_metrics(
-                [], self.bot.game.question_selector.questions
-            ).get("players", {})
-            kwargs['players'] = players
+            kwargs['players'] = [k for k in read_players_into_dict().keys()]
         elif feature_name == "roles":
             kwargs['db'] = self.bot.logger.db
             from cfg.main import ConfigReader

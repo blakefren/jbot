@@ -48,20 +48,10 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         )
 
         # Check for the two calls to send_message
-        expected_calls = [
-            call(
-                "That is correct! Nicely done.",
-                interaction=mock_ctx.interaction,
-                ephemeral=True,
-            ),
-            call(
-                f"{mock_ctx.author.mention} got the correct answer in 1 guess(es)!",
-                interaction=mock_ctx.interaction,
-                ephemeral=False,
-                is_followup=True,
-            ),
-        ]
-        self.bot.send_message.assert_has_calls(expected_calls, any_order=False)
+        mock_ctx.interaction.followup.send.assert_called_once_with("That is correct! Nicely done.")
+        mock_ctx.channel.send.assert_called_once_with(
+            f"{mock_ctx.author.mention} got the correct answer in 1 guess(es)!"
+        )
 
     async def test_answer_command_incorrect(self):
         """Test the answer command with an incorrect guess."""
@@ -80,10 +70,8 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         self.mock_game_runner.handle_guess.assert_called_once_with(
             123, "Test User", "wrong answer"
         )
-        self.bot.send_message.assert_called_once_with(
-            "Sorry, that is not the correct answer.",
-            interaction=mock_ctx.interaction,
-            ephemeral=True,
+        mock_ctx.interaction.followup.send.assert_called_once_with(
+            "Sorry, that is not the correct answer."
         )
 
     async def test_answer_command_no_question(self):
@@ -97,10 +85,8 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         )
 
         self.mock_game_runner.handle_guess.assert_not_called()
-        self.bot.send_message.assert_called_once_with(
-            "There is no active question right now.",
-            interaction=mock_ctx.interaction,
-            ephemeral=True,
+        mock_ctx.interaction.followup.send.assert_called_once_with(
+            "There is no active question right now."
         )
 
 
