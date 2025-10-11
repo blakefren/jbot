@@ -29,6 +29,7 @@ class GameRunner:
         self.player_manager = PlayerManager(logger.db)
         self.subscribed_contexts = Subscriber.get_all(self.logger.db)
         self.daily_q = None
+        self.daily_question_id = None
         self.managers = {}
 
     def register_manager(self, name: str, manager_class):
@@ -59,6 +60,8 @@ class GameRunner:
 
     def set_daily_question(self):
         self.daily_q = self.question_selector.get_question_for_today()
+        if self.daily_q:
+            self.daily_question_id = self.logger.log_daily_question(self.daily_q)
 
     def add_subscriber(self, subscriber: Subscriber):
         subscriber.db_conn = self.logger.db
@@ -103,14 +106,19 @@ class GameRunner:
         # Get the number of guesses for this question
         player_guesses = self.logger.read_guess_history(user_id=player_id)
         num_guesses = (
-            sum(1 for g in player_guesses if g.get("QuestionID") == self.daily_q.id) + 1
+            sum(
+                1
+                for g in player_guesses
+                if g.get("daily_question_id") == self.daily_question_id
+            )
+            + 1
         )
 
         g = guess.strip().lower()
         a = self.daily_q.answer.strip().lower()
         is_correct = self._is_correct_guess(g, a)
         self.logger.log_player_guess(
-            player_id, player_name, self.daily_q.id, g, is_correct
+            player_id, player_name, self.daily_question_id, g, is_correct
         )
 
         if is_correct:
@@ -218,9 +226,9 @@ class GameRunner:
         # Get players who have guessed
         all_guesses = self.logger.read_guess_history()
         daily_guesses = [
-            g for g in all_guesses if g.get("QuestionID") == self.daily_q.id
+            g for g in all_guesses if g.get("daily_question_id") == self.daily_question_id
         ]
-        player_ids_who_guessed = {g.get("PlayerID") for g in daily_guesses}
+        player_ids_who_guessed = {g.get("player_id") for g in daily_guesses}
 
         # Get all players
         all_players = self.player_manager.get_all_players()

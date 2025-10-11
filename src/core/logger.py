@@ -49,8 +49,8 @@ class Logger:
         else:
             # Insert the new question and get its ID
             insert_query = """
-                INSERT INTO questions (question_text, answer_text, category, value, source, hint_text)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO questions (question_text, answer_text, category, value, source, hint_text, question_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """
             _, question_id = self.db.execute_update(
                 insert_query,
@@ -61,6 +61,7 @@ class Logger:
                     question.clue_value,
                     question.data_source,
                     question.hint,
+                    str(question.id),  # Hash
                 ),
             )
 
@@ -68,10 +69,12 @@ class Logger:
         daily_question_query = (
             "INSERT INTO daily_questions (question_id, sent_at) VALUES (?, ?)"
         )
-        self.db.execute_update(daily_question_query, (question_id, date.today()))
+        _, daily_question_id = self.db.execute_update(
+            daily_question_query, (question_id, date.today())
+        )
 
-        print(f"[History Logged] Daily Question Sent - ID: {question_id}")
-        return question_id
+        print(f"[History Logged] Daily Question Sent - ID: {daily_question_id}")
+        return daily_question_id
 
     def log_player_guess(
         self,

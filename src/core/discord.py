@@ -190,7 +190,6 @@ class DiscordBot(commands.Bot):
                 self.game.get_morning_message_content, "morning_message",
                 send_leaderboard=True
             )
-            self.logger.log_daily_question(question=self.game.daily_q)
         except Exception as e:
             self._log_task_error(e, "morning_message_task")
 
