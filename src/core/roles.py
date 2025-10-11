@@ -56,10 +56,15 @@ class RolesGameMode(BaseManager):
         with self.db.get_conn() as conn:
             conn.execute("DELETE FROM player_roles")
 
-        # Assign 'First Place' role
+        # Assign 'first place' role to all players tied for first
         if sorted_players:
-            first_place_player_id = sorted_players[0][0]
-            self.assign_role_to_player(first_place_player_id, "First Place")
+            top_score = sorted_players[0][1]
+            for player_id, score in sorted_players:
+                if score == top_score:
+                    self.assign_role_to_player(player_id, ROLE_NAMES["FIRST_PLACE"])
+                else:
+                    # Players are sorted, so we can break early
+                    break
 
         # Assign 'Top X%' role
         top_percentage = self.config.get("JBOT_TOP_PLAYER_PERCENTAGE", 10)
@@ -69,7 +74,7 @@ class RolesGameMode(BaseManager):
         
         for i in range(top_n_count):
             player_id = sorted_players[i][0]
-            self.assign_role_to_player(player_id, f"top player")
+            self.assign_role_to_player(player_id, ROLE_NAMES["TOP_PLAYER"])
 
     def assign_role_to_player(self, player_id, role_name):
         """
