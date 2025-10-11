@@ -95,11 +95,12 @@ class TestGameRunner(unittest.TestCase):
     def test_get_reminder_message_content(self):
         """Test generating the reminder message content."""
         self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 12345  # Mock daily question ID
         self.game_runner.player_manager.get_all_players = MagicMock(
             return_value={"1": "Player1", "2": "Player2"}
         )
         self.mock_logger.read_guess_history.return_value = [
-            {"QuestionID": self.mock_question.id, "PlayerID": 1}
+            {"daily_question_id": 12345, "player_id": 1}
         ]
 
         # With tagging enabled, with hint
@@ -135,7 +136,7 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.daily_q = self.mock_question
         self.mock_logger.read_guess_history.return_value = [
             {
-                "QuestionID": 110004699642252617987064134833407364497,
+                "daily_question_id": self.game_runner.daily_question_id,
                 "PlayerName": "Player1",
                 "Guess": "A guess",
             }
@@ -147,7 +148,7 @@ class TestGameRunner(unittest.TestCase):
 
     def test_handle_guess(self):
         """Test handling a player's guess."""
-        self.game_runner.daily_q = self.mock_question
+        self.game_runner.set_daily_question()
         player_id, player_name = 123, "Test Guesser"
 
         # Mock the logger's read_guess_history to simulate an empty history initially
@@ -162,14 +163,14 @@ class TestGameRunner(unittest.TestCase):
         self.mock_logger.log_player_guess.assert_called_with(
             player_id,
             player_name,
-            110004699642252617987064134833407364497,
+            self.game_runner.daily_question_id,
             "test answer",
             True,
         )
 
         # Update the mock to simulate that one guess has been made
         self.mock_logger.read_guess_history.return_value = [
-            {"QuestionID": self.mock_question.id}
+            {"daily_question_id": self.game_runner.daily_question_id}
         ]
 
         # Incorrect guess
@@ -181,7 +182,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_logger.log_player_guess.assert_called_with(
             player_id,
             player_name,
-            110004699642252617987064134833407364497,
+            self.game_runner.daily_question_id,
             "wrong answer",
             False,
         )

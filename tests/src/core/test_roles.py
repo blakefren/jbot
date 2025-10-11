@@ -69,7 +69,7 @@ class TestRolesGameMode(unittest.TestCase):
                 """
                 SELECT pr.player_id FROM player_roles pr
                 JOIN roles r ON pr.role_id = r.id
-                WHERE r.name = 'First Place'
+                WHERE r.name = 'first place'
             """
             )
             first_place_player = cursor.fetchone()

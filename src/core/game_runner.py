@@ -263,7 +263,7 @@ class GameRunner:
         # Get all guesses for the daily question
         all_guesses = self.logger.read_guess_history()
         daily_guesses = [
-            g for g in all_guesses if g.get("QuestionID") == self.daily_q.id
+            g for g in all_guesses if g.get("daily_question_id") == self.daily_question_id
         ]
 
         player_answers = ""
