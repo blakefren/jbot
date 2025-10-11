@@ -92,13 +92,14 @@ class TestGameRunner(unittest.TestCase):
         content = self.game_runner.get_morning_message_content()
         self.assertIn(self.mock_question.question, content)
 
-    @patch("src.core.game_runner.read_players_into_dict")
-    def test_get_reminder_message_content(self, mock_read_players):
+    def test_get_reminder_message_content(self):
         """Test generating the reminder message content."""
         self.game_runner.daily_q = self.mock_question
-        mock_read_players.return_value = {"1": "Player1", "2": "Player2"}
+        self.game_runner.player_manager.get_all_players = MagicMock(
+            return_value={"1": "Player1", "2": "Player2"}
+        )
         self.mock_logger.read_guess_history.return_value = [
-            {"QuestionID": self.mock_question.id, "PlayerID": "1"}
+            {"QuestionID": self.mock_question.id, "PlayerID": 1}
         ]
 
         # With tagging enabled, with hint

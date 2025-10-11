@@ -33,8 +33,7 @@ class TestLogger(unittest.TestCase):
             data_source="test",
             metadata={},
         )
-        users = ["user1", "user2"]
-        self.logger.log_daily_question(question, users)
+        self.logger.log_daily_question(question)
 
         # Verify question was inserted
         question_from_db = self.db.execute_query(
@@ -50,11 +49,10 @@ class TestLogger(unittest.TestCase):
     def test_log_player_guess(self):
         # First, log a daily question to guess against
         q = Question(question="q1", answer="a1", category="cat", clue_value=100)
-        self.logger.log_daily_question(q, [])
-        daily_q = self.db.execute_query("SELECT id FROM daily_questions LIMIT 1")[0]
+        daily_q_id = self.logger.log_daily_question(q)
 
         self.logger.log_player_guess(
-            "player1", "PlayerOne", daily_q["id"], "My Answer", True
+            "player1", "PlayerOne", daily_q_id, "My Answer", True
         )
 
         guess_from_db = self.db.execute_query(
@@ -78,14 +76,8 @@ class TestLogger(unittest.TestCase):
         # Log questions and guesses
         q1 = Question(question="q1", answer="a1", category="cat", clue_value=100)
         q2 = Question(question="q2", answer="a2", category="cat", clue_value=100)
-        self.logger.log_daily_question(q1, [])
-        daily_q1_id = self.db.execute_query(
-            "SELECT id FROM daily_questions ORDER BY id DESC LIMIT 1"
-        )[0]["id"]
-        self.logger.log_daily_question(q2, [])
-        daily_q2_id = self.db.execute_query(
-            "SELECT id FROM daily_questions ORDER BY id DESC LIMIT 1"
-        )[0]["id"]
+        daily_q1_id = self.logger.log_daily_question(q1)
+        daily_q2_id = self.logger.log_daily_question(q2)
 
         self.logger.log_player_guess("123", "PlayerOne", daily_q1_id, "A1", True)
         self.logger.log_player_guess("456", "PlayerTwo", daily_q1_id, "A2", False)
