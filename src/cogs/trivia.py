@@ -5,9 +5,9 @@ class Trivia(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="question")
+    @commands.hybrid_command()
     async def question(self, ctx: commands.Context):
-        """Get a random question and answer."""
+        """Get a random trivia question."""
         random_q = self.bot.game.question_selector.get_random_question()
         if not random_q:
             await self.bot.send_message(
@@ -22,9 +22,9 @@ class Trivia(commands.Cog):
         full_message = f"{question_part}\n{answer_part}"
         await self.bot.send_message(full_message, interaction=ctx.interaction)
 
-    @commands.hybrid_command(name="when")
+    @commands.hybrid_command()
     async def when(self, ctx: commands.Context):
-        """Get the next event time. Shows the active question, if there is one."""
+        """Next event time & current question."""
         morning_task = self.bot.morning_message_task
         evening_task = self.bot.evening_message_task
 
@@ -60,9 +60,9 @@ class Trivia(commands.Cog):
             response_content, interaction=ctx.interaction, ephemeral=True
         )
 
-    @commands.hybrid_command(name="answer")
+    @commands.hybrid_command()
     async def answer(self, ctx: commands.Context, *, guess: str):
-        """Submits an answer for the current daily question."""
+        """Answer the current daily question."""
         # Defer the response to prevent timeouts, making it ephemeral so only the user sees it.
         await ctx.interaction.response.defer(ephemeral=True)
 

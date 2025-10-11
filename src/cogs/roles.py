@@ -22,11 +22,10 @@ class RolesCog(commands.Cog):
     def cog_unload(self):
         self.update_roles_task.cancel()
 
-    @commands.hybrid_command(
-        name="updateroles", help="Manually update player roles based on scores."
-    )
+    @commands.hybrid_command()
     @commands.has_permissions(administrator=True)
     async def update_roles(self, ctx):
+        """Manually update player roles."""
         await ctx.send("Updating roles...")
         self.roles_game_mode.run()
         await self.apply_discord_roles(ctx.guild)

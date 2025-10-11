@@ -19,7 +19,7 @@ class Admin(commands.Cog):
     @commands.hybrid_command()
     @commands.is_owner()
     async def refund(self, ctx: commands.Context, member: discord.Member, amount: int, *, reason: str):
-        """Refunds a player a certain amount of score."""
+        """Refunds score to a player."""
         player_manager = PlayerManager(self.bot.logger.db)
         player = player_manager.get_player(str(member.id))
 
@@ -54,7 +54,7 @@ class Admin(commands.Cog):
         channel: discord.TextChannel = None,
     ):
         await ctx.defer()
-        """Subscribes or unsubscribes a user or channel from daily questions."""
+        """Sub/unsub a user/channel from daily questions."""
         if not member and not channel:
             await ctx.send("Please provide a member or a channel to subscribe.")
             return
@@ -86,7 +86,7 @@ class Admin(commands.Cog):
     @commands.hybrid_command()
     @commands.is_owner()
     async def resend(self, ctx: commands.Context, message_type: str):
-        """Resends a scheduled message (morning, reminder, or evening)."""
+        """Resend a scheduled message."""
         if message_type.lower() == "morning":
             await self.bot.morning_message_task()
             await ctx.send("Morning message resent.")

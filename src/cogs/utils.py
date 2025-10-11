@@ -24,7 +24,7 @@ class Utils(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command(name="shutdown")
+    @commands.hybrid_command()
     @commands.is_owner()
     async def shutdown(self, ctx: commands.Context):
         """Shuts down the bot."""
@@ -47,7 +47,7 @@ class Utils(commands.Cog):
         await self.bot.close()
         sys.exit(0)
 
-    @commands.hybrid_command(name="restart")
+    @commands.hybrid_command()
     @commands.is_owner()
     async def restart(self, ctx: commands.Context):
         """Restarts the bot."""
@@ -64,9 +64,9 @@ class Utils(commands.Cog):
         await self.bot.close()
         os.execv(sys.executable, ["python"] + sys.argv)
 
-    @commands.hybrid_command(name="ping")
+    @commands.hybrid_command()
     async def ping(self, ctx: commands.Context):
-        """Responds with 'Pong!' to test bot latency."""
+        """Check the bot's response time."""
         response_content = "Pong!"
         await self.bot.send_message(response_content, interaction=ctx.interaction)
 
