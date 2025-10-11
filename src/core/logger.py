@@ -29,13 +29,12 @@ class Logger:
         self.db.close()
         print("Logger database connection closed.")
 
-    def log_daily_question(self, question: Question, sent_to_users):
+    def log_daily_question(self, question: Question):
         """
         Logs details about a daily question that was sent out.
 
         Args:
             question (Question): The question object.
-            sent_to_users (list): A list of user identifiers.
         """
         # First, ensure the question exists in the 'questions' table
         question_query = (
