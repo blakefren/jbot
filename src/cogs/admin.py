@@ -91,6 +91,13 @@ class Admin(commands.Cog):
 
     @commands.hybrid_command()
     @commands.is_owner()
+    @discord.app_commands.choices(
+        message_type=[
+            discord.app_commands.Choice(name="morning", value="morning"),
+            discord.app_commands.Choice(name="reminder", value="reminder"),
+            discord.app_commands.Choice(name="evening", value="evening"),
+        ]
+    )
     async def resend(self, ctx: commands.Context, message_type: str):
         """Resend a scheduled message."""
         if message_type.lower() == "morning":
@@ -113,6 +120,14 @@ class Admin(commands.Cog):
             await ctx.send("Invalid feature command. Use `enable` or `disable`.")
 
     @feature.command(name="enable", description="Enable a game feature.")
+    @discord.app_commands.choices(
+        feature_name=[
+            discord.app_commands.Choice(name="fight", value="fight"),
+            discord.app_commands.Choice(name="powerup", value="powerup"),
+            discord.app_commands.Choice(name="coop", value="coop"),
+            discord.app_commands.Choice(name="roles", value="roles"),
+        ]
+    )
     async def enable_feature(self, ctx: commands.Context, feature_name: str):
         """Enables a game feature by name."""
         # You might need to pass arguments to the manager's constructor
@@ -128,6 +143,14 @@ class Admin(commands.Cog):
         await ctx.send(f"Feature '{feature_name}' enabled.")
 
     @feature.command(name="disable", description="Disable a game feature.")
+    @discord.app_commands.choices(
+        feature_name=[
+            discord.app_commands.Choice(name="fight", value="fight"),
+            discord.app_commands.Choice(name="powerup", value="powerup"),
+            discord.app_commands.Choice(name="coop", value="coop"),
+            discord.app_commands.Choice(name="roles", value="roles"),
+        ]
+    )
     async def disable_feature(self, ctx: commands.Context, feature_name: str):
         """Disables a game feature by name."""
         self.bot.game.disable_manager(feature_name)
