@@ -18,7 +18,10 @@ def setup_logging():
     file_handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=1024*1024*5, backupCount=2)
     file_handler.setFormatter(log_formatter)
     
+    # TODO: replace the root logger with module-specific loggers
+    #       This will prevent extra log messages from other libraries
+    # TODO: make configurable by admin cmd
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)  # TODO: make configurable by admin cmd
+    root_logger.setLevel(logging.INFO)
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
