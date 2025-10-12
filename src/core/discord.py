@@ -159,10 +159,12 @@ class DiscordBot(commands.Bot):
         # TODO: keep daily question persistent across restarts (remove evening time check)
         now = datetime.datetime.now(TIMEZONE)
         if MORNING_TIME < now.time() < EVENING_TIME and self.game.daily_q is None:
-            logging.info(f"Bot started after morning message time. Setting daily question with hash {self.game.daily_q.id}.")
+            logging.info(f"Bot started after morning message time.")
             self.game.set_daily_question()
             if not self.game.daily_q:
                 logging.warning("No question found for today.")
+            else:
+                logging.info(f"Set daily question with hash {self.game.daily_q.id} on startup.")
 
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
         """Global error handler for all commands."""
@@ -260,6 +262,7 @@ class DiscordBot(commands.Bot):
         self, content_getter, success_status: str, send_leaderboard: bool = False
     ):
         """Helper function to send a daily message to all subscribers."""
+        logging.debug(f"DiscordBot._send_daily_message_to_all_subscribers")
         if not self.game.daily_q:
             logging.warning("No question available for today.")
             return

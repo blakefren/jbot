@@ -60,6 +60,7 @@ class GameRunner:
             logging.warning(f"Manager '{name}' is not enabled or not found.")
 
     def set_daily_question(self):
+        logging.debug(f"GameRunner.set_daily_question.")
         self.daily_q = self.question_selector.get_question_for_today()
         if self.daily_q:
             self.daily_question_id = self.data_manager.log_daily_question(self.daily_q)

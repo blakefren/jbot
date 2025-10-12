@@ -24,6 +24,7 @@ class QuestionSelector:
         """
         Selects a question based on the current mode and date.
         """
+        logging.debug(f"QuestionSelector.get_question_for_today")
         if not self.questions:
             raise ValueError("No questions available to select from.")
 

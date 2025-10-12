@@ -19,6 +19,6 @@ def setup_logging():
     file_handler.setFormatter(log_formatter)
     
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.INFO)  # TODO: make configurable by admin cmd
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
