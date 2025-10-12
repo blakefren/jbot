@@ -5,7 +5,7 @@ from src.cogs.fight import Fight
 from src.cogs.powerup import Powerup
 from src.cogs.coop import Coop
 from src.core.game_runner import GameRunner
-from src.core.logger import Logger
+from src.core.data_manager import DataManager
 from data.readers.question_selector import QuestionSelector
 from data.readers.question import Question
 
@@ -27,9 +27,9 @@ class DummyCtx:
 class DummyGame(GameRunner):
     def __init__(self):
         selector = MagicMock(spec=QuestionSelector)
-        logger = MagicMock(spec=Logger)
-        super().__init__(selector, logger)
-        self.logger.get_guess_metrics.return_value = {
+        data_manager = MagicMock(spec=DataManager)
+        super().__init__(selector, data_manager)
+        self.data_manager.get_guess_metrics.return_value = {
             "players": {
                 "1": {
                     "score": 100,

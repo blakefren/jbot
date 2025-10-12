@@ -7,21 +7,21 @@ from src.core.discord import DiscordBot
 from src.cogs.trivia import Trivia
 from src.cfg.main import ConfigReader
 from src.core.game_runner import GameRunner
-from src.core.logger import Logger
+from src.core.data_manager import DataManager
 
 
 class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.mock_game_runner = MagicMock(spec=GameRunner)
         self.mock_config_reader = MagicMock(spec=ConfigReader)
-        self.mock_logger = MagicMock(spec=Logger)
-        self.mock_game_runner.logger = self.mock_logger
+        self.mock_data_manager = MagicMock(spec=DataManager)
+        self.mock_game_runner.data_manager = self.mock_data_manager
         self.mock_game_runner.handle_guess = MagicMock()
 
         self.bot = MagicMock(spec=DiscordBot)
         self.bot.game = self.mock_game_runner
         self.bot.config = self.mock_config_reader
-        self.bot.logger = self.mock_logger
+        self.bot.data_manager = self.mock_data_manager
         self.bot.send_message = AsyncMock()
         self.bot.is_owner = AsyncMock(return_value=True)
 

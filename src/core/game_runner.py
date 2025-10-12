@@ -5,7 +5,8 @@ import re
 from enum import Enum
 from src.cfg.players import PlayerManager
 from src.core.subscriber import Subscriber
-from src.core.logger import Logger
+import logging
+from src.core.data_manager import DataManager
 from data.readers.question_selector import QuestionSelector
 from data.readers.question import Question
 
@@ -22,12 +23,12 @@ class GameRunner:
     def __init__(
         self,
         question_selector: QuestionSelector,
-        logger: Logger,
+        data_manager: DataManager,
     ):
         self.question_selector = question_selector
-        self.logger = logger
-        self.player_manager = PlayerManager(logger.db)
-        self.subscribed_contexts = Subscriber.get_all(self.logger.db)
+        self.data_manager = data_manager
+        self.player_manager = PlayerManager(self.data_manager.db)
+        self.subscribed_contexts = Subscriber.get_all(self.data_manager.db)
         self.daily_q = None
         self.daily_question_id = None
         self.managers = {}
@@ -44,9 +45,9 @@ class GameRunner:
         """
         if name in self.managers:
             self.managers[name] = self.managers[name](**kwargs)
-            print(f"Manager '{name}' enabled.")
+            logging.info(f"Manager '{name}' enabled.")
         else:
-            print(f"Manager '{name}' not found.")
+            logging.warning(f"Manager '{name}' not found.")
 
     def disable_manager(self, name: str):
         """
@@ -54,17 +55,18 @@ class GameRunner:
         """
         if name in self.managers and self.managers[name] is not None:
             self.managers[name] = None
-            print(f"Manager '{name}' disabled.")
+            logging.info(f"Manager '{name}' disabled.")
         else:
-            print(f"Manager '{name}' is not enabled or not found.")
+            logging.warning(f"Manager '{name}' is not enabled or not found.")
 
     def set_daily_question(self):
         self.daily_q = self.question_selector.get_question_for_today()
         if self.daily_q:
-            self.daily_question_id = self.logger.log_daily_question(self.daily_q)
+            self.daily_question_id = self.data_manager.log_daily_question(self.daily_q)
+            logging.info(f"Daily question set with ID: {self.daily_question_id}")
 
     def add_subscriber(self, subscriber: Subscriber):
-        subscriber.db_conn = self.logger.db
+        subscriber.db_conn = self.data_manager.db
         subscriber.save()
         self.subscribed_contexts.add(subscriber)
 
@@ -104,7 +106,7 @@ class GameRunner:
             return False, 0  # No active question
 
         # Get the number of guesses for this question
-        player_guesses = self.logger.read_guess_history(user_id=player_id)
+        player_guesses = self.data_manager.read_guess_history(user_id=player_id)
         num_guesses = (
             sum(
                 1
@@ -117,9 +119,10 @@ class GameRunner:
         g = guess.strip().lower()
         a = self.daily_q.answer.strip().lower()
         is_correct = self._is_correct_guess(g, a)
-        self.logger.log_player_guess(
+        self.data_manager.log_player_guess(
             player_id, player_name, self.daily_question_id, g, is_correct
         )
+        logging.info(f"Player {player_name} guessed '{g}'. Correct: {is_correct}")
 
         if is_correct:
             player = self.player_manager.get_player(str(player_id))
@@ -137,7 +140,7 @@ class GameRunner:
                 try:
                     manager.on_guess(player_id, player_name, guess, is_correct)
                 except TypeError as e:
-                    print(f"Error calling on_guess for {type(manager).__name__}: {e}")
+                    logging.error(f"Error calling on_guess for {type(manager).__name__}: {e}")
                     # Attempt to call with fewer arguments for backward compatibility
                     try:
                         manager.on_guess(player_id, is_correct)
@@ -148,7 +151,7 @@ class GameRunner:
 
     def get_scores_leaderboard(self) -> str:
         """Computes and formats the leaderboard string."""
-        player_scores = self.logger.get_player_scores()
+        player_scores = self.data_manager.get_player_scores()
 
         if not player_scores:
             return "No scores available yet."
@@ -168,33 +171,24 @@ class GameRunner:
 
     def get_player_history(self, player_id: int, player_name: str) -> str:
         """Computes and formats the history/metrics string for a given player."""
-        history = self.logger.read_guess_history(user_id=player_id)
-        metrics = self.logger.get_guess_metrics(
-            history, self.question_selector.questions
-        )
+        history = self.data_manager.read_guess_history(user_id=player_id)
+        
+        if not history:
+            return f"No history found for {player_name}."
 
-        full_message = ""
-        player_metrics = metrics["players"].get(str(player_id), None)
-        if player_metrics:
-            correct_rate = player_metrics.get("correct_rate", 0)
-            player_part = (
-                f"--Your stats, {player_name}-- \n"
-                f"Total guesses: {player_metrics.get('guesses')}\n"
-                f"Correct rate:  {correct_rate:.2f}\n"
-                f"Score:         {player_metrics.get('score')}"
-            )
-            full_message += player_part
+        total_guesses = len(history)
+        correct_guesses = sum(1 for g in history if g['is_correct'])
+        correct_rate = (correct_guesses / total_guesses) * 100 if total_guesses > 0 else 0
 
-        global_correct_rate = metrics.get("global_correct_rate", 0)
-        global_part = (
-            f"\n\n--Global data--\n"
-            f"Global guesses:   {metrics.get('total_guesses')}\n"
-            f"Unique questions: {metrics.get('unique_questions')}\n"
-            f"Correct rate:     {global_correct_rate:.2f}\n"
-            f"Global score:     {metrics.get('global_score')}"
+        player = self.player_manager.get_player(str(player_id))
+        score = player.get('score', 0) if player else 0
+
+        return (
+            f"-- Your stats, {player_name} --\n"
+            f"Total guesses: {total_guesses}\n"
+            f"Correct rate:  {correct_rate:.2f}%\n"
+            f"Score:         {score}"
         )
-        full_message += global_part
-        return full_message
 
     def format_question(self, question: Question) -> str:
         """Internal helper method to format a trivia question."""
@@ -224,7 +218,7 @@ class GameRunner:
             return "No question to remind about."
 
         # Get players who have guessed
-        all_guesses = self.logger.read_guess_history()
+        all_guesses = self.data_manager.read_guess_history()
         daily_guesses = [
             g for g in all_guesses if g.get("daily_question_id") == self.daily_question_id
         ]
@@ -261,7 +255,7 @@ class GameRunner:
             return "No question to answer for today."
 
         # Get all guesses for the daily question
-        all_guesses = self.logger.read_guess_history()
+        all_guesses = self.data_manager.read_guess_history()
         daily_guesses = [
             g for g in all_guesses if g.get("daily_question_id") == self.daily_question_id
         ]
@@ -270,7 +264,7 @@ class GameRunner:
         if daily_guesses:
             player_answers += "--Player answers--\n"
             for guess in daily_guesses:
-                player_answers += f"{guess['PlayerName']}: {guess['Guess']}\n"
+                player_answers += f"{guess.get('player_name', 'Unknown')}: {guess.get('guess_text', '')}\n"
 
         flavor_message = (
             "Good evening players!\n" f"Here is the answer to today's trivia question:"

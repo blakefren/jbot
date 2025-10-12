@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock, call
 
 from data.readers.question import Question
 from src.core.game_runner import GameRunner
-from src.core.logger import Logger
+from src.core.data_manager import DataManager
 from src.core.subscriber import Subscriber
 
 
@@ -11,8 +11,8 @@ class TestGameRunner(unittest.TestCase):
     def setUp(self):
         """Set up for the tests."""
         self.mock_question_selector = MagicMock()
-        self.mock_logger = MagicMock(spec=Logger)
-        self.mock_logger.db = MagicMock()
+        self.mock_data_manager = MagicMock(spec=DataManager)
+        self.mock_data_manager.db = MagicMock()
         self.mock_question = Question(
             question="Test Question",
             answer="Test Answer",
@@ -28,7 +28,7 @@ class TestGameRunner(unittest.TestCase):
         self.subscriber_patcher = patch("src.core.game_runner.Subscriber")
         self.MockSubscriber = self.subscriber_patcher.start()
 
-        self.game_runner = GameRunner(self.mock_question_selector, self.mock_logger)
+        self.game_runner = GameRunner(self.mock_question_selector, self.mock_data_manager)
 
     def tearDown(self):
         """Tear down after tests."""
@@ -40,7 +40,7 @@ class TestGameRunner(unittest.TestCase):
         self.assertEqual(
             self.game_runner.question_selector, self.mock_question_selector
         )
-        self.MockSubscriber.get_all.assert_called_once_with(self.mock_logger.db)
+        self.MockSubscriber.get_all.assert_called_once_with(self.mock_data_manager.db)
         self.assertEqual(
             self.game_runner.subscribed_contexts,
             self.MockSubscriber.get_all.return_value,
@@ -99,7 +99,7 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.player_manager.get_all_players = MagicMock(
             return_value={"1": "Player1", "2": "Player2"}
         )
-        self.mock_logger.read_guess_history.return_value = [
+        self.mock_data_manager.read_guess_history.return_value = [
             {"daily_question_id": 12345, "player_id": 1}
         ]
 
@@ -134,11 +134,11 @@ class TestGameRunner(unittest.TestCase):
     def test_get_evening_message_content(self):
         """Test generating the evening message content."""
         self.game_runner.daily_q = self.mock_question
-        self.mock_logger.read_guess_history.return_value = [
+        self.mock_data_manager.read_guess_history.return_value = [
             {
                 "daily_question_id": self.game_runner.daily_question_id,
-                "PlayerName": "Player1",
-                "Guess": "A guess",
+                "player_name": "Player1",
+                "guess_text": "A guess",
             }
         ]
 
@@ -151,8 +151,8 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.set_daily_question()
         player_id, player_name = 123, "Test Guesser"
 
-        # Mock the logger's read_guess_history to simulate an empty history initially
-        self.mock_logger.read_guess_history.return_value = []
+        # Mock the data_manager's read_guess_history to simulate an empty history initially
+        self.mock_data_manager.read_guess_history.return_value = []
 
         # Correct guess
         is_correct, num_guesses = self.game_runner.handle_guess(
@@ -160,7 +160,7 @@ class TestGameRunner(unittest.TestCase):
         )
         self.assertTrue(is_correct)
         self.assertEqual(num_guesses, 1)  # One guess made
-        self.mock_logger.log_player_guess.assert_called_with(
+        self.mock_data_manager.log_player_guess.assert_called_with(
             player_id,
             player_name,
             self.game_runner.daily_question_id,
@@ -169,7 +169,7 @@ class TestGameRunner(unittest.TestCase):
         )
 
         # Update the mock to simulate that one guess has been made
-        self.mock_logger.read_guess_history.return_value = [
+        self.mock_data_manager.read_guess_history.return_value = [
             {"daily_question_id": self.game_runner.daily_question_id}
         ]
 
@@ -179,7 +179,7 @@ class TestGameRunner(unittest.TestCase):
         )
         self.assertFalse(is_correct)
         self.assertEqual(num_guesses, 2)  # Two guesses made
-        self.mock_logger.log_player_guess.assert_called_with(
+        self.mock_data_manager.log_player_guess.assert_called_with(
             player_id,
             player_name,
             self.game_runner.daily_question_id,
@@ -195,7 +195,7 @@ class TestGameRunner(unittest.TestCase):
 
     def test_get_scores_leaderboard(self):
         """Test generating the scores leaderboard."""
-        self.mock_logger.get_player_scores.return_value = [
+        self.mock_data_manager.get_player_scores.return_value = [
             {"name": "Alice", "score": 10},
             {"name": "Bob", "score": 5},
         ]
@@ -206,25 +206,19 @@ class TestGameRunner(unittest.TestCase):
 
     def test_get_player_history(self):
         """Test generating a player's history."""
-        self.mock_logger.get_guess_metrics.return_value = {
-            "players": {
-                "123": {
-                    "guesses": 5,
-                    "correct_rate": 0.8,
-                    "score": 4,
-                }
-            },
-            "global_correct_rate": 0.75,
-            "total_guesses": 10,
-            "unique_questions": 8,
-            "global_score": 7,
-        }
+        self.mock_data_manager.read_guess_history.return_value = [
+            {'is_correct': True},
+            {'is_correct': False},
+            {'is_correct': True},
+            {'is_correct': True},
+        ]
+        self.game_runner.player_manager.get_player = MagicMock(return_value={'score': 300})
+
         history = self.game_runner.get_player_history(123, "Alice")
-        self.assertIn("--Your stats, Alice--", history)
-        self.assertIn("Total guesses: 5", history)
-        self.assertIn("Correct rate:  0.80", history)
-        self.assertIn("Score:         4", history)
-        self.assertIn("Global score:     7", history)
+        self.assertIn("-- Your stats, Alice --", history)
+        self.assertIn("Total guesses: 4", history)
+        self.assertIn("Correct rate:  75.00%", history)
+        self.assertIn("Score:         300", history)
 
     def test_manager_registration_and_enabling(self):
         """Test registering, enabling, and disabling a manager."""
@@ -252,7 +246,7 @@ from unittest.mock import MagicMock
 from src.core.game_runner import GameRunner
 
 
-class DummyLoggerPowerup:
+class DummyDataManagerPowerup:
     def log_player_guess(self, *a, **kw):
         pass
 
@@ -275,9 +269,9 @@ class DummyQuestionSelectorPowerup:
 
 
 def test_handle_guess_powerup_correct():
-    logger = DummyLoggerPowerup()
+    data_manager = DummyDataManagerPowerup()
     selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, logger)
+    game = GameRunner(selector, data_manager)
     game.daily_q = selector.get_question_for_today()
     called = {}
 
@@ -298,9 +292,9 @@ def test_handle_guess_powerup_correct():
 
 
 def test_handle_guess_powerup_incorrect():
-    logger = DummyLoggerPowerup()
+    data_manager = DummyDataManagerPowerup()
     selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, logger)
+    game = GameRunner(selector, data_manager)
     game.daily_q = selector.get_question_for_today()
     called = {}
 
@@ -321,18 +315,18 @@ def test_handle_guess_powerup_incorrect():
 
 
 def test_handle_guess_non_powerup():
-    logger = DummyLoggerPowerup()
+    data_manager = DummyDataManagerPowerup()
     selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, logger)
+    game = GameRunner(selector, data_manager)
     game.daily_q = selector.get_question_for_today()
     result = game.handle_guess(1, "Player1", "test")
     assert result is True
 
 
 def test_handle_guess_no_question():
-    logger = DummyLoggerPowerup()
+    data_manager = DummyDataManagerPowerup()
     selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, logger)
+    game = GameRunner(selector, data_manager)
     game.daily_q = None
     result = game.handle_guess(1, "Player1", "test")
     assert result is False

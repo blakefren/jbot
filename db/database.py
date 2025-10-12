@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import logging
 
 
 class Database:
@@ -31,9 +32,9 @@ class Database:
         try:
             self.conn = sqlite3.connect(self.db_path)
             self.conn.row_factory = sqlite3.Row  # Access columns by name
-            print(f"Successfully connected to the database at '{self.db_path}'.")
+            logging.info(f"Successfully connected to the database at '{self.db_path}'.")
         except sqlite3.Error as e:
-            print(f"Error connecting to the database: {e}")
+            logging.error(f"Error connecting to the database: {e}")
             raise
 
     def _create_tables(self):
@@ -46,11 +47,11 @@ class Database:
                 schema = f.read()
             self.conn.executescript(schema)
             self.conn.commit()
-            print("Database tables created or verified successfully.")
+            logging.info("Database tables created or verified successfully.")
         except sqlite3.Error as e:
-            print(f"Error creating tables: {e}")
+            logging.error(f"Error creating tables: {e}")
         except FileNotFoundError:
-            print(f"Error: 'schema.sql' not found in '{os.path.dirname(__file__)}'.")
+            logging.error(f"Error: 'schema.sql' not found in '{os.path.dirname(__file__)}'.")
 
     def close(self):
         """
@@ -59,7 +60,7 @@ class Database:
         if self.conn:
             self.conn.close()
             self.conn = None
-            print("Database connection closed.")
+            logging.info("Database connection closed.")
 
     def execute_query(self, query, params=()):
         """
@@ -78,7 +79,7 @@ class Database:
                 cursor.execute(query, params)
                 return [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as e:
-            print(f"Error executing query: {e}")
+            logging.error(f"Error executing query: {e}")
             return []
 
     def get_conn(self):
@@ -105,7 +106,7 @@ class Database:
                 cursor.execute(query, params)
                 return cursor.rowcount, cursor.lastrowid
         except sqlite3.Error as e:
-            print(f"Error executing update: {e}")
+            logging.error(f"Error executing update: {e}")
             return 0, None
 
 
@@ -113,5 +114,5 @@ if __name__ == "__main__":
     # When run as a script, this will initialize the database.
     db_file = os.path.join(os.path.dirname(__file__), "jbot.db")
     db = Database(db_path=db_file)
-    print("Database initialized.")
+    logging.info("Database initialized.")
     db.close()

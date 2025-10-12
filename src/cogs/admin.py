@@ -26,7 +26,7 @@ class Admin(commands.Cog):
     @commands.is_owner()
     async def refund(self, ctx: commands.Context, member: discord.Member, amount: int, *, reason: str):
         """Refunds score to a player."""
-        player_manager = PlayerManager(self.bot.logger.db)
+        player_manager = PlayerManager(self.bot.data_manager.db)
         player = player_manager.get_player(str(member.id))
 
         if not player:
@@ -43,7 +43,7 @@ class Admin(commands.Cog):
         player_manager.save_players()
 
         # Log the adjustment
-        self.bot.logger.db.execute_update(
+        self.bot.data_manager.db.execute_update(
             "INSERT INTO score_adjustments (player_id, admin_id, amount, reason) VALUES (?, ?, ?, ?)",
             (str(member.id), str(ctx.author.id), amount, reason),
         )
@@ -71,12 +71,12 @@ class Admin(commands.Cog):
 
         if member:
             subscriber = Subscriber(
-                member.id, member.display_name, is_channel=False, db_conn=self.bot.logger.db
+                member.id, member.display_name, is_channel=False, db_conn=self.bot.data_manager.db
             )
             target_name = member.display_name
         else:  # channel
             subscriber = Subscriber(
-                channel.id, channel.name, is_channel=True, db_conn=self.bot.logger.db
+                channel.id, channel.name, is_channel=True, db_conn=self.bot.data_manager.db
             )
             target_name = channel.name
 
@@ -120,7 +120,7 @@ class Admin(commands.Cog):
         if feature_name == "powerup":
             kwargs['players'] = [k for k in read_players_into_dict().keys()]
         elif feature_name == "roles":
-            kwargs['db'] = self.bot.logger.db
+            kwargs['db'] = self.bot.data_manager.db
             from cfg.main import ConfigReader
             kwargs['config'] = ConfigReader()
 

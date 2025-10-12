@@ -106,16 +106,17 @@ class TestLoadQuestions(unittest.TestCase):
         expected_path = os.path.join(self.project_root, "dummy_riddles_hints.csv")
         mock_read_riddles_hints.assert_called_once_with(expected_path)
 
-    @patch('builtins.print')
-    def test_load_questions_unknown_dataset(self, mock_print):
+    @patch('logging.info')
+    @patch('logging.error')
+    def test_load_questions_unknown_dataset(self, mock_log_error, mock_log_info):
         """Test loading questions with an unknown dataset."""
         self.mock_config.get.side_effect = lambda key: {"JBOT_QUESTION_DATASET": "unknown_dataset"}.get(key)
 
         questions = load_questions(self.mock_config)
 
         self.assertEqual(len(questions), 0)
-        mock_print.assert_any_call("Reading 'unknown_dataset' questions from file...")
-        mock_print.assert_any_call("Unknown dataset: unknown_dataset")
+        mock_log_info.assert_any_call("Reading 'unknown_dataset' questions from file...")
+        mock_log_error.assert_any_call("Unknown dataset: unknown_dataset")
 
 if __name__ == '__main__':
     unittest.main()

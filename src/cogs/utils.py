@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 
@@ -28,7 +29,7 @@ class Utils(commands.Cog):
     @commands.is_owner()
     async def shutdown(self, ctx: commands.Context):
         """Shuts down the bot."""
-        print("Shutting down...")
+        logging.info("Shutting down...")
         await self.bot.send_message("Shutting down...", interaction=ctx.interaction)
 
         # Stop background tasks
@@ -51,7 +52,7 @@ class Utils(commands.Cog):
     @commands.is_owner()
     async def restart(self, ctx: commands.Context):
         """Restarts the bot."""
-        print("Restarting bot...")
+        logging.info("Restarting bot...")
         # Create restart info file to be read on next startup
         with open("restart.inf", "w") as f:
             f.write(f"{ctx.channel.id},{ctx.author.id}")

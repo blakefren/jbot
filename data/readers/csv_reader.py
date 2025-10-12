@@ -1,4 +1,5 @@
 import csv
+import logging
 from data.readers.question import Question
 
 
@@ -27,9 +28,9 @@ def read_riddle_questions(file_path: str) -> list[Question]:
                     )
                 )
     except FileNotFoundError:
-        print(f"Error: The file at {file_path} was not found.")
+        logging.error(f"The file at {file_path} was not found.")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.error(f"An error occurred: {e}")
     return questions
 
 
@@ -59,7 +60,7 @@ def read_riddle_with_hints_questions(file_path: str) -> list[Question]:
                     )
                 )
     except FileNotFoundError:
-        print(f"Error: The file at {file_path} was not found.")
+        logging.error(f"The file at {file_path} was not found.")
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.error(f"An error occurred: {e}")
     return questions

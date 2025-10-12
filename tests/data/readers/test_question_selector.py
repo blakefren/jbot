@@ -58,10 +58,10 @@ class TestQuestionSelector(unittest.TestCase):
             selector.get_question_for_today()
 
     def test_init_no_questions_warning(self):
-        with patch("builtins.print") as mock_print:
+        with patch("logging.warning") as mock_logging:
             QuestionSelector([])
-            mock_print.assert_called_with(
-                "Warning: QuestionSelector initialized with no questions."
+            mock_logging.assert_called_with(
+                "QuestionSelector initialized with no questions."
             )
 
 

@@ -2,6 +2,7 @@ import datetime
 from random import randint
 from data.readers.question import Question
 from zoneinfo import ZoneInfo
+import logging
 
 # TODO: This should be handled more centrally
 TIMEZONE = ZoneInfo("US/Pacific")
@@ -17,7 +18,7 @@ class QuestionSelector:
         self.questions = questions
         self.mode = mode
         if not questions:
-            print("Warning: QuestionSelector initialized with no questions.")
+            logging.warning("QuestionSelector initialized with no questions.")
 
     def get_question_for_today(self) -> Question:
         """

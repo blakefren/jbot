@@ -77,7 +77,7 @@ class Trivia(commands.Cog):
                 player_id, player_name, guess
             )
         except Exception as e:
-            print(f"Error handling guess: {e}")
+            logging.error(f"Error handling guess: {e}")
             await ctx.interaction.followup.send(
                 "An error occurred while processing your answer. Please try again later."
             )
@@ -85,7 +85,7 @@ class Trivia(commands.Cog):
 
         # Log the guess submission event
         status = "correct_guess" if is_correct else "incorrect_guess"
-        self.bot.logger.log_messaging_event(
+        self.bot.data_manager.log_messaging_event(
             direction="from",
             method="Discord",
             recipient_or_sender=str(player_id),

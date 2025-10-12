@@ -12,8 +12,8 @@ import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
-from db.database import Database
-from src.core.logger import Logger
+import logging
+from src.core.data_manager import DataManager
 from src.core.game_runner import GameRunner
 from data.readers.question import Question
 from data.readers.question_selector import QuestionSelector
@@ -41,7 +41,7 @@ try:
     EVENING_TIME = parse_time(EVENING_TIME_STR, datetime.time(hour=20, minute=0)).replace(tzinfo=TIMEZONE)
 
 except Exception as e:
-    print(f"Error reading time configuration, defaulting to hardcoded times. Error: {e}")
+    logging.error(f"Error reading time configuration, defaulting to hardcoded times. Error: {e}")
     TIMEZONE = ZoneInfo("US/Pacific")
     MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
     REMINDER_TIME = datetime.time(hour=19, minute=30, tzinfo=TIMEZONE)
@@ -71,28 +71,28 @@ class DiscordBot(commands.Bot):
 
         self.game = game
         self.config = config
-        self.logger = self.game.logger
+        self.data_manager = self.game.data_manager
         self.bot_token = bot_token
         self.ready_event_fired = False
 
     async def setup_hook(self):
         """This is called when the bot is setting up."""
-        print("setup_hook: loading cogs")
+        logging.info("setup_hook: loading cogs")
         for filename in os.listdir(os.path.join("src", "cogs")):
             if filename.endswith(".py") and not filename.startswith("__"):
                 try:
                     await self.load_extension(f"cogs.{filename[:-3]}")
-                    print(f"Loaded cog: {filename}")
+                    logging.info(f"Loaded cog: {filename}")
                 except Exception as e:
-                    print(f"Failed to load cog {filename}: {e}")
+                    logging.error(f"Failed to load cog {filename}: {e}")
 
         # Sync commands after loading cogs
         try:
-            print("setup_hook: syncing commands start")
+            logging.info("setup_hook: syncing commands start")
             await self.tree.sync()
-            print("setup_hook: syncing commands finish")
+            logging.info("setup_hook: syncing commands finish")
         except Exception as e:
-            print(e)
+            logging.error(e)
 
     async def run(self):
         """Starts the Discord bot."""
@@ -115,24 +115,24 @@ class DiscordBot(commands.Bot):
                         if author:
                             await channel.send(f"Bot is back online, {author.mention}.")
             except Exception as e:
-                print(f"Error processing restart info: {e}")
+                logging.error(f"Error processing restart info: {e}")
             finally:
                 os.remove("restart.inf")
 
         if not self.ready_event_fired:
-            print(f"Logged in as {self.user} (ID: {self.user.id})")
-            self.logger.log_messaging_event(
+            logging.info(f"Logged in as {self.user} (ID: {self.user.id})")
+            self.data_manager.log_messaging_event(
                 direction="bot",
                 method="Discord",
                 recipient_or_sender=str(self.user.id),
                 content=f"Bot logged in as {self.user.name}",
                 status="success",
             )
-            print("------")
+            logging.info("------")
             self.ready_event_fired = True
         else:
-            print("Bot reconnected.")
-            self.logger.log_messaging_event(
+            logging.info("Bot reconnected.")
+            self.data_manager.log_messaging_event(
                 direction="bot",
                 method="Discord",
                 recipient_or_sender=str(self.user.id),
@@ -142,26 +142,27 @@ class DiscordBot(commands.Bot):
         # Start the tasks
         if not self.morning_message_task.is_running():
             self.morning_message_task.start()
-            print(
+            logging.info(
                 f"Morning message task started. Next iteration: {self.morning_message_task.next_iteration}"
             )
         if not self.reminder_message_task.is_running():
             self.reminder_message_task.start()
-            print(
+            logging.info(
                 f"Reminder message task started. Next iteration: {self.reminder_message_task.next_iteration}"
             )
         if not self.evening_message_task.is_running():
             self.evening_message_task.start()
-            print(
+            logging.info(
                 f"Evening message task started. Next iteration: {self.evening_message_task.next_iteration}"
             )
         # Set daily question, if bot started after the morning message but before the evening message.
+        # TODO: keep daily question persistent across restarts (remove evening time check)
         now = datetime.datetime.now(TIMEZONE)
         if MORNING_TIME < now.time() < EVENING_TIME and self.game.daily_q is None:
-            print(f"Bot started after morning message time. Setting daily question with hash {self.game.daily_q.id}.")
+            logging.info(f"Bot started after morning message time. Setting daily question with hash {self.game.daily_q.id}.")
             self.game.set_daily_question()
             if not self.game.daily_q:
-                print("No question found for today.")
+                logging.warning("No question found for today.")
 
     async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
         """Global error handler for all commands."""
@@ -183,8 +184,8 @@ class DiscordBot(commands.Bot):
             message = "You don't meet the requirements to run this command."
         else:
             # For any other errors, log them and send a generic failure message.
-            print(f"An unexpected error occurred in command '{ctx.command}': {error}")
-            self.logger.log_messaging_event(
+            logging.error(f"An unexpected error occurred in command '{ctx.command}': {error}")
+            self.data_manager.log_messaging_event(
                 direction="bot",
                 method="Discord",
                 recipient_or_sender=str(ctx.author.id),
@@ -203,8 +204,8 @@ class DiscordBot(commands.Bot):
         if message.author == self.user:
             return
 
-        print(f"Received message from {message.author}: {message.content}")
-        self.logger.log_messaging_event(
+        logging.info(f"Received message from {message.author}: {message.content}")
+        self.data_manager.log_messaging_event(
             direction="from",
             method="Discord",
             recipient_or_sender=str(message.author.id),
@@ -216,7 +217,7 @@ class DiscordBot(commands.Bot):
     @tasks.loop(time=MORNING_TIME)
     async def morning_message_task(self):
         """Sends the morning message and question to all subscribers."""
-        print(f"Morning message task running at {datetime.datetime.now(TIMEZONE)}...")
+        logging.info(f"Morning message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
             self.game.set_daily_question()
             await self._send_daily_message_to_all_subscribers(
@@ -229,7 +230,7 @@ class DiscordBot(commands.Bot):
     @tasks.loop(time=REMINDER_TIME)
     async def reminder_message_task(self):
         """Sends a reminder to all subscribers, tagging those who haven't guessed."""
-        print(f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}...")
+        logging.info(f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
             content_getter = lambda: self.game.get_reminder_message_content(
                 self.config.get_bool("JBOT_TAG_UNANSWERED_PLAYERS")
@@ -243,10 +244,11 @@ class DiscordBot(commands.Bot):
     @tasks.loop(time=EVENING_TIME)
     async def evening_message_task(self):
         """Sends the evening answer to all subscribers."""
-        print(f"Evening message task running at {datetime.datetime.now(TIMEZONE)}...")
+        # TODO: db write is inconsistent
+        logging.info(f"Evening message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
             self.game.player_manager.save_players()
-            print("Player scores saved.")
+            logging.info("Player scores saved.")
             await self._send_daily_message_to_all_subscribers(
                 self.game.get_evening_message_content, "evening_message",
                 send_leaderboard=True
@@ -259,7 +261,7 @@ class DiscordBot(commands.Bot):
     ):
         """Helper function to send a daily message to all subscribers."""
         if not self.game.daily_q:
-            print("No question available for today.")
+            logging.warning("No question available for today.")
             return
 
         content = content_getter()
@@ -284,8 +286,8 @@ class DiscordBot(commands.Bot):
 
     def _log_task_error(self, e: Exception, task_name: str):
         """Logs an error for a background task."""
-        print(f"An error occurred during the {task_name}: {e}")
-        self.logger.log_messaging_event(
+        logging.error(f"An error occurred during the {task_name}: {e}")
+        self.data_manager.log_messaging_event(
             direction="bot",
             method="Discord",
             recipient_or_sender="N/A",
@@ -330,7 +332,7 @@ class DiscordBot(commands.Bot):
                 user = await self.fetch_user(target_id)
                 if user:
                     await user.send(content)
-            self.logger.log_messaging_event(
+            self.data_manager.log_messaging_event(
                 direction="to",
                 method="Discord",
                 recipient_or_sender=str(target_id),
@@ -338,8 +340,8 @@ class DiscordBot(commands.Bot):
                 status=success_status,
             )
         except Exception as e:
-            print(f"Error sending message to {target_id}: {e}")
-            self.logger.log_messaging_event(
+            logging.error(f"Error sending message to {target_id}: {e}")
+            self.data_manager.log_messaging_event(
                 direction="to",
                 method="Discord",
                 recipient_or_sender=str(target_id),
@@ -349,12 +351,11 @@ class DiscordBot(commands.Bot):
 
 
 async def discord_bot_async(
-    config: ConfigReader, questions: list[Question], db: "Database"
+    config: ConfigReader, questions: list[Question], db: "Database", data_manager: "DataManager"
 ):
     """Main function to initialize and run the bot."""
-    logger = Logger(db)
     question_selector = QuestionSelector(questions, mode=config.get("JBOT_QUESTION_MODE"))
-    game = GameRunner(question_selector, logger)
+    game = GameRunner(question_selector, data_manager)
 
     # Register managers
     from core.powerup import PowerUpManager
@@ -367,10 +368,10 @@ async def discord_bot_async(
     await bot.run()
 
 
-def run_discord_bot(config: ConfigReader, questions: list[Question], db: "Database"):
+def run_discord_bot(config: ConfigReader, questions: list[Question], db: "Database", data_manager: "DataManager"):
     try:
         # TODO: try this instead
-        # asyncio.get_event_loop().run_until_complete(discord_bot_async(config, questions, db))
-        asyncio.run(discord_bot_async(config, questions, db))
+        # asyncio.get_event_loop().run_until_complete(discord_bot_async(config, questions, db, data_manager))
+        asyncio.run(discord_bot_async(config, questions, db, data_manager))
     except KeyboardInterrupt:
-        print("Bot shutdown requested by user.")
+        logging.info("Bot shutdown requested by user.")

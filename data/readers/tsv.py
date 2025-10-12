@@ -1,5 +1,6 @@
 import csv
 import random
+import logging
 
 from data.readers.question import Question
 
@@ -52,9 +53,9 @@ def read_jeopardy_questions(
                     )
                 )
     except FileNotFoundError:
-        print(f"Error: The file at {file_path} was not found.")
+        logging.error(f"The file at {file_path} was not found.")
     except Exception as e:
-        print(f"An error occurred while reading Jeopardy questions: {e}")
+        logging.error(f"An error occurred while reading Jeopardy questions: {e}")
 
     return questions
 
@@ -88,9 +89,9 @@ def read_knowledge_bowl_questions(file_path: str) -> list[Question]:
                     )
                 )
     except FileNotFoundError:
-        print(f"Error: The file at {file_path} was not found.")
+        logging.error(f"The file at {file_path} was not found.")
     except Exception as e:
-        print(f"An error occurred while reading Knowledge Bowl questions: {e}")
+        logging.error(f"An error occurred while reading Knowledge Bowl questions: {e}")
 
     return questions
 
@@ -129,25 +130,25 @@ if __name__ == "__main__":
         if jeopardy_path and jeopardy_path != "todo":
             jeopardy_questions = read_jeopardy_questions(jeopardy_path)
             if jeopardy_questions:
-                print("\n--- Random Jeopardy Question ---")
-                print(get_random_question(jeopardy_questions))
+                logging.info("--- Random Jeopardy Question ---")
+                logging.info(get_random_question(jeopardy_questions))
             else:
-                print("No Jeopardy questions found or file path is a placeholder.")
+                logging.warning("No Jeopardy questions found or file path is a placeholder.")
         else:
-            print("Jeopardy file path not configured or is 'todo'.")
+            logging.warning("Jeopardy file path not configured or is 'todo'.")
 
         # Test Knowledge Bowl reader
         kb_path = config.get("KNOWLEDGE_BOWL_LOCAL_PATH")
         if kb_path and kb_path != "todo":
             kb_questions = read_knowledge_bowl_questions(kb_path)
             if kb_questions:
-                print("\n--- Random Knowledge Bowl Question ---")
-                print(get_random_question(kb_questions))
+                logging.info("--- Random Knowledge Bowl Question ---")
+                logging.info(get_random_question(kb_questions))
             else:
-                print(
+                logging.warning(
                     "No Knowledge Bowl questions found or file path is a placeholder."
                 )
         else:
-            print("Knowledge Bowl file path not configured or is 'todo'.")
+            logging.warning("Knowledge Bowl file path not configured or is 'todo'.")
     else:
-        print(f"Config file not found at {config_path}, skipping example usage.")
+        logging.warning(f"Config file not found at {config_path}, skipping example usage.")

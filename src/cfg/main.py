@@ -1,6 +1,7 @@
 import os
 import shutil
 from dotenv import load_dotenv
+import logging
 
 # Define the paths for the .env files
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
@@ -12,7 +13,7 @@ def load_config():
     Load the .env file. If it doesn't exist, create it from the template.
     """
     if not os.path.exists(ENV_PATH):
-        print(f"Creating .env file from template: {ENV_TEMPLATE_PATH}")
+        logging.info(f"Creating .env file from template: {ENV_TEMPLATE_PATH}")
         shutil.copy(ENV_TEMPLATE_PATH, ENV_PATH)
     load_dotenv(dotenv_path=ENV_PATH)
 

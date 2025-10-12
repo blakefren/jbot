@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 
 # Add the project root to the Python path
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -22,7 +23,7 @@ def load_questions(config: ConfigReader) -> list[Question]:
     Reads questions from the dataset specified in the config.
     """
     dataset = config.get("JBOT_QUESTION_DATASET")
-    print(f"Reading '{dataset}' questions from file...")
+    logging.info(f"Reading '{dataset}' questions from file...")
 
     if dataset == "jeopardy":
         path = os.path.join(PROJECT_ROOT, config.get("JBOT_JEOPARDY_LOCAL_PATH"))
@@ -38,5 +39,5 @@ def load_questions(config: ConfigReader) -> list[Question]:
         path = os.path.join(PROJECT_ROOT, config.get("JBOT_RIDDLE_HINTS_LOCAL_PATH"))
         return read_riddle_with_hints_questions(path)
     else:
-        print(f"Unknown dataset: {dataset}")
+        logging.error(f"Unknown dataset: {dataset}")
         return []
