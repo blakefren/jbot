@@ -20,6 +20,7 @@ def setup_logging():
     
     # TODO: replace the root logger with module-specific loggers
     #       This will prevent extra log messages from other libraries
+    #       https://stackoverflow.com/questions/35325042
     # TODO: make configurable by admin cmd
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
