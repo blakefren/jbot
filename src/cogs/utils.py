@@ -27,10 +27,17 @@ class Utils(commands.Cog):
 
     @commands.hybrid_command()
     @commands.is_owner()
-    async def shutdown(self, ctx: commands.Context):
-        """Shuts down the bot."""
-        logging.info("Shutting down...")
-        await self.bot.send_message("Shutting down...", interaction=ctx.interaction)
+    async def shutdown(self, ctx: commands.Context, restart: bool = False):
+        """Shuts down or restarts the bot."""
+        if restart:
+            logging.info("Restarting bot...")
+            # Create restart info file to be read on next startup
+            with open("restart.inf", "w") as f:
+                f.write(f"{ctx.channel.id},{ctx.author.id}")
+            await self.bot.send_message("Restarting bot...", interaction=ctx.interaction)
+        else:
+            logging.info("Shutting down...")
+            await self.bot.send_message("Shutting down...", interaction=ctx.interaction)
 
         # Stop background tasks
         for task in [
@@ -46,24 +53,12 @@ class Utils(commands.Cog):
             self.bot.db.close()
 
         await self.bot.close()
-        sys.exit(0)
 
-    @commands.hybrid_command()
-    @commands.is_owner()
-    async def restart(self, ctx: commands.Context):
-        """Restarts the bot."""
-        logging.info("Restarting bot...")
-        # Create restart info file to be read on next startup
-        with open("restart.inf", "w") as f:
-            f.write(f"{ctx.channel.id},{ctx.author.id}")
-        await self.bot.send_message("Restarting bot...", interaction=ctx.interaction)
-        
-        # Close the database connection before shutting down the bot
-        if hasattr(self.bot, "db") and self.bot.db.conn:
-            self.bot.db.close()
-
-        await self.bot.close()
-        os.execv(sys.executable, ["python"] + sys.argv)
+        if restart:
+            # TODO: implement
+            pass
+        else:
+            sys.exit(0)
 
     @commands.hybrid_command()
     async def ping(self, ctx: commands.Context):
