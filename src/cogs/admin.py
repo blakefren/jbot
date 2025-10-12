@@ -40,7 +40,7 @@ class Admin(commands.Cog):
             player = player_manager.get_player(str(member.id))
 
         player["score"] += amount
-        player_manager.save_players()
+        self.bot.game.update_scores()
 
         # Log the adjustment
         self.bot.data_manager.db.execute_update(

@@ -273,6 +273,9 @@ class GameRunner:
         answer_part = self.format_answer(self.daily_q)
         return f"{flavor_message}\n{answer_part}\n{player_answers}"
 
-    # TODO: Add more game-specific logic, e.g., tracking scores,
-    # handling guesses, etc. for different game modes.
-    # Handle game state management.
+    def update_scores(self):
+        """
+        Finalizes and saves player scores for the day.
+        """
+        self.player_manager.save_players()
+        logging.info("Player scores saved.")

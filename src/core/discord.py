@@ -246,11 +246,9 @@ class DiscordBot(commands.Bot):
     @tasks.loop(time=EVENING_TIME)
     async def evening_message_task(self):
         """Sends the evening answer to all subscribers."""
-        # TODO: db write is inconsistent
         logging.info(f"Evening message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
-            self.game.player_manager.save_players()
-            logging.info("Player scores saved.")
+            self.game.update_scores()
             await self._send_daily_message_to_all_subscribers(
                 self.game.get_evening_message_content, "evening_message",
                 send_leaderboard=True
