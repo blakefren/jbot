@@ -60,8 +60,8 @@ class RolesCog(commands.Cog):
         # Clear all managed roles first
         # TODO: read config from other file
         managed_role_names = [
-            "First Place",
-            "Top 10%",
+            "first place",
+            "top player",
         ]  # Add any other roles you manage
         for role_name in managed_role_names:
             if role_name in guild_roles:
