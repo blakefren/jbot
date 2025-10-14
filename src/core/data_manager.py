@@ -104,9 +104,9 @@ class DataManager:
 
     def get_player_scores(self) -> list[dict]:
         """
-        Retrieves player names and scores from the database, ordered by score.
+        Retrieves player ids, names and scores from the database, ordered by score.
         """
-        query = "SELECT name, score FROM players WHERE score > 0 ORDER BY score DESC"
+        query = "SELECT id, name, score FROM players WHERE score > 0 ORDER BY score DESC"
         return self.db.execute_query(query)
 
     def read_guess_history(self, user_id: int = -1) -> list[dict]:

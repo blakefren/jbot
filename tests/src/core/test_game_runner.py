@@ -214,13 +214,57 @@ class TestGameRunner(unittest.TestCase):
     def test_get_scores_leaderboard(self):
         """Test generating the scores leaderboard."""
         self.mock_data_manager.get_player_scores.return_value = [
-            {"name": "Alice", "score": 10},
-            {"name": "Bob", "score": 5},
+            {"id": "1", "name": "Alice", "score": 10},
+            {"id": "2", "name": "Bob", "score": 5},
         ]
         leaderboard = self.game_runner.get_scores_leaderboard()
         self.assertIn("1. Alice: 10", leaderboard)
         self.assertIn("2. Bob: 5", leaderboard)
         self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Bob"))
+
+    def test_get_scores_leaderboard_with_guild(self):
+        """Test generating the scores leaderboard with a guild to resolve names."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "OldNameAlice", "score": 10},
+            {"id": "2", "name": "Bob", "score": 5},
+        ]
+        
+        mock_guild = MagicMock()
+        mock_member_alice = MagicMock()
+        mock_member_alice.display_name = "NewNameAlice"
+        mock_member_alice.nick = None
+        
+        # Let get_member return the new mock member for Alice, and None for Bob
+        mock_guild.get_member.side_effect = lambda id: mock_member_alice if id == 1 else None
+
+        leaderboard = self.game_runner.get_scores_leaderboard(guild=mock_guild)
+        
+        self.assertIn("1. NewNameAlice: 10", leaderboard)
+        self.assertIn("2. Bob: 5", leaderboard)
+        self.assertNotIn("OldNameAlice", leaderboard)
+        mock_guild.get_member.assert_any_call(1)
+        mock_guild.get_member.assert_any_call(2)
+
+    def test_get_scores_leaderboard_with_guild_and_nick(self):
+        """Test that a member's nickname is used if available."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "OldNameAlice", "score": 10},
+        ]
+        
+        mock_guild = MagicMock()
+        mock_member_alice = MagicMock()
+        mock_member_alice.display_name = "NewNameAlice"
+        mock_member_alice.nick = "AliceNick"
+        
+        mock_guild.get_member.return_value = mock_member_alice
+
+        leaderboard = self.game_runner.get_scores_leaderboard(guild=mock_guild)
+        
+        self.assertIn("1. AliceNick: 10", leaderboard)
+        self.assertNotIn("OldNameAlice", leaderboard)
+        self.assertNotIn("NewNameAlice", leaderboard)
+        mock_guild.get_member.assert_called_once_with(1)
+
 
     def test_get_player_history(self):
         """Test generating a player's history."""

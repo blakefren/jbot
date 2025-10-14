@@ -151,7 +151,7 @@ class GameRunner:
 
         return is_correct, num_guesses
 
-    def get_scores_leaderboard(self) -> str:
+    def get_scores_leaderboard(self, guild=None) -> str:
         """Computes and formats the leaderboard string."""
         player_scores = self.data_manager.get_player_scores()
 
@@ -168,7 +168,16 @@ class GameRunner:
 
         response_content = "-- Player Scores --\n"
         for i, player in enumerate(sorted_players, 1):
-            response_content += f"{i}. {player['name']}: {player['score']}\n"
+            player_name = player["name"]
+            if guild:
+                try:
+                    member = guild.get_member(int(player["id"]))
+                    if member:
+                        player_name = member.nick if member.nick else member.display_name
+                except Exception as e:
+                    logging.warning(f"Could not resolve player name for {player['id']}: {e}")
+
+            response_content += f"{i}. {player_name}: {player['score']}\n"
         return response_content
 
     def get_player_history(self, player_id: int, player_name: str) -> str:

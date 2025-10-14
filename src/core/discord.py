@@ -67,6 +67,7 @@ class DiscordBot(commands.Bot):
         intents.message_content = True
         intents.guild_messages = True
         intents.dm_messages = True
+        intents.members = True
         super().__init__(command_prefix=command_prefix, intents=intents)
 
         self.game = game
@@ -266,18 +267,26 @@ class DiscordBot(commands.Bot):
             return
 
         content = content_getter()
-        sent_to_ids = []
-        leaderboard = self.game.get_scores_leaderboard()
 
         for sub in self.game.get_subscribed_users():
+            guild = None
+            if sub.is_channel:
+                channel = self.get_channel(sub.sub_id)
+                if channel:
+                    guild = channel.guild
+
+            # Generate leaderboard if needed
+            leaderboard = None
+            if send_leaderboard:
+                leaderboard = self.game.get_scores_leaderboard(guild)
+
             await self.send_message(
                 content,
                 is_channel=sub.is_channel,
                 target_id=sub.sub_id,
                 success_status=success_status,
             )
-            sent_to_ids.append(sub.sub_id)
-            if send_leaderboard and leaderboard:
+            if leaderboard:
                 await self.send_message(
                     leaderboard,
                     is_channel=sub.is_channel,

@@ -18,7 +18,7 @@ class Metrics(commands.Cog):
     @commands.hybrid_command()
     async def leaderboard(self, ctx: commands.Context):
         """View the current score leaderboard."""
-        leaderboard = self.bot.game.get_scores_leaderboard()
+        leaderboard = self.bot.game.get_scores_leaderboard(ctx.guild)
         await self.bot.send_message(leaderboard, interaction=ctx.interaction)
 
 
