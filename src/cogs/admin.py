@@ -1,8 +1,8 @@
 import discord
 from discord.ext import commands
 
-from cfg.players import PlayerManager
-from core.subscriber import Subscriber
+from src.cfg.players import PlayerManager
+from src.core.subscriber import Subscriber
 from src.cfg.players import read_players_into_dict
 
 class Admin(commands.Cog):
@@ -101,19 +101,26 @@ class Admin(commands.Cog):
             discord.app_commands.Choice(name="evening", value="evening"),
         ]
     )
-    async def resend(self, ctx: commands.Context, message_type: str):
+    async def resend(self, ctx: commands.Context, message_type: str, silent: bool = True):
         """Resend a scheduled message."""
+        await ctx.defer()
         if message_type.lower() == "morning":
-            await self.bot.morning_message_task()
-            await ctx.send("Morning message resent.")
+            await self.bot.morning_message_task(silent=silent)
+            if not silent:
+                await ctx.send("Morning message resent.")
         elif message_type.lower() == "reminder":
-            await self.bot.reminder_message_task()
-            await ctx.send("Reminder message resent.")
+            await self.bot.reminder_message_task(silent=silent)
+            if not silent:
+                await ctx.send("Reminder message resent.")
         elif message_type.lower() == "evening":
-            await self.bot.evening_message_task()
-            await ctx.send("Evening message resent.")
+            await self.bot.evening_message_task(silent=silent)
+            if not silent:
+                await ctx.send("Evening message resent.")
         else:
             await ctx.send("Invalid message type. Use 'morning', 'reminder', or 'evening'.")
+
+        if silent:
+            await ctx.send(f"Silently resent {message_type} message.", ephemeral=True)
 
     @commands.hybrid_group(name="feature", description="Manage game features.")
     @commands.is_owner()
@@ -139,7 +146,7 @@ class Admin(commands.Cog):
             kwargs['players'] = [k for k in read_players_into_dict().keys()]
         elif feature_name == "roles":
             kwargs['db'] = self.bot.data_manager.db
-            from cfg.main import ConfigReader
+            from src.cfg.main import ConfigReader
             kwargs['config'] = ConfigReader()
 
         self.bot.game.enable_manager(feature_name, **kwargs)

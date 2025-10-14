@@ -218,42 +218,45 @@ class DiscordBot(commands.Bot):
         await self.process_commands(message)
 
     @tasks.loop(time=MORNING_TIME)
-    async def morning_message_task(self):
+    async def morning_message_task(self, silent: bool = False):
         """Sends the morning message and question to all subscribers."""
         logging.info(f"Morning message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
             self.game.set_daily_question()
-            await self._send_daily_message_to_all_subscribers(
-                self.game.get_morning_message_content, "morning_message",
-                send_leaderboard=True
-            )
+            if not silent:
+                await self._send_daily_message_to_all_subscribers(
+                    self.game.get_morning_message_content, "morning_message",
+                    send_leaderboard=True
+                )
         except Exception as e:
             self._log_task_error(e, "morning_message_task")
 
     @tasks.loop(time=REMINDER_TIME)
-    async def reminder_message_task(self):
+    async def reminder_message_task(self, silent: bool = False):
         """Sends a reminder to all subscribers, tagging those who haven't guessed."""
         logging.info(f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
             content_getter = lambda: self.game.get_reminder_message_content(
                 self.config.get_bool("JBOT_TAG_UNANSWERED_PLAYERS")
             )
-            await self._send_daily_message_to_all_subscribers(
-                content_getter, "reminder_message"
-            )
+            if not silent:
+                await self._send_daily_message_to_all_subscribers(
+                    content_getter, "reminder_message"
+                )
         except Exception as e:
             self._log_task_error(e, "reminder_message_task")
 
     @tasks.loop(time=EVENING_TIME)
-    async def evening_message_task(self):
+    async def evening_message_task(self, silent: bool = False):
         """Sends the evening answer to all subscribers."""
         logging.info(f"Evening message task running at {datetime.datetime.now(TIMEZONE)}...")
         try:
             self.game.update_scores()
-            await self._send_daily_message_to_all_subscribers(
-                self.game.get_evening_message_content, "evening_message",
-                send_leaderboard=True
-            )
+            if not silent:
+                await self._send_daily_message_to_all_subscribers(
+                    self.game.get_evening_message_content, "evening_message",
+                    send_leaderboard=True
+                )
         except Exception as e:
             self._log_task_error(e, "evening_message_task")
 
