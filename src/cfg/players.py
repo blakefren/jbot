@@ -19,7 +19,6 @@ class PlayerManager:
         Reads the players table and returns a dictionary of player data.
         """
         players = {}
-        # TODO: Migrate this query to DataManager
         query = "SELECT id, name, score, answer_streak, active_shield FROM players"
         player_records = self.db.execute_query(query)
         for record in player_records:
@@ -44,7 +43,6 @@ class PlayerManager:
         Writes the current player data back to the database.
         """
         for discord_id, data in self.players.items():
-            # TODO: Migrate this query to DataManager
             query = """
                 INSERT INTO players (id, name, score, answer_streak, active_shield)
                 VALUES (?, ?, ?, ?, ?)
@@ -62,6 +60,42 @@ class PlayerManager:
                 data["active_shield"],
             )
             self.db.execute_update(query, params)
+
+    # TODO: Implement score update logic from GameRunner
+    def update_score(self, player_id: str, amount: int):
+        """
+        Updates a player's score by a given amount.
+        """
+        pass
+
+    # TODO: Implement powerup logic from powerup manager
+    def reinforce(self, player1_id: str, player2_id: str):
+        pass
+
+    def resolve_reinforce(self, player_id: str, correct: bool):
+        pass
+
+    def steal(self, thief_id: str, target_id: str):
+        pass
+
+    def disrupt(self, attacker_id: str, target_id: str):
+        pass
+
+    def use_shield(self, player_id: str):
+        pass
+
+    def place_wager(self, player_id: str, amount: int):
+        pass
+
+    def resolve_wager(self, player_id: str, correct: bool):
+        pass
+
+    # TODO: Implement player creation and refund logic from admin cog
+    def get_or_create_player(self, player_id: str, player_name: str):
+        pass
+
+    def refund_score(self, player_id: str, amount: int):
+        pass
 
 
 # TODO: Migrate this function to DataManager

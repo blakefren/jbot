@@ -36,6 +36,7 @@ class PowerUpManager(BaseManager):
         Returns:
             str: Result message of the team up action.
         """
+        # TODO: Migrate to PlayerManager
         p1 = self.players.get(player1_id)
         p2 = self.players.get(player2_id)
         if not p1 or not p2:
@@ -65,6 +66,7 @@ class PowerUpManager(BaseManager):
         Returns:
             str: Result message of the team up resolution.
         """
+        # TODO: Migrate to PlayerManager
         player = self.players.get(player_id)
         partner_id = player.get("team_partner")
         if not partner_id:
@@ -97,6 +99,7 @@ class PowerUpManager(BaseManager):
         Returns:
             str: Result message of the steal action.
         """
+        # TODO: Migrate to PlayerManager
         thief = self.players.get(thief_id)
         target = self.players.get(target_id)
         if not thief or not target:
@@ -121,6 +124,7 @@ class PowerUpManager(BaseManager):
         Returns:
             str: Result message of the disrupt action.
         """
+        # TODO: Migrate to PlayerManager
         attacker = self.players.get(attacker_id)
         target = self.players.get(target_id)
         if not attacker or not target:
@@ -148,6 +152,7 @@ class PowerUpManager(BaseManager):
         Returns:
             str: Result message of the shield action.
         """
+        # TODO: Migrate to PlayerManager
         player = self.players.get(player_id)
         if not player:
             return "Invalid player."
@@ -171,6 +176,7 @@ class PowerUpManager(BaseManager):
         Returns:
             str: Result message of the wager action.
         """
+        # TODO: Migrate to PlayerManager
         player = self.players.get(player_id)
         if not player:
             return "Invalid player."
@@ -198,6 +204,7 @@ class PowerUpManager(BaseManager):
         Returns:
             str: Result message of the wager resolution.
         """
+        # TODO: Migrate to PlayerManager
         player = self.players.get(player_id)
         wager = player.get("wager", 0)
         msg = ""

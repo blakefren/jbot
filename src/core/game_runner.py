@@ -131,9 +131,11 @@ class GameRunner:
             if player:
                 try:
                     score_value = self.daily_q.clue_value
+                    # TODO: Migrate score update to PlayerManager
                     player["score"] += score_value
                 except (TypeError, AttributeError):
                     # Fallback to a default score if parsing fails
+                    # TODO: Migrate score update to PlayerManager
                     player["score"] += 100
 
         # Resolve with active managers
@@ -296,3 +298,32 @@ class GameRunner:
         """
         self.player_manager.save_players()
         logging.info("Player scores saved.")
+
+    # TODO: Implement score adjustment logic from admin cog
+    def adjust_score(self, player_id: int, amount: int, reason: str):
+        """
+        Adjusts a player's score by a given amount.
+        """
+        pass
+
+    # TODO: Implement powerup logic from powerup manager
+    def reinforce(self, player1_id: str, player2_id: str):
+        pass
+
+    def resolve_reinforce(self, player_id: str, correct: bool):
+        pass
+
+    def steal(self, thief_id: str, target_id: str):
+        pass
+
+    def disrupt(self, attacker_id: str, target_id: str):
+        pass
+
+    def use_shield(self, player_id: str):
+        pass
+
+    def place_wager(self, player_id: str, amount: int):
+        pass
+
+    def resolve_wager(self, player_id: str, correct: bool):
+        pass

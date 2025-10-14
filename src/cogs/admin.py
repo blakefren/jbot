@@ -30,6 +30,7 @@ class Admin(commands.Cog):
         player = player_manager.get_player(str(member.id))
 
         if not player:
+            # TODO: Migrate to PlayerManager
             # Create a new player if they don't exist
             player_manager.players[str(member.id)] = {
                 "name": member.display_name,
@@ -39,6 +40,7 @@ class Admin(commands.Cog):
             }
             player = player_manager.get_player(str(member.id))
 
+        # TODO: Migrate to PlayerManager
         player["score"] += amount
         self.bot.game.update_scores()
 
