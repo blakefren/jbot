@@ -31,6 +31,7 @@ if __name__ == "__main__":
     config = load_configs()
     questions = load_questions(config)
     db_path = config.get("JBOT_DB_PATH", "jbot.db")
+    # TODO: Migrate database initialization to DataManager
     db = Database(db_path)
     data_manager = DataManager(db)
 

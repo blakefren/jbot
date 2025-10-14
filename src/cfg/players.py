@@ -13,11 +13,13 @@ class PlayerManager:
         self.db = db
         self.players = self._load_players()
 
+    # TODO: Migrate _load_players to DataManager
     def _load_players(self):
         """
         Reads the players table and returns a dictionary of player data.
         """
         players = {}
+        # TODO: Migrate this query to DataManager
         query = "SELECT id, name, score, answer_streak, active_shield FROM players"
         player_records = self.db.execute_query(query)
         for record in player_records:
@@ -36,11 +38,13 @@ class PlayerManager:
     def get_all_players(self):
         return self.players
 
+    # TODO: Migrate save_players to DataManager
     def save_players(self):
         """
         Writes the current player data back to the database.
         """
         for discord_id, data in self.players.items():
+            # TODO: Migrate this query to DataManager
             query = """
                 INSERT INTO players (id, name, score, answer_streak, active_shield)
                 VALUES (?, ?, ?, ?, ?)
@@ -60,7 +64,7 @@ class PlayerManager:
             self.db.execute_update(query, params)
 
 
-# For backwards compatibility
+# TODO: Migrate this function to DataManager
 def read_players_into_dict():
     db = Database()
     manager = PlayerManager(db)

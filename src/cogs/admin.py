@@ -43,6 +43,7 @@ class Admin(commands.Cog):
         self.bot.game.update_scores()
 
         # Log the adjustment
+        # TODO: Migrate this to a DataManager method
         self.bot.data_manager.db.execute_update(
             "INSERT INTO score_adjustments (player_id, admin_id, amount, reason) VALUES (?, ?, ?, ?)",
             (str(member.id), str(ctx.author.id), amount, reason),

@@ -13,6 +13,16 @@ class DataManager:
         """
         self.db = db
 
+    # TODO: Add a method to initialize the database from main.py
+
+    # TODO: Add a method to load all player data, replacing _load_players in players.py
+
+    # TODO: Add a method to save all player data, replacing save_players in players.py
+
+    # TODO: Add a method to adjust player scores, replacing the direct query in admin.py
+
+    # TODO: Add a method to get all players, replacing read_players_into_dict in players.py
+
     def log_daily_question(self, question: Question):
         """
         Logs details about a daily question that was sent out.
