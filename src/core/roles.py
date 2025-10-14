@@ -32,7 +32,7 @@ class RolesGameMode(BaseManager):
         Calculates the score for each player based on the number of correct guesses.
         """
         scores = {}
-        # TODO: get from players table instead
+        # TODO: get from datamanager via players table
         query = "SELECT player_id, COUNT(*) FROM guesses WHERE is_correct = 1 GROUP BY player_id"
         with self.db.get_conn() as conn:
             cursor = conn.execute(query)
