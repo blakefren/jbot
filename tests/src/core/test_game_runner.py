@@ -218,8 +218,8 @@ class TestGameRunner(unittest.TestCase):
             {"id": "2", "name": "Bob", "score": 5},
         ]
         leaderboard = self.game_runner.get_scores_leaderboard()
-        self.assertIn("1. Alice: 10", leaderboard)
-        self.assertIn("2. Bob: 5", leaderboard)
+        self.assertIn("10: Alice", leaderboard)
+        self.assertIn("5: Bob", leaderboard)
         self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Bob"))
 
     def test_get_scores_leaderboard_with_guild(self):
@@ -239,8 +239,8 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard(guild=mock_guild)
         
-        self.assertIn("1. NewNameAlice: 10", leaderboard)
-        self.assertIn("2. Bob: 5", leaderboard)
+        self.assertIn("10: NewNameAlice", leaderboard)
+        self.assertIn("5: Bob", leaderboard)
         self.assertNotIn("OldNameAlice", leaderboard)
         mock_guild.get_member.assert_any_call(1)
         mock_guild.get_member.assert_any_call(2)
@@ -260,7 +260,7 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard(guild=mock_guild)
         
-        self.assertIn("1. AliceNick: 10", leaderboard)
+        self.assertIn("10: AliceNick", leaderboard)
         self.assertNotIn("OldNameAlice", leaderboard)
         self.assertNotIn("NewNameAlice", leaderboard)
         mock_guild.get_member.assert_called_once_with(1)
@@ -297,6 +297,18 @@ class TestGameRunner(unittest.TestCase):
         # Disable the manager
         self.game_runner.disable_manager("test_manager")
         self.assertIsNone(self.game_runner.managers["test_manager"])
+
+    def test_get_scores_leaderboard_alphabetical_tie(self):
+        """Test that players with the same score are sorted alphabetically."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Charlie", "score": 10},
+            {"id": "2", "name": "Alice", "score": 10},
+            {"id": "3", "name": "Bob", "score": 5},
+        ]
+        leaderboard = self.game_runner.get_scores_leaderboard()
+        self.assertIn("10: Alice, Charlie", leaderboard)
+        self.assertIn("5: Bob", leaderboard)
+        self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Charlie"))
 
 
 if __name__ == "__main__":

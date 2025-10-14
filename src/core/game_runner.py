@@ -158,16 +158,8 @@ class GameRunner:
         if not player_scores:
             return "No scores available yet."
 
-        # Sort players by score
-        sorted_players = sorted(
-            player_scores, key=lambda item: item["score"], reverse=True
-        )
-
-        if not sorted_players:
-            return "No scores available yet."
-
-        response_content = "-- Player Scores --\n"
-        for i, player in enumerate(sorted_players, 1):
+        scores_by_points = defaultdict(list)
+        for player in player_scores:
             player_name = player["name"]
             if guild:
                 try:
@@ -176,8 +168,19 @@ class GameRunner:
                         player_name = member.nick if member.nick else member.display_name
                 except Exception as e:
                     logging.warning(f"Could not resolve player name for {player['id']}: {e}")
+            scores_by_points[player['score']].append(player_name)
 
-            response_content += f"{i}. {player_name}: {player['score']}\n"
+        if not scores_by_points:
+            return "No scores available yet."
+
+        # Sort scores in descending order
+        sorted_scores = sorted(scores_by_points.keys(), reverse=True)
+
+        response_content = "-- Player Scores --\n"
+        for score in sorted_scores:
+            # Sort player names alphabetically
+            sorted_names = sorted(scores_by_points[score])
+            response_content += f"{score}: {', '.join(sorted_names)}\n"
         return response_content
 
     def get_player_history(self, player_id: int, player_name: str) -> str:
