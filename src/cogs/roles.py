@@ -1,8 +1,7 @@
 # bot/cogs/roles.py
 import discord
 from discord.ext import commands, tasks
-from core.roles import RolesGameMode
-from db.database import Database
+from src.core.roles import RolesGameMode
 
 import sys
 import os
@@ -14,8 +13,7 @@ sys.path.insert(0, project_root)
 class RolesCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.db = Database()
-        self.roles_game_mode = RolesGameMode(self.db, self.bot.config)
+        self.roles_game_mode = RolesGameMode(self.bot.data_manager, self.bot.config)
         if self.bot.config.get_bool("JBOT_ENABLE_ROLES"):
             self.update_roles_task.start()
 
@@ -41,7 +39,7 @@ class RolesCog(commands.Cog):
             await self.apply_discord_roles(guild)
 
     async def apply_discord_roles(self, guild: discord.Guild):
-        with self.db.get_conn() as conn:
+        with self.bot.data_manager.db.get_conn() as conn:
             cursor = conn.execute(
                 """
                 SELECT pr.player_id, r.name 
