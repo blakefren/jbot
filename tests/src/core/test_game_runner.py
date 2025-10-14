@@ -132,19 +132,37 @@ class TestGameRunner(unittest.TestCase):
         self.mock_question.hint = None  # Reset for other tests
 
     def test_get_evening_message_content(self):
-        """Test generating the evening message content."""
+        """Test generating the evening message content with grouped player guesses."""
         self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 123
         self.mock_data_manager.read_guess_history.return_value = [
             {
-                "daily_question_id": self.game_runner.daily_question_id,
+                "daily_question_id": 123,
                 "player_name": "Player1",
-                "guess_text": "A guess",
-            }
+                "guess_text": "guess1",
+            },
+            {
+                "daily_question_id": 123,
+                "player_name": "Player2",
+                "guess_text": "guessA",
+            },
+            {
+                "daily_question_id": 123,
+                "player_name": "Player1",
+                "guess_text": "guess2",
+            },
+            {
+                "daily_question_id": 456,  # from another day
+                "player_name": "Player1",
+                "guess_text": "guess3",
+            },
         ]
 
         content = self.game_runner.get_evening_message_content()
         self.assertIn(self.mock_question.answer, content)
-        self.assertIn("Player1: A guess", content)
+        self.assertIn("Player1: guess1, guess2", content)
+        self.assertIn("Player2: guessA", content)
+        self.assertNotIn("guess3", content)
 
     def test_handle_guess(self):
         """Test handling a player's guess."""

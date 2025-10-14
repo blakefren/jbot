@@ -2,6 +2,7 @@ import csv
 import os
 import re
 
+from collections import defaultdict
 from enum import Enum
 from src.cfg.players import PlayerManager
 from src.core.subscriber import Subscriber
@@ -263,9 +264,13 @@ class GameRunner:
 
         player_answers = ""
         if daily_guesses:
-            player_answers += "--Player answers--\n"
+            player_guesses = defaultdict(list)
             for guess in daily_guesses:
-                player_answers += f"{guess.get('player_name', 'Unknown')}: {guess.get('guess_text', '')}\n"
+                player_guesses[guess.get('player_name', 'Unknown')].append(guess.get('guess_text', ''))
+            
+            player_answers += "--Player answers--\n"
+            for player_name, guesses in player_guesses.items():
+                player_answers += f"{player_name}: {', '.join(guesses)}\n"
 
         flavor_message = (
             "Good evening players!\n" f"Here is the answer to today's trivia question:"
