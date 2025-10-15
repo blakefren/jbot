@@ -278,13 +278,32 @@ class GameRunner:
 
         player_answers = ""
         if daily_guesses:
-            player_guesses = defaultdict(list)
-            for guess in daily_guesses:
-                player_guesses[guess.get('player_name', 'Unknown')].append(guess.get('guess_text', ''))
-            
+            player_guesses_map = defaultdict(list)
+            for g in daily_guesses:
+                player_guesses_map[g['player_name']].append(g)
+
+            player_display_list = []
+
+            for player_name, guesses in player_guesses_map.items():
+                # Deduplicate guesses for each player, keeping track of correctness
+                unique_guesses = {g['guess_text']: g['is_correct'] for g in guesses}
+                
+                formatted_guesses = []
+                # Sort by guess text
+                for guess_text, is_correct in sorted(unique_guesses.items()):
+                    if is_correct:
+                        formatted_guesses.append(f"**{guess_text}**")
+                    else:
+                        formatted_guesses.append(guess_text)
+                
+                player_display_list.append((player_name, ", ".join(formatted_guesses)))
+
+            # Sort by player name
+            player_display_list.sort()
+
             player_answers += "--Player answers--\n"
-            for player_name, guesses in player_guesses.items():
-                player_answers += f"{player_name}: {', '.join(guesses)}\n"
+            for player_name, formatted_guesses_str in player_display_list:
+                player_answers += f"**{player_name}**: {formatted_guesses_str}\n"
 
         flavor_message = (
             "Good evening players!\n" f"Here is the answer to today's trivia question:"
