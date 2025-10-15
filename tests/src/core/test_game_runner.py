@@ -132,37 +132,41 @@ class TestGameRunner(unittest.TestCase):
         self.mock_question.hint = None  # Reset for other tests
 
     def test_get_evening_message_content(self):
-        """Test generating the evening message content with grouped player guesses."""
+        """Test generating the evening message content with deduplicated, sorted, and bolded guesses."""
         self.game_runner.daily_q = self.mock_question
         self.game_runner.daily_question_id = 123
         self.mock_data_manager.read_guess_history.return_value = [
-            {
-                "daily_question_id": 123,
-                "player_name": "Player1",
-                "guess_text": "guess1",
-            },
-            {
-                "daily_question_id": 123,
-                "player_name": "Player2",
-                "guess_text": "guessA",
-            },
-            {
-                "daily_question_id": 123,
-                "player_name": "Player1",
-                "guess_text": "guess2",
-            },
-            {
-                "daily_question_id": 456,  # from another day
-                "player_name": "Player1",
-                "guess_text": "guess3",
-            },
+            # Player 'Charlie'
+            {"daily_question_id": 123, "player_name": "Charlie", "guess_text": "wrong answer", "is_correct": False},
+            
+            # Player 'Alice' - correct guess, duplicate guess, another guess
+            {"daily_question_id": 123, "player_name": "Alice", "guess_text": "Test Answer", "is_correct": True},
+            {"daily_question_id": 123, "player_name": "Alice", "guess_text": "another guess", "is_correct": False},
+            {"daily_question_id": 123, "player_name": "Alice", "guess_text": "another guess", "is_correct": False},
+            
+            # Player 'Bob'
+            {"daily_question_id": 123, "player_name": "Bob", "guess_text": "some guess", "is_correct": False},
+
+            # Another day's guess for Alice
+            {"daily_question_id": 456, "player_name": "Alice", "guess_text": "yesterday's guess", "is_correct": False},
         ]
 
         content = self.game_runner.get_evening_message_content()
+
+        # Expected output lines for each player, sorted by player name
+        expected_alice = "**Alice**: **Test Answer**, another guess"
+        expected_bob = "**Bob**: some guess"
+        expected_charlie = "**Charlie**: wrong answer"
+
         self.assertIn(self.mock_question.answer, content)
-        self.assertIn("Player1: guess1, guess2", content)
-        self.assertIn("Player2: guessA", content)
-        self.assertNotIn("guess3", content)
+        self.assertIn(expected_alice, content)
+        self.assertIn(expected_bob, content)
+        self.assertIn(expected_charlie, content)
+        self.assertNotIn("yesterday's guess", content)
+
+        # Check order
+        self.assertTrue(content.find(expected_alice) < content.find(expected_bob))
+        self.assertTrue(content.find(expected_bob) < content.find(expected_charlie))
 
     def test_handle_guess(self):
         """Test handling a player's guess."""
