@@ -12,7 +12,7 @@ class Admin(commands.Cog):
     @commands.hybrid_command()
     @commands.is_owner()
     async def sync(self, ctx: commands.Context):
-        """Syncs the command tree."""
+        """(owner) Syncs the command tree."""
         # TODO: error when running this command:
         # An unexpected error occurred in command 'sync':
         # Hybrid command raised an error:
@@ -23,9 +23,9 @@ class Admin(commands.Cog):
         await ctx.send("Command tree synced.")
 
     @commands.hybrid_command()
-    @commands.is_owner()
+    @commands.has_permissions(administrator=True)
     async def refund(self, ctx: commands.Context, member: discord.Member, amount: int, *, reason: str):
-        """Refunds score to a player."""
+        """(admin) Refunds score to a player."""
         player_manager = PlayerManager(self.bot.data_manager.db)
         player = player_manager.get_player(str(member.id))
 
@@ -58,7 +58,7 @@ class Admin(commands.Cog):
         await ctx.send(f"Refunded {amount} to {member.display_name}. New score: {player['score']}. Reason: {reason}")
 
     @commands.hybrid_command()
-    @commands.is_owner()
+    @commands.has_permissions(administrator=True)
     async def subscribe(
         self,
         ctx: commands.Context,
@@ -67,7 +67,7 @@ class Admin(commands.Cog):
         channel: discord.TextChannel = None,
     ):
         await ctx.defer()
-        """Sub/unsub a user/channel from daily questions."""
+        """(admin) Sub/unsub from daily questions."""
         if not member and not channel:
             await ctx.send("Please provide a member or a channel to subscribe.")
             return
@@ -97,7 +97,7 @@ class Admin(commands.Cog):
 
 
     @commands.hybrid_command()
-    @commands.is_owner()
+    @commands.has_permissions(administrator=True)
     @discord.app_commands.choices(
         message_type=[
             discord.app_commands.Choice(name="morning", value="morning"),
@@ -106,7 +106,7 @@ class Admin(commands.Cog):
         ]
     )
     async def resend(self, ctx: commands.Context, message_type: str, silent: bool = True):
-        """Resend a scheduled message."""
+        """(admin) Resend a scheduled message."""
         await ctx.defer()
         if message_type.lower() == "morning":
             await self.bot.morning_message_task(silent=silent)
@@ -129,7 +129,7 @@ class Admin(commands.Cog):
     @commands.hybrid_group(name="feature", description="Manage game features.")
     @commands.is_owner()
     async def feature(self, ctx: commands.Context):
-        """A group of commands to manage game features."""
+        """(owner) Manage game features."""
         if ctx.invoked_subcommand is None:
             await ctx.send("Invalid feature command. Use `enable` or `disable`.")
 
@@ -143,7 +143,7 @@ class Admin(commands.Cog):
         ]
     )
     async def enable_feature(self, ctx: commands.Context, feature_name: str):
-        """Enables a game feature by name."""
+        """(owner) Enable a game feature."""
         # You might need to pass arguments to the manager's constructor
         kwargs = {}
         if feature_name == "powerup":
@@ -166,7 +166,7 @@ class Admin(commands.Cog):
         ]
     )
     async def disable_feature(self, ctx: commands.Context, feature_name: str):
-        """Disables a game feature by name."""
+        """(owner) Disable a game feature."""
         self.bot.game.disable_manager(feature_name)
         await ctx.send(f"Feature '{feature_name}' disabled.")
 
