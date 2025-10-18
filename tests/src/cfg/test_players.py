@@ -78,6 +78,66 @@ class TestPlayerManager(unittest.TestCase):
         self.assertEqual(params[1], "John Doe")
         self.assertEqual(params[2], 15)
 
+    def test_refund_score(self):
+        """Test refunding a player's score."""
+        self.mock_db.execute_query.return_value = [
+            {"id": "123", "name": "Test Player", "score": 100, "answer_streak": 0, "active_shield": 0}
+        ]
+        manager = PlayerManager(self.mock_db)
+
+        # Initial score
+        self.assertEqual(manager.get_player("123")["score"], 100)
+
+        # Refund
+        manager.refund_score("123", 50)
+
+        # Check score in memory
+        self.assertEqual(manager.get_player("123")["score"], 150)
+
+        # Check that save_players was called, which calls execute_update
+        self.mock_db.execute_update.assert_called()
+
+        # Verify the correct data was passed to the DB
+        call_args = self.mock_db.execute_update.call_args
+        query = call_args[0][0]
+        params = call_args[0][1]
+
+        self.assertIn("INSERT INTO players", query)
+        self.assertEqual(params[0], "123")  # id
+        self.assertEqual(params[2], 150)  # score
+
+    def test_refund_score_multiple(self):
+        """Test that multiple refunds accumulate correctly."""
+        # We need to mock the load to happen only once.
+        self.mock_db.execute_query.return_value = [
+            {"id": "123", "name": "Test Player", "score": 100, "answer_streak": 0, "active_shield": 0}
+        ]
+        manager = PlayerManager(self.mock_db)
+        # Now, we change the mock so it reflects the updates from save_players
+        def side_effect(*args, **kwargs):
+            # This simulates the database being updated
+            if "UPDATE" in args[0] or "INSERT" in args[0]:
+                updated_score = args[1][2]
+                self.mock_db.execute_query.return_value = [
+                    {"id": "123", "name": "Test Player", "score": updated_score, "answer_streak": 0, "active_shield": 0}
+                ]
+        self.mock_db.execute_update.side_effect = side_effect
+
+        # First refund
+        manager.refund_score("123", 50)
+        self.assertEqual(manager.get_player("123")["score"], 150)
+        # After the refund, the manager reloads players. We need to simulate this.
+        manager.players = manager._load_players()
+
+        # Second refund
+        manager.refund_score("123", 25)
+        self.assertEqual(manager.get_player("123")["score"], 175)
+        manager.players = manager._load_players()
+
+        # Verify the final score in the "database"
+        final_player_state = manager.get_player("123")
+        self.assertEqual(final_player_state["score"], 175)
+
 
 if __name__ == "__main__":
     unittest.main()

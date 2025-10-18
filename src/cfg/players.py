@@ -95,7 +95,12 @@ class PlayerManager:
         pass
 
     def refund_score(self, player_id: str, amount: int):
-        pass
+        """
+        Refunds a player's score by a given amount and saves it to the database.
+        """
+        if player_id in self.players:
+            self.players[player_id]["score"] += amount
+            self.save_players()
 
 
 # TODO: Migrate this function to DataManager
