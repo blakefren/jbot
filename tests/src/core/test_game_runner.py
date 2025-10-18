@@ -19,6 +19,7 @@ class TestGameRunner(unittest.TestCase):
             category="Test Category",
             clue_value=100,
         )
+        self.mock_question.id = "q1"
         self.mock_question_selector.get_question_for_today.return_value = (
             self.mock_question
         )
@@ -49,10 +50,28 @@ class TestGameRunner(unittest.TestCase):
 
     def test_set_daily_question(self):
         """Test setting the daily question."""
+        self.mock_data_manager.get_todays_daily_question.return_value = None
         self.game_runner.daily_q = None
         self.game_runner.set_daily_question()
         self.mock_question_selector.get_question_for_today.assert_called_once()
         self.assertEqual(self.game_runner.daily_q, self.mock_question)
+
+    def test_set_daily_question_on_restart(self):
+        """Test setting the daily question on restart when one already exists."""
+        # Simulate finding an existing daily question
+        self.mock_data_manager.get_todays_daily_question.return_value = (self.mock_question, 5)
+
+        self.game_runner.set_daily_question()
+
+        # Verify that we fetched the existing question data
+        self.mock_data_manager.get_todays_daily_question.assert_called_once()
+        
+        # Ensure we didn't try to select a new question
+        self.mock_question_selector.get_question_for_today.assert_not_called()
+        
+        # Verify the daily question is correctly set
+        self.assertEqual(self.game_runner.daily_q, self.mock_question)
+        self.assertEqual(self.game_runner.daily_question_id, 5)
 
     def test_add_and_remove_subscriber(self):
         """Test adding and removing a subscriber."""
@@ -170,6 +189,8 @@ class TestGameRunner(unittest.TestCase):
 
     def test_handle_guess(self):
         """Test handling a player's guess."""
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+        self.mock_data_manager.log_daily_question.return_value = 1
         self.game_runner.set_daily_question()
         player_id, player_name = 123, "Test Guesser"
 

@@ -1,3 +1,4 @@
+from typing import Optional
 from datetime import date
 from db.database import Database
 from data.readers.question import Question
@@ -58,6 +59,12 @@ class DataManager:
                     str(question.id),  # Hash
                 ),
             )
+
+        # Check if a daily question has already been logged for today
+        daily_question_info = self.get_todays_daily_question()
+        if daily_question_info:
+            _, daily_question_id = daily_question_info
+            return daily_question_id
 
         # Log the daily question event
         daily_question_query = (
@@ -134,3 +141,43 @@ class DataManager:
             params = (user_id,)
 
         return self.db.execute_query(query, params)
+
+    def get_question_by_id(self, question_id: int) -> Optional[Question]:
+        """
+        Retrieves a question from the database by its ID.
+        """
+        query = "SELECT * FROM questions WHERE id = ?"
+        result = self.db.execute_query(query, (question_id,))
+        if not result:
+            return None
+        
+        q_data = result[0]
+        return Question(
+            question=q_data['question_text'],
+            answer=q_data['answer_text'],
+            category=q_data['category'],
+            clue_value=q_data['value'],
+            data_source=q_data['source'],
+            hint=q_data['hint_text']
+        )
+
+    def get_todays_daily_question(self) -> Optional[tuple[Question, int]]:
+        """
+        Retrieves today's daily question as a Question object and its ID.
+        """
+        today = date.today()
+        query = "SELECT id, question_id FROM daily_questions WHERE sent_at = ?"
+        daily_question_info = self.db.execute_query(query, (today,))
+        
+        if not daily_question_info:
+            return None
+        
+        daily_question_info = daily_question_info[0]
+
+        question = self.get_question_by_id(daily_question_info["question_id"])
+        daily_question_id = daily_question_info["id"]
+        
+        if not question:
+            return None
+
+        return question, daily_question_id

@@ -71,11 +71,12 @@ class TestDataManager(unittest.TestCase):
         q1 = Question(question="q1", answer="a1", category="cat", clue_value=100)
         q2 = Question(question="q2", answer="a2", category="cat", clue_value=100)
         daily_q1_id = self.data_manager.log_daily_question(q1)
-        daily_q2_id = self.data_manager.log_daily_question(q2)
+        # This will not create a new daily question due to the date check
+        self.data_manager.log_daily_question(q2)
 
         self.data_manager.log_player_guess("123", "PlayerOne", daily_q1_id, "A1", True)
         self.data_manager.log_player_guess("456", "PlayerTwo", daily_q1_id, "A2", False)
-        self.data_manager.log_player_guess("123", "PlayerOne", daily_q2_id, "A3", True)
+        self.data_manager.log_player_guess("123", "PlayerOne", daily_q1_id, "A3", True)
 
         history = self.data_manager.read_guess_history()
         self.assertEqual(len(history), 3)

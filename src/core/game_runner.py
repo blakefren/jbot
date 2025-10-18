@@ -3,6 +3,7 @@ import os
 import re
 
 from collections import defaultdict
+from datetime import date
 from enum import Enum
 from src.cfg.players import PlayerManager
 from src.core.subscriber import Subscriber
@@ -62,9 +63,24 @@ class GameRunner:
 
     def set_daily_question(self):
         logging.debug(f"GameRunner.set_daily_question.")
+        
+        # Check for an existing daily question ID for today
+        daily_question_data = self.data_manager.get_todays_daily_question()
+        if daily_question_data:
+            self.daily_q, self.daily_question_id = daily_question_data
+            logging.info(f"Daily question already set with ID: {self.daily_question_id}")
+            return
+
+        # Otherwise, select a new question
         self.daily_q = self.question_selector.get_question_for_today()
         if self.daily_q:
             self.daily_question_id = self.data_manager.log_daily_question(self.daily_q)
+            if self.daily_question_id is None:
+                # If log_daily_question returns None, it means a question for today already exists.
+                # We need to get the ID of that existing question.
+                daily_question_data = self.data_manager.get_todays_daily_question()
+                if daily_question_data:
+                    self.daily_question_id = daily_question_data[1]
             logging.info(f"Daily question set with ID: {self.daily_question_id}")
 
     def add_subscriber(self, subscriber: Subscriber):
@@ -85,9 +101,7 @@ class GameRunner:
         Currently uses simple substring matching (case insensitive).
         """
         # TODO: Improve matching logic (e.g., fuzzy matching, ignore punctuation, etc.)
-        g = guess.strip().lower()
-        a = answer.strip().lower()
-        return re.search(g, a) is not None
+        return re.search(guess, answer) is not None
 
 
     def handle_guess(self, player_id: int, player_name: str, guess: str) -> tuple[bool, int]:
@@ -119,7 +133,7 @@ class GameRunner:
         )
 
         g = guess.strip().lower()
-        a = self.daily_q.answer.strip().lower()
+        a = str(self.daily_q.answer).strip().lower()
         is_correct = self._is_correct_guess(g, a)
         self.data_manager.log_player_guess(
             player_id, player_name, self.daily_question_id, g, is_correct
