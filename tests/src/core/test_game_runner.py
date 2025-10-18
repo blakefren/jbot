@@ -299,7 +299,8 @@ class TestGameRunner(unittest.TestCase):
             {'is_correct': True},
             {'is_correct': True},
         ]
-        self.game_runner.player_manager.get_player = MagicMock(return_value={'score': 300})
+        from src.core.player import Player
+        self.game_runner.player_manager.get_player = MagicMock(return_value=Player(id="123", name="Alice", score=300))
 
         history = self.game_runner.get_player_history(123, "Alice")
         self.assertIn("-- Your stats, Alice --", history)

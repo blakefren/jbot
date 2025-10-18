@@ -6,18 +6,20 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 sys.path.insert(0, project_root)
 
 from db.database import Database
-
 from src.core.data_manager import DataManager
+from src.core.player import Player
+from typing import Optional
+
 
 class PlayerManager:
     def __init__(self, db: Database):
         self.data_manager = DataManager(db)
         self.players = self.data_manager.load_players()
 
-    def get_player(self, discord_id: str):
+    def get_player(self, discord_id: str) -> Optional[Player]:
         return self.players.get(discord_id)
 
-    def get_all_players(self):
+    def get_all_players(self) -> dict:
         return self.players
 
     def save_players(self):
@@ -26,12 +28,14 @@ class PlayerManager:
         """
         self.data_manager.save_players(self.players)
 
-    # TODO: Implement score update logic from GameRunner
     def update_score(self, player_id: str, amount: int):
         """
         Updates a player's score by a given amount.
         """
-        pass
+        player = self.get_player(player_id)
+        if player:
+            player.update_score(amount)
+            self.save_players()
 
     # TODO: Implement powerup logic from powerup manager
     def reinforce(self, player1_id: str, player2_id: str):
@@ -56,15 +60,26 @@ class PlayerManager:
         pass
 
     # TODO: Implement player creation and refund logic from admin cog
-    def get_or_create_player(self, player_id: str, player_name: str):
-        pass
+    def get_or_create_player(self, player_id: str, player_name: str) -> Player:
+        player = self.get_player(player_id)
+        if player is None:
+            player = Player(id=player_id, name=player_name)
+            self.players[player_id] = player
+            self.save_players()
+        else:
+            # Optionally update name if changed
+            if player.name != player_name:
+                player.set_name(player_name)
+                self.save_players()
+        return player
 
     def refund_score(self, player_id: str, amount: int):
         """
         Refunds a player's score by a given amount and saves it to the database.
         """
-        if player_id in self.players:
-            self.players[player_id]["score"] += amount
+        player = self.get_player(player_id)
+        if player:
+            player.update_score(amount)
             self.save_players()
 
 

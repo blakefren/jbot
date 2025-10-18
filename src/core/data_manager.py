@@ -2,6 +2,7 @@ from typing import Optional
 from datetime import date
 from db.database import Database
 from data.readers.question import Question
+from src.core.player import Player
 
 class DataManager:
     """
@@ -18,28 +19,30 @@ class DataManager:
 
     def load_players(self) -> dict:
         """
-        Reads the players table and returns a dictionary of player data.
+        Reads the players table and returns a dictionary of Player objects keyed by discord_id.
         """
         players = {}
         query = "SELECT id, name, score, answer_streak, active_shield FROM players"
         player_records = self.db.execute_query(query)
         for record in player_records:
-            discord_id = record["id"]
-            players[discord_id] = {
-                "name": record["name"],
-                "score": record["score"],
-                "answer_streak": record["answer_streak"],
-                "active_shield": bool(record["active_shield"]),
-            }
+            player = Player(
+                id=record["id"],
+                name=record["name"],
+                score=record["score"],
+                answer_streak=record["answer_streak"],
+                active_shield=bool(record["active_shield"]),
+            )
+            players[player.id] = player
         return players
 
     def save_players(self, players: dict):
         """
         Writes the current player data back to the database.
         Args:
-            players (dict): Dictionary of player data keyed by discord_id.
+            players (dict): Dictionary of Player objects keyed by discord_id.
         """
-        for discord_id, data in players.items():
+        for _, player in players.items():
+            data = player.to_dict()
             query = """
                 INSERT INTO players (id, name, score, answer_streak, active_shield)
                 VALUES (?, ?, ?, ?, ?)
@@ -50,7 +53,7 @@ class DataManager:
                     active_shield = excluded.active_shield;
             """
             params = (
-                discord_id,
+                data["id"],
                 data["name"],
                 data["score"],
                 data["answer_streak"],

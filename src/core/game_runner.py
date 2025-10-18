@@ -144,13 +144,10 @@ class GameRunner:
             player = self.player_manager.get_player(str(player_id))
             if player:
                 try:
-                    score_value = self.daily_q.clue_value
-                    # TODO: Migrate score update to PlayerManager
-                    player["score"] += score_value
+                    player.update_score(self.daily_q.clue_value)
                 except (TypeError, AttributeError):
-                    # Fallback to a default score if parsing fails
-                    # TODO: Migrate score update to PlayerManager
-                    player["score"] += 100
+                    player.update_score(100)
+                self.player_manager.save_players()
 
         # Resolve with active managers
         for manager in self.managers.values():
@@ -202,7 +199,6 @@ class GameRunner:
     def get_player_history(self, player_id: int, player_name: str) -> str:
         """Computes and formats the history/metrics string for a given player."""
         history = self.data_manager.read_guess_history(user_id=player_id)
-        
         if not history:
             return f"No history found for {player_name}."
 
@@ -211,7 +207,7 @@ class GameRunner:
         correct_rate = (correct_guesses / total_guesses) * 100 if total_guesses > 0 else 0
 
         player = self.player_manager.get_player(str(player_id))
-        score = player.get('score', 0) if player else 0
+        score = player.score if player else 0
 
         return (
             f"-- Your stats, {player_name} --\n"

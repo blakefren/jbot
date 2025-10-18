@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from src.core.data_manager import DataManager
+from src.core.player import Player
 from data.readers.question import Question
 from db.database import Database
 
@@ -11,8 +12,8 @@ class TestDataManager(unittest.TestCase):
         """Test DataManager.save_players writes correct player data to DB."""
         mock_db = patch.object(self.data_manager, 'db', autospec=True).start()
         players = {
-            "1": {"name": "Alice", "score": 42, "answer_streak": 3, "active_shield": True},
-            "2": {"name": "Bob", "score": 0, "answer_streak": 0, "active_shield": False},
+            "1": Player(id="1", name="Alice", score=42, answer_streak=3, active_shield=True),
+            "2": Player(id="2", name="Bob", score=0, answer_streak=0, active_shield=False),
         }
         self.data_manager.save_players(players)
         # Should call execute_update twice, once for each player
@@ -44,11 +45,11 @@ class TestDataManager(unittest.TestCase):
             {"id": "2", "name": "Bob", "score": 0, "answer_streak": 0, "active_shield": 0},
         ]
         players = self.data_manager.load_players()
-        self.assertEqual(players["1"]["name"], "Alice")
-        self.assertEqual(players["1"]["score"], 42)
-        self.assertEqual(players["1"]["answer_streak"], 3)
-        self.assertTrue(players["1"]["active_shield"])
-        self.assertFalse(players["2"]["active_shield"])
+        self.assertEqual(players["1"].name, "Alice")
+        self.assertEqual(players["1"].score, 42)
+        self.assertEqual(players["1"].answer_streak, 3)
+        self.assertTrue(players["1"].active_shield)
+        self.assertFalse(players["2"].active_shield)
 
         # Test empty DB
         self.db.execute_query = lambda query: []
