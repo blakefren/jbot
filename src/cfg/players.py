@@ -7,29 +7,13 @@ sys.path.insert(0, project_root)
 
 from db.database import Database
 
+from src.core.data_manager import DataManager
 
 class PlayerManager:
     def __init__(self, db: Database):
         self.db = db
-        self.players = self._load_players()
-
-    # TODO: Migrate _load_players to DataManager
-    def _load_players(self):
-        """
-        Reads the players table and returns a dictionary of player data.
-        """
-        players = {}
-        query = "SELECT id, name, score, answer_streak, active_shield FROM players"
-        player_records = self.db.execute_query(query)
-        for record in player_records:
-            discord_id = record["id"]
-            players[discord_id] = {
-                "name": record["name"],
-                "score": record["score"],
-                "answer_streak": record["answer_streak"],
-                "active_shield": bool(record["active_shield"]),
-            }
-        return players
+        self.data_manager = DataManager(db)
+        self.players = self.data_manager.load_players()
 
     def get_player(self, discord_id: str):
         return self.players.get(discord_id)

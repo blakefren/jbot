@@ -7,6 +7,24 @@ from db.database import Database
 
 
 class TestDataManager(unittest.TestCase):
+    def test_load_players(self):
+        """Test DataManager.load_players returns correct player dict."""
+        # Mock the database execute_query method
+        self.db.execute_query = lambda query: [
+            {"id": "1", "name": "Alice", "score": 42, "answer_streak": 3, "active_shield": 1},
+            {"id": "2", "name": "Bob", "score": 0, "answer_streak": 0, "active_shield": 0},
+        ]
+        players = self.data_manager.load_players()
+        self.assertEqual(players["1"]["name"], "Alice")
+        self.assertEqual(players["1"]["score"], 42)
+        self.assertEqual(players["1"]["answer_streak"], 3)
+        self.assertTrue(players["1"]["active_shield"])
+        self.assertFalse(players["2"]["active_shield"])
+
+        # Test empty DB
+        self.db.execute_query = lambda query: []
+        players = self.data_manager.load_players()
+        self.assertEqual(players, {})
 
     def setUp(self):
         """Set up for test cases."""

@@ -16,7 +16,22 @@ class DataManager:
 
     # TODO: Add a method to initialize the database from main.py
 
-    # TODO: Add a method to load all player data, replacing _load_players in players.py
+    def load_players(self) -> dict:
+        """
+        Reads the players table and returns a dictionary of player data.
+        """
+        players = {}
+        query = "SELECT id, name, score, answer_streak, active_shield FROM players"
+        player_records = self.db.execute_query(query)
+        for record in player_records:
+            discord_id = record["id"]
+            players[discord_id] = {
+                "name": record["name"],
+                "score": record["score"],
+                "answer_streak": record["answer_streak"],
+                "active_shield": bool(record["active_shield"]),
+            }
+        return players
 
     # TODO: Add a method to save all player data, replacing save_players in players.py
 
