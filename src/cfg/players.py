@@ -11,7 +11,6 @@ from src.core.data_manager import DataManager
 
 class PlayerManager:
     def __init__(self, db: Database):
-        self.db = db
         self.data_manager = DataManager(db)
         self.players = self.data_manager.load_players()
 
@@ -21,29 +20,11 @@ class PlayerManager:
     def get_all_players(self):
         return self.players
 
-    # TODO: Migrate save_players to DataManager
     def save_players(self):
         """
         Writes the current player data back to the database.
         """
-        for discord_id, data in self.players.items():
-            query = """
-                INSERT INTO players (id, name, score, answer_streak, active_shield)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    name = excluded.name,
-                    score = excluded.score,
-                    answer_streak = excluded.answer_streak,
-                    active_shield = excluded.active_shield;
-            """
-            params = (
-                discord_id,
-                data["name"],
-                data["score"],
-                data["answer_streak"],
-                data["active_shield"],
-            )
-            self.db.execute_update(query, params)
+        self.data_manager.save_players(self.players)
 
     # TODO: Implement score update logic from GameRunner
     def update_score(self, player_id: str, amount: int):

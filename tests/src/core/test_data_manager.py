@@ -7,6 +7,35 @@ from db.database import Database
 
 
 class TestDataManager(unittest.TestCase):
+    def test_save_players(self):
+        """Test DataManager.save_players writes correct player data to DB."""
+        mock_db = patch.object(self.data_manager, 'db', autospec=True).start()
+        players = {
+            "1": {"name": "Alice", "score": 42, "answer_streak": 3, "active_shield": True},
+            "2": {"name": "Bob", "score": 0, "answer_streak": 0, "active_shield": False},
+        }
+        self.data_manager.save_players(players)
+        # Should call execute_update twice, once for each player
+        self.assertEqual(mock_db.execute_update.call_count, 2)
+        # Check first call params
+        first_call = mock_db.execute_update.call_args_list[0]
+        query = first_call[0][0]
+        params = first_call[0][1]
+        self.assertIn("INSERT INTO players", query)
+        self.assertEqual(params[0], "1")
+        self.assertEqual(params[1], "Alice")
+        self.assertEqual(params[2], 42)
+        self.assertEqual(params[3], 3)
+        self.assertEqual(params[4], True)
+        # Check second call params
+        second_call = mock_db.execute_update.call_args_list[1]
+        params2 = second_call[0][1]
+        self.assertEqual(params2[0], "2")
+        self.assertEqual(params2[1], "Bob")
+        self.assertEqual(params2[2], 0)
+        self.assertEqual(params2[3], 0)
+        self.assertEqual(params2[4], False)
+        patch.stopall()
     def test_load_players(self):
         """Test DataManager.load_players returns correct player dict."""
         # Mock the database execute_query method

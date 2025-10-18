@@ -33,7 +33,30 @@ class DataManager:
             }
         return players
 
-    # TODO: Add a method to save all player data, replacing save_players in players.py
+    def save_players(self, players: dict):
+        """
+        Writes the current player data back to the database.
+        Args:
+            players (dict): Dictionary of player data keyed by discord_id.
+        """
+        for discord_id, data in players.items():
+            query = """
+                INSERT INTO players (id, name, score, answer_streak, active_shield)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    score = excluded.score,
+                    answer_streak = excluded.answer_streak,
+                    active_shield = excluded.active_shield;
+            """
+            params = (
+                discord_id,
+                data["name"],
+                data["score"],
+                data["answer_streak"],
+                data["active_shield"],
+            )
+            self.db.execute_update(query, params)
 
     # TODO: Add a method to adjust player scores, replacing the direct query in admin.py
 

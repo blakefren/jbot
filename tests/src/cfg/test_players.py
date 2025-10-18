@@ -60,7 +60,7 @@ class TestPlayerManager(unittest.TestCase):
         self.assertIn("456", all_players)
 
     def test_save_players(self):
-        """Test writing player data back to the database."""
+        """Test writing player data back to the database via DataManager."""
         manager = PlayerManager(self.mock_db)
         manager.players = {
             "123": {
@@ -72,19 +72,10 @@ class TestPlayerManager(unittest.TestCase):
         }
         manager.save_players()
 
-        self.mock_db.execute_update.assert_called_once()
-        call_args = self.mock_db.execute_update.call_args
-        query = call_args[0][0]
-        params = call_args[0][1]
-
-        self.assertIn("INSERT INTO players", query)
-        self.assertEqual(params[0], "123")
-        self.assertEqual(params[1], "John Doe")
-        self.assertEqual(params[2], 15)
+        self.mock_data_manager.save_players.assert_called_once_with(manager.players)
 
     def test_refund_score(self):
-        """Test refunding a player's score."""
-        # Patch DataManager.load_players to return a real dict
+        """Test refunding a player's score and saving via DataManager."""
         with patch('src.cfg.players.DataManager') as MockDataManager:
             players_dict = {
                 "123": {"name": "Test Player", "score": 100, "answer_streak": 0, "active_shield": False}
@@ -102,17 +93,8 @@ class TestPlayerManager(unittest.TestCase):
             # Check score in memory
             self.assertEqual(manager.get_player("123")["score"], 150)
 
-            # Check that save_players was called, which calls execute_update
-            self.mock_db.execute_update.assert_called()
-
-            # Verify the correct data was passed to the DB
-            call_args = self.mock_db.execute_update.call_args
-            query = call_args[0][0]
-            params = call_args[0][1]
-
-            self.assertIn("INSERT INTO players", query)
-            self.assertEqual(params[0], "123")  # id
-            self.assertEqual(params[2], 150)  # score
+            # Check that DataManager.save_players was called with updated players
+            instance.save_players.assert_called_once_with(manager.players)
 
     def test_refund_score_multiple(self):
         """Test that multiple refunds accumulate correctly."""
