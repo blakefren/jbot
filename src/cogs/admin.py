@@ -42,11 +42,12 @@ class Admin(commands.Cog):
         player_manager.refund_score(str(member.id), amount)
         player = player_manager.get_player(str(member.id))
 
-        # Log the adjustment
-        # TODO: Migrate these to a DataManager method
-        self.bot.data_manager.db.execute_update(
-            "INSERT INTO score_adjustments (player_id, admin_id, amount, reason) VALUES (?, ?, ?, ?)",
-            (str(member.id), str(ctx.author.id), amount, reason),
+        # Log the adjustment using DataManager
+        self.bot.data_manager.log_score_adjustment(
+            player_id=str(member.id),
+            admin_id=str(ctx.author.id),
+            amount=amount,
+            reason=reason
         )
 
         await ctx.send(f"Refunded {amount} to {member.display_name}. New score: {player['score']}. Reason: {reason}")

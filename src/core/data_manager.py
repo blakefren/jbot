@@ -181,3 +181,19 @@ class DataManager:
             return None
 
         return question, daily_question_id
+
+    def log_score_adjustment(self, player_id: str, admin_id: str, amount: int, reason: str):
+        """
+        Logs a score adjustment for a player.
+
+        Args:
+            player_id (str): The unique identifier for the player.
+            admin_id (str): The unique identifier for the admin making the adjustment.
+            amount (int): The amount adjusted (positive or negative).
+            reason (str): The reason for the adjustment.
+        """
+        query = """
+            INSERT INTO score_adjustments (player_id, admin_id, amount, reason)
+            VALUES (?, ?, ?, ?)
+        """
+        self.db.execute_update(query, (player_id, admin_id, amount, reason))

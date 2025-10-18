@@ -91,6 +91,22 @@ class TestDataManager(unittest.TestCase):
             user_id="999"
         )  # Non-existent user
         self.assertEqual(len(user_history), 0)
+    
+    def test_log_score_adjustment(self):
+        """Test logging a score adjustment for a player."""
+        player_id = "player1"
+        admin_id = "admin1"
+        amount = 50
+        reason = "Manual refund"
+        self.data_manager.log_score_adjustment(player_id, admin_id, amount, reason)
+    
+        result = self.db.execute_query(
+            "SELECT * FROM score_adjustments WHERE player_id = ? AND admin_id = ?",
+            (player_id, admin_id)
+        )
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["amount"], amount)
+        self.assertEqual(result[0]["reason"], reason)
 
 
 if __name__ == "__main__":
