@@ -23,7 +23,7 @@ class RolesCog(commands.Cog):
     @commands.hybrid_command()
     @commands.has_permissions(administrator=True)
     async def update_roles(self, ctx):
-        """Manually update player roles."""
+        """(admin) Manually update player roles."""
         await ctx.send("Updating roles...")
         self.roles_game_mode.run()
         await self.apply_discord_roles(ctx.guild)

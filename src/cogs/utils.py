@@ -28,7 +28,7 @@ class Utils(commands.Cog):
     @commands.hybrid_command()
     @commands.is_owner()
     async def shutdown(self, ctx: commands.Context, restart: bool = False):
-        """Shuts down or restarts the bot."""
+        """(owner) Shuts down or restarts the bot."""
         if restart:
             logging.info("Restarting bot...")
             # Create restart info file to be read on next startup
