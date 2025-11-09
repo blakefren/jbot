@@ -362,10 +362,10 @@ class GameRunner:
         ]
 
         # Get unique players who answered correctly
-        player_ids_answered_correctly = {g['player_id'] for g in correct_guesses}
+        players_answered_correctly = {g['player_id']: g.get('player_name', 'Unknown') for g in correct_guesses}
 
-        for player_id in player_ids_answered_correctly:
-            player = self.player_manager.get_player(str(player_id))
+        for player_id, player_name in players_answered_correctly.items():
+            player = self.player_manager.get_or_create_player(str(player_id), player_name)
             if player:
                 try:
                     player.update_score(self.daily_q.clue_value)
