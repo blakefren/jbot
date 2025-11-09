@@ -37,7 +37,7 @@ try:
     EVENING_TIME_STR = config_reader.get("JBOT_EVENING_TIME")
 
     MORNING_TIME = parse_time(MORNING_TIME_STR, datetime.time(hour=8, minute=0)).replace(tzinfo=TIMEZONE)
-    REMINDER_TIME = parse_time(REMINDER_TIME_STR, datetime.time(hour=19, minute=30)).replace(tzinfo=TIMEZONE)
+    REMINDER_TIME = parse_time(REMINDER_TIME_STR, datetime.time(hour=19, minute=00)).replace(tzinfo=TIMEZONE)
     EVENING_TIME = parse_time(EVENING_TIME_STR, datetime.time(hour=20, minute=0)).replace(tzinfo=TIMEZONE)
 
 except Exception as e:
