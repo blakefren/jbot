@@ -26,7 +26,7 @@ class Admin(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def refund(self, ctx: commands.Context, member: discord.Member, amount: int, *, reason: str):
         """(admin) Refunds score to a player."""
-        player_manager = PlayerManager(self.bot.data_manager.db)
+        player_manager = self.bot.game.player_manager
         player = player_manager.get_player(str(member.id))
 
         if not player:
@@ -40,7 +40,14 @@ class Admin(commands.Cog):
             }
         
         player_manager.refund_score(str(member.id), amount)
+
+        # Reload player data in GameRunner to reflect the change
+        self.bot.game.player_manager.reload_players()
+
         player = player_manager.get_player(str(member.id))
+        if not player:
+            await ctx.send(f"Could not find player {member.display_name} after refund.")
+            return
 
         # Log the adjustment using DataManager
         self.bot.data_manager.log_score_adjustment(

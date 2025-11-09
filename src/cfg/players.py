@@ -82,6 +82,12 @@ class PlayerManager:
             player.update_score(amount)
             self.save_players()
 
+    def reload_players(self):
+        """
+        Reloads player data from the database.
+        """
+        self.players = self.data_manager.load_players()
+
 
 # TODO: Migrate this function to DataManager
 def read_players_into_dict():
