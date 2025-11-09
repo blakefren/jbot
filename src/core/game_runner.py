@@ -13,7 +13,9 @@ from data.readers.question_selector import QuestionSelector
 from data.readers.question import Question
 
 
-
+class AlreadyAnsweredCorrectlyError(Exception):
+    """Raised when a player tries to answer a question they have already answered correctly."""
+    pass
 
 
 class GameRunner:
@@ -113,6 +115,19 @@ class GameRunner:
         # Only include guesses for the current daily question
         return [g.get("guess_text") for g in guesses if g.get("daily_question_id") == self.daily_question_id]
 
+    def has_answered_correctly_today(self, player_id: int) -> bool:
+        """
+        Checks if the player has already answered today's question correctly.
+        """
+        if not self.daily_question_id:
+            return False
+        
+        guesses = self.data_manager.read_guess_history(user_id=player_id)
+        for guess in guesses:
+            if guess.get("daily_question_id") == self.daily_question_id and guess.get("is_correct"):
+                return True
+        return False
+
 
     def handle_guess(self, player_id: int, player_name: str, guess: str) -> tuple[bool, int]:
         """
@@ -127,9 +142,16 @@ class GameRunner:
             tuple[bool, int]: A tuple containing:
                 - bool: True if the guess was correct, False otherwise.
                 - int: The number of guesses the player has made for this question.
+        
+        Raises:
+            AlreadyAnsweredCorrectlyError: If the player has already answered correctly.
         """
         if not self.daily_q:
             return False, 0  # No active question
+
+        # Check if the player has already answered correctly today
+        if self.has_answered_correctly_today(player_id):
+            raise AlreadyAnsweredCorrectlyError()
 
         # Get the number of guesses for this question
         num_guesses = len(self.get_player_guesses(player_id)) + 1
@@ -141,15 +163,6 @@ class GameRunner:
             player_id, player_name, self.daily_question_id, g, is_correct
         )
         logging.info(f"Player {player_name} guessed '{g}'. Correct: {is_correct}")
-
-        if is_correct:
-            player = self.player_manager.get_player(str(player_id))
-            if player:
-                try:
-                    player.update_score(self.daily_q.clue_value)
-                except (TypeError, AttributeError):
-                    player.update_score(100)
-                self.player_manager.save_players()
 
         # Resolve with active managers
         for manager in self.managers.values():
@@ -337,8 +350,30 @@ class GameRunner:
         """
         Finalizes and saves player scores for the day.
         """
+        if not self.daily_question_id:
+            logging.warning("No daily question ID set, cannot update scores.")
+            return
+
+        # Get all correct guesses for the daily question
+        all_guesses = self.data_manager.read_guess_history()
+        correct_guesses = [
+            g for g in all_guesses 
+            if g.get("daily_question_id") == self.daily_question_id and g.get("is_correct")
+        ]
+
+        # Get unique players who answered correctly
+        player_ids_answered_correctly = {g['player_id'] for g in correct_guesses}
+
+        for player_id in player_ids_answered_correctly:
+            player = self.player_manager.get_player(str(player_id))
+            if player:
+                try:
+                    player.update_score(self.daily_q.clue_value)
+                except (TypeError, AttributeError):
+                    player.update_score(100)
+        
         self.player_manager.save_players()
-        logging.info("Player scores saved.")
+        logging.info("Player scores updated and saved.")
 
     # TODO: Implement score adjustment logic from admin cog
     def adjust_score(self, player_id: int, amount: int, reason: str):

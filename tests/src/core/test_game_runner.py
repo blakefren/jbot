@@ -2,9 +2,10 @@ import unittest
 from unittest.mock import patch, MagicMock, call
 
 from data.readers.question import Question
-from src.core.game_runner import GameRunner
+from src.core.game_runner import GameRunner, AlreadyAnsweredCorrectlyError
 from src.core.data_manager import DataManager
 from src.core.subscriber import Subscriber
+from src.core.player import Player
 
 
 class TestGameRunner(unittest.TestCase):
@@ -84,11 +85,18 @@ class TestGameRunner(unittest.TestCase):
         self.subscriber_patcher = patch("src.core.game_runner.Subscriber")
         self.MockSubscriber = self.subscriber_patcher.start()
 
+        # Patch PlayerManager
+        self.player_manager_patcher = patch("src.core.game_runner.PlayerManager")
+        self.MockPlayerManager = self.player_manager_patcher.start()
+        self.mock_player_manager_instance = self.MockPlayerManager.return_value
+
         self.game_runner = GameRunner(self.mock_question_selector, self.mock_data_manager)
+        self.game_runner.player_manager = self.mock_player_manager_instance
 
     def tearDown(self):
         """Tear down after tests."""
         self.subscriber_patcher.stop()
+        self.player_manager_patcher.stop()
 
     def test_initialization(self):
         """Test GameRunner initialization."""
@@ -242,12 +250,64 @@ class TestGameRunner(unittest.TestCase):
         self.assertTrue(content.find(expected_alice) < content.find(expected_bob))
         self.assertTrue(content.find(expected_bob) < content.find(expected_charlie))
 
+    def test_handle_guess_already_answered_correctly(self):
+        """Test that handle_guess raises an error if the player has already answered correctly."""
+        self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 1
+        player_id = 123
+        # Simulate that the player has already answered correctly
+        self.game_runner.has_answered_correctly_today = MagicMock(return_value=True)
+
+        with self.assertRaises(AlreadyAnsweredCorrectlyError):
+            self.game_runner.handle_guess(player_id, "Test Player", "any guess")
+        
+        # Ensure we didn't log the guess
+        self.mock_data_manager.log_player_guess.assert_not_called()
+
+    def test_update_scores(self):
+        """Test that scores are updated correctly for players with correct answers."""
+        self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 1
+        
+        # Mock players
+        mock_player_1 = MagicMock(spec=Player)
+        mock_player_2 = MagicMock(spec=Player)
+        
+        def get_player_side_effect(player_id):
+            if player_id == "111":
+                return mock_player_1
+            if player_id == "222":
+                return mock_player_2
+            return None
+        self.mock_player_manager_instance.get_player.side_effect = get_player_side_effect
+
+        # Mock guess history: player 111 answered correctly twice, player 222 once
+        self.mock_data_manager.read_guess_history.return_value = [
+            {"daily_question_id": 1, "player_id": 111, "is_correct": True},
+            {"daily_question_id": 1, "player_id": 111, "is_correct": True},
+            {"daily_question_id": 1, "player_id": 222, "is_correct": True},
+            {"daily_question_id": 1, "player_id": 333, "is_correct": False},
+        ]
+
+        self.game_runner.update_scores()
+
+        # Player 1 should only be scored once
+        mock_player_1.update_score.assert_called_once_with(self.mock_question.clue_value)
+        # Player 2 should be scored once
+        mock_player_2.update_score.assert_called_once_with(self.mock_question.clue_value)
+        
+        # Check that save_players was called
+        self.mock_player_manager_instance.save_players.assert_called_once()
+
     def test_handle_guess(self):
         """Test handling a player's guess."""
         self.mock_data_manager.get_todays_daily_question.return_value = None
         self.mock_data_manager.log_daily_question.return_value = 1
         self.game_runner.set_daily_question()
         player_id, player_name = 123, "Test Guesser"
+
+        # Mock has_answered_correctly_today to always be False for this test
+        self.game_runner.has_answered_correctly_today = MagicMock(return_value=False)
 
         # Mock the data_manager's read_guess_history to simulate an empty history initially
         self.mock_data_manager.read_guess_history.return_value = []
@@ -265,6 +325,8 @@ class TestGameRunner(unittest.TestCase):
             "test answer",
             True,
         )
+        # Ensure score is NOT updated here
+        self.mock_player_manager_instance.get_player.assert_not_called()
 
         # Update the mock to simulate that one guess has been made
         self.mock_data_manager.read_guess_history.return_value = [

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, call
 from src.core.discord import DiscordBot
 from src.cogs.trivia import Trivia
 from src.cfg.main import ConfigReader
-from src.core.game_runner import GameRunner
+from src.core.game_runner import GameRunner, AlreadyAnsweredCorrectlyError
 from src.core.data_manager import DataManager
 
 
@@ -90,6 +90,34 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx.interaction.followup.send.assert_called_once_with(
             "There is no active question right now."
         )
+
+    async def test_answer_command_already_answered_correctly(self):
+        """Test the answer command when the player has already answered correctly."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_ctx.author.id = 123
+        mock_ctx.author.display_name = "Test User"
+        self.mock_game_runner.daily_q = MagicMock()
+
+        # Configure the mock to raise the custom exception
+        self.mock_game_runner.handle_guess.side_effect = AlreadyAnsweredCorrectlyError
+
+        await self.trivia_cog.answer.callback(
+            self.trivia_cog, mock_ctx, guess="any guess"
+        )
+
+        # Verify handle_guess was called
+        self.mock_game_runner.handle_guess.assert_called_once_with(
+            123, "Test User", "any guess"
+        )
+
+        # Check that the correct feedback is sent
+        mock_ctx.interaction.followup.send.assert_called_once_with(
+            "You have already answered today's question correctly."
+        )
+
+        # Ensure no other messages were sent
+        mock_ctx.channel.send.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -29,6 +29,7 @@ class TestGameRunnerUpdateScores(unittest.TestCase):
     def test_update_scores_calls_save_players(self):
         """Test that update_scores calls player_manager.save_players."""
         # Act
+        self.game_runner.daily_question_id = 1
         self.game_runner.update_scores()
 
         # Assert

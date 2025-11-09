@@ -1,6 +1,8 @@
 from discord.ext import commands
 import logging
 
+from src.core.game_runner import AlreadyAnsweredCorrectlyError
+
 
 class Trivia(commands.Cog):
     def __init__(self, bot):
@@ -77,6 +79,11 @@ class Trivia(commands.Cog):
             is_correct, num_guesses = self.bot.game.handle_guess(
                 player_id, player_name, guess
             )
+        except AlreadyAnsweredCorrectlyError:
+            await ctx.interaction.followup.send(
+                "You have already answered today's question correctly."
+            )
+            return
         except Exception as e:
             logging.error(f"Error handling guess: {e}")
             await ctx.interaction.followup.send(
