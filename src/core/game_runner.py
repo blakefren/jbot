@@ -275,8 +275,8 @@ class GameRunner:
         )
         return f"{flavor_message}\n{mentions}"
 
-    def get_evening_message_content(self) -> str:
-        """Generates the evening message with the answer and a summary of player guesses."""
+    def get_evening_message_content(self, guild=None) -> str:
+        """Generates the evening message with the answer and a summary of player guesses, using server nicknames if possible."""
         if not self.daily_q:
             return "No question to answer for today."
 
@@ -290,14 +290,14 @@ class GameRunner:
         if daily_guesses:
             player_guesses_map = defaultdict(list)
             for g in daily_guesses:
-                player_guesses_map[g['player_name']].append(g)
+                player_guesses_map[g['player_id']].append(g)
 
             player_display_list = []
 
-            for player_name, guesses in player_guesses_map.items():
+            for player_id, guesses in player_guesses_map.items():
                 # Deduplicate guesses for each player, keeping track of correctness
                 unique_guesses = {g['guess_text']: g['is_correct'] for g in guesses}
-                
+
                 formatted_guesses = []
                 # Sort by guess text
                 for guess_text, is_correct in sorted(unique_guesses.items()):
@@ -305,7 +305,17 @@ class GameRunner:
                         formatted_guesses.append(f"**{guess_text}**")
                     else:
                         formatted_guesses.append(guess_text)
-                
+
+                # Resolve player name using guild nickname if possible
+                player_name = guesses[0]['player_name']
+                if guild:
+                    try:
+                        member = guild.get_member(int(player_id))
+                        if member:
+                            player_name = member.nick if member.nick else member.display_name
+                    except Exception as e:
+                        logging.warning(f"Could not resolve player name for {player_id}: {e}")
+
                 player_display_list.append((player_name, ", ".join(formatted_guesses)))
 
             # Sort by player name

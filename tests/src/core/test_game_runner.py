@@ -8,6 +8,37 @@ from src.core.subscriber import Subscriber
 
 
 class TestGameRunner(unittest.TestCase):
+    def test_get_evening_message_content_with_guild_nicknames(self):
+        """Test evening message uses server nicknames if guild is provided."""
+        self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 123
+        # Prepare guess history with player_id and player_name
+        self.mock_data_manager.read_guess_history.return_value = [
+            {"daily_question_id": 123, "player_id": 111, "player_name": "Alice", "guess_text": "Test Answer", "is_correct": True},
+            {"daily_question_id": 123, "player_id": 222, "player_name": "Bob", "guess_text": "some guess", "is_correct": False},
+        ]
+
+        # Mock guild and member objects
+        mock_guild = MagicMock()
+        mock_member_alice = MagicMock()
+        mock_member_alice.nick = "AliceNick"
+        mock_member_alice.display_name = "AliceDisplay"
+        mock_member_bob = MagicMock()
+        mock_member_bob.nick = None
+        mock_member_bob.display_name = "BobDisplay"
+        def get_member_side_effect(member_id):
+            if member_id == 111:
+                return mock_member_alice
+            elif member_id == 222:
+                return mock_member_bob
+            return None
+        mock_guild.get_member.side_effect = get_member_side_effect
+
+        content = self.game_runner.get_evening_message_content(guild=mock_guild)
+        # Should use nick if available, else display_name
+        self.assertIn("**AliceNick**: **Test Answer**", content)
+        self.assertIn("**BobDisplay**: some guess", content)
+
     def setUp(self):
         """Set up for the tests."""
         self.mock_question_selector = MagicMock()
@@ -156,18 +187,18 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.daily_question_id = 123
         self.mock_data_manager.read_guess_history.return_value = [
             # Player 'Charlie'
-            {"daily_question_id": 123, "player_name": "Charlie", "guess_text": "wrong answer", "is_correct": False},
-            
+            {"daily_question_id": 123, "player_id": 333, "player_name": "Charlie", "guess_text": "wrong answer", "is_correct": False},
+
             # Player 'Alice' - correct guess, duplicate guess, another guess
-            {"daily_question_id": 123, "player_name": "Alice", "guess_text": "Test Answer", "is_correct": True},
-            {"daily_question_id": 123, "player_name": "Alice", "guess_text": "another guess", "is_correct": False},
-            {"daily_question_id": 123, "player_name": "Alice", "guess_text": "another guess", "is_correct": False},
-            
+            {"daily_question_id": 123, "player_id": 111, "player_name": "Alice", "guess_text": "Test Answer", "is_correct": True},
+            {"daily_question_id": 123, "player_id": 111, "player_name": "Alice", "guess_text": "another guess", "is_correct": False},
+            {"daily_question_id": 123, "player_id": 111, "player_name": "Alice", "guess_text": "another guess", "is_correct": False},
+
             # Player 'Bob'
-            {"daily_question_id": 123, "player_name": "Bob", "guess_text": "some guess", "is_correct": False},
+            {"daily_question_id": 123, "player_id": 222, "player_name": "Bob", "guess_text": "some guess", "is_correct": False},
 
             # Another day's guess for Alice
-            {"daily_question_id": 456, "player_name": "Alice", "guess_text": "yesterday's guess", "is_correct": False},
+            {"daily_question_id": 456, "player_id": 111, "player_name": "Alice", "guess_text": "yesterday's guess", "is_correct": False},
         ]
 
         content = self.game_runner.get_evening_message_content()
