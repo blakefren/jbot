@@ -1,4 +1,5 @@
 from discord.ext import commands
+import logging
 
 
 class Trivia(commands.Cog):
@@ -93,17 +94,31 @@ class Trivia(commands.Cog):
             status=status,
         )
 
+        # Retrieve all guesses for this player for the current question
+        all_guesses = self.bot.game.get_player_guesses(player_id)
+        # Deduplicate and sort guesses
+        unique_guesses = sorted({(g or '').lower() for g in all_guesses})
+        guesses_text = (
+            "\n".join(f"{i+1}. {g}" for i, g in enumerate(unique_guesses))
+            if unique_guesses
+            else "No guesses yet."
+        )
+
         # Send a confirmation message
         if is_correct:
             # Send the private confirmation
-            await ctx.interaction.followup.send("That is correct! Nicely done.")
+            await ctx.interaction.followup.send(
+                f"That is correct! Nicely done.\n\nYour guesses:\n{guesses_text}"
+            )
             # Announce the correct answer publicly in the channel
             await ctx.channel.send(
                 f"{ctx.author.mention} got the correct answer in {num_guesses} guess(es)!"
             )
         else:
             # Send the private confirmation for an incorrect answer
-            await ctx.interaction.followup.send("Sorry, that is not the correct answer.")
+            await ctx.interaction.followup.send(
+                f"Sorry, that is not the correct answer.\n\nYour guesses:\n{guesses_text}"
+            )
 
 async def setup(bot):
     await bot.add_cog(Trivia(bot))

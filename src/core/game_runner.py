@@ -103,6 +103,16 @@ class GameRunner:
         # TODO: Improve matching logic (e.g., fuzzy matching, ignore punctuation, etc.)
         return re.search(guess, answer) is not None
 
+    def get_player_guesses(self, player_id: int) -> list:
+        """
+        Returns all guesses for the current daily question for the given player.
+        """
+        if not self.daily_question_id:
+            return []
+        guesses = self.data_manager.read_guess_history(user_id=player_id)
+        # Only include guesses for the current daily question
+        return [g.get("guess_text") for g in guesses if g.get("daily_question_id") == self.daily_question_id]
+
 
     def handle_guess(self, player_id: int, player_name: str, guess: str) -> tuple[bool, int]:
         """
@@ -122,15 +132,7 @@ class GameRunner:
             return False, 0  # No active question
 
         # Get the number of guesses for this question
-        player_guesses = self.data_manager.read_guess_history(user_id=player_id)
-        num_guesses = (
-            sum(
-                1
-                for g in player_guesses
-                if g.get("daily_question_id") == self.daily_question_id
-            )
-            + 1
-        )
+        num_guesses = len(self.get_player_guesses(player_id)) + 1
 
         g = guess.strip().lower()
         a = str(self.daily_q.answer).strip().lower()

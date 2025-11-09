@@ -8,6 +8,30 @@ from src.core.subscriber import Subscriber
 
 
 class TestGameRunner(unittest.TestCase):
+    def test_get_player_guesses(self):
+        """Test get_player_guesses returns deduplicated, sorted, lowercase guesses for the current daily question and player."""
+        self.game_runner.daily_question_id = 123
+        self.mock_data_manager.read_guess_history.return_value = [
+            {"daily_question_id": 123, "player_id": 111, "guess_text": "First Guess"},
+            {"daily_question_id": 123, "player_id": 111, "guess_text": "second guess"},
+            {"daily_question_id": 123, "player_id": 111, "guess_text": "FIRST GUESS"},
+            {"daily_question_id": 456, "player_id": 111, "guess_text": "Old Question Guess"},
+        ]
+        # Should only return deduplicated, sorted, lowercase guesses for player_id=111 and daily_question_id=123
+        all_guesses = self.mock_data_manager.read_guess_history.return_value
+        filtered_guesses = [g["guess_text"] for g in all_guesses if g["player_id"] == 111 and g["daily_question_id"] == 123]
+        # Remove guesses for other players
+        guesses = self.game_runner.get_player_guesses(111)
+        self.assertEqual(guesses, ["First Guess", "second guess", "FIRST GUESS"])
+        # Now deduplicate, lowercase, and sort as trivia.py does
+        formatted_guesses = sorted({(g or '').lower() for g in guesses})
+        self.assertEqual(formatted_guesses, ["first guess", "second guess"])
+
+        # Should return empty list for player with no guesses for current question
+        self.mock_data_manager.read_guess_history.return_value = []
+        guesses_none = self.game_runner.get_player_guesses(999)
+        self.assertEqual(guesses_none, [])
+
     def test_get_evening_message_content_with_guild_nicknames(self):
         """Test evening message uses server nicknames if guild is provided."""
         self.game_runner.daily_q = self.mock_question

@@ -37,6 +37,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
 
         # Mock the return value of handle_guess to be (is_correct, num_guesses)
         self.mock_game_runner.handle_guess.return_value = (True, 1)
+        self.mock_game_runner.get_player_guesses.return_value = ["test answer"]
         self.mock_game_runner.daily_q = MagicMock()
 
         await self.trivia_cog.answer.callback(
@@ -48,7 +49,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         )
 
         # Check for the two calls to send_message
-        mock_ctx.interaction.followup.send.assert_called_once_with("That is correct! Nicely done.")
+        mock_ctx.interaction.followup.send.assert_called_once_with("That is correct! Nicely done.\n\nYour guesses:\n1. test answer")
         mock_ctx.channel.send.assert_called_once_with(
             f"{mock_ctx.author.mention} got the correct answer in 1 guess(es)!"
         )
@@ -61,6 +62,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx.author.display_name = "Test User"
 
         self.mock_game_runner.handle_guess.return_value = (False, 2)
+        self.mock_game_runner.get_player_guesses.return_value = ["wrong answer"]
         self.mock_game_runner.daily_q = MagicMock()
 
         await self.trivia_cog.answer.callback(
@@ -71,7 +73,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
             123, "Test User", "wrong answer"
         )
         mock_ctx.interaction.followup.send.assert_called_once_with(
-            "Sorry, that is not the correct answer."
+            "Sorry, that is not the correct answer.\n\nYour guesses:\n1. wrong answer"
         )
 
     async def test_answer_command_no_question(self):
