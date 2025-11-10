@@ -114,9 +114,11 @@ def get_random_question(questions: list[Question]) -> Question:
 if __name__ == "__main__":
     # Example usage for testing the question readers
     import os
+
     # Add the project root to the Python path to allow imports from `src`
     import sys
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     sys.path.insert(0, project_root)
     from src.cfg.main import ConfigReader
 
@@ -133,7 +135,9 @@ if __name__ == "__main__":
                 logging.info("--- Random Jeopardy Question ---")
                 logging.info(get_random_question(jeopardy_questions))
             else:
-                logging.warning("No Jeopardy questions found or file path is a placeholder.")
+                logging.warning(
+                    "No Jeopardy questions found or file path is a placeholder."
+                )
         else:
             logging.warning("Jeopardy file path not configured or is 'todo'.")
 
@@ -151,4 +155,6 @@ if __name__ == "__main__":
         else:
             logging.warning("Knowledge Bowl file path not configured or is 'todo'.")
     else:
-        logging.warning(f"Config file not found at {config_path}, skipping example usage.")
+        logging.warning(
+            f"Config file not found at {config_path}, skipping example usage."
+        )
