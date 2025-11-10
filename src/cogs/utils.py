@@ -34,7 +34,9 @@ class Utils(commands.Cog):
             # Create restart info file to be read on next startup
             with open("restart.inf", "w") as f:
                 f.write(f"{ctx.channel.id},{ctx.author.id}")
-            await self.bot.send_message("Restarting bot...", interaction=ctx.interaction)
+            await self.bot.send_message(
+                "Restarting bot...", interaction=ctx.interaction
+            )
         else:
             logging.info("Shutting down...")
             await self.bot.send_message("Shutting down...", interaction=ctx.interaction)

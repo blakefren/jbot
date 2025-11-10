@@ -70,7 +70,9 @@ class Trivia(commands.Cog):
         await ctx.interaction.response.defer(ephemeral=True)
 
         if not self.bot.game.daily_q:
-            await ctx.interaction.followup.send("There is no active question right now.")
+            await ctx.interaction.followup.send(
+                "There is no active question right now."
+            )
             return
 
         try:
@@ -104,7 +106,7 @@ class Trivia(commands.Cog):
         # Retrieve all guesses for this player for the current question
         all_guesses = self.bot.game.get_player_guesses(player_id)
         # Deduplicate and sort guesses
-        unique_guesses = sorted({(g or '').lower() for g in all_guesses})
+        unique_guesses = sorted({(g or "").lower() for g in all_guesses})
         guesses_text = (
             "\n".join(f"{i+1}. {g}" for i, g in enumerate(unique_guesses))
             if unique_guesses
@@ -126,6 +128,7 @@ class Trivia(commands.Cog):
             await ctx.interaction.followup.send(
                 f"Sorry, that is not the correct answer.\n\nYour guesses:\n{guesses_text}"
             )
+
 
 async def setup(bot):
     await bot.add_cog(Trivia(bot))

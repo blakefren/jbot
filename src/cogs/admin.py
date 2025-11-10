@@ -5,6 +5,7 @@ from src.cfg.players import PlayerManager
 from src.core.subscriber import Subscriber
 from src.cfg.players import read_players_into_dict
 
+
 class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -24,7 +25,9 @@ class Admin(commands.Cog):
 
     @commands.hybrid_command()
     @commands.has_permissions(administrator=True)
-    async def refund(self, ctx: commands.Context, member: discord.Member, amount: int, *, reason: str):
+    async def refund(
+        self, ctx: commands.Context, member: discord.Member, amount: int, *, reason: str
+    ):
         """(admin) Refunds score to a player."""
         player_manager = self.bot.game.player_manager
         player = player_manager.get_player(str(member.id))
@@ -38,7 +41,7 @@ class Admin(commands.Cog):
                 "answer_streak": 0,
                 "active_shield": False,
             }
-        
+
         player_manager.refund_score(str(member.id), amount)
 
         # Reload player data in GameRunner to reflect the change
@@ -54,10 +57,12 @@ class Admin(commands.Cog):
             player_id=str(member.id),
             admin_id=str(ctx.author.id),
             amount=amount,
-            reason=reason
+            reason=reason,
         )
 
-        await ctx.send(f"Refunded {amount} to {member.display_name}. New score: {player['score']}. Reason: {reason}")
+        await ctx.send(
+            f"Refunded {amount} to {member.display_name}. New score: {player['score']}. Reason: {reason}"
+        )
 
     @commands.hybrid_command()
     @commands.has_permissions(administrator=True)
@@ -80,12 +85,18 @@ class Admin(commands.Cog):
 
         if member:
             subscriber = Subscriber(
-                member.id, member.display_name, is_channel=False, db_conn=self.bot.data_manager.db
+                member.id,
+                member.display_name,
+                is_channel=False,
+                db_conn=self.bot.data_manager.db,
             )
             target_name = member.display_name
         else:  # channel
             subscriber = Subscriber(
-                channel.id, channel.name, is_channel=True, db_conn=self.bot.data_manager.db
+                channel.id,
+                channel.name,
+                is_channel=True,
+                db_conn=self.bot.data_manager.db,
             )
             target_name = channel.name
 
@@ -97,7 +108,6 @@ class Admin(commands.Cog):
             await ctx.send(f"Unsubscribed {target_name} from daily questions.")
         return
 
-
     @commands.hybrid_command()
     @commands.has_permissions(administrator=True)
     @discord.app_commands.choices(
@@ -107,7 +117,9 @@ class Admin(commands.Cog):
             discord.app_commands.Choice(name="evening", value="evening"),
         ]
     )
-    async def resend(self, ctx: commands.Context, message_type: str, silent: bool = True):
+    async def resend(
+        self, ctx: commands.Context, message_type: str, silent: bool = True
+    ):
         """(admin) Resend a scheduled message."""
         await ctx.defer()
         if message_type.lower() == "morning":
@@ -123,7 +135,9 @@ class Admin(commands.Cog):
             if not silent:
                 await ctx.send("Evening message resent.")
         else:
-            await ctx.send("Invalid message type. Use 'morning', 'reminder', or 'evening'.")
+            await ctx.send(
+                "Invalid message type. Use 'morning', 'reminder', or 'evening'."
+            )
 
         if silent:
             await ctx.send(f"Silently resent {message_type} message.", ephemeral=True)
@@ -149,11 +163,12 @@ class Admin(commands.Cog):
         # You might need to pass arguments to the manager's constructor
         kwargs = {}
         if feature_name == "powerup":
-            kwargs['players'] = [k for k in read_players_into_dict().keys()]
+            kwargs["players"] = [k for k in read_players_into_dict().keys()]
         elif feature_name == "roles":
-            kwargs['db'] = self.bot.data_manager.db
+            kwargs["db"] = self.bot.data_manager.db
             from src.cfg.main import ConfigReader
-            kwargs['config'] = ConfigReader()
+
+            kwargs["config"] = ConfigReader()
 
         self.bot.game.enable_manager(feature_name, **kwargs)
         await ctx.send(f"Feature '{feature_name}' enabled.")
@@ -171,6 +186,7 @@ class Admin(commands.Cog):
         """(owner) Disable a game feature."""
         self.bot.game.disable_manager(feature_name)
         await ctx.send(f"Feature '{feature_name}' disabled.")
+
 
 async def setup(bot):
     await bot.add_cog(Admin(bot))
