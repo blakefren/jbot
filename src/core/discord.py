@@ -42,7 +42,7 @@ try:
         MORNING_TIME_STR, datetime.time(hour=8, minute=0)
     ).replace(tzinfo=TIMEZONE)
     REMINDER_TIME = parse_time(
-        REMINDER_TIME_STR, datetime.time(hour=19, minute=00)
+        REMINDER_TIME_STR, datetime.time(hour=19, minute=0)
     ).replace(tzinfo=TIMEZONE)
     EVENING_TIME = parse_time(
         EVENING_TIME_STR, datetime.time(hour=20, minute=0)
