@@ -4,9 +4,10 @@ from dotenv import load_dotenv
 import logging
 
 # Define the paths for the .env files
-BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
+BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 ENV_TEMPLATE_PATH = os.path.join(BASE_DIR, ".env.template")
+
 
 def load_config():
     """
@@ -16,6 +17,7 @@ def load_config():
         logging.info(f"Creating .env file from template: {ENV_TEMPLATE_PATH}")
         shutil.copy(ENV_TEMPLATE_PATH, ENV_PATH)
     load_dotenv(dotenv_path=ENV_PATH)
+
 
 class ConfigReader:
     """
