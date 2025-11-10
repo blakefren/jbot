@@ -56,7 +56,7 @@ class TestLoadQuestions(unittest.TestCase):
         """Test loading questions for the 'knowledge_bowl' dataset."""
         self.mock_config.get.side_effect = lambda key: {
             "JBOT_QUESTION_DATASET": "knowledge_bowl",
-            "JBOT_KNOWLEDGE_BOWL_LOCAL_PATH": "dummy_kb.tsv",
+            "JBOT_KNOWLEDGE_BOWL_LOCAL_PATH": "dummy_kb.csv",
         }.get(key)
 
         expected_question = Question("KB Q", "KB A", "Test", 10)
@@ -67,7 +67,7 @@ class TestLoadQuestions(unittest.TestCase):
         self.assertEqual(len(questions), 1)
         self.assertEqual(questions[0], expected_question)
 
-        expected_path = os.path.join(self.project_root, "dummy_kb.tsv")
+        expected_path = os.path.join(self.project_root, "dummy_kb.csv")
         mock_read_kb.assert_called_once_with(expected_path)
 
     @patch("data.loader.read_riddle_questions")
