@@ -9,6 +9,7 @@ from data.readers.tsv import get_random_question
 import os
 import sys
 
+
 def load_configs() -> ConfigReader:
     """Reads and returns the main configuration."""
     logging.info("Reading configuration...")
