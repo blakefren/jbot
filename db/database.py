@@ -51,7 +51,9 @@ class Database:
         except sqlite3.Error as e:
             logging.error(f"Error creating tables: {e}")
         except FileNotFoundError:
-            logging.error(f"Error: 'schema.sql' not found in '{os.path.dirname(__file__)}'.")
+            logging.error(
+                f"Error: 'schema.sql' not found in '{os.path.dirname(__file__)}'."
+            )
 
     def close(self):
         """
