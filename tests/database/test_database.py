@@ -1,6 +1,7 @@
 import unittest
 import os
 import sys
+
 # Add the project root to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
@@ -8,7 +9,6 @@ from db.database import Database
 
 
 class TestDatabase(unittest.TestCase):
-
     def setUp(self):
         """Set up a temporary database for testing."""
         self.db_path = ":memory:"

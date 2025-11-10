@@ -10,10 +10,14 @@ from db.database import Database
 class TestDataManager(unittest.TestCase):
     def test_save_players(self):
         """Test DataManager.save_players writes correct player data to DB."""
-        mock_db = patch.object(self.data_manager, 'db', autospec=True).start()
+        mock_db = patch.object(self.data_manager, "db", autospec=True).start()
         players = {
-            "1": Player(id="1", name="Alice", score=42, answer_streak=3, active_shield=True),
-            "2": Player(id="2", name="Bob", score=0, answer_streak=0, active_shield=False),
+            "1": Player(
+                id="1", name="Alice", score=42, answer_streak=3, active_shield=True
+            ),
+            "2": Player(
+                id="2", name="Bob", score=0, answer_streak=0, active_shield=False
+            ),
         }
         self.data_manager.save_players(players)
         # Should call execute_update twice, once for each player
@@ -37,12 +41,25 @@ class TestDataManager(unittest.TestCase):
         self.assertEqual(params2[3], 0)
         self.assertEqual(params2[4], False)
         patch.stopall()
+
     def test_load_players(self):
         """Test DataManager.load_players returns correct player dict."""
         # Mock the database execute_query method
         self.db.execute_query = lambda query: [
-            {"id": "1", "name": "Alice", "score": 42, "answer_streak": 3, "active_shield": 1},
-            {"id": "2", "name": "Bob", "score": 0, "answer_streak": 0, "active_shield": 0},
+            {
+                "id": "1",
+                "name": "Alice",
+                "score": 42,
+                "answer_streak": 3,
+                "active_shield": 1,
+            },
+            {
+                "id": "2",
+                "name": "Bob",
+                "score": 0,
+                "answer_streak": 0,
+                "active_shield": 0,
+            },
         ]
         players = self.data_manager.load_players()
         self.assertEqual(players["1"].name, "Alice")
@@ -139,7 +156,7 @@ class TestDataManager(unittest.TestCase):
             user_id="999"
         )  # Non-existent user
         self.assertEqual(len(user_history), 0)
-    
+
     def test_log_score_adjustment(self):
         """Test logging a score adjustment for a player."""
         player_id = "player1"
@@ -147,10 +164,10 @@ class TestDataManager(unittest.TestCase):
         amount = 50
         reason = "Manual refund"
         self.data_manager.log_score_adjustment(player_id, admin_id, amount, reason)
-    
+
         result = self.db.execute_query(
             "SELECT * FROM score_adjustments WHERE player_id = ? AND admin_id = ?",
-            (player_id, admin_id)
+            (player_id, admin_id),
         )
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["amount"], amount)

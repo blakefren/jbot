@@ -43,19 +43,20 @@ class TestSubscriber(unittest.TestCase):
 
     def test_get_all(self):
         self.mock_db_conn.execute_query.return_value = [
-            {'id': 123, 'display_name': 'test_user_1', 'is_channel': False},
-            {'id': 456, 'display_name': 'test_user_2', 'is_channel': True},
+            {"id": 123, "display_name": "test_user_1", "is_channel": False},
+            {"id": 456, "display_name": "test_user_2", "is_channel": True},
         ]
 
         subscribers_set = Subscriber.get_all(self.mock_db_conn)
         subscribers = sorted(list(subscribers_set), key=lambda s: s.sub_id)
 
-        self.mock_db_conn.execute_query.assert_called_once_with("SELECT id, display_name, is_channel FROM subscribers")
+        self.mock_db_conn.execute_query.assert_called_once_with(
+            "SELECT id, display_name, is_channel FROM subscribers"
+        )
         self.assertEqual(len(subscribers), 2)
         self.assertEqual(subscribers[0].sub_id, 123)
         self.assertEqual(subscribers[1].sub_id, 456)
         self.assertTrue(subscribers[1].is_channel)
-
 
 
 if __name__ == "__main__":

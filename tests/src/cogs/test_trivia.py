@@ -49,7 +49,9 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         )
 
         # Check for the two calls to send_message
-        mock_ctx.interaction.followup.send.assert_called_once_with("That is correct! Nicely done.\n\nYour guesses:\n1. test answer")
+        mock_ctx.interaction.followup.send.assert_called_once_with(
+            "That is correct! Nicely done.\n\nYour guesses:\n1. test answer"
+        )
         mock_ctx.channel.send.assert_called_once_with(
             f"{mock_ctx.author.mention} got the correct answer in 1 guess(es)!"
         )

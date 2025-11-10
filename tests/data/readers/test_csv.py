@@ -1,11 +1,13 @@
 import unittest
 from unittest.mock import patch, mock_open
-from data.readers.csv_reader import read_riddle_questions, read_riddle_with_hints_questions
+from data.readers.csv_reader import (
+    read_riddle_questions,
+    read_riddle_with_hints_questions,
+)
 from data.readers.question import Question
 
 
 class TestCsvReader(unittest.TestCase):
-
     def test_read_riddle_questions(self):
         mock_data = (
             "QUESTIONS,ANSWERS\n"

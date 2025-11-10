@@ -9,15 +9,25 @@ class TestPlayerManager(unittest.TestCase):
     def setUp(self):
         self.mock_db = MagicMock(spec=Database)
         self.mock_data_manager = MagicMock()
-        patcher = patch('src.cfg.players.DataManager', return_value=self.mock_data_manager)
+        patcher = patch(
+            "src.cfg.players.DataManager", return_value=self.mock_data_manager
+        )
         self.addCleanup(patcher.stop)
         self.mock_data_manager_class = patcher.start()
 
     def test_load_players_success(self):
         """Test successful loading of players via DataManager."""
         self.mock_data_manager.load_players.return_value = {
-            "123": Player(id="123", name="John Doe", score=10, answer_streak=5, active_shield=True),
-            "456": Player(id="456", name="Jane Smith", score=20, answer_streak=0, active_shield=False),
+            "123": Player(
+                id="123", name="John Doe", score=10, answer_streak=5, active_shield=True
+            ),
+            "456": Player(
+                id="456",
+                name="Jane Smith",
+                score=20,
+                answer_streak=0,
+                active_shield=False,
+            ),
         }
         manager = PlayerManager(self.mock_db)
         self.assertIn("123", manager.players)
@@ -39,7 +49,9 @@ class TestPlayerManager(unittest.TestCase):
     def test_get_player(self):
         """Test retrieving a single player via DataManager."""
         self.mock_data_manager.load_players.return_value = {
-            "123": Player(id="123", name="John Doe", score=10, answer_streak=5, active_shield=True)
+            "123": Player(
+                id="123", name="John Doe", score=10, answer_streak=5, active_shield=True
+            )
         }
         manager = PlayerManager(self.mock_db)
         player = manager.get_player("123")
@@ -51,8 +63,16 @@ class TestPlayerManager(unittest.TestCase):
     def test_get_all_players(self):
         """Test retrieving all players via DataManager."""
         self.mock_data_manager.load_players.return_value = {
-            "123": Player(id="123", name="John Doe", score=10, answer_streak=5, active_shield=True),
-            "456": Player(id="456", name="Jane Smith", score=20, answer_streak=0, active_shield=False),
+            "123": Player(
+                id="123", name="John Doe", score=10, answer_streak=5, active_shield=True
+            ),
+            "456": Player(
+                id="456",
+                name="Jane Smith",
+                score=20,
+                answer_streak=0,
+                active_shield=False,
+            ),
         }
         manager = PlayerManager(self.mock_db)
         all_players = manager.get_all_players()
@@ -64,8 +84,11 @@ class TestPlayerManager(unittest.TestCase):
         """Test writing player data back to the database via DataManager."""
         manager = PlayerManager(self.mock_db)
         from src.core.player import Player
+
         manager.players = {
-            "123": Player(id="123", name="John Doe", score=15, answer_streak=1, active_shield=True)
+            "123": Player(
+                id="123", name="John Doe", score=15, answer_streak=1, active_shield=True
+            )
         }
         manager.save_players()
         self.mock_data_manager.save_players.assert_called_once_with(manager.players)
@@ -73,9 +96,16 @@ class TestPlayerManager(unittest.TestCase):
     def test_refund_score(self):
         """Test refunding a player's score and saving via DataManager."""
         from src.core.player import Player
-        with patch('src.cfg.players.DataManager') as MockDataManager:
+
+        with patch("src.cfg.players.DataManager") as MockDataManager:
             players_dict = {
-                "123": Player(id="123", name="Test Player", score=100, answer_streak=0, active_shield=False)
+                "123": Player(
+                    id="123",
+                    name="Test Player",
+                    score=100,
+                    answer_streak=0,
+                    active_shield=False,
+                )
             }
             instance = MockDataManager.return_value
             instance.load_players.return_value = players_dict
@@ -96,9 +126,16 @@ class TestPlayerManager(unittest.TestCase):
     def test_refund_score_multiple(self):
         """Test that multiple refunds accumulate correctly."""
         from src.core.player import Player
-        with patch('src.cfg.players.DataManager') as MockDataManager:
+
+        with patch("src.cfg.players.DataManager") as MockDataManager:
             players_dict = {
-                "123": Player(id="123", name="Test Player", score=100, answer_streak=0, active_shield=False)
+                "123": Player(
+                    id="123",
+                    name="Test Player",
+                    score=100,
+                    answer_streak=0,
+                    active_shield=False,
+                )
             }
             instance = MockDataManager.return_value
             instance.load_players.return_value = players_dict

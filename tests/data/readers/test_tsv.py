@@ -10,7 +10,6 @@ from data.readers.question import Question
 
 
 class TestTsv(unittest.TestCase):
-
     def test_parse_value(self):
         self.assertEqual(parse_value("$1,000"), 1000)
         self.assertEqual(parse_value("2,500"), 2500)

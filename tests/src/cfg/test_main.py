@@ -69,8 +69,7 @@ class TestConfigReader(unittest.TestCase):
         self.assertTrue(config_reader.get_bool("JBOT_MIXED_CASE"))
 
     @patch.dict(
-        os.environ,
-        {"JBOT_FALSE_VAL": "false", "JBOT_OTHER_VAL": "any other value"},
+        os.environ, {"JBOT_FALSE_VAL": "false", "JBOT_OTHER_VAL": "any other value"},
     )
     def test_get_bool_false(self):
         """Test getting 'false' boolean values."""

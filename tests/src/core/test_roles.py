@@ -21,17 +21,35 @@ class TestRolesGameMode(unittest.TestCase):
         # Populate with some test data
         with self.db.get_conn() as conn:
             # Players
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('1', 'Alice', 10)")
+            conn.execute(
+                "INSERT INTO players (id, name, score) VALUES ('1', 'Alice', 10)"
+            )
             conn.execute("INSERT INTO players (id, name, score) VALUES ('2', 'Bob', 5)")
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('3', 'Charlie', 8)")
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('4', 'David', 0)")
+            conn.execute(
+                "INSERT INTO players (id, name, score) VALUES ('3', 'Charlie', 8)"
+            )
+            conn.execute(
+                "INSERT INTO players (id, name, score) VALUES ('4', 'David', 0)"
+            )
             conn.execute("INSERT INTO players (id, name, score) VALUES ('5', 'Eve', 0)")
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('6', 'Frank', 0)")
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('7', 'Grace', 0)")
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('8', 'Heidi', 0)")
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('9', 'Ivan', 0)")
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('10', 'Judy', 0)")
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('11', 'Mallory', 0)")
+            conn.execute(
+                "INSERT INTO players (id, name, score) VALUES ('6', 'Frank', 0)"
+            )
+            conn.execute(
+                "INSERT INTO players (id, name, score) VALUES ('7', 'Grace', 0)"
+            )
+            conn.execute(
+                "INSERT INTO players (id, name, score) VALUES ('8', 'Heidi', 0)"
+            )
+            conn.execute(
+                "INSERT INTO players (id, name, score) VALUES ('9', 'Ivan', 0)"
+            )
+            conn.execute(
+                "INSERT INTO players (id, name, score) VALUES ('10', 'Judy', 0)"
+            )
+            conn.execute(
+                "INSERT INTO players (id, name, score) VALUES ('11', 'Mallory', 0)"
+            )
 
     def tearDown(self):
         self.db.close()
@@ -39,12 +57,12 @@ class TestRolesGameMode(unittest.TestCase):
     def test_get_player_scores(self):
         scores = self.roles_game_mode.get_player_scores()
         self.assertEqual(len(scores), 3)
-        self.assertEqual(scores[0]['id'], '1')
-        self.assertEqual(scores[0]['score'], 10)
-        self.assertEqual(scores[1]['id'], '3')
-        self.assertEqual(scores[1]['score'], 8)
-        self.assertEqual(scores[2]['id'], '2')
-        self.assertEqual(scores[2]['score'], 5)
+        self.assertEqual(scores[0]["id"], "1")
+        self.assertEqual(scores[0]["score"], 10)
+        self.assertEqual(scores[1]["id"], "3")
+        self.assertEqual(scores[1]["score"], 8)
+        self.assertEqual(scores[2]["id"], "2")
+        self.assertEqual(scores[2]["score"], 5)
 
     def test_assign_roles(self):
         self.roles_game_mode.assign_roles()

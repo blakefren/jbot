@@ -16,16 +16,24 @@ class TestGameRunner(unittest.TestCase):
             {"daily_question_id": 123, "player_id": 111, "guess_text": "First Guess"},
             {"daily_question_id": 123, "player_id": 111, "guess_text": "second guess"},
             {"daily_question_id": 123, "player_id": 111, "guess_text": "FIRST GUESS"},
-            {"daily_question_id": 456, "player_id": 111, "guess_text": "Old Question Guess"},
+            {
+                "daily_question_id": 456,
+                "player_id": 111,
+                "guess_text": "Old Question Guess",
+            },
         ]
         # Should only return deduplicated, sorted, lowercase guesses for player_id=111 and daily_question_id=123
         all_guesses = self.mock_data_manager.read_guess_history.return_value
-        filtered_guesses = [g["guess_text"] for g in all_guesses if g["player_id"] == 111 and g["daily_question_id"] == 123]
+        filtered_guesses = [
+            g["guess_text"]
+            for g in all_guesses
+            if g["player_id"] == 111 and g["daily_question_id"] == 123
+        ]
         # Remove guesses for other players
         guesses = self.game_runner.get_player_guesses(111)
         self.assertEqual(guesses, ["First Guess", "second guess", "FIRST GUESS"])
         # Now deduplicate, lowercase, and sort as trivia.py does
-        formatted_guesses = sorted({(g or '').lower() for g in guesses})
+        formatted_guesses = sorted({(g or "").lower() for g in guesses})
         self.assertEqual(formatted_guesses, ["first guess", "second guess"])
 
         # Should return empty list for player with no guesses for current question
@@ -39,8 +47,20 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.daily_question_id = 123
         # Prepare guess history with player_id and player_name
         self.mock_data_manager.read_guess_history.return_value = [
-            {"daily_question_id": 123, "player_id": 111, "player_name": "Alice", "guess_text": "Test Answer", "is_correct": True},
-            {"daily_question_id": 123, "player_id": 222, "player_name": "Bob", "guess_text": "some guess", "is_correct": False},
+            {
+                "daily_question_id": 123,
+                "player_id": 111,
+                "player_name": "Alice",
+                "guess_text": "Test Answer",
+                "is_correct": True,
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": 222,
+                "player_name": "Bob",
+                "guess_text": "some guess",
+                "is_correct": False,
+            },
         ]
 
         # Mock guild and member objects
@@ -51,12 +71,14 @@ class TestGameRunner(unittest.TestCase):
         mock_member_bob = MagicMock()
         mock_member_bob.nick = None
         mock_member_bob.display_name = "BobDisplay"
+
         def get_member_side_effect(member_id):
             if member_id == 111:
                 return mock_member_alice
             elif member_id == 222:
                 return mock_member_bob
             return None
+
         mock_guild.get_member.side_effect = get_member_side_effect
 
         content = self.game_runner.get_evening_message_content(guild=mock_guild)
@@ -90,7 +112,9 @@ class TestGameRunner(unittest.TestCase):
         self.MockPlayerManager = self.player_manager_patcher.start()
         self.mock_player_manager_instance = self.MockPlayerManager.return_value
 
-        self.game_runner = GameRunner(self.mock_question_selector, self.mock_data_manager)
+        self.game_runner = GameRunner(
+            self.mock_question_selector, self.mock_data_manager
+        )
         self.game_runner.player_manager = self.mock_player_manager_instance
 
     def tearDown(self):
@@ -122,16 +146,19 @@ class TestGameRunner(unittest.TestCase):
     def test_set_daily_question_on_restart(self):
         """Test setting the daily question on restart when one already exists."""
         # Simulate finding an existing daily question
-        self.mock_data_manager.get_todays_daily_question.return_value = (self.mock_question, 5)
+        self.mock_data_manager.get_todays_daily_question.return_value = (
+            self.mock_question,
+            5,
+        )
 
         self.game_runner.set_daily_question()
 
         # Verify that we fetched the existing question data
         self.mock_data_manager.get_todays_daily_question.assert_called_once()
-        
+
         # Ensure we didn't try to select a new question
         self.mock_question_selector.get_question_for_today.assert_not_called()
-        
+
         # Verify the daily question is correctly set
         self.assertEqual(self.game_runner.daily_q, self.mock_question)
         self.assertEqual(self.game_runner.daily_question_id, 5)
@@ -219,18 +246,51 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.daily_question_id = 123
         self.mock_data_manager.read_guess_history.return_value = [
             # Player 'Charlie'
-            {"daily_question_id": 123, "player_id": 333, "player_name": "Charlie", "guess_text": "wrong answer", "is_correct": False},
-
+            {
+                "daily_question_id": 123,
+                "player_id": 333,
+                "player_name": "Charlie",
+                "guess_text": "wrong answer",
+                "is_correct": False,
+            },
             # Player 'Alice' - correct guess, duplicate guess, another guess
-            {"daily_question_id": 123, "player_id": 111, "player_name": "Alice", "guess_text": "Test Answer", "is_correct": True},
-            {"daily_question_id": 123, "player_id": 111, "player_name": "Alice", "guess_text": "another guess", "is_correct": False},
-            {"daily_question_id": 123, "player_id": 111, "player_name": "Alice", "guess_text": "another guess", "is_correct": False},
-
+            {
+                "daily_question_id": 123,
+                "player_id": 111,
+                "player_name": "Alice",
+                "guess_text": "Test Answer",
+                "is_correct": True,
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": 111,
+                "player_name": "Alice",
+                "guess_text": "another guess",
+                "is_correct": False,
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": 111,
+                "player_name": "Alice",
+                "guess_text": "another guess",
+                "is_correct": False,
+            },
             # Player 'Bob'
-            {"daily_question_id": 123, "player_id": 222, "player_name": "Bob", "guess_text": "some guess", "is_correct": False},
-
+            {
+                "daily_question_id": 123,
+                "player_id": 222,
+                "player_name": "Bob",
+                "guess_text": "some guess",
+                "is_correct": False,
+            },
             # Another day's guess for Alice
-            {"daily_question_id": 456, "player_id": 111, "player_name": "Alice", "guess_text": "yesterday's guess", "is_correct": False},
+            {
+                "daily_question_id": 456,
+                "player_id": 111,
+                "player_name": "Alice",
+                "guess_text": "yesterday's guess",
+                "is_correct": False,
+            },
         ]
 
         content = self.game_runner.get_evening_message_content()
@@ -260,7 +320,7 @@ class TestGameRunner(unittest.TestCase):
 
         with self.assertRaises(AlreadyAnsweredCorrectlyError):
             self.game_runner.handle_guess(player_id, "Test Player", "any guess")
-        
+
         # Ensure we didn't log the guess
         self.mock_data_manager.log_player_guess.assert_not_called()
 
@@ -268,34 +328,61 @@ class TestGameRunner(unittest.TestCase):
         """Test that scores are updated correctly for players with correct answers."""
         self.game_runner.daily_q = self.mock_question
         self.game_runner.daily_question_id = 1
-        
+
         # Mock players
         mock_player_1 = MagicMock(spec=Player)
         mock_player_2 = MagicMock(spec=Player)
-        
+
         def get_or_create_player_side_effect(player_id, player_name=None):
             if player_id == "111":
                 return mock_player_1
             if player_id == "222":
                 return mock_player_2
             return None
-        self.mock_player_manager_instance.get_or_create_player.side_effect = get_or_create_player_side_effect
+
+        self.mock_player_manager_instance.get_or_create_player.side_effect = (
+            get_or_create_player_side_effect
+        )
 
         # Mock guess history: player 111 answered correctly twice, player 222 once
         self.mock_data_manager.read_guess_history.return_value = [
-            {"daily_question_id": 1, "player_id": 111, "player_name": "Player1", "is_correct": True},
-            {"daily_question_id": 1, "player_id": 111, "player_name": "Player1", "is_correct": True},
-            {"daily_question_id": 1, "player_id": 222, "player_name": "Player2", "is_correct": True},
-            {"daily_question_id": 1, "player_id": 333, "player_name": "Player3", "is_correct": False},
+            {
+                "daily_question_id": 1,
+                "player_id": 111,
+                "player_name": "Player1",
+                "is_correct": True,
+            },
+            {
+                "daily_question_id": 1,
+                "player_id": 111,
+                "player_name": "Player1",
+                "is_correct": True,
+            },
+            {
+                "daily_question_id": 1,
+                "player_id": 222,
+                "player_name": "Player2",
+                "is_correct": True,
+            },
+            {
+                "daily_question_id": 1,
+                "player_id": 333,
+                "player_name": "Player3",
+                "is_correct": False,
+            },
         ]
 
         self.game_runner.update_scores()
 
         # Player 1 should only be scored once
-        mock_player_1.update_score.assert_called_once_with(self.mock_question.clue_value)
+        mock_player_1.update_score.assert_called_once_with(
+            self.mock_question.clue_value
+        )
         # Player 2 should be scored once
-        mock_player_2.update_score.assert_called_once_with(self.mock_question.clue_value)
-        
+        mock_player_2.update_score.assert_called_once_with(
+            self.mock_question.clue_value
+        )
+
         # Check that save_players was called
         self.mock_player_manager_instance.save_players.assert_called_once()
 
@@ -303,29 +390,40 @@ class TestGameRunner(unittest.TestCase):
         """Test that a new player's score is updated correctly."""
         self.game_runner.daily_q = self.mock_question
         self.game_runner.daily_question_id = 1
-        
+
         # Mock a new player who is not in the player manager's cache initially
         new_player_id = "444"
         new_player_name = "Newbie"
-        
+
         # get_player returns None, but get_or_create_player will create them
         mock_new_player = MagicMock(spec=Player)
         self.mock_player_manager_instance.get_player.return_value = None
-        self.mock_player_manager_instance.get_or_create_player.return_value = mock_new_player
+        self.mock_player_manager_instance.get_or_create_player.return_value = (
+            mock_new_player
+        )
 
         # Mock guess history for the new player
         self.mock_data_manager.read_guess_history.return_value = [
-            {"daily_question_id": 1, "player_id": int(new_player_id), "player_name": new_player_name, "is_correct": True},
+            {
+                "daily_question_id": 1,
+                "player_id": int(new_player_id),
+                "player_name": new_player_name,
+                "is_correct": True,
+            },
         ]
 
         self.game_runner.update_scores()
 
         # Verify that get_or_create_player was called for the new player
-        self.mock_player_manager_instance.get_or_create_player.assert_called_once_with(new_player_id, new_player_name)
-        
+        self.mock_player_manager_instance.get_or_create_player.assert_called_once_with(
+            new_player_id, new_player_name
+        )
+
         # Verify the new player's score was updated
-        mock_new_player.update_score.assert_called_once_with(self.mock_question.clue_value)
-        
+        mock_new_player.update_score.assert_called_once_with(
+            self.mock_question.clue_value
+        )
+
         # Check that save_players was called
         self.mock_player_manager_instance.save_players.assert_called_once()
 
@@ -379,7 +477,9 @@ class TestGameRunner(unittest.TestCase):
 
         # No daily question
         self.game_runner.daily_q = None
-        is_correct, num_guesses = self.game_runner.handle_guess(player_id, player_name, "any answer")
+        is_correct, num_guesses = self.game_runner.handle_guess(
+            player_id, player_name, "any answer"
+        )
         self.assertFalse(is_correct)
         self.assertEqual(num_guesses, 0)
 
@@ -400,17 +500,19 @@ class TestGameRunner(unittest.TestCase):
             {"id": "1", "name": "OldNameAlice", "score": 10},
             {"id": "2", "name": "Bob", "score": 5},
         ]
-        
+
         mock_guild = MagicMock()
         mock_member_alice = MagicMock()
         mock_member_alice.display_name = "NewNameAlice"
         mock_member_alice.nick = None
-        
+
         # Let get_member return the new mock member for Alice, and None for Bob
-        mock_guild.get_member.side_effect = lambda id: mock_member_alice if id == 1 else None
+        mock_guild.get_member.side_effect = (
+            lambda id: mock_member_alice if id == 1 else None
+        )
 
         leaderboard = self.game_runner.get_scores_leaderboard(guild=mock_guild)
-        
+
         self.assertIn("10: NewNameAlice", leaderboard)
         self.assertIn("5: Bob", leaderboard)
         self.assertNotIn("OldNameAlice", leaderboard)
@@ -422,32 +524,34 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.get_player_scores.return_value = [
             {"id": "1", "name": "OldNameAlice", "score": 10},
         ]
-        
+
         mock_guild = MagicMock()
         mock_member_alice = MagicMock()
         mock_member_alice.display_name = "NewNameAlice"
         mock_member_alice.nick = "AliceNick"
-        
+
         mock_guild.get_member.return_value = mock_member_alice
 
         leaderboard = self.game_runner.get_scores_leaderboard(guild=mock_guild)
-        
+
         self.assertIn("10: AliceNick", leaderboard)
         self.assertNotIn("OldNameAlice", leaderboard)
         self.assertNotIn("NewNameAlice", leaderboard)
         mock_guild.get_member.assert_called_once_with(1)
 
-
     def test_get_player_history(self):
         """Test generating a player's history."""
         self.mock_data_manager.read_guess_history.return_value = [
-            {'is_correct': True},
-            {'is_correct': False},
-            {'is_correct': True},
-            {'is_correct': True},
+            {"is_correct": True},
+            {"is_correct": False},
+            {"is_correct": True},
+            {"is_correct": True},
         ]
         from src.core.player import Player
-        self.game_runner.player_manager.get_player = MagicMock(return_value=Player(id="123", name="Alice", score=300))
+
+        self.game_runner.player_manager.get_player = MagicMock(
+            return_value=Player(id="123", name="Alice", score=300)
+        )
 
         history = self.game_runner.get_player_history(123, "Alice")
         self.assertIn("-- Your stats, Alice --", history)
