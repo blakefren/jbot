@@ -8,9 +8,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 from src.cfg.main import ConfigReader
 from data.readers.question import Question
-from data.readers.tsv import (
-    read_jeopardy_questions,
-)
+from data.readers.tsv import read_jeopardy_questions
 from data.readers.csv_reader import (
     read_riddle_questions,
     read_riddle_with_hints_questions,
@@ -47,10 +45,14 @@ def load_questions(config: ConfigReader) -> list[Question]:
         path = os.path.join(PROJECT_ROOT, config.get("JBOT_GENERAL_TRIVIA_LOCAL_PATH"))
         return read_general_trivia_questions(path)
     elif dataset == "millionaire_easy":
-        path = os.path.join(PROJECT_ROOT, config.get("JBOT_MILLIONAIRE_EASY_LOCAL_PATH"))
+        path = os.path.join(
+            PROJECT_ROOT, config.get("JBOT_MILLIONAIRE_EASY_LOCAL_PATH")
+        )
         return read_simple_questions(path, "Millionaire (Easy)")
     elif dataset == "millionaire_hard":
-        path = os.path.join(PROJECT_ROOT, config.get("JBOT_MILLIONAIRE_HARD_LOCAL_PATH"))
+        path = os.path.join(
+            PROJECT_ROOT, config.get("JBOT_MILLIONAIRE_HARD_LOCAL_PATH")
+        )
         return read_simple_questions(path, "Millionaire (Hard)")
     else:
         logging.error(f"Unknown dataset: {dataset}")
