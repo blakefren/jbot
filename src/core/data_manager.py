@@ -4,6 +4,7 @@ from db.database import Database
 from data.readers.question import Question
 from src.core.player import Player
 
+
 class DataManager:
     """
     Handles all database interactions for the bot.
@@ -73,12 +74,8 @@ class DataManager:
             question (Question): The question object.
         """
         # First, ensure the question exists in the 'questions' table
-        question_query = (
-            "SELECT id FROM questions WHERE question_hash = ?"
-        )
-        existing_question = self.db.execute_query(
-            question_query, (str(question.id),)
-        )
+        question_query = "SELECT id FROM questions WHERE question_hash = ?"
+        existing_question = self.db.execute_query(question_query, (str(question.id),))
 
         if existing_question:
             question_id = existing_question[0]["id"]
@@ -164,7 +161,9 @@ class DataManager:
         """
         Retrieves player ids, names and scores from the database, ordered by score.
         """
-        query = "SELECT id, name, score FROM players WHERE score > 0 ORDER BY score DESC"
+        query = (
+            "SELECT id, name, score FROM players WHERE score > 0 ORDER BY score DESC"
+        )
         return self.db.execute_query(query)
 
     def read_guess_history(self, user_id: int = -1) -> list[dict]:
@@ -191,15 +190,15 @@ class DataManager:
         result = self.db.execute_query(query, (question_id,))
         if not result:
             return None
-        
+
         q_data = result[0]
         return Question(
-            question=q_data['question_text'],
-            answer=q_data['answer_text'],
-            category=q_data['category'],
-            clue_value=q_data['value'],
-            data_source=q_data['source'],
-            hint=q_data['hint_text']
+            question=q_data["question_text"],
+            answer=q_data["answer_text"],
+            category=q_data["category"],
+            clue_value=q_data["value"],
+            data_source=q_data["source"],
+            hint=q_data["hint_text"],
         )
 
     def get_todays_daily_question(self) -> Optional[tuple[Question, int]]:
@@ -209,21 +208,23 @@ class DataManager:
         today = date.today()
         query = "SELECT id, question_id FROM daily_questions WHERE sent_at = ?"
         daily_question_info = self.db.execute_query(query, (today,))
-        
+
         if not daily_question_info:
             return None
-        
+
         daily_question_info = daily_question_info[0]
 
         question = self.get_question_by_id(daily_question_info["question_id"])
         daily_question_id = daily_question_info["id"]
-        
+
         if not question:
             return None
 
         return question, daily_question_id
 
-    def log_score_adjustment(self, player_id: str, admin_id: str, amount: int, reason: str):
+    def log_score_adjustment(
+        self, player_id: str, admin_id: str, amount: int, reason: str
+    ):
         """
         Logs a score adjustment for a player.
 

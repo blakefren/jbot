@@ -3,7 +3,15 @@ class Player:
     Represents a player in the trivia game.
     Encapsulates all fields from the players table and provides methods for player operations.
     """
-    def __init__(self, id: str, name: str, score: int = 0, answer_streak: int = 0, active_shield: bool = False):
+
+    def __init__(
+        self,
+        id: str,
+        name: str,
+        score: int = 0,
+        answer_streak: int = 0,
+        active_shield: bool = False,
+    ):
         self.id = id  # Discord ID
         self.name = name
         self.score = score

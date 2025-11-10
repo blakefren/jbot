@@ -15,6 +15,7 @@ from data.readers.question import Question
 
 class AlreadyAnsweredCorrectlyError(Exception):
     """Raised when a player tries to answer a question they have already answered correctly."""
+
     pass
 
 
@@ -25,9 +26,7 @@ class GameRunner:
     """
 
     def __init__(
-        self,
-        question_selector: QuestionSelector,
-        data_manager: DataManager,
+        self, question_selector: QuestionSelector, data_manager: DataManager,
     ):
         self.question_selector = question_selector
         self.data_manager = data_manager
@@ -65,12 +64,14 @@ class GameRunner:
 
     def set_daily_question(self):
         logging.debug(f"GameRunner.set_daily_question.")
-        
+
         # Check for an existing daily question ID for today
         daily_question_data = self.data_manager.get_todays_daily_question()
         if daily_question_data:
             self.daily_q, self.daily_question_id = daily_question_data
-            logging.info(f"Daily question already set with ID: {self.daily_question_id}")
+            logging.info(
+                f"Daily question already set with ID: {self.daily_question_id}"
+            )
             return
 
         # Otherwise, select a new question
@@ -113,7 +114,11 @@ class GameRunner:
             return []
         guesses = self.data_manager.read_guess_history(user_id=player_id)
         # Only include guesses for the current daily question
-        return [g.get("guess_text") for g in guesses if g.get("daily_question_id") == self.daily_question_id]
+        return [
+            g.get("guess_text")
+            for g in guesses
+            if g.get("daily_question_id") == self.daily_question_id
+        ]
 
     def has_answered_correctly_today(self, player_id: int) -> bool:
         """
@@ -121,15 +126,18 @@ class GameRunner:
         """
         if not self.daily_question_id:
             return False
-        
+
         guesses = self.data_manager.read_guess_history(user_id=player_id)
         for guess in guesses:
-            if guess.get("daily_question_id") == self.daily_question_id and guess.get("is_correct"):
+            if guess.get("daily_question_id") == self.daily_question_id and guess.get(
+                "is_correct"
+            ):
                 return True
         return False
 
-
-    def handle_guess(self, player_id: int, player_name: str, guess: str) -> tuple[bool, int]:
+    def handle_guess(
+        self, player_id: int, player_name: str, guess: str
+    ) -> tuple[bool, int]:
         """
         Handles the answer submitted by a player, logs it, and returns correctness.
 
@@ -170,7 +178,9 @@ class GameRunner:
                 try:
                     manager.on_guess(player_id, player_name, guess, is_correct)
                 except TypeError as e:
-                    logging.error(f"Error calling on_guess for {type(manager).__name__}: {e}")
+                    logging.error(
+                        f"Error calling on_guess for {type(manager).__name__}: {e}"
+                    )
                     # Attempt to call with fewer arguments for backward compatibility
                     try:
                         manager.on_guess(player_id, is_correct)
@@ -193,10 +203,14 @@ class GameRunner:
                 try:
                     member = guild.get_member(int(player["id"]))
                     if member:
-                        player_name = member.nick if member.nick else member.display_name
+                        player_name = (
+                            member.nick if member.nick else member.display_name
+                        )
                 except Exception as e:
-                    logging.warning(f"Could not resolve player name for {player['id']}: {e}")
-            scores_by_points[player['score']].append(player_name)
+                    logging.warning(
+                        f"Could not resolve player name for {player['id']}: {e}"
+                    )
+            scores_by_points[player["score"]].append(player_name)
 
         if not scores_by_points:
             return "No scores available yet."
@@ -218,8 +232,10 @@ class GameRunner:
             return f"No history found for {player_name}."
 
         total_guesses = len(history)
-        correct_guesses = sum(1 for g in history if g['is_correct'])
-        correct_rate = (correct_guesses / total_guesses) * 100 if total_guesses > 0 else 0
+        correct_guesses = sum(1 for g in history if g["is_correct"])
+        correct_rate = (
+            (correct_guesses / total_guesses) * 100 if total_guesses > 0 else 0
+        )
 
         player = self.player_manager.get_player(str(player_id))
         score = player.score if player else 0
@@ -261,7 +277,9 @@ class GameRunner:
         # Get players who have guessed
         all_guesses = self.data_manager.read_guess_history()
         daily_guesses = [
-            g for g in all_guesses if g.get("daily_question_id") == self.daily_question_id
+            g
+            for g in all_guesses
+            if g.get("daily_question_id") == self.daily_question_id
         ]
         player_ids_who_guessed = {g.get("player_id") for g in daily_guesses}
 
@@ -298,20 +316,22 @@ class GameRunner:
         # Get all guesses for the daily question
         all_guesses = self.data_manager.read_guess_history()
         daily_guesses = [
-            g for g in all_guesses if g.get("daily_question_id") == self.daily_question_id
+            g
+            for g in all_guesses
+            if g.get("daily_question_id") == self.daily_question_id
         ]
 
         player_answers = ""
         if daily_guesses:
             player_guesses_map = defaultdict(list)
             for g in daily_guesses:
-                player_guesses_map[g['player_id']].append(g)
+                player_guesses_map[g["player_id"]].append(g)
 
             player_display_list = []
 
             for player_id, guesses in player_guesses_map.items():
                 # Deduplicate guesses for each player, keeping track of correctness
-                unique_guesses = {g['guess_text']: g['is_correct'] for g in guesses}
+                unique_guesses = {g["guess_text"]: g["is_correct"] for g in guesses}
 
                 formatted_guesses = []
                 # Sort by guess text
@@ -322,14 +342,18 @@ class GameRunner:
                         formatted_guesses.append(guess_text)
 
                 # Resolve player name using guild nickname if possible
-                player_name = guesses[0]['player_name']
+                player_name = guesses[0]["player_name"]
                 if guild:
                     try:
                         member = guild.get_member(int(player_id))
                         if member:
-                            player_name = member.nick if member.nick else member.display_name
+                            player_name = (
+                                member.nick if member.nick else member.display_name
+                            )
                     except Exception as e:
-                        logging.warning(f"Could not resolve player name for {player_id}: {e}")
+                        logging.warning(
+                            f"Could not resolve player name for {player_id}: {e}"
+                        )
 
                 player_display_list.append((player_name, ", ".join(formatted_guesses)))
 
@@ -357,21 +381,27 @@ class GameRunner:
         # Get all correct guesses for the daily question
         all_guesses = self.data_manager.read_guess_history()
         correct_guesses = [
-            g for g in all_guesses 
-            if g.get("daily_question_id") == self.daily_question_id and g.get("is_correct")
+            g
+            for g in all_guesses
+            if g.get("daily_question_id") == self.daily_question_id
+            and g.get("is_correct")
         ]
 
         # Get unique players who answered correctly
-        players_answered_correctly = {g['player_id']: g.get('player_name', 'Unknown') for g in correct_guesses}
+        players_answered_correctly = {
+            g["player_id"]: g.get("player_name", "Unknown") for g in correct_guesses
+        }
 
         for player_id, player_name in players_answered_correctly.items():
-            player = self.player_manager.get_or_create_player(str(player_id), player_name)
+            player = self.player_manager.get_or_create_player(
+                str(player_id), player_name
+            )
             if player:
                 try:
                     player.update_score(self.daily_q.clue_value)
                 except (TypeError, AttributeError):
                     player.update_score(100)
-        
+
         self.player_manager.save_players()
         logging.info("Player scores updated and saved.")
 

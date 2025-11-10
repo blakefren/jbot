@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+
 class BaseManager(ABC):
     """
     Abstract base class for game feature managers.

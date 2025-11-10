@@ -1,6 +1,7 @@
 # bot/managers/roles.py
 import sys
 import os
+
 # Add the project root to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
@@ -15,6 +16,7 @@ ROLE_NAMES = {
     "RED_TEAM": "red team",
     "BLUE_TEAM": "blue team",
 }
+
 
 class RolesGameMode(BaseManager):
     def __init__(self, data_manager: DataManager, config):
@@ -33,7 +35,6 @@ class RolesGameMode(BaseManager):
         """
         return self.data_manager.get_player_scores()
 
-
     def assign_roles(self):
         """
         Assigns roles to players based on their scores.
@@ -42,7 +43,7 @@ class RolesGameMode(BaseManager):
         player_scores = self.data_manager.get_player_scores()
         if not player_scores:
             return
-        
+
         # Clear existing roles
         # TODO: use data_manager method
         with self.data_manager.db.get_conn() as conn:
@@ -63,7 +64,7 @@ class RolesGameMode(BaseManager):
         top_n_count = len(player_scores) * top_percentage // 100
         if top_n_count == 0 and len(player_scores) > 1:
             top_n_count = 1
-        
+
         for i in range(top_n_count):
             player_id = player_scores[i]["id"]
             self.assign_role_to_player(player_id, ROLE_NAMES["TOP_PLAYER"])
@@ -81,11 +82,17 @@ class RolesGameMode(BaseManager):
                 role_id = role_id_row[0]
             else:
                 # If role doesn't exist, create it
-                cursor = conn.execute("INSERT INTO roles (name, description) VALUES (?, ?)", (role_name, f"Dynamically created role for {role_name}"))
+                cursor = conn.execute(
+                    "INSERT INTO roles (name, description) VALUES (?, ?)",
+                    (role_name, f"Dynamically created role for {role_name}"),
+                )
                 role_id = cursor.lastrowid
-            
+
             if role_id:
-                conn.execute("INSERT OR IGNORE INTO player_roles (player_id, role_id) VALUES (?, ?)", (player_id, role_id))
+                conn.execute(
+                    "INSERT OR IGNORE INTO player_roles (player_id, role_id) VALUES (?, ?)",
+                    (player_id, role_id),
+                )
 
     def run(self):
         """

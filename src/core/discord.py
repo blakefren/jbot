@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from src.cfg.main import ConfigReader
 import sys
+
 # Add the project root to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
@@ -27,26 +28,34 @@ def parse_time(time_str: str, default_time: datetime.time) -> datetime.time:
     except (ValueError, TypeError):
         return default_time
 
+
 try:
     config_reader = ConfigReader()
     TIMEZONE_STR = config_reader.get("JBOT_TIMEZONE") or "US/Pacific"
     TIMEZONE = ZoneInfo(TIMEZONE_STR)
-    
+
     MORNING_TIME_STR = config_reader.get("JBOT_MORNING_TIME")
     REMINDER_TIME_STR = config_reader.get("JBOT_REMINDER_TIME")
     EVENING_TIME_STR = config_reader.get("JBOT_EVENING_TIME")
 
-    MORNING_TIME = parse_time(MORNING_TIME_STR, datetime.time(hour=8, minute=0)).replace(tzinfo=TIMEZONE)
-    REMINDER_TIME = parse_time(REMINDER_TIME_STR, datetime.time(hour=19, minute=00)).replace(tzinfo=TIMEZONE)
-    EVENING_TIME = parse_time(EVENING_TIME_STR, datetime.time(hour=20, minute=0)).replace(tzinfo=TIMEZONE)
+    MORNING_TIME = parse_time(
+        MORNING_TIME_STR, datetime.time(hour=8, minute=0)
+    ).replace(tzinfo=TIMEZONE)
+    REMINDER_TIME = parse_time(
+        REMINDER_TIME_STR, datetime.time(hour=19, minute=00)
+    ).replace(tzinfo=TIMEZONE)
+    EVENING_TIME = parse_time(
+        EVENING_TIME_STR, datetime.time(hour=20, minute=0)
+    ).replace(tzinfo=TIMEZONE)
 
 except Exception as e:
-    logging.error(f"Error reading time configuration, defaulting to hardcoded times. Error: {e}")
+    logging.error(
+        f"Error reading time configuration, defaulting to hardcoded times. Error: {e}"
+    )
     TIMEZONE = ZoneInfo("US/Pacific")
     MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
     REMINDER_TIME = datetime.time(hour=19, minute=30, tzinfo=TIMEZONE)
     EVENING_TIME = datetime.time(hour=20, minute=0, tzinfo=TIMEZONE)
-
 
 
 class DiscordBot(commands.Bot):
@@ -165,9 +174,13 @@ class DiscordBot(commands.Bot):
             if not self.game.daily_q:
                 logging.warning("No question found for today.")
             else:
-                logging.info(f"Set daily question with hash {self.game.daily_q.id} on startup.")
+                logging.info(
+                    f"Set daily question with hash {self.game.daily_q.id} on startup."
+                )
 
-    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
+    async def on_command_error(
+        self, ctx: commands.Context, error: commands.CommandError
+    ):
         """Global error handler for all commands."""
         # Check if the error is a CommandInvokeError, and get the original exception
         if isinstance(error, commands.CommandInvokeError):
@@ -187,7 +200,9 @@ class DiscordBot(commands.Bot):
             message = "You don't meet the requirements to run this command."
         else:
             # For any other errors, log them and send a generic failure message.
-            logging.error(f"An unexpected error occurred in command '{ctx.command}': {error}")
+            logging.error(
+                f"An unexpected error occurred in command '{ctx.command}': {error}"
+            )
             self.data_manager.log_messaging_event(
                 direction="bot",
                 method="Discord",
@@ -198,7 +213,9 @@ class DiscordBot(commands.Bot):
             message = "An unexpected error occurred while running the command."
 
         # Send the error message. We use send_message to handle both interactions and regular commands.
-        await self.send_message(message, ctx=ctx, interaction=ctx.interaction, ephemeral=True)
+        await self.send_message(
+            message, ctx=ctx, interaction=ctx.interaction, ephemeral=True
+        )
 
     async def on_message(self, message):
         """
@@ -220,13 +237,16 @@ class DiscordBot(commands.Bot):
     @tasks.loop(time=MORNING_TIME)
     async def morning_message_task(self, silent: bool = False):
         """Sends the morning message and question to all subscribers."""
-        logging.info(f"Morning message task running at {datetime.datetime.now(TIMEZONE)}...")
+        logging.info(
+            f"Morning message task running at {datetime.datetime.now(TIMEZONE)}..."
+        )
         try:
             self.game.set_daily_question()
             if not silent:
                 await self._send_daily_message_to_all_subscribers(
-                    self.game.get_morning_message_content, "morning_message",
-                    send_leaderboard=True
+                    self.game.get_morning_message_content,
+                    "morning_message",
+                    send_leaderboard=True,
                 )
         except Exception as e:
             self._log_task_error(e, "morning_message_task")
@@ -234,7 +254,9 @@ class DiscordBot(commands.Bot):
     @tasks.loop(time=REMINDER_TIME)
     async def reminder_message_task(self, silent: bool = False):
         """Sends a reminder to all subscribers, tagging those who haven't guessed."""
-        logging.info(f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}...")
+        logging.info(
+            f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}..."
+        )
         try:
             content_getter = lambda: self.game.get_reminder_message_content(
                 self.config.get_bool("JBOT_TAG_UNANSWERED_PLAYERS")
@@ -249,13 +271,16 @@ class DiscordBot(commands.Bot):
     @tasks.loop(time=EVENING_TIME)
     async def evening_message_task(self, silent: bool = False):
         """Sends the evening answer to all subscribers."""
-        logging.info(f"Evening message task running at {datetime.datetime.now(TIMEZONE)}...")
+        logging.info(
+            f"Evening message task running at {datetime.datetime.now(TIMEZONE)}..."
+        )
         try:
             self.game.update_scores()
             if not silent:
                 await self._send_daily_message_to_all_subscribers(
-                    self.game.get_evening_message_content, "evening_message",
-                    send_leaderboard=True
+                    self.game.get_evening_message_content,
+                    "evening_message",
+                    send_leaderboard=True,
                 )
         except Exception as e:
             self._log_task_error(e, "evening_message_task")
@@ -364,15 +389,21 @@ class DiscordBot(commands.Bot):
 
 
 async def discord_bot_async(
-    config: ConfigReader, questions: list[Question], db: "Database", data_manager: "DataManager"
+    config: ConfigReader,
+    questions: list[Question],
+    db: "Database",
+    data_manager: "DataManager",
 ):
     """Main function to initialize and run the bot."""
-    question_selector = QuestionSelector(questions, mode=config.get("JBOT_QUESTION_MODE"))
+    question_selector = QuestionSelector(
+        questions, mode=config.get("JBOT_QUESTION_MODE")
+    )
     game = GameRunner(question_selector, data_manager)
 
     # Register managers
     from core.powerup import PowerUpManager
     from core.roles import RolesGameMode
+
     game.register_manager("powerup", PowerUpManager)
     game.register_manager("roles", RolesGameMode)
 
@@ -381,7 +412,12 @@ async def discord_bot_async(
     await bot.run()
 
 
-def run_discord_bot(config: ConfigReader, questions: list[Question], db: "Database", data_manager: "DataManager"):
+def run_discord_bot(
+    config: ConfigReader,
+    questions: list[Question],
+    db: "Database",
+    data_manager: "DataManager",
+):
     try:
         # TODO: try this instead
         # asyncio.get_event_loop().run_until_complete(discord_bot_async(config, questions, db, data_manager))
