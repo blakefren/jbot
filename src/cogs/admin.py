@@ -142,6 +142,25 @@ class Admin(commands.Cog):
         if silent:
             await ctx.send(f"Silently resent {message_type} message.", ephemeral=True)
 
+    @commands.hybrid_command()
+    @commands.has_permissions(administrator=True)
+    async def skip(self, ctx: commands.Context):
+        """(admin) Skips the current daily question."""
+        await ctx.defer(ephemeral=True)
+
+        if not self.bot.game.daily_q:
+            await ctx.send("There is no active question to skip.")
+            return
+
+        if self.bot.game.reset_daily_question():
+            new_question = self.bot.game.daily_q
+            question_content = self.bot.game.format_question(new_question)
+            await ctx.send(
+                f"The daily question has been skipped. The new question is:\n{question_content}"
+            )
+        else:
+            await ctx.send("Failed to skip the daily question. Check the logs.")
+
     @commands.hybrid_group(name="feature", description="Manage game features.")
     @commands.is_owner()
     async def feature(self, ctx: commands.Context):

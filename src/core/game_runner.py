@@ -62,6 +62,30 @@ class GameRunner:
         else:
             logging.warning(f"Manager '{name}' is not enabled or not found.")
 
+    def reset_daily_question(self):
+        """
+        Resets the daily question by selecting a new one.
+        This is intended for admin use to skip a problematic or unwanted question.
+        """
+        logging.info("Admin triggered reset of daily question.")
+        # Force a new question by bypassing the check
+        self.daily_q = self.question_selector.get_question_for_today()
+        if self.daily_q:
+            # Invalidate the old question by logging the new one for today.
+            # The DB schema ensures only one question per day, so this will either
+            # fail if not set up correctly, or overwrite/ignore.
+            # `log_daily_question` should ideally handle this.
+            # For now, we assume it replaces or the logic inside handles it.
+            self.daily_question_id = self.data_manager.log_daily_question(
+                self.daily_q, force_new=True
+            )
+            if self.daily_question_id is None:
+                logging.error("Failed to log new daily question during reset.")
+                return False
+            logging.info(f"Daily question reset to new ID: {self.daily_question_id}")
+            return True
+        return False
+
     def set_daily_question(self):
         logging.debug(f"GameRunner.set_daily_question.")
 

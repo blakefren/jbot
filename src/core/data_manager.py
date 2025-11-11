@@ -66,12 +66,13 @@ class DataManager:
 
     # TODO: Add a method to get all players, replacing read_players_into_dict in players.py
 
-    def log_daily_question(self, question: Question):
+    def log_daily_question(self, question: Question, force_new: bool = False):
         """
         Logs details about a daily question that was sent out.
 
         Args:
             question (Question): The question object.
+            force_new (bool): If True, will replace today's question if one exists.
         """
         # First, ensure the question exists in the 'questions' table
         question_query = "SELECT id FROM questions WHERE question_hash = ?"
@@ -99,17 +100,27 @@ class DataManager:
             )
 
         # Check if a daily question has already been logged for today
+        today = date.today()
         daily_question_info = self.get_todays_daily_question()
+
         if daily_question_info:
             _, daily_question_id = daily_question_info
-            return daily_question_id
+            if force_new:
+                # Update the existing daily question entry for today
+                update_query = (
+                    "UPDATE daily_questions SET question_id = ? WHERE sent_at = ?"
+                )
+                self.db.execute_update(update_query, (question_id, today))
+                return daily_question_id
+            else:
+                return daily_question_id
 
         # Log the daily question event
         daily_question_query = (
             "INSERT INTO daily_questions (question_id, sent_at) VALUES (?, ?)"
         )
         _, daily_question_id = self.db.execute_update(
-            daily_question_query, (question_id, date.today())
+            daily_question_query, (question_id, today)
         )
 
         return daily_question_id
