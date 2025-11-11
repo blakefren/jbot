@@ -239,8 +239,6 @@ class TestCsvReader(unittest.TestCase):
             self.assertIsNone(questions[0].hint)
         os.unlink(f.name)
 
-    # ...existing code...
-
 
 if __name__ == "__main__":
     unittest.main()
