@@ -20,6 +20,7 @@ class QuestionSelector:
         if not questions:
             logging.warning("QuestionSelector initialized with no questions.")
 
+    # TODO: prevent repeated questions.
     def get_question_for_today(self) -> Question:
         """
         Selects a question based on the current mode and date.
@@ -41,6 +42,7 @@ class QuestionSelector:
                 f"Question selection mode '{self.mode}' is not yet implemented."
             )
 
+    # TODO: limit to previous questions?
     def get_random_question(self) -> Question:
         """
         Returns a random question from the list.
