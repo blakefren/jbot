@@ -22,7 +22,9 @@ class Trivia(commands.Cog):
 
         question_part = self.bot.game.format_question(random_q)
         answer_part = self.bot.game.format_answer(random_q)
-        full_message = f"{question_part}\n{answer_part}"
+        # Add hint if present
+        hint_part = f"\nHint: ||**{random_q.hint}**||" if getattr(random_q, "hint", None) else ""
+        full_message = f"{question_part}{hint_part}\n{answer_part}"
         await self.bot.send_message(full_message, interaction=ctx.interaction)
 
     @commands.hybrid_command()

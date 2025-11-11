@@ -17,6 +17,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         self.mock_data_manager = MagicMock(spec=DataManager)
         self.mock_game_runner.data_manager = self.mock_data_manager
         self.mock_game_runner.handle_guess = MagicMock()
+        self.mock_game_runner.question_selector = MagicMock()
 
         self.bot = MagicMock(spec=DiscordBot)
         self.bot.game = self.mock_game_runner
@@ -120,6 +121,22 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
 
         # Ensure no other messages were sent
         mock_ctx.channel.send.assert_not_called()
+
+    async def test_question_command_with_hint(self):
+        """Test the question command includes the hint if present."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_question = MagicMock()
+        mock_question.hint = "This is a hint"
+        self.mock_game_runner.question_selector.get_random_question.return_value = mock_question
+        self.mock_game_runner.format_question.return_value = "Q: What is 2+2?"
+        self.mock_game_runner.format_answer.return_value = "A: ||**4**||"
+
+        await self.trivia_cog.question.callback(self.trivia_cog, mock_ctx)
+
+        self.bot.send_message.assert_awaited_once()
+        args, kwargs = self.bot.send_message.await_args
+        assert "Hint: ||**This is a hint**||" in args[0]
 
 
 if __name__ == "__main__":
