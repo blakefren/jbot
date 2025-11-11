@@ -20,10 +20,11 @@ def read_riddle_questions(file_path: str) -> list[Question]:
             for row in reader:
                 questions.append(
                     Question(
-                        question=row["QUESTIONS"],
-                        answer=row["ANSWERS"],
+                        question=row.get("QUESTIONS"),
+                        answer=row.get("ANSWERS"),
                         category="Riddle",
                         clue_value=100,  # Default value for riddles
+                        hint=row.get("Hint"),
                         data_source="Riddles (small)",
                     )
                 )
@@ -51,11 +52,11 @@ def read_riddle_with_hints_questions(file_path: str) -> list[Question]:
             for row in reader:
                 questions.append(
                     Question(
-                        question=row["Riddle"],
-                        answer=row["Answer"],
+                        question=row.get("Riddle"),
+                        answer=row.get("Answer"),
                         category="Riddle",
                         clue_value=100,  # Default value for riddles
-                        hint=row["Hint"],
+                        hint=row.get("Hint"),
                         data_source="Riddles with Hints",
                     )
                 )
@@ -83,10 +84,11 @@ def read_knowledge_bowl_questions(file_path: str) -> list[Question]:
             for row in reader:
                 questions.append(
                     Question(
-                        question=row["Question"],
-                        answer=row["Answer"],
-                        category=row["Subject"],
+                        question=row.get("Question"),
+                        answer=row.get("Answer"),
+                        category=row.get("Subject"),
                         clue_value=100,  # Default value
+                        hint=row.get("Hint"),
                         data_source="Knowledge Bowl",
                     )
                 )
@@ -115,10 +117,11 @@ def read_simple_questions(file_path: str, source: str) -> list[Question]:
             for row in reader:
                 questions.append(
                     Question(
-                        question=row["Question"],
-                        answer=row["Answer"],
+                        question=row.get("Question"),
+                        answer=row.get("Answer"),
                         category="General",
                         clue_value=100,  # Default value
+                        hint=row.get("Hint"),
                         data_source=source,
                     )
                 )
@@ -146,10 +149,11 @@ def read_general_trivia_questions(file_path: str) -> list[Question]:
             for row in reader:
                 questions.append(
                     Question(
-                        question=row["Question"],
-                        answer=row["Answer"],
-                        category=row["Category"],
+                        question=row.get("Question"),
+                        answer=row.get("Answer"),
+                        category=row.get("Category"),
                         clue_value=100,  # Default value
+                        hint=row.get("Hint"),
                         data_source="General Trivia",
                     )
                 )

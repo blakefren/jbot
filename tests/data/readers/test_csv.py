@@ -1,5 +1,6 @@
 import unittest
 import os
+import tempfile
 from unittest.mock import patch, mock_open
 from data.readers.csv_reader import (
     read_riddle_questions,
@@ -195,6 +196,50 @@ class TestCsvReader(unittest.TestCase):
         with patch("builtins.open", side_effect=Exception("Test error")):
             questions = read_general_trivia_questions("any_path.csv")
             self.assertEqual(questions, [])
+
+    def test_read_simple_questions_with_hint(self):
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".csv") as f:
+            f.write("Question,Answer,Hint\nWhat is 2+2?,4,Think of basic addition.\n")
+            f.flush()
+            questions = read_simple_questions(f.name, "TestSource")
+            self.assertEqual(len(questions), 1)
+            self.assertEqual(questions[0].question, "What is 2+2?")
+            self.assertEqual(questions[0].answer, "4")
+            self.assertEqual(questions[0].hint, "Think of basic addition.")
+        os.unlink(f.name)
+
+    def test_read_simple_questions_without_hint(self):
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".csv") as f:
+            f.write("Question,Answer\nWhat is 2+2?,4\n")
+            f.flush()
+            questions = read_simple_questions(f.name, "TestSource")
+            self.assertEqual(len(questions), 1)
+            self.assertEqual(questions[0].question, "What is 2+2?")
+            self.assertEqual(questions[0].answer, "4")
+            self.assertIsNone(questions[0].hint)
+        os.unlink(f.name)
+
+    def test_read_general_trivia_questions_with_hint(self):
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".csv") as f:
+            f.write("Question,Answer,Category,Hint\n")
+            f.write(
+                "Capital of France?,Paris,Geography,It's famous for the Eiffel Tower.\n"
+            )
+            f.flush()
+            questions = read_general_trivia_questions(f.name)
+            self.assertEqual(questions[0].hint, "It's famous for the Eiffel Tower.")
+        os.unlink(f.name)
+
+    def test_read_general_trivia_questions_without_hint(self):
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".csv") as f:
+            f.write("Question,Answer,Category\n")
+            f.write("Capital of France?,Paris,Geography\n")
+            f.flush()
+            questions = read_general_trivia_questions(f.name)
+            self.assertIsNone(questions[0].hint)
+        os.unlink(f.name)
+
+    # ...existing code...
 
 
 if __name__ == "__main__":
