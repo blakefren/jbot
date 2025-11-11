@@ -128,7 +128,9 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx = AsyncMock()
         mock_question = MagicMock()
         mock_question.hint = "This is a hint"
-        self.mock_game_runner.question_selector.get_random_question.return_value = mock_question
+        self.mock_game_runner.question_selector.get_random_question.return_value = (
+            mock_question
+        )
         self.mock_game_runner.format_question.return_value = "Q: What is 2+2?"
         self.mock_game_runner.format_answer.return_value = "A: ||**4**||"
 
