@@ -76,22 +76,7 @@ class TestRolesGameMode(unittest.TestCase):
             """
             )
             first_place_players = [row[0] for row in cursor.fetchall()]
-            self.assertIn("1", first_place_players)
-
-            # Check for 'Top 10%' role
-            self.mock_config.get.assert_called_with("JBOT_TOP_PLAYER_PERCENTAGE", 10)
-            cursor = conn.execute(
-                """
-                SELECT pr.player_id FROM player_roles pr
-                JOIN roles r ON pr.role_id = r.id
-                WHERE r.name = 'top player'
-            """
-            )
-            top_10_players = [row[0] for row in cursor.fetchall()]
-            # Only Alice should be in the top 10% of the 3 players with scores
-            self.assertIn("1", top_10_players)
-            # With 11 players total, top 10% is 1 player.
-            self.assertEqual(len(top_10_players), 1)
+            self.assertEqual(first_place_players, ["1"])
 
     def test_assign_roles_tie_for_first(self):
         # Make Bob have the same score as Alice

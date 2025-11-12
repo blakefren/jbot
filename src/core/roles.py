@@ -12,9 +12,6 @@ from src.core.base_manager import BaseManager
 # TODO: use these role names
 ROLE_NAMES = {
     "FIRST_PLACE": "first place",
-    "TOP_PLAYER": "top player",
-    "RED_TEAM": "red team",
-    "BLUE_TEAM": "blue team",
 }
 
 
@@ -54,20 +51,13 @@ class RolesGameMode(BaseManager):
             top_score = player_scores[0]["score"]
             for player in player_scores:
                 if player["score"] == top_score:
-                    self.assign_role_to_player(player["id"], ROLE_NAMES["FIRST_PLACE"])
+                    self.assign_role_to_player(
+                        player["id"],
+                        self.bot.config.get_string("JBOT_FIRST_PLACE_ROLE_NAME"),
+                    )
                 else:
                     # Players are sorted, so we can break early
                     break
-
-        # Assign 'Top X%' role
-        top_percentage = self.config.get("JBOT_TOP_PLAYER_PERCENTAGE", 10)
-        top_n_count = len(player_scores) * top_percentage // 100
-        if top_n_count == 0 and len(player_scores) > 1:
-            top_n_count = 1
-
-        for i in range(top_n_count):
-            player_id = player_scores[i]["id"]
-            self.assign_role_to_player(player_id, ROLE_NAMES["TOP_PLAYER"])
 
     def assign_role_to_player(self, player_id, role_name):
         """
