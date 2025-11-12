@@ -26,48 +26,57 @@ class RolesCog(commands.Cog):
         await ctx.send("Roles updated.")
 
     async def apply_discord_roles(self, guild: discord.Guild):
+        """
+        Efficiently applies the 'first place' role to the current winner(s).
+        - Fetches the role name from config.
+        - Determines who should have the role from the database.
+        - Compares against who currently has the role in Discord.
+        - Only adds or removes roles if there is a change.
+        """
+        first_place_role_name = self.bot.config.get_string("JBOT_FIRST_PLACE_ROLE_NAME")
+        if not first_place_role_name:
+            return  # Or log a warning
+
+        # Get the discord.Role object, creating it if it doesn't exist.
+        role = discord.utils.get(guild.roles, name=first_place_role_name)
+        if not role:
+            try:
+                role = await guild.create_role(
+                    name=first_place_role_name, reason="JBot: Create First Place Role",
+                )
+            except discord.Forbidden:
+                # Log that we don't have permissions to create roles
+                return
+
+        # Get the set of player IDs that should have the role from the database
         with self.bot.data_manager.db.get_conn() as conn:
             cursor = conn.execute(
-                """
-                SELECT pr.player_id, r.name 
-                FROM player_roles pr
-                JOIN roles r ON pr.role_id = r.id
-            """
+                "SELECT player_id FROM player_roles pr JOIN roles r ON pr.role_id = r.id WHERE r.name = ?",
+                (first_place_role_name,),
             )
-            player_roles_from_db = cursor.fetchall()
+            # Ensure player IDs are integers for comparison with member IDs
+            db_winners = {int(row[0]) for row in cursor.fetchall()}
 
-        # Get all members from the guild
-        members = {str(m.id): m for m in guild.members}
+        # Get the set of members who currently have the role in Discord
+        discord_winners = {member.id for member in role.members}
 
-        # Get all roles from the guild
-        guild_roles = {r.name: r for r in guild.roles}
+        # Determine who to add and who to remove
+        to_add = db_winners - discord_winners
+        to_remove = discord_winners - db_winners
 
-        # Clear all managed roles first
-        # TODO: read config from other file
-        managed_role_names = [
-            "first place",
-            "top player",
-        ]  # Add any other roles you manage
-        for role_name in managed_role_names:
-            if role_name in guild_roles:
-                role_to_clear = guild_roles[role_name]
-                for member in role_to_clear.members:
-                    await member.remove_roles(role_to_clear)
+        # Add the role to new winners
+        for member_id in to_add:
+            member = guild.get_member(member_id)
+            if member:
+                await member.add_roles(role, reason="JBot: Player achieved first place")
 
-        # Assign roles
-        for player_id, role_name in player_roles_from_db:
-            if player_id in members:
-                member = members[player_id]
-                role = guild_roles.get(role_name)
-                if not role:
-                    # Create the role if it doesn't exist
-                    role = await guild.create_role(
-                        name=role_name, reason="JBot role management"
-                    )
-                    guild_roles[role_name] = role
-
-                if role not in member.roles:
-                    await member.add_roles(role)
+        # Remove the role from previous winners
+        for member_id in to_remove:
+            member = guild.get_member(member_id)
+            if member:
+                await member.remove_roles(
+                    role, reason="JBot: Player no longer in first place"
+                )
 
 
 async def setup(bot):
