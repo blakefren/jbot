@@ -18,97 +18,60 @@ class TestRolesGameMode(unittest.TestCase):
 
         self.roles_game_mode = RolesGameMode(self.data_manager, self.mock_config)
 
-        # Populate with some test data
-        with self.db.get_conn() as conn:
-            # Players
-            conn.execute(
-                "INSERT INTO players (id, name, score) VALUES ('1', 'Alice', 10)"
-            )
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('2', 'Bob', 5)")
-            conn.execute(
-                "INSERT INTO players (id, name, score) VALUES ('3', 'Charlie', 8)"
-            )
-            conn.execute(
-                "INSERT INTO players (id, name, score) VALUES ('4', 'David', 0)"
-            )
-            conn.execute("INSERT INTO players (id, name, score) VALUES ('5', 'Eve', 0)")
-            conn.execute(
-                "INSERT INTO players (id, name, score) VALUES ('6', 'Frank', 0)"
-            )
-            conn.execute(
-                "INSERT INTO players (id, name, score) VALUES ('7', 'Grace', 0)"
-            )
-            conn.execute(
-                "INSERT INTO players (id, name, score) VALUES ('8', 'Heidi', 0)"
-            )
-            conn.execute(
-                "INSERT INTO players (id, name, score) VALUES ('9', 'Ivan', 0)"
-            )
-            conn.execute(
-                "INSERT INTO players (id, name, score) VALUES ('10', 'Judy', 0)"
-            )
-            conn.execute(
-                "INSERT INTO players (id, name, score) VALUES ('11', 'Mallory', 0)"
-            )
+        # Mock data manager methods
+        self.data_manager.get_player_scores = MagicMock()
+        self.data_manager.clear_player_roles = MagicMock()
+        self.data_manager.assign_role_to_player = MagicMock()
 
     def tearDown(self):
         self.db.close()
 
     def test_assign_roles(self):
-        role_name = self.mock_config.get_string.return_value
+        # Mock the data from get_player_scores
+        self.data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 10},
+            {"id": "3", "name": "Charlie", "score": 8},
+            {"id": "2", "name": "Bob", "score": 5},
+        ]
+
         self.roles_game_mode.assign_roles()
-        with self.db.get_conn() as conn:
-            # Check for 'First Place' role
-            cursor = conn.execute(
-                """
-                SELECT pr.player_id FROM player_roles pr
-                JOIN roles r ON pr.role_id = r.id
-                WHERE r.name = ?
-            """,
-                (role_name,),
-            )
-            first_place_players = [row[0] for row in cursor.fetchall()]
-            self.assertEqual(first_place_players, ["1"])
+
+        # Verify that clear_player_roles was called
+        self.data_manager.clear_player_roles.assert_called_once()
+
+        # Verify that assign_role_to_player was called for the top player
+        self.data_manager.assign_role_to_player.assert_called_once_with(
+            "1", "first place"
+        )
 
     def test_assign_roles_tie_for_first(self):
-        role_name = self.mock_config.get_string.return_value
-        with self.db.get_conn() as conn:
-            conn.execute("UPDATE players SET score = 10 WHERE id = '2'")
+        # Mock the data for a tie
+        self.data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 10},
+            {"id": "2", "name": "Bob", "score": 10},
+            {"id": "3", "name": "Charlie", "score": 8},
+        ]
 
         self.roles_game_mode.assign_roles()
-        with self.db.get_conn() as conn:
-            cursor = conn.execute(
-                """
-                SELECT pr.player_id FROM player_roles pr
-                JOIN roles r ON pr.role_id = r.id
-                WHERE r.name = ?
-            """,
-                (role_name,),
-            )
-            first_place_players = sorted([row[0] for row in cursor.fetchall()])
-            self.assertEqual(first_place_players, ["1", "2"])
 
-    def test_assign_roles_clears_old_roles(self):
-        role_name = self.mock_config.get_string.return_value
-        # Pre-assign a role to a player who shouldn't have it
-        self.roles_game_mode.assign_role_to_player("2", role_name)
+        # Verify clear_player_roles was called
+        self.data_manager.clear_player_roles.assert_called_once()
 
-        # Run the assignment
+        # Verify assign_role_to_player was called for both top players
+        self.assertEqual(self.data_manager.assign_role_to_player.call_count, 2)
+        self.data_manager.assign_role_to_player.assert_any_call("1", "first place")
+        self.data_manager.assign_role_to_player.assert_any_call("2", "first place")
+
+    def test_assign_roles_no_players(self):
+        # Mock no players
+        self.data_manager.get_player_scores.return_value = []
+
         self.roles_game_mode.assign_roles()
 
-        with self.db.get_conn() as conn:
-            # Check that Bob no longer has 'first place'
-            cursor = conn.execute(
-                """
-                SELECT pr.player_id FROM player_roles pr
-                JOIN roles r ON pr.role_id = r.id
-                WHERE r.name = ?
-            """,
-                (role_name,),
-            )
-            first_place_players = [row[0] for row in cursor.fetchall()]
-            self.assertNotIn("2", first_place_players)
-            self.assertIn("1", first_place_players)
+        # Verify that clear_player_roles was not called
+        self.data_manager.clear_player_roles.assert_not_called()
+        # Verify that assign_role_to_player was not called
+        self.data_manager.assign_role_to_player.assert_not_called()
 
 
 if __name__ == "__main__":

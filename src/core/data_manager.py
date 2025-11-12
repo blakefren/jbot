@@ -247,6 +247,39 @@ class DataManager:
 
         return question, daily_question_id
 
+    def assign_role_to_player(self, player_id: str, role_name: str):
+        """
+        Assigns a role to a player in the database, creating the role if it doesn't exist.
+        """
+        # This method combines getting/creating the role and assigning it.
+        # It's not transactional, but for this use case, it's acceptable.
+
+        # Get role_id from role_name
+        role_id_row = self.db.execute_query(
+            "SELECT id FROM roles WHERE name = ?", (role_name,)
+        )
+        if role_id_row:
+            role_id = role_id_row[0]["id"]
+        else:
+            # If role doesn't exist, create it
+            _, role_id = self.db.execute_update(
+                "INSERT INTO roles (name, description) VALUES (?, ?)",
+                (role_name, f"Dynamically created role for {role_name}"),
+            )
+
+        if role_id:
+            self.db.execute_update(
+                "INSERT OR IGNORE INTO player_roles (player_id, role_id) VALUES (?, ?)",
+                (player_id, role_id),
+            )
+
+    def clear_player_roles(self):
+        """
+        Deletes all records from the player_roles table.
+        """
+        query = "DELETE FROM player_roles"
+        self.db.execute_update(query)
+
     def log_score_adjustment(
         self, player_id: str, admin_id: str, amount: int, reason: str
     ):

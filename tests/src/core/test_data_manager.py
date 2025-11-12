@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from src.core.data_manager import DataManager
 from src.core.player import Player
@@ -188,6 +188,27 @@ class TestDataManager(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["amount"], amount)
         self.assertEqual(result[0]["reason"], reason)
+
+    def test_assign_role_to_player(self):
+        """Test assigning a role to a player."""
+        player_id = "player1"
+        role_name = "New Role"
+
+        # Mock DB methods
+        self.data_manager.db.execute_query = MagicMock(return_value=[])
+        self.data_manager.db.execute_update = MagicMock(return_value=(None, 1))
+
+        self.data_manager.assign_role_to_player(player_id, role_name)
+
+        # Verify role was created and assigned
+        self.assertEqual(self.data_manager.db.execute_update.call_count, 2)
+
+    def test_clear_player_roles(self):
+        """Test clearing all player roles."""
+        # Mock DB method
+        self.data_manager.db.execute_update = MagicMock(return_value=(None, 1))
+        self.data_manager.clear_player_roles()
+        self.assertEqual(self.data_manager.db.execute_update.call_count, 1)
 
 
 if __name__ == "__main__":

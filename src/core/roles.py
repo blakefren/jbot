@@ -31,9 +31,7 @@ class RolesGameMode(BaseManager):
             return
 
         # Clear existing roles
-        # TODO: use data_manager method
-        with self.data_manager.db.get_conn() as conn:
-            conn.execute("DELETE FROM player_roles")
+        self.data_manager.clear_player_roles()
 
         # Assign 'first place' role to all players tied for first
         if player_scores:
@@ -52,26 +50,7 @@ class RolesGameMode(BaseManager):
         """
         Assigns a role to a player in the database.
         """
-        # TODO: use data_manager method
-        with self.data_manager.db.get_conn() as conn:
-            # Get role_id from role_name
-            cursor = conn.execute("SELECT id FROM roles WHERE name = ?", (role_name,))
-            role_id_row = cursor.fetchone()
-            if role_id_row:
-                role_id = role_id_row[0]
-            else:
-                # If role doesn't exist, create it
-                cursor = conn.execute(
-                    "INSERT INTO roles (name, description) VALUES (?, ?)",
-                    (role_name, f"Dynamically created role for {role_name}"),
-                )
-                role_id = cursor.lastrowid
-
-            if role_id:
-                conn.execute(
-                    "INSERT OR IGNORE INTO player_roles (player_id, role_id) VALUES (?, ?)",
-                    (player_id, role_id),
-                )
+        self.data_manager.assign_role_to_player(player_id, role_name)
 
     def run(self):
         """
