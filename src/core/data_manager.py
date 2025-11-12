@@ -16,7 +16,13 @@ class DataManager:
         """
         self.db = db
 
-    # TODO: Add a method to initialize the database from main.py
+    def initialize_database(self):
+        """
+        Initializes the database by creating tables from the schema.
+        """
+        with open("db/schema.sql", "r") as f:
+            schema = f.read()
+        self.db.execute_script(schema)
 
     def load_players(self) -> dict:
         """
@@ -35,6 +41,12 @@ class DataManager:
             )
             players[player.id] = player
         return players
+
+    def get_all_players(self) -> dict:
+        """
+        Reads the players table and returns a dictionary of Player objects keyed by discord_id.
+        """
+        return self.load_players()
 
     def save_players(self, players: dict):
         """
@@ -62,9 +74,16 @@ class DataManager:
             )
             self.db.execute_update(query, params)
 
-    # TODO: Add a method to adjust player scores, replacing the direct query in admin.py
+    def adjust_player_score(self, player_id: str, amount: int):
+        """
+        Adjusts a player's score by a given amount.
 
-    # TODO: Add a method to get all players, replacing read_players_into_dict in players.py
+        Args:
+            player_id (str): The unique identifier for the player.
+            amount (int): The amount to adjust the score by (can be negative).
+        """
+        query = "UPDATE players SET score = score + ? WHERE id = ?"
+        self.db.execute_update(query, (amount, player_id))
 
     def log_daily_question(self, question: Question, force_new: bool = False):
         """

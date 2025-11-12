@@ -165,8 +165,7 @@ class DiscordBot(commands.Bot):
             logging.info(
                 f"Evening message task started. Next iteration: {self.evening_message_task.next_iteration}"
             )
-        # Set daily question, if bot started after the morning message but before the evening message.
-        # TODO: keep daily question persistent across restarts (remove evening time check)
+        # Set daily question, if bot started after the morning message.
         now = datetime.datetime.now(TIMEZONE)
         if MORNING_TIME < now.time() < EVENING_TIME and self.game.daily_q is None:
             logging.info(f"Bot started after morning message time.")
@@ -431,8 +430,6 @@ def run_discord_bot(
     data_manager: "DataManager",
 ):
     try:
-        # TODO: try this instead
-        # asyncio.get_event_loop().run_until_complete(discord_bot_async(config, questions, db, data_manager))
         asyncio.run(discord_bot_async(config, questions, db, data_manager))
     except KeyboardInterrupt:
         logging.info("Bot shutdown requested by user.")
