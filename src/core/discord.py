@@ -276,6 +276,18 @@ class DiscordBot(commands.Bot):
         )
         try:
             self.game.update_scores()
+
+            # Update roles
+            roles_cog = self.get_cog("RolesCog")
+            if roles_cog:
+                logging.info("Updating roles...")
+                roles_cog.roles_game_mode.run()  # Update roles in DB
+                for guild in self.guilds:
+                    await roles_cog.apply_discord_roles(guild)  # Apply roles in Discord
+                logging.info("Roles updated.")
+            else:
+                logging.warning("RolesCog not found, skipping role update.")
+
             if not silent:
                 await self._send_daily_message_to_all_subscribers(
                     self.game.get_evening_message_content,

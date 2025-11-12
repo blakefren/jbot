@@ -15,10 +15,6 @@ class RolesCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.roles_game_mode = RolesGameMode(self.bot.data_manager, self.bot.config)
-        self.update_roles_task.start()
-
-    def cog_unload(self):
-        self.update_roles_task.cancel()
 
     @commands.hybrid_command()
     @commands.has_permissions(administrator=True)
@@ -28,15 +24,6 @@ class RolesCog(commands.Cog):
         self.roles_game_mode.run()
         await self.apply_discord_roles(ctx.guild)
         await ctx.send("Roles updated.")
-
-    @tasks.loop(hours=1)  # Or some other interval
-    async def update_roles_task(self):
-        # This will run periodically to update roles automatically
-        # Find a guild to run this on. This is a bit of a hack.
-        # A better solution would be to store guild_id in config.
-        for guild in self.bot.guilds:
-            self.roles_game_mode.run()
-            await self.apply_discord_roles(guild)
 
     async def apply_discord_roles(self, guild: discord.Guild):
         with self.bot.data_manager.db.get_conn() as conn:
