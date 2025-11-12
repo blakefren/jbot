@@ -9,11 +9,6 @@ sys.path.insert(0, project_root)
 from src.core.data_manager import DataManager
 from src.core.base_manager import BaseManager
 
-# TODO: use these role names
-ROLE_NAMES = {
-    "FIRST_PLACE": "first place",
-}
-
 
 class RolesGameMode(BaseManager):
     def __init__(self, data_manager: DataManager, config):
@@ -25,12 +20,6 @@ class RolesGameMode(BaseManager):
         # We can call run() here, or have a separate trigger.
         # For now, let's assume it's run manually or on a schedule.
         pass
-
-    def get_player_scores(self):
-        """
-        Calculates the score for each player based on the number of correct guesses.
-        """
-        return self.data_manager.get_player_scores()
 
     def assign_roles(self):
         """
@@ -53,7 +42,7 @@ class RolesGameMode(BaseManager):
                 if player["score"] == top_score:
                     self.assign_role_to_player(
                         player["id"],
-                        self.bot.config.get_string("JBOT_FIRST_PLACE_ROLE_NAME"),
+                        self.config.get_string("JBOT_FIRST_PLACE_ROLE_NAME"),
                     )
                 else:
                     # Players are sorted, so we can break early

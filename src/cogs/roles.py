@@ -15,8 +15,7 @@ class RolesCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.roles_game_mode = RolesGameMode(self.bot.data_manager, self.bot.config)
-        if self.bot.config.get_bool("JBOT_ENABLE_ROLES"):
-            self.update_roles_task.start()
+        self.update_roles_task.start()
 
     def cog_unload(self):
         self.update_roles_task.cancel()
