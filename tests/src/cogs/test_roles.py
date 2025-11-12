@@ -22,14 +22,7 @@ class TestRolesCog(unittest.IsolatedAsyncioTestCase):
         self.bot.config = MagicMock()
         self.bot.config.get_string.return_value = "first place"
         self.bot.data_manager = MagicMock()
-
-        # Mock DB connection
-        self.mock_conn = MagicMock()
-        self.mock_cursor = MagicMock()
-        self.bot.data_manager.db.get_conn.return_value.__enter__.return_value = (
-            self.mock_conn
-        )
-        self.mock_conn.execute.return_value = self.mock_cursor
+        self.bot.data_manager.get_player_ids_with_role = MagicMock()
 
         # Mock Guild and Members
         self.guild = MagicMock(spec=discord.Guild)
@@ -65,7 +58,7 @@ class TestRolesCog(unittest.IsolatedAsyncioTestCase):
         mock_utils_get.return_value = self.first_place_role
 
         # DB winners: member1 and member2
-        self.mock_cursor.fetchall.return_value = [(101,), (102,)]
+        self.bot.data_manager.get_player_ids_with_role.return_value = {101, 102}
 
         await self.cog.apply_discord_roles(self.guild)
 
@@ -88,7 +81,7 @@ class TestRolesCog(unittest.IsolatedAsyncioTestCase):
         self.first_place_role.members = [self.member1]
 
         # DB winner: member1
-        self.mock_cursor.fetchall.return_value = [(101,)]
+        self.bot.data_manager.get_player_ids_with_role.return_value = {101}
 
         await self.cog.apply_discord_roles(self.guild)
 
@@ -103,7 +96,7 @@ class TestRolesCog(unittest.IsolatedAsyncioTestCase):
         self.guild.create_role = AsyncMock(return_value=self.first_place_role)
 
         # DB winner: member1
-        self.mock_cursor.fetchall.return_value = [(101,)]
+        self.bot.data_manager.get_player_ids_with_role.return_value = {101}
         self.first_place_role.members = []  # No one has the role yet
 
         await self.cog.apply_discord_roles(self.guild)

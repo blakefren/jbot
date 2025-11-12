@@ -131,6 +131,22 @@ class TestDataManager(unittest.TestCase):
         self.assertEqual(message_from_db[0]["content"], "Hello")
         self.assertEqual(message_from_db[0]["status"], "success")
 
+    def test_get_player_ids_with_role(self):
+        """Test retrieving player IDs for a given role."""
+        role_name = "Winner"
+        # Mock the DB response
+        self.data_manager.db.execute_query = lambda query, params: [
+            {"player_id": "123"},
+            {"player_id": "456"},
+        ]
+        player_ids = self.data_manager.get_player_ids_with_role(role_name)
+        self.assertEqual(player_ids, {123, 456})
+
+        # Test with no results
+        self.data_manager.db.execute_query = lambda query, params: []
+        player_ids = self.data_manager.get_player_ids_with_role(role_name)
+        self.assertEqual(player_ids, set())
+
     def test_read_guess_history(self):
         # Log questions and guesses
         q1 = Question(question="q1", answer="a1", category="cat", clue_value=100)

@@ -177,6 +177,20 @@ class DataManager:
         )
         return self.db.execute_query(query)
 
+    def get_player_ids_with_role(self, role_name: str) -> set[int]:
+        """
+        Retrieves the player IDs for a given role name.
+
+        Args:
+            role_name (str): The name of the role to check.
+
+        Returns:
+            set[int]: A set of player IDs that have the role.
+        """
+        query = "SELECT player_id FROM player_roles pr JOIN roles r ON pr.role_id = r.id WHERE r.name = ?"
+        result = self.db.execute_query(query, (role_name,))
+        return {int(row["player_id"]) for row in result}
+
     def read_guess_history(self, user_id: int = -1) -> list[dict]:
         """
         Reads and parses the guess history from the database.

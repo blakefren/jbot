@@ -49,13 +49,9 @@ class RolesCog(commands.Cog):
                 return
 
         # Get the set of player IDs that should have the role from the database
-        with self.bot.data_manager.db.get_conn() as conn:
-            cursor = conn.execute(
-                "SELECT player_id FROM player_roles pr JOIN roles r ON pr.role_id = r.id WHERE r.name = ?",
-                (first_place_role_name,),
-            )
-            # Ensure player IDs are integers for comparison with member IDs
-            db_winners = {int(row[0]) for row in cursor.fetchall()}
+        db_winners = self.bot.data_manager.get_player_ids_with_role(
+            first_place_role_name
+        )
 
         # Get the set of members who currently have the role in Discord
         discord_winners = {member.id for member in role.members}
