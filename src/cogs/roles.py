@@ -33,7 +33,7 @@ class RolesCog(commands.Cog):
         - Compares against who currently has the role in Discord.
         - Only adds or removes roles if there is a change.
         """
-        first_place_role_name = self.bot.config.get_string("JBOT_FIRST_PLACE_ROLE_NAME")
+        first_place_role_name = self.bot.config.get("JBOT_FIRST_PLACE_ROLE_NAME")
         if not first_place_role_name:
             return  # Or log a warning
 

@@ -14,7 +14,7 @@ class TestRolesGameMode(unittest.TestCase):
 
         # Mock config
         self.mock_config = MagicMock()
-        self.mock_config.get_string.return_value = "first place"
+        self.mock_config.get.return_value = "first place"
 
         self.roles_game_mode = RolesGameMode(self.data_manager, self.mock_config)
 

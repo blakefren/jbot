@@ -20,7 +20,7 @@ class TestRolesCog(unittest.IsolatedAsyncioTestCase):
         # Mock Bot
         self.bot = MagicMock()
         self.bot.config = MagicMock()
-        self.bot.config.get_string.return_value = "first place"
+        self.bot.config.get.return_value = "first place"
         self.bot.data_manager = MagicMock()
         self.bot.data_manager.get_player_ids_with_role = MagicMock()
 

@@ -39,8 +39,7 @@ class RolesGameMode(BaseManager):
             for player in player_scores:
                 if player["score"] == top_score:
                     self.assign_role_to_player(
-                        player["id"],
-                        self.config.get_string("JBOT_FIRST_PLACE_ROLE_NAME"),
+                        player["id"], self.config.get("JBOT_FIRST_PLACE_ROLE_NAME"),
                     )
                 else:
                     # Players are sorted, so we can break early
