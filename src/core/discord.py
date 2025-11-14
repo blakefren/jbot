@@ -295,12 +295,17 @@ class DiscordBot(commands.Bot):
                     self.game.get_evening_message_content,
                     "evening_message",
                     send_leaderboard=True,
+                    requires_guild=True,
                 )
             except Exception as e:
                 self._log_task_error(e, "evening_message_task - send_message")
 
     async def _send_daily_message_to_all_subscribers(
-        self, content_getter, success_status: str, send_leaderboard: bool = False
+        self,
+        content_getter,
+        success_status: str,
+        send_leaderboard: bool = False,
+        requires_guild: bool = False,
     ):
         """Helper function to send a daily message to all subscribers."""
         logging.debug(f"DiscordBot._send_daily_message_to_all_subscribers")
@@ -308,14 +313,18 @@ class DiscordBot(commands.Bot):
             logging.warning("No question available for today.")
             return
 
-        content = content_getter()
-
         for sub in self.game.get_subscribed_users():
             guild = None
             if sub.is_channel:
                 channel = self.get_channel(sub.sub_id)
                 if channel:
                     guild = channel.guild
+
+            # Generate content
+            if requires_guild:
+                content = content_getter(guild=guild)
+            else:
+                content = content_getter()
 
             # Generate leaderboard if needed
             leaderboard = None
