@@ -57,3 +57,15 @@ class ConfigReader:
         if value is None:
             raise KeyError(f"Key '{key}' not found in environment variables.")
         return value.lower() in ("true", "1", "t", "y", "yes")
+
+    def get_gemini_api_key(self) -> str:
+        """
+        Retrieves the Gemini API key from environment variables.
+
+        Returns:
+            str: The Gemini API key.
+        """
+        key = self.get("GEMINI_API_KEY")
+        if not key:
+            raise ValueError("GEMINI_API_KEY not found in environment variables.")
+        return key
