@@ -122,7 +122,7 @@ class TestDataManager(unittest.TestCase):
         self.assertEqual(guess_from_db[0]["is_correct"], 1)
 
     def test_log_messaging_event(self):
-        self.data_manager.log_messaging_event("to", "SMS", "12345", "Hello", "success")
+        self.data_manager.log_messaging_event("outgoing", "discord", "12345", "Hello", "success")
 
         message_from_db = self.db.execute_query(
             "SELECT * FROM messages WHERE recipient_sender = '12345'"
