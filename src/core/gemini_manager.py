@@ -1,19 +1,29 @@
 """
-Manager for interacting with the Gemini API.
+Manager for interacting with the Gemini API using the google-generativeai library.
 """
-from src.core.api_manager import APIManager
+import google.generativeai as genai
+import logging
 
 
-class GeminiManager(APIManager):
+class GeminiManager:
     def __init__(self, api_key: str):
-        super().__init__(
-            api_key, base_url="https://generativelanguage.googleapis.com/v1beta"
-        )
+        if not api_key:
+            raise ValueError("Gemini API key is required.")
+        try:
+            genai.configure(api_key=api_key)
+            self.model = genai.GenerativeModel("gemini-2.5-pro")
+            logging.info("GeminiManager initialized successfully.")
+        except Exception as e:
+            logging.error(f"Failed to configure Gemini: {e}")
+            raise
 
-    def generate_content(self, text: str) -> dict:
+    def generate_content(self, text: str) -> str:
         """
         Generates content using the Gemini API.
         """
-        endpoint = "models/gemini-pro:generateContent"
-        data = {"contents": [{"parts": [{"text": text}]}]}
-        return self.post(endpoint, data)
+        try:
+            response = self.model.generate_content(text)
+            return response.text
+        except Exception as e:
+            logging.error(f"An error occurred during Gemini content generation: {e}")
+            return None
