@@ -10,7 +10,8 @@ class GeminiManager:
         if not api_key:
             raise ValueError("Gemini API key is required.")
         try:
-            genai.configure(api_key=api_key)
+            self.api_key = api_key
+            genai.configure(api_key=self.api_key)
             self.model = genai.GenerativeModel("gemini-2.5-pro")
             logging.info("GeminiManager initialized successfully.")
         except Exception as e:
