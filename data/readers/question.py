@@ -11,7 +11,7 @@ class Question:
         question: str,
         answer: str,
         category: str,
-        clue_value: int,
+        clue_value: int=100,
         hint: str = None,
         data_source="unknown",
         metadata={},
@@ -23,7 +23,7 @@ class Question:
             question (str): The text of the Jeopardy! question (the clue).
             answer (str): The correct answer to the question.
             category (str): The category of the question (e.g., "WORLD HISTORY").
-            clue_value (int): The point value of the question (e.g., 200, 400).
+            clue_value (int, optional): The point value of the question (e.g., 200, 400). Defaults to 100.
             hint (str, optional): A hint for the question. Defaults to None.
             data_source (str, optional): The source from which the question was obtained
                                          (e.g., "j-archive.com", "custom_set"). Defaults to "unknown".
