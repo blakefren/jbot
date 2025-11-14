@@ -30,17 +30,9 @@ class Admin(commands.Cog):
     ):
         """(admin) Refunds score to a player."""
         player_manager = self.bot.game.player_manager
-        player = player_manager.get_player(str(member.id))
-
-        if not player:
-            # TODO: Migrate to PlayerManager
-            # Create a new player if they don't exist
-            player_manager.players[str(member.id)] = {
-                "name": member.display_name,
-                "score": 0,
-                "answer_streak": 0,
-                "active_shield": False,
-            }
+        player = player_manager.get_or_create_player(
+            str(member.id), member.display_name
+        )
 
         player_manager.refund_score(str(member.id), amount)
 
@@ -61,7 +53,7 @@ class Admin(commands.Cog):
         )
 
         await ctx.send(
-            f"Refunded {amount} to {member.display_name}. New score: {player['score']}. Reason: {reason}"
+            f"Refunded {amount} to {member.display_name}. New score: {player.score}. Reason: {reason}"
         )
 
     @commands.hybrid_command()
