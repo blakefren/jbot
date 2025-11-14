@@ -1,5 +1,7 @@
 import datetime
 from random import randint
+
+from typing import Optional
 from data.readers.question import Question
 from zoneinfo import ZoneInfo
 import logging
@@ -19,7 +21,7 @@ class QuestionSelector:
         self,
         questions: list[Question],
         mode: str = "daily",
-        gemini_manager: GeminiManager = None,
+        gemini_manager: Optional[GeminiManager] = None,
     ):
         self.questions = questions
         self.mode = mode
@@ -27,7 +29,7 @@ class QuestionSelector:
         if not questions:
             logging.warning("QuestionSelector initialized with no questions.")
 
-    def get_riddle_from_gemini(self, difficulty: str) -> Question:
+    def get_riddle_from_gemini(self, difficulty: str) -> Optional[Question]:
         """
         Generates a riddle using the Gemini API and returns it as a Question object.
         """
