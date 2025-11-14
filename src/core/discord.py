@@ -417,9 +417,17 @@ async def discord_bot_async(
     # Register managers
     from core.powerup import PowerUpManager
     from core.roles import RolesGameMode
+    from src.core.gemini_manager import GeminiManager
 
     game.register_manager("powerup", PowerUpManager)
     game.register_manager("roles", RolesGameMode)
+
+    try:
+        gemini_api_key = config.get_gemini_api_key()
+        if gemini_api_key:
+            game.register_manager("gemini", GeminiManager, api_key=gemini_api_key)
+    except ValueError as e:
+        logging.warning(f"Could not initialize GeminiManager: {e}")
 
     bot = DiscordBot(config.get("JBOT_DISCORD_BOT_TOKEN"), game, config)
     bot.db = db  # Attach the database connection to the bot
