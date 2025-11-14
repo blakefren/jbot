@@ -177,8 +177,11 @@ class DataManager:
         self, direction, method, recipient_or_sender, content, status="success"
     ):
         """
-        Logs details about any message sent or received by the bot.
+        Logs details about any message sent by the bot.
         """
+        if direction != "outgoing":
+            return
+
         query = """
             INSERT INTO messages (direction, method, recipient_sender, content, status)
             VALUES (?, ?, ?, ?, ?)

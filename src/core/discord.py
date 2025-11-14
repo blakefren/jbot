@@ -2,9 +2,13 @@ import asyncio
 import datetime
 import discord
 import os
+from typing import TYPE_CHECKING
 
 from discord.ext import commands, tasks
 from zoneinfo import ZoneInfo
+
+if TYPE_CHECKING:
+    from db.database import Database
 
 from src.cfg.main import ConfigReader
 import sys
@@ -131,24 +135,10 @@ class DiscordBot(commands.Bot):
 
         if not self.ready_event_fired:
             logging.info(f"Logged in as {self.user} (ID: {self.user.id})")
-            self.data_manager.log_messaging_event(
-                direction="bot",
-                method="Discord",
-                recipient_or_sender=str(self.user.id),
-                content=f"Bot logged in as {self.user.name}",
-                status="success",
-            )
             logging.info("------")
             self.ready_event_fired = True
         else:
             logging.info("Bot reconnected.")
-            self.data_manager.log_messaging_event(
-                direction="bot",
-                method="Discord",
-                recipient_or_sender=str(self.user.id),
-                content="Bot reconnected.",
-                status="success",
-            )
         # Start the tasks
         if not self.morning_message_task.is_running():
             self.morning_message_task.start()
@@ -203,7 +193,7 @@ class DiscordBot(commands.Bot):
                 f"An unexpected error occurred in command '{ctx.command}': {error}"
             )
             self.data_manager.log_messaging_event(
-                direction="bot",
+                direction="outgoing",
                 method="Discord",
                 recipient_or_sender=str(ctx.author.id),
                 content=f"Error in command {ctx.command}: {error}",
@@ -223,14 +213,6 @@ class DiscordBot(commands.Bot):
         if message.author == self.user:
             return
 
-        logging.info(f"Received message from {message.author}: {message.content}")
-        self.data_manager.log_messaging_event(
-            direction="from",
-            method="Discord",
-            recipient_or_sender=str(message.author.id),
-            content=message.content,
-            status="received",
-        )
         await self.process_commands(message)
 
     @tasks.loop(time=MORNING_TIME)
@@ -337,7 +319,7 @@ class DiscordBot(commands.Bot):
         """Logs an error for a background task."""
         logging.error(f"An error occurred during the {task_name}: {e}")
         self.data_manager.log_messaging_event(
-            direction="bot",
+            direction="outgoing",
             method="Discord",
             recipient_or_sender="N/A",
             content=f"Error in {task_name}: {e}",
@@ -382,7 +364,7 @@ class DiscordBot(commands.Bot):
                 if user:
                     await user.send(content)
             self.data_manager.log_messaging_event(
-                direction="to",
+                direction="outgoing",
                 method="Discord",
                 recipient_or_sender=str(target_id),
                 content=content,
@@ -391,7 +373,7 @@ class DiscordBot(commands.Bot):
         except Exception as e:
             logging.error(f"Error sending message to {target_id}: {e}")
             self.data_manager.log_messaging_event(
-                direction="to",
+                direction="outgoing",
                 method="Discord",
                 recipient_or_sender=str(target_id),
                 content=content,

@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS guesses (
     FOREIGN KEY (player_id) REFERENCES players (id)
 );
 
--- This table logs all messages sent and received by the bot.
+-- This table logs all messages sent by the bot.
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     direction TEXT NOT NULL, -- 'incoming' or 'outgoing'

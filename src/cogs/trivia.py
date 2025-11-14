@@ -99,16 +99,6 @@ class Trivia(commands.Cog):
             )
             return
 
-        # Log the guess submission event
-        status = "correct_guess" if is_correct else "incorrect_guess"
-        self.bot.data_manager.log_messaging_event(
-            direction="from",
-            method="Discord",
-            recipient_or_sender=str(player_id),
-            content=f"Answer: '{guess}'",
-            status=status,
-        )
-
         # Retrieve all guesses for this player for the current question
         all_guesses = self.bot.game.get_player_guesses(player_id)
         # Deduplicate and sort guesses
