@@ -223,14 +223,20 @@ class DiscordBot(commands.Bot):
         )
         try:
             self.game.set_daily_question()
-            if not silent:
+        except Exception as e:
+            self._log_task_error(e, "morning_message_task - set_daily_question")
+            # If we can't set a question, there's no point in sending a message.
+            return
+
+        if not silent:
+            try:
                 await self._send_daily_message_to_all_subscribers(
                     self.game.get_morning_message_content,
                     "morning_message",
                     send_leaderboard=True,
                 )
-        except Exception as e:
-            self._log_task_error(e, "morning_message_task")
+            except Exception as e:
+                self._log_task_error(e, "morning_message_task - send_message")
 
     @tasks.loop(time=REMINDER_TIME)
     async def reminder_message_task(self, silent: bool = False):
@@ -238,16 +244,20 @@ class DiscordBot(commands.Bot):
         logging.info(
             f"Reminder message task running at {datetime.datetime.now(TIMEZONE)}..."
         )
-        try:
-            content_getter = lambda: self.game.get_reminder_message_content(
-                self.config.get_bool("JBOT_TAG_UNANSWERED_PLAYERS")
-            )
-            if not silent:
+        if not self.game.daily_q:
+            logging.warning("Reminder task: No daily question set, skipping reminder.")
+            return
+
+        if not silent:
+            try:
+                content_getter = lambda: self.game.get_reminder_message_content(
+                    self.config.get_bool("JBOT_TAG_UNANSWERED_PLAYERS")
+                )
                 await self._send_daily_message_to_all_subscribers(
                     content_getter, "reminder_message"
                 )
-        except Exception as e:
-            self._log_task_error(e, "reminder_message_task")
+            except Exception as e:
+                self._log_task_error(e, "reminder_message_task")
 
     @tasks.loop(time=EVENING_TIME)
     async def evening_message_task(self, silent: bool = False):
@@ -255,28 +265,39 @@ class DiscordBot(commands.Bot):
         logging.info(
             f"Evening message task running at {datetime.datetime.now(TIMEZONE)}..."
         )
+
+        # 1. Update scores
         try:
             self.game.update_scores()
+        except Exception as e:
+            self._log_task_error(e, "evening_message_task - update_scores")
+            # If scores can't be updated, we probably shouldn't proceed.
+            return
 
-            # Update roles
+        # 2. Update roles
+        try:
             roles_cog = self.get_cog("RolesCog")
             if roles_cog:
                 logging.info("Updating roles...")
                 roles_cog.roles_game_mode.run()  # Update roles in DB
                 for guild in self.guilds:
-                    await roles_cog.apply_discord_roles(guild)  # Apply roles in Discord
+                    await roles_cog.apply_discord_roles(guild)
                 logging.info("Roles updated.")
             else:
                 logging.warning("RolesCog not found, skipping role update.")
+        except Exception as e:
+            self._log_task_error(e, "evening_message_task - update_roles")
 
-            if not silent:
+        # 3. Send evening message
+        if not silent:
+            try:
                 await self._send_daily_message_to_all_subscribers(
                     self.game.get_evening_message_content,
                     "evening_message",
                     send_leaderboard=True,
                 )
-        except Exception as e:
-            self._log_task_error(e, "evening_message_task")
+            except Exception as e:
+                self._log_task_error(e, "evening_message_task - send_message")
 
     async def _send_daily_message_to_all_subscribers(
         self, content_getter, success_status: str, send_leaderboard: bool = False
