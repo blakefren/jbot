@@ -11,10 +11,10 @@ class Question:
         question: str,
         answer: str,
         category: str,
-        clue_value: int=100,
+        clue_value: int = 100,
         hint: str = None,
-        data_source="unknown",
-        metadata={},
+        data_source: str = "unknown",
+        metadata: dict = None,
     ):
         """
         Initializes a Question object.
@@ -46,7 +46,7 @@ class Question:
         self.clue_value = clue_value
         self.hint = hint
         self.data_source = data_source
-        self.metadata = metadata
+        self.metadata = metadata if metadata is not None else {}
         # Hash the question and answer to create a unique ID
         # https://stackoverflow.com/questions/2511058/persistent-hashing-of-strings-in-python
         self.id = int(
