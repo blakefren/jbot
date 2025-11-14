@@ -440,10 +440,6 @@ async def discord_bot_async(
     game.register_manager("powerup", PowerUpManager)
     game.register_manager("roles", RolesGameMode)
 
-    if gemini_manager:
-        game.register_manager("gemini", GeminiManager)
-        game.enable_manager("gemini", api_key=gemini_manager.api_key)
-
     bot = DiscordBot(config.get("JBOT_DISCORD_BOT_TOKEN"), game, config)
     bot.db = db  # Attach the database connection to the bot
     await bot.run()
