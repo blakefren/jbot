@@ -1,8 +1,11 @@
 import datetime
 from random import randint
+
+from typing import Optional
 from data.readers.question import Question
 from zoneinfo import ZoneInfo
 import logging
+from src.core.gemini_manager import GeminiManager
 
 # TODO: This should be handled more centrally
 TIMEZONE = ZoneInfo("US/Pacific")
@@ -14,11 +17,65 @@ class QuestionSelector:
     Supports different modes for question selection.
     """
 
-    def __init__(self, questions: list[Question], mode: str = "daily"):
+    def __init__(
+        self,
+        questions: list[Question],
+        mode: str = "daily",
+        gemini_manager: Optional[GeminiManager] = None,
+    ):
         self.questions = questions
         self.mode = mode
+        self.gemini_manager = gemini_manager
         if not questions:
             logging.warning("QuestionSelector initialized with no questions.")
+
+    def get_riddle_from_gemini(self, difficulty: str) -> Optional[Question]:
+        """
+        Generates a riddle using the Gemini API and returns it as a Question object.
+        """
+        if not self.gemini_manager:
+            raise ValueError("Gemini manager is not configured.")
+
+        try:
+            with open("prompts/riddle.txt", "r") as f:
+                prompt = f.read()
+        except FileNotFoundError:
+            logging.error("Riddle prompt file not found.")
+            return None
+
+        prompt = prompt.replace(
+            '[Insert Your Desired Difficulty Here, e.g., "Medium"]', difficulty
+        )
+
+        response_text = self.gemini_manager.generate_content(prompt)
+
+        if not response_text:
+            logging.error("Failed to get response from Gemini.")
+            return None
+
+        # Parse the response
+        try:
+            lines = response_text.strip().split("\n")
+            riddle_line = next(line for line in lines if line.startswith("Riddle:"))
+            hint_line = next(line for line in lines if line.startswith("Hint:"))
+            answer_line = next(line for line in lines if line.startswith("Answer:"))
+
+            riddle = riddle_line.replace("Riddle:", "").strip()
+            hint = hint_line.replace("Hint:", "").strip()
+            answer = answer_line.replace("Answer:", "").strip()
+
+            return Question(
+                question=riddle,
+                answer=answer,
+                category="Riddle",
+                hint=hint,
+                data_source="gemini",
+            )
+        except (StopIteration, IndexError) as e:
+            logging.error(
+                f"Failed to parse riddle from Gemini response: {e}\nResponse: {response_text}"
+            )
+            return None
 
     # TODO: prevent repeated questions.
     def get_question_for_today(self) -> Question:

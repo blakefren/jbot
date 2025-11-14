@@ -11,10 +11,10 @@ class Question:
         question: str,
         answer: str,
         category: str,
-        clue_value: int,
+        clue_value: int = 100,
         hint: str = None,
-        data_source="unknown",
-        metadata={},
+        data_source: str = "unknown",
+        metadata: dict = None,
     ):
         """
         Initializes a Question object.
@@ -23,7 +23,7 @@ class Question:
             question (str): The text of the Jeopardy! question (the clue).
             answer (str): The correct answer to the question.
             category (str): The category of the question (e.g., "WORLD HISTORY").
-            clue_value (int): The point value of the question (e.g., 200, 400).
+            clue_value (int, optional): The point value of the question (e.g., 200, 400). Defaults to 100.
             hint (str, optional): A hint for the question. Defaults to None.
             data_source (str, optional): The source from which the question was obtained
                                          (e.g., "j-archive.com", "custom_set"). Defaults to "unknown".
@@ -46,7 +46,7 @@ class Question:
         self.clue_value = clue_value
         self.hint = hint
         self.data_source = data_source
-        self.metadata = metadata
+        self.metadata = metadata if metadata is not None else {}
         # Hash the question and answer to create a unique ID
         # https://stackoverflow.com/questions/2511058/persistent-hashing-of-strings-in-python
         self.id = int(

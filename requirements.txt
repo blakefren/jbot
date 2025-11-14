@@ -6,3 +6,4 @@ pandas
 plotly
 openpyxl
 kaleido
+google-generativeai

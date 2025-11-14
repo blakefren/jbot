@@ -1,9 +1,10 @@
 import datetime
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock, mock_open
 
 from data.readers.question import Question
 from data.readers.question_selector import QuestionSelector
+from src.core.gemini_manager import GeminiManager
 from zoneinfo import ZoneInfo
 
 TIMEZONE = ZoneInfo("US/Pacific")
@@ -16,6 +17,71 @@ class TestQuestionSelector(unittest.TestCase):
             Question("Q2", "A2", "C2", 200),
             Question("Q3", "A3", "C3", 300),
         ]
+        self.mock_gemini_manager = MagicMock(spec=GeminiManager)
+
+    def test_init_with_gemini(self):
+        selector = QuestionSelector(
+            self.questions, mode="daily", gemini_manager=self.mock_gemini_manager
+        )
+        self.assertEqual(selector.gemini_manager, self.mock_gemini_manager)
+
+    @patch(
+        "builtins.open",
+        new_callable=mock_open,
+        read_data='Riddle: [Riddle]\nHint: [Hint]\nAnswer: [Answer]\n[Insert Your Desired Difficulty Here, e.g., "Medium"]',
+    )
+    def test_get_riddle_from_gemini_success(self, mock_file):
+        self.mock_gemini_manager.generate_content.return_value = (
+            "Riddle: I have cities, but no houses.\n"
+            "Hint: I am often folded.\n"
+            "Answer: A map"
+        )
+        selector = QuestionSelector([], gemini_manager=self.mock_gemini_manager)
+
+        question = selector.get_riddle_from_gemini("Medium")
+
+        self.assertIsInstance(question, Question)
+        self.assertEqual(question.question, "I have cities, but no houses.")
+        self.assertEqual(question.answer, "A map")
+        self.assertEqual(question.hint, "I am often folded.")
+        self.assertEqual(question.category, "Riddle")
+        mock_file.assert_called_with("prompts/riddle.txt", "r")
+        self.mock_gemini_manager.generate_content.assert_called_once()
+
+    def test_get_riddle_from_gemini_no_manager(self):
+        selector = QuestionSelector([])  # No gemini_manager
+        with self.assertRaises(ValueError):
+            selector.get_riddle_from_gemini("Easy")
+
+    @patch("logging.error")
+    @patch("builtins.open", side_effect=FileNotFoundError)
+    def test_get_riddle_from_gemini_file_not_found(self, mock_open, mock_logging):
+        selector = QuestionSelector([], gemini_manager=self.mock_gemini_manager)
+        result = selector.get_riddle_from_gemini("Easy")
+        self.assertIsNone(result)
+        mock_logging.assert_called_with("Riddle prompt file not found.")
+
+    @patch("logging.error")
+    @patch("builtins.open", new_callable=mock_open, read_data="prompt")
+    def test_get_riddle_from_gemini_api_failure(self, mock_open, mock_logging):
+        self.mock_gemini_manager.generate_content.return_value = None
+        selector = QuestionSelector([], gemini_manager=self.mock_gemini_manager)
+        result = selector.get_riddle_from_gemini("Hard")
+        self.assertIsNone(result)
+        mock_logging.assert_called_with("Failed to get response from Gemini.")
+
+    @patch("logging.error")
+    @patch("builtins.open", new_callable=mock_open, read_data="prompt")
+    def test_get_riddle_from_gemini_parsing_error(self, mock_open, mock_logging):
+        self.mock_gemini_manager.generate_content.return_value = (
+            "This is not a valid riddle format"
+        )
+        selector = QuestionSelector([], gemini_manager=self.mock_gemini_manager)
+        result = selector.get_riddle_from_gemini("Medium")
+        self.assertIsNone(result)
+        self.assertIn(
+            "Failed to parse riddle from Gemini response", mock_logging.call_args[0][0]
+        )
 
     def test_init(self):
         selector = QuestionSelector(self.questions, mode="daily")

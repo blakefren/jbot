@@ -409,8 +409,18 @@ async def discord_bot_async(
     data_manager: "DataManager",
 ):
     """Main function to initialize and run the bot."""
+    from src.core.gemini_manager import GeminiManager
+
+    gemini_manager = None
+    try:
+        gemini_api_key = config.get_gemini_api_key()
+        if gemini_api_key:
+            gemini_manager = GeminiManager(api_key=gemini_api_key)
+    except ValueError as e:
+        logging.warning(f"Could not initialize GeminiManager: {e}")
+
     question_selector = QuestionSelector(
-        questions, mode=config.get("JBOT_QUESTION_MODE")
+        questions, mode=config.get("JBOT_QUESTION_MODE"), gemini_manager=gemini_manager,
     )
     game = GameRunner(question_selector, data_manager)
 
@@ -420,6 +430,10 @@ async def discord_bot_async(
 
     game.register_manager("powerup", PowerUpManager)
     game.register_manager("roles", RolesGameMode)
+
+    if gemini_manager:
+        game.register_manager("gemini", GeminiManager)
+        game.enable_manager("gemini", api_key=gemini_manager.api_key)
 
     bot = DiscordBot(config.get("JBOT_DISCORD_BOT_TOKEN"), game, config)
     bot.db = db  # Attach the database connection to the bot
