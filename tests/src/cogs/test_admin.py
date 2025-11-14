@@ -136,18 +136,13 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         # Configure the mock player_manager
         player_manager = self.bot.game.player_manager
 
-        # get_player is called twice. First to get the player, second to get the updated score for the message.
         # We'll have it return a different mock each time to simulate the data changing.
         mock_player_before_refund = MagicMock()
         mock_player_after_refund = MagicMock()
-        mock_player_after_refund.__getitem__.side_effect = lambda key: {"score": 150}[
-            key
-        ]
+        mock_player_after_refund.score = 150
 
-        player_manager.get_player.side_effect = [
-            mock_player_before_refund,
-            mock_player_after_refund,
-        ]
+        player_manager.get_or_create_player.return_value = mock_player_before_refund
+        player_manager.get_player.return_value = mock_player_after_refund
 
         # Call the refund command
         await self.cog.refund.callback(
@@ -164,11 +159,11 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         )
         player_manager.reload_players.assert_called_once()
 
-        # Verify get_player was called twice
-        self.assertEqual(player_manager.get_player.call_count, 2)
+        # Verify get_or_create_player was called
+        player_manager.get_or_create_player.assert_called_once()
 
         # Check the final message
-        expected_message = f"Refunded {amount} to {member.display_name}. New score: 150. Reason: {reason}"
+        expected_message = f"Refunded {amount} to {member.display_name}. New score: {mock_player_after_refund.score}. Reason: {reason}"
         self.ctx.send.assert_called_once_with(expected_message)
 
 
