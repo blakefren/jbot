@@ -37,7 +37,7 @@ async def main():
     question_selector = QuestionSelector(questions=[], gemini_manager=gemini_manager)
 
     # 4. Call the new method with a desired difficulty
-    difficulty = "Medium"
+    difficulty = "Hard"
     logging.info(f"Requesting a '{difficulty}' riddle from Gemini...")
     riddle_question = question_selector.get_riddle_from_gemini(difficulty)
 
