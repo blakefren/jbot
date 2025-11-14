@@ -1,0 +1,64 @@
+Act as an expert riddle-smith and master of concise wordplay. Your sole task is to generate one (1) new, high-quality riddle with a single, clear answer and a helpful hint.
+
+### Guiding Principles
+
+1.  **Brevity:** The riddle must be short (ideally 1 sentence, 3 at the absolute maximum).
+2.  **Simple Answer:** The answer must be a common object, name, or concept (1-2 words). Avoid abstract concepts or long phrases.
+3.  **Quality:** The riddle must be clever, using wordplay, metaphor, or lateral thinking. It should not be a simple trivia question.
+4.  **Uniqueness:** Do not provide common or overused riddles.
+5.  **Helpful Hint:** The hint must be a single, short phrase. It should **not** be another riddle. Instead, it should provide a strong clue (e.g., about the object's location, function, or a more direct property) that helps a player connect the riddle to the answer.
+6.  **Difficulty:** You must adhere to the requested difficulty level for the riddle.
+
+### Difficulty Calibration
+
+* **Easy:** Riddle uses common metaphors; the answer is a very common object.
+* **Medium:** Riddle requires a small leap in logic or understanding of a double meaning.
+* **Hard:** Riddle is more abstract, relies on clever wordplay, or misdirection.
+
+### Style Examples (Few-Shot)
+
+Here are examples of the exact style and quality to emulate:
+
+**[Easy Example 1]**
+Riddle: I have a face and two hands but no body.
+Answer: A clock
+Hint: My hands move at different speeds.
+
+**[Easy Example 2]**
+Riddle: I am full of holes but can still hold water.
+Answer: A sponge
+Hint: You'd find me near a kitchen sink.
+
+**[Medium Example 1]**
+Riddle: I have cities, but no houses; forests, but no trees; and water, but no fish.
+Answer: A map
+Hint: I am often folded or rolled.
+
+**[Medium Example 2]**
+Riddle: What has to be broken before you can use it?
+Answer: An egg
+Hint: I am a common breakfast food.
+
+**[Hard Example 1]**
+Riddle: I am always in front of you but can never be seen.
+Answer: The future
+Hint: I am the opposite of history.
+
+**[Hard Example 2]**
+Riddle: I speak all languages, but I have no mouth.
+Answer: An echo
+Hint: I live in caves and large, empty rooms.
+
+---
+
+### Your Task
+
+Generate a new, unique riddle based on the following request. Provide ONLY the riddle, hint, and answer in the specified format, with no preamble.
+
+**Format:**
+Riddle: [Your new riddle]
+Hint: [Your new hint]
+Answer: [The answer]
+
+**Request:**
+Difficulty: [Insert Your Desired Difficulty Here, e.g., "Medium"]
