@@ -100,7 +100,17 @@ class Trivia(commands.Cog):
             return
 
         # Retrieve all guesses for this player for the current question
-        all_guesses = self.bot.game.get_player_guesses(player_id)
+        daily_question_id = self.bot.game.daily_question_id
+        if not daily_question_id:
+            all_guesses = []
+        else:
+            guesses = self.bot.game.data_manager.read_guess_history(user_id=player_id)
+            all_guesses = [
+                g.get("guess_text")
+                for g in guesses
+                if g.get("daily_question_id") == daily_question_id
+            ]
+
         # Deduplicate and sort guesses
         unique_guesses = sorted({(g or "").lower() for g in all_guesses})
         guesses_text = (

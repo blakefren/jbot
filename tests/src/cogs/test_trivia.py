@@ -38,8 +38,11 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
 
         # Mock the return value of handle_guess to be (is_correct, num_guesses)
         self.mock_game_runner.handle_guess.return_value = (True, 1)
-        self.mock_game_runner.get_player_guesses.return_value = ["test answer"]
         self.mock_game_runner.daily_q = MagicMock()
+        self.mock_game_runner.daily_question_id = 1
+        self.mock_data_manager.read_guess_history.return_value = [
+            {"guess_text": "test answer", "daily_question_id": 1}
+        ]
 
         await self.trivia_cog.answer.callback(
             self.trivia_cog, mock_ctx, guess="test answer"
@@ -65,8 +68,11 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx.author.display_name = "Test User"
 
         self.mock_game_runner.handle_guess.return_value = (False, 2)
-        self.mock_game_runner.get_player_guesses.return_value = ["wrong answer"]
         self.mock_game_runner.daily_q = MagicMock()
+        self.mock_game_runner.daily_question_id = 1
+        self.mock_data_manager.read_guess_history.return_value = [
+            {"guess_text": "wrong answer", "daily_question_id": 1}
+        ]
 
         await self.trivia_cog.answer.callback(
             self.trivia_cog, mock_ctx, guess="wrong answer"

@@ -117,15 +117,6 @@ class GameRunner:
     def get_subscribed_users(self):
         return self.subscribed_contexts
 
-    def get_player_guesses(self, player_id: int) -> list:
-        """
-        Retrieves all guesses made by a player for the current daily question.
-
-        Args:
-            player_id (int): The Discord ID of the player.
-        """
-        return self.guess_handler.get_player_guesses(player_id)
-
     def handle_guess(
         self, player_id: int, player_name: str, guess: str
     ) -> tuple[bool, int]:
