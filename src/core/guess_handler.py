@@ -167,6 +167,6 @@ class GuessHandler:
                         pass  # Or log that this also failed
 
         # Get the number of guesses for this question
-        num_guesses = len(self.get_player_guesses(player_id)) + 1
+        num_guesses = len(self.get_player_guesses(player_id))
 
         return is_correct, num_guesses
