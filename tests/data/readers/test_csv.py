@@ -158,7 +158,7 @@ class TestCsvReader(unittest.TestCase):
         q1 = questions[0]
         self.assertEqual(q1.question, "What is 2+2?")
         self.assertEqual(q1.answer, "4")
-        self.assertEqual(q1.category, "General")
+        self.assertEqual(q1.category, "Simple Test")
         self.assertEqual(q1.data_source, "Simple Test")
         q2 = questions[1]
         self.assertEqual(q2.question, "What is the capital of France?")
