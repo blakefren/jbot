@@ -11,12 +11,7 @@ import logging
 from src.core.data_manager import DataManager
 from data.readers.question_selector import QuestionSelector
 from data.readers.question import Question
-
-
-class AlreadyAnsweredCorrectlyError(Exception):
-    """Raised when a player tries to answer a question they have already answered correctly."""
-
-    pass
+from src.core.guess_handler import GuessHandler, AlreadyAnsweredCorrectlyError
 
 
 class GameRunner:
@@ -122,48 +117,20 @@ class GameRunner:
     def get_subscribed_users(self):
         return self.subscribed_contexts
 
-    def _is_correct_guess(self, guess: str, answer: str) -> bool:
-        """
-        Internal helper method to determine if a guess matches the answer.
-        Currently uses simple substring matching (case insensitive).
-        """
-        # TODO: Improve matching logic (e.g., fuzzy matching, ignore punctuation, etc.)
-        return re.search(guess, answer) is not None
-
     def get_player_guesses(self, player_id: int) -> list:
         """
-        Returns all guesses for the current daily question for the given player.
-        """
-        if not self.daily_question_id:
-            return []
-        guesses = self.data_manager.read_guess_history(user_id=player_id)
-        # Only include guesses for the current daily question
-        return [
-            g.get("guess_text")
-            for g in guesses
-            if g.get("daily_question_id") == self.daily_question_id
-        ]
+        Retrieves all guesses made by a player for the current daily question.
 
-    def has_answered_correctly_today(self, player_id: int) -> bool:
+        Args:
+            player_id (int): The Discord ID of the player.
         """
-        Checks if the player has already answered today's question correctly.
-        """
-        if not self.daily_question_id:
-            return False
-
-        guesses = self.data_manager.read_guess_history(user_id=player_id)
-        for guess in guesses:
-            if guess.get("daily_question_id") == self.daily_question_id and guess.get(
-                "is_correct"
-            ):
-                return True
-        return False
+        return self.guess_handler.get_player_guesses(player_id)
 
     def handle_guess(
         self, player_id: int, player_name: str, guess: str
     ) -> tuple[bool, int]:
         """
-        Handles the answer submitted by a player, logs it, and returns correctness.
+        Handles the answer submitted by a player by delegating to GuessHandler.
 
         Args:
             player_id (int): The Discord ID of the player.
@@ -181,37 +148,10 @@ class GameRunner:
         if not self.daily_q:
             return False, 0  # No active question
 
-        # Check if the player has already answered correctly today
-        if self.has_answered_correctly_today(player_id):
-            raise AlreadyAnsweredCorrectlyError()
-
-        # Get the number of guesses for this question
-        num_guesses = len(self.get_player_guesses(player_id)) + 1
-
-        g = guess.strip().lower()
-        a = str(self.daily_q.answer).strip().lower()
-        is_correct = self._is_correct_guess(g, a)
-        self.data_manager.log_player_guess(
-            player_id, player_name, self.daily_question_id, g, is_correct
+        guess_handler = GuessHandler(
+            self.data_manager, self.daily_q, self.daily_question_id, self.managers
         )
-        logging.info(f"Player {player_name} guessed '{g}'. Correct: {is_correct}")
-
-        # Resolve with active managers
-        for manager in self.managers.values():
-            if manager is not None and not isinstance(manager, type):
-                try:
-                    manager.on_guess(player_id, player_name, guess, is_correct)
-                except TypeError as e:
-                    logging.error(
-                        f"Error calling on_guess for {type(manager).__name__}: {e}"
-                    )
-                    # Attempt to call with fewer arguments for backward compatibility
-                    try:
-                        manager.on_guess(player_id, is_correct)
-                    except TypeError:
-                        pass  # Or log that this also failed
-
-        return is_correct, num_guesses
+        return guess_handler.handle_guess(player_id, player_name, guess)
 
     def get_scores_leaderboard(self, guild=None) -> str:
         """Computes and formats the leaderboard string."""

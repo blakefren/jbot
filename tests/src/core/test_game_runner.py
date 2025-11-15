@@ -9,38 +9,6 @@ from src.core.player import Player
 
 
 class TestGameRunner(unittest.TestCase):
-    def test_get_player_guesses(self):
-        """Test get_player_guesses returns deduplicated, sorted, lowercase guesses for the current daily question and player."""
-        self.game_runner.daily_question_id = 123
-        self.mock_data_manager.read_guess_history.return_value = [
-            {"daily_question_id": 123, "player_id": 111, "guess_text": "First Guess"},
-            {"daily_question_id": 123, "player_id": 111, "guess_text": "second guess"},
-            {"daily_question_id": 123, "player_id": 111, "guess_text": "FIRST GUESS"},
-            {
-                "daily_question_id": 456,
-                "player_id": 111,
-                "guess_text": "Old Question Guess",
-            },
-        ]
-        # Should only return deduplicated, sorted, lowercase guesses for player_id=111 and daily_question_id=123
-        all_guesses = self.mock_data_manager.read_guess_history.return_value
-        filtered_guesses = [
-            g["guess_text"]
-            for g in all_guesses
-            if g["player_id"] == 111 and g["daily_question_id"] == 123
-        ]
-        # Remove guesses for other players
-        guesses = self.game_runner.get_player_guesses(111)
-        self.assertEqual(guesses, ["First Guess", "second guess", "FIRST GUESS"])
-        # Now deduplicate, lowercase, and sort as trivia.py does
-        formatted_guesses = sorted({(g or "").lower() for g in guesses})
-        self.assertEqual(formatted_guesses, ["first guess", "second guess"])
-
-        # Should return empty list for player with no guesses for current question
-        self.mock_data_manager.read_guess_history.return_value = []
-        guesses_none = self.game_runner.get_player_guesses(999)
-        self.assertEqual(guesses_none, [])
-
     def test_get_evening_message_content_with_guild_nicknames(self):
         """Test evening message uses server nicknames if guild is provided."""
         self.game_runner.daily_q = self.mock_question
@@ -315,14 +283,19 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.daily_q = self.mock_question
         self.game_runner.daily_question_id = 1
         player_id = 123
-        # Simulate that the player has already answered correctly
-        self.game_runner.has_answered_correctly_today = MagicMock(return_value=True)
 
-        with self.assertRaises(AlreadyAnsweredCorrectlyError):
-            self.game_runner.handle_guess(player_id, "Test Player", "any guess")
+        with patch("src.core.game_runner.GuessHandler") as mock_guess_handler:
+            mock_handler_instance = mock_guess_handler.return_value
+            mock_handler_instance.handle_guess.side_effect = (
+                AlreadyAnsweredCorrectlyError
+            )
 
-        # Ensure we didn't log the guess
-        self.mock_data_manager.log_player_guess.assert_not_called()
+            with self.assertRaises(AlreadyAnsweredCorrectlyError):
+                self.game_runner.handle_guess(player_id, "Test Player", "any guess")
+
+            mock_handler_instance.handle_guess.assert_called_once_with(
+                player_id, "Test Player", "any guess"
+            )
 
     def test_update_scores(self):
         """Test that scores are updated correctly for players with correct answers."""
@@ -434,46 +407,18 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.set_daily_question()
         player_id, player_name = 123, "Test Guesser"
 
-        # Mock has_answered_correctly_today to always be False for this test
-        self.game_runner.has_answered_correctly_today = MagicMock(return_value=False)
+        with patch("src.core.game_runner.GuessHandler") as mock_guess_handler:
+            mock_handler_instance = mock_guess_handler.return_value
+            mock_handler_instance.handle_guess.return_value = (True, 1)
 
-        # Mock the data_manager's read_guess_history to simulate an empty history initially
-        self.mock_data_manager.read_guess_history.return_value = []
-
-        # Correct guess
-        is_correct, num_guesses = self.game_runner.handle_guess(
-            player_id, player_name, "test answer"
-        )
-        self.assertTrue(is_correct)
-        self.assertEqual(num_guesses, 1)  # One guess made
-        self.mock_data_manager.log_player_guess.assert_called_with(
-            player_id,
-            player_name,
-            self.game_runner.daily_question_id,
-            "test answer",
-            True,
-        )
-        # Ensure score is NOT updated here
-        self.mock_player_manager_instance.get_player.assert_not_called()
-
-        # Update the mock to simulate that one guess has been made
-        self.mock_data_manager.read_guess_history.return_value = [
-            {"daily_question_id": self.game_runner.daily_question_id}
-        ]
-
-        # Incorrect guess
-        is_correct, num_guesses = self.game_runner.handle_guess(
-            player_id, player_name, "wrong answer"
-        )
-        self.assertFalse(is_correct)
-        self.assertEqual(num_guesses, 2)  # Two guesses made
-        self.mock_data_manager.log_player_guess.assert_called_with(
-            player_id,
-            player_name,
-            self.game_runner.daily_question_id,
-            "wrong answer",
-            False,
-        )
+            is_correct, num_guesses = self.game_runner.handle_guess(
+                player_id, player_name, "test answer"
+            )
+            self.assertTrue(is_correct)
+            self.assertEqual(num_guesses, 1)
+            mock_handler_instance.handle_guess.assert_called_once_with(
+                player_id, player_name, "test answer"
+            )
 
         # No daily question
         self.game_runner.daily_q = None
