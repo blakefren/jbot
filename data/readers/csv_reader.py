@@ -119,7 +119,7 @@ def read_simple_questions(file_path: str, source: str) -> list[Question]:
                     Question(
                         question=row.get("Question"),
                         answer=row.get("Answer"),
-                        category="General",
+                        category=source,
                         clue_value=100,  # Default value
                         hint=row.get("Hint"),
                         data_source=source,
