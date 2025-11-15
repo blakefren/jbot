@@ -1,5 +1,6 @@
 import re
 import logging
+import jellyfish
 from src.core.data_manager import DataManager
 from data.readers.question import Question
 
@@ -21,19 +22,71 @@ class GuessHandler:
         daily_question: Question,
         daily_question_id: int,
         managers: dict,
+        fuzzy_threshold=2,
     ):
         self.data_manager = data_manager
         self.daily_q = daily_question
         self.daily_question_id = daily_question_id
         self.managers = managers
+        self.fuzzy_threshold = fuzzy_threshold
+
+    def _normalize(self, text: str) -> str:
+        """
+        Applies a series of cleaning and normalization rules to a string.
+        """
+        if not text:
+            return ""
+
+        text = text.lower().strip()
+
+        # Convert written numbers to digits
+        replacements = {
+            r"\bone\b": "1",
+            r"\btwo\b": "2",
+            r"\bthree\b": "3",
+            r"\bfour\b": "4",
+            r"\bfive\b": "5",
+            r"\bsix\b": "6",
+            r"\bseven\b": "7",
+            r"\beight\b": "8",
+            r"\bnine\b": "9",
+            r"\bten\b": "10",
+        }
+        for word, num in replacements.items():
+            text = re.sub(word, num, text)
+
+        # Remove articles (a, an, the)
+        text = re.sub(r"\b(a|an|the)\b", "", text)
+
+        # Remove all non-alphanumeric characters
+        text = re.sub(r"[^\w\s]", "", text)
+
+        # Replace multiple spaces with a single space
+        text = re.sub(r"\s+", " ", text).strip()
+
+        return text
 
     def _is_correct_guess(self, guess: str, answer: str) -> bool:
         """
-        Internal helper method to determine if a guess matches the answer.
-        Currently uses simple substring matching (case insensitive).
+        Checks a guess against an answer using normalization and fuzzy matching.
         """
-        # TODO: Improve matching logic (e.g., fuzzy matching, ignore punctuation, etc.)
-        return re.search(guess, answer) is not None
+        norm_g = self._normalize(guess)
+        norm_a = self._normalize(answer)
+
+        # Reject short guesses unless the answer is also short
+        if len(norm_g) <= 1 and len(norm_a) > 1:
+            return False
+
+        # Check for exact match
+        if norm_g == norm_a:
+            return True
+
+        # Check for fuzzy match using Levenshtein distance
+        distance = jellyfish.levenshtein_distance(norm_g, norm_a)
+        if distance <= self.fuzzy_threshold:
+            return True
+
+        return False
 
     def get_player_guesses(self, player_id: int) -> list:
         """

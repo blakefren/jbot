@@ -107,6 +107,43 @@ class TestGuessHandler(unittest.TestCase):
 
         self.assertFalse(self.guess_handler.has_answered_correctly_today(player_id))
 
+    def test_advanced_guess_checking(self):
+        """Test the advanced guess checking logic with normalization and fuzzy matching."""
+        # (guess, answer, expected_result)
+        test_cases = [
+            # Basic matches
+            ("clock", "clock", True),  # Exact
+            ("A Clock", "clock", True),  # Normalization (case, article)
+            ("the clock", "clock", True),  # Stop word removal
+            ("clock.", "clock", True),  # Punctuation
+            # "Hack" attempts
+            ("c", "clock", False),  # Too short
+            (".", "clock", False),  # Normalized to empty
+            ("o", "clock", False),  # Too short
+            # Spell correction (fuzzy matching)
+            ("clokc", "clock", True),  # Fuzzy (dist 1)
+            ("clocc", "clock", True),  # Fuzzy (dist 1)
+            ("clockk", "clock", True),  # Fuzzy (dist 1)
+            ("klock", "clock", True),  # Fuzzy (dist 1)
+            ("spnige", "sponge", True),  # Fuzzy (dist 2)
+            ("splnge", "sponge", True),  # Fuzzy (dist 2)
+            # Number/Word matching
+            ("one", "1", True),  # Normalization
+            ("1", "one", True),  # Normalization
+            ("7", "seven", True),  # Normalization
+            # Multi-word answers
+            ("The Great Gatsby", "great gatsby", True),
+            ("great gatsby", "The Great Gatsby", True),
+            ("great gatsy", "The Great Gatsby", True),  # Fuzzy
+        ]
+
+        for guess, answer, expected in test_cases:
+            with self.subTest(f"Guess: '{guess}', Answer: '{answer}'"):
+                # Direct test of the internal method
+                self.assertEqual(
+                    self.guess_handler._is_correct_guess(guess, answer), expected
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
