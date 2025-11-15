@@ -26,7 +26,10 @@ class TestGuessHandler(unittest.TestCase):
         player_name = "PlayerOne"
         guess = "Test Answer"
 
-        self.data_manager.read_guess_history.return_value = []
+        # Mock so that get_player_guesses returns the guess we are making
+        self.data_manager.read_guess_history.return_value = [
+            {"daily_question_id": self.daily_question_id, "guess_text": guess}
+        ]
 
         is_correct, num_guesses = self.guess_handler.handle_guess(
             player_id, player_name, guess
@@ -47,7 +50,10 @@ class TestGuessHandler(unittest.TestCase):
         player_name = "PlayerTwo"
         guess = "Wrong Answer"
 
-        self.data_manager.read_guess_history.return_value = []
+        # Mock so that get_player_guesses returns the guess we are making
+        self.data_manager.read_guess_history.return_value = [
+            {"daily_question_id": self.daily_question_id, "guess_text": guess}
+        ]
 
         is_correct, num_guesses = self.guess_handler.handle_guess(
             player_id, player_name, guess
