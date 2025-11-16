@@ -484,6 +484,25 @@ class TestGameRunner(unittest.TestCase):
         self.assertNotIn("NewNameAlice", leaderboard)
         mock_guild.get_member.assert_called_once_with(1)
 
+    def test_get_scores_leaderboard_with_streaks(self):
+        """Test that player streaks are shown in the leaderboard."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 100},
+            {"id": "2", "name": "Bob", "score": 90},
+            {"id": "3", "name": "Charlie", "score": 80},
+        ]
+        self.mock_data_manager.get_player_streaks.return_value = [
+            {"id": "1", "answer_streak": 3},
+            {"id": "3", "answer_streak": 5},
+        ]
+
+        leaderboard = self.game_runner.get_scores_leaderboard()
+
+        self.assertIn("100: Alice 🔥3", leaderboard)
+        self.assertIn("90: Bob", leaderboard)
+        self.assertIn("80: Charlie 🔥5", leaderboard)
+        self.assertNotIn("Bob 🔥", leaderboard)
+
     def test_get_player_history(self):
         """Test generating a player's history."""
         self.mock_data_manager.read_guess_history.return_value = [

@@ -151,21 +151,29 @@ class GameRunner:
         if not player_scores:
             return "No scores available yet."
 
+        streaks = {
+            s["id"]: s["answer_streak"] for s in self.data_manager.get_player_streaks()
+        }
+
         scores_by_points = defaultdict(list)
         for player in player_scores:
+            player_id = player["id"]
             player_name = player["name"]
             if guild:
                 try:
-                    member = guild.get_member(int(player["id"]))
+                    member = guild.get_member(int(player_id))
                     if member:
                         player_name = (
                             member.nick if member.nick else member.display_name
                         )
                 except Exception as e:
                     logging.warning(
-                        f"Could not resolve player name for {player['id']}: {e}"
+                        f"Could not resolve player name for {player_id}: {e}"
                     )
-            scores_by_points[player["score"]].append(player_name)
+
+            streak = streaks.get(player_id)
+            display_name = f"{player_name} 🔥{streak}" if streak else player_name
+            scores_by_points[player["score"]].append(display_name)
 
         if not scores_by_points:
             return "No scores available yet."
@@ -324,6 +332,35 @@ class GameRunner:
         )
         answer_part = self.format_answer(self.daily_q)
         return f"{flavor_message}\n{answer_part}\n{player_answers}"
+
+    def update_streaks(self):
+        """
+        Resets answer streaks for players who did not answer today's question correctly.
+        """
+        if not self.daily_question_id:
+            logging.warning("No daily question ID set, cannot update streaks.")
+            return
+
+        all_guesses = self.data_manager.read_guess_history()
+        correct_guesses = [
+            g
+            for g in all_guesses
+            if g.get("daily_question_id") == self.daily_question_id
+            and g.get("is_correct")
+        ]
+        player_ids_answered_correctly = {g["player_id"] for g in correct_guesses}
+
+        all_players = self.player_manager.get_all_players()
+        for player_id, player in all_players.items():
+            if int(player_id) not in player_ids_answered_correctly:
+                if player.answer_streak > 0:
+                    player.reset_streak()
+                    logging.info(
+                        f"Resetting streak for player {player.name} ({player_id})."
+                    )
+
+        self.player_manager.save_players()
+        logging.info("Player streaks updated and saved.")
 
     def update_scores(self):
         """

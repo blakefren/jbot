@@ -199,6 +199,13 @@ class DataManager:
         )
         return self.db.execute_query(query)
 
+    def get_player_streaks(self) -> list[dict]:
+        """
+        Retrieves player ids, names and answer streaks from the database, ordered by streak.
+        """
+        query = "SELECT id, name, answer_streak FROM players WHERE answer_streak > 1 ORDER BY answer_streak DESC"
+        return self.db.execute_query(query)
+
     def get_player_ids_with_role(self, role_name: str) -> set[int]:
         """
         Retrieves the player IDs for a given role name.

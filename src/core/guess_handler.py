@@ -151,6 +151,15 @@ class GuessHandler:
         )
         logging.info(f"Player {player_name} guessed '{g}'. Correct: {is_correct}")
 
+        # Update player's answer streak
+        player_manager = self.managers.get("player")
+        if player_manager:
+            player = player_manager.get_player(player_id)
+            if player:
+                if is_correct:
+                    player.increment_streak()
+                    player_manager.save_players()
+
         # Resolve with active managers
         for manager in self.managers.values():
             if manager is not None and not isinstance(manager, type):

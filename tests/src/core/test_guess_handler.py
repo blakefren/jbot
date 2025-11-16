@@ -11,7 +11,9 @@ class TestGuessHandler(unittest.TestCase):
             "Test Question", "Test Answer", "Test Category", 100, "Test Hint"
         )
         self.daily_question_id = 123
-        self.managers = {"test_manager": MagicMock()}
+
+        self.player_manager = MagicMock()
+        self.managers = {"player": self.player_manager, "test_manager": MagicMock()}
 
         self.guess_handler = GuessHandler(
             self.data_manager,
@@ -25,6 +27,9 @@ class TestGuessHandler(unittest.TestCase):
         player_id = 1
         player_name = "PlayerOne"
         guess = "Test Answer"
+
+        mock_player = MagicMock()
+        self.player_manager.get_player.return_value = mock_player
 
         # Mock so that get_player_guesses returns the guess we are making
         self.data_manager.read_guess_history.return_value = [
@@ -40,6 +45,12 @@ class TestGuessHandler(unittest.TestCase):
         self.data_manager.log_player_guess.assert_called_once_with(
             player_id, player_name, self.daily_question_id, guess.lower(), True
         )
+
+        # Verify streak logic
+        mock_player.increment_streak.assert_called_once()
+        mock_player.reset_streak.assert_not_called()
+        self.player_manager.save_players.assert_called_once()
+
         self.managers["test_manager"].on_guess.assert_called_once_with(
             player_id, player_name, guess, True
         )
@@ -49,6 +60,9 @@ class TestGuessHandler(unittest.TestCase):
         player_id = 2
         player_name = "PlayerTwo"
         guess = "Wrong Answer"
+
+        mock_player = MagicMock()
+        self.player_manager.get_player.return_value = mock_player
 
         # Mock so that get_player_guesses returns the guess we are making
         self.data_manager.read_guess_history.return_value = [
@@ -64,6 +78,12 @@ class TestGuessHandler(unittest.TestCase):
         self.data_manager.log_player_guess.assert_called_once_with(
             player_id, player_name, self.daily_question_id, guess.lower(), False
         )
+
+        # Verify streak logic
+        mock_player.increment_streak.assert_not_called()
+        mock_player.reset_streak.assert_not_called()
+        self.player_manager.save_players.assert_not_called()
+
         self.managers["test_manager"].on_guess.assert_called_once_with(
             player_id, player_name, guess, False
         )
