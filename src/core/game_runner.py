@@ -174,7 +174,8 @@ class GameRunner:
             s["id"]: s["answer_streak"] for s in self.data_manager.get_player_streaks()
         }
 
-        scores_by_points = defaultdict(list)
+        # Create a list of player data
+        all_player_data = []
         for player in player_scores:
             player_id = player["id"]
             player_name = player["name"]
@@ -190,22 +191,52 @@ class GameRunner:
                         f"Could not resolve player name for {player_id}: {e}"
                     )
 
-            streak = streaks.get(player_id)
-            display_name = f"{player_name} 🔥{streak}" if streak else player_name
-            scores_by_points[player["score"]].append(display_name)
+            streak = streaks.get(player_id, 0)
+            score = player["score"]
+            all_player_data.append(
+                {"name": player_name, "score": score, "streak": streak}
+            )
 
-        if not scores_by_points:
-            return "No scores available yet."
+        # Sort players by score (desc), then by name (asc)
+        all_player_data.sort(key=lambda p: (-p["score"], p["name"]))
 
-        # Sort scores in descending order
-        sorted_scores = sorted(scores_by_points.keys(), reverse=True)
+        # Determine column widths
+        max_name = (
+            max(len(p["name"]) for p in all_player_data) if all_player_data else 10
+        )
+        max_score = max(
+            5,
+            (
+                max(len(str(p["score"])) for p in all_player_data)
+                if all_player_data
+                else 0
+            ),
+        )
 
-        response_content = "-- Player Scores --\n"
-        for score in sorted_scores:
-            # Sort player names alphabetically
-            sorted_names = sorted(scores_by_points[score])
-            response_content += f"{score}: {', '.join(sorted_names)}\n"
-        return response_content
+        # Header
+        header = (
+            f"{'Rank':<5} {'Player':<{max_name}} {'Score':<{max_score}} {'Streak'}\n"
+        )
+        divider = f"{'-'*5} {'-'*max_name} {'-'*max_score} {'-'*6}\n"
+
+        # Body
+        body = ""
+        rank = 0
+        last_score = -1
+        for i, p_data in enumerate(all_player_data):
+            # Handle rank ties
+            if last_score == -1:
+                rank = 1
+            elif p_data["score"] < last_score:
+                rank = i + 1
+
+            last_score = p_data["score"]
+            name = p_data["name"]
+            score = p_data["score"]
+            streak_str = f"🔥{p_data['streak']}" if p_data["streak"] > 0 else ""
+            body += f"{rank:<5} {name:<{max_name}} {score:<{max_score}} {streak_str}\n"
+
+        return f"-- Player Scores --\n```{header}{divider}{body}```"
 
     def get_player_history(self, player_id: int, player_name: str) -> str:
         """Computes and formats the history/metrics string for a given player."""

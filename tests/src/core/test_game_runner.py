@@ -435,9 +435,14 @@ class TestGameRunner(unittest.TestCase):
             {"id": "1", "name": "Alice", "score": 10},
             {"id": "2", "name": "Bob", "score": 5},
         ]
+        self.mock_data_manager.get_player_streaks.return_value = []
         leaderboard = self.game_runner.get_scores_leaderboard()
-        self.assertIn("10: Alice", leaderboard)
-        self.assertIn("5: Bob", leaderboard)
+        self.assertIn("Rank", leaderboard)
+        self.assertIn("Player", leaderboard)
+        self.assertIn("Score", leaderboard)
+        self.assertIn("Streak", leaderboard)
+        self.assertIn("Alice", leaderboard)
+        self.assertIn("Bob", leaderboard)
         self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Bob"))
 
     def test_get_scores_leaderboard_with_guild(self):
@@ -446,6 +451,7 @@ class TestGameRunner(unittest.TestCase):
             {"id": "1", "name": "OldNameAlice", "score": 10},
             {"id": "2", "name": "Bob", "score": 5},
         ]
+        self.mock_data_manager.get_player_streaks.return_value = []
 
         mock_guild = MagicMock()
         mock_member_alice = MagicMock()
@@ -459,8 +465,8 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard(guild=mock_guild)
 
-        self.assertIn("10: NewNameAlice", leaderboard)
-        self.assertIn("5: Bob", leaderboard)
+        self.assertIn("NewNameAlice", leaderboard)
+        self.assertIn("Bob", leaderboard)
         self.assertNotIn("OldNameAlice", leaderboard)
         mock_guild.get_member.assert_any_call(1)
         mock_guild.get_member.assert_any_call(2)
@@ -470,6 +476,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.get_player_scores.return_value = [
             {"id": "1", "name": "OldNameAlice", "score": 10},
         ]
+        self.mock_data_manager.get_player_streaks.return_value = []
 
         mock_guild = MagicMock()
         mock_member_alice = MagicMock()
@@ -480,7 +487,7 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard(guild=mock_guild)
 
-        self.assertIn("10: AliceNick", leaderboard)
+        self.assertIn("AliceNick", leaderboard)
         self.assertNotIn("OldNameAlice", leaderboard)
         self.assertNotIn("NewNameAlice", leaderboard)
         mock_guild.get_member.assert_called_once_with(1)
@@ -499,9 +506,11 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard()
 
-        self.assertIn("100: Alice 🔥3", leaderboard)
-        self.assertIn("90: Bob", leaderboard)
-        self.assertIn("80: Charlie 🔥5", leaderboard)
+        self.assertIn("Alice", leaderboard)
+        self.assertIn("Bob", leaderboard)
+        self.assertIn("Charlie", leaderboard)
+        self.assertIn("🔥3", leaderboard)
+        self.assertIn("🔥5", leaderboard)
         self.assertNotIn("Bob 🔥", leaderboard)
 
     def test_get_player_history(self):
@@ -547,10 +556,16 @@ class TestGameRunner(unittest.TestCase):
             {"id": "2", "name": "Alice", "score": 10},
             {"id": "3", "name": "Bob", "score": 5},
         ]
+        self.mock_data_manager.get_player_streaks.return_value = []
         leaderboard = self.game_runner.get_scores_leaderboard()
-        self.assertIn("10: Alice, Charlie", leaderboard)
-        self.assertIn("5: Bob", leaderboard)
+        self.assertIn("Alice", leaderboard)
+        self.assertIn("Bob", leaderboard)
+        self.assertIn("Charlie", leaderboard)
+        # Alice and Charlie have the same score, Alice should be first alphabetically.
         self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Charlie"))
+        # Bob has a lower score, so he should appear after both.
+        self.assertTrue(leaderboard.find("Charlie") < leaderboard.find("Bob"))
+        self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Bob"))
 
     def test_set_daily_question_generates_hint_if_missing(self):
         """Test that a hint is generated if the selected question is missing one."""
