@@ -132,7 +132,7 @@ class GuessHandler:
             tuple[bool, int]: A tuple containing:
                 - bool: True if the guess was correct, False otherwise.
                 - int: The number of guesses the player has made for this question.
-        
+
         Raises:
             AlreadyAnsweredCorrectlyError: If the player has already answered correctly.
         """

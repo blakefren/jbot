@@ -452,8 +452,8 @@ class TestGameRunner(unittest.TestCase):
         mock_member_alice.nick = None
 
         # Let get_member return the new mock member for Alice, and None for Bob
-        mock_guild.get_member.side_effect = (
-            lambda id: mock_member_alice if id == 1 else None
+        mock_guild.get_member.side_effect = lambda id: (
+            mock_member_alice if id == 1 else None
         )
 
         leaderboard = self.game_runner.get_scores_leaderboard(guild=mock_guild)

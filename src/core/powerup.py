@@ -2,6 +2,7 @@
 POWERUP mode logic for jbot trivia game.
 Implements power-up actions: attack, shield, and wager.
 """
+
 from typing import Dict
 from src.cfg.main import ConfigReader
 from src.core.base_manager import BaseManager
