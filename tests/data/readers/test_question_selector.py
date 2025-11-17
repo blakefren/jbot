@@ -45,7 +45,7 @@ class TestQuestionSelector(unittest.TestCase):
         self.assertEqual(question.answer, "A map")
         self.assertEqual(question.hint, "I am often folded.")
         self.assertEqual(question.category, "Riddle")
-        mock_file.assert_called_with("prompts/riddle.txt", "r")
+        mock_file.assert_called_with("prompts/riddle.txt", "r", encoding="utf-8")
         self.mock_gemini_manager.generate_content.assert_called_once()
 
     def test_get_riddle_from_gemini_no_manager(self):
@@ -81,6 +81,66 @@ class TestQuestionSelector(unittest.TestCase):
         self.assertIsNone(result)
         self.assertIn(
             "Failed to parse riddle from Gemini response", mock_logging.call_args[0][0]
+        )
+
+    @patch(
+        "builtins.open",
+        new_callable=mock_open,
+        read_data="Riddle: [Insert your riddle here]\nAnswer: [Insert your answer here]",
+    )
+    def test_get_hint_from_gemini_success(self, mock_file):
+        self.mock_gemini_manager.generate_content.return_value = "Hint: It's a thing."
+        selector = QuestionSelector([], gemini_manager=self.mock_gemini_manager)
+        question = Question("What is a thing?", "A thing", "Category", 100)
+
+        hint = selector.get_hint_from_gemini(question)
+
+        self.assertEqual(hint, "It's a thing.")
+        mock_file.assert_called_with("prompts/hint.txt", "r", encoding="utf-8")
+        self.mock_gemini_manager.generate_content.assert_called_once()
+        # Check that the prompt was correctly formatted
+        call_args = self.mock_gemini_manager.generate_content.call_args
+        prompt = call_args[0][0]
+        self.assertIn("What is a thing?", prompt)
+        self.assertIn("A thing", prompt)
+
+    def test_get_hint_from_gemini_no_manager(self):
+        selector = QuestionSelector([])  # No gemini_manager
+        question = Question("Q", "A", "C", 1)
+        with self.assertRaisesRegex(ValueError, "Gemini manager is not configured."):
+            selector.get_hint_from_gemini(question)
+
+    @patch("logging.error")
+    @patch("builtins.open", side_effect=FileNotFoundError)
+    def test_get_hint_from_gemini_file_not_found(self, mock_open, mock_logging):
+        selector = QuestionSelector([], gemini_manager=self.mock_gemini_manager)
+        question = Question("Q", "A", "C", 1)
+        result = selector.get_hint_from_gemini(question)
+        self.assertIsNone(result)
+        mock_logging.assert_called_with("Hint prompt file not found.")
+
+    @patch("logging.error")
+    @patch("builtins.open", new_callable=mock_open, read_data="prompt")
+    def test_get_hint_from_gemini_api_failure(self, mock_open, mock_logging):
+        self.mock_gemini_manager.generate_content.return_value = None
+        selector = QuestionSelector([], gemini_manager=self.mock_gemini_manager)
+        question = Question("Q", "A", "C", 1)
+        result = selector.get_hint_from_gemini(question)
+        self.assertIsNone(result)
+        mock_logging.assert_called_with("Failed to get response from Gemini for hint.")
+
+    @patch("logging.error")
+    @patch("builtins.open", new_callable=mock_open, read_data="prompt")
+    def test_get_hint_from_gemini_parsing_error(self, mock_open, mock_logging):
+        self.mock_gemini_manager.generate_content.return_value = (
+            "This is not a valid hint format"
+        )
+        selector = QuestionSelector([], gemini_manager=self.mock_gemini_manager)
+        question = Question("Q", "A", "C", 1)
+        result = selector.get_hint_from_gemini(question)
+        self.assertIsNone(result)
+        self.assertIn(
+            "Failed to parse hint from Gemini response", mock_logging.call_args[0][0]
         )
 
     def test_init(self):

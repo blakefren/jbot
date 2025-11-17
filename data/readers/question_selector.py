@@ -37,7 +37,7 @@ class QuestionSelector:
             raise ValueError("Gemini manager is not configured.")
 
         try:
-            with open("prompts/riddle.txt", "r") as f:
+            with open("prompts/riddle.txt", "r", encoding="utf-8") as f:
                 prompt = f.read()
         except FileNotFoundError:
             logging.error("Riddle prompt file not found.")
@@ -74,6 +74,41 @@ class QuestionSelector:
         except (StopIteration, IndexError) as e:
             logging.error(
                 f"Failed to parse riddle from Gemini response: {e}\nResponse: {response_text}"
+            )
+            return None
+
+    def get_hint_from_gemini(self, question: Question) -> Optional[str]:
+        """
+        Generates a hint for a given question using the Gemini API.
+        """
+        if not self.gemini_manager:
+            raise ValueError("Gemini manager is not configured.")
+
+        try:
+            with open("prompts/hint.txt", "r", encoding="utf-8") as f:
+                prompt = f.read()
+        except FileNotFoundError:
+            logging.error("Hint prompt file not found.")
+            return None
+
+        prompt = prompt.replace("[Insert your riddle here]", question.question)
+        prompt = prompt.replace("[Insert your answer here]", question.answer)
+
+        response_text = self.gemini_manager.generate_content(prompt)
+
+        if not response_text:
+            logging.error("Failed to get response from Gemini for hint.")
+            return None
+
+        # Parse the response
+        try:
+            lines = response_text.strip().split("\n")
+            hint_line = next(line for line in lines if line.startswith("Hint:"))
+            hint = hint_line.replace("Hint:", "").strip()
+            return hint
+        except StopIteration:
+            logging.error(
+                f"Failed to parse hint from Gemini response. Response: {response_text}"
             )
             return None
 

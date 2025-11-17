@@ -1,0 +1,67 @@
+Act as an expert riddle-smith and master of concise wordplay. Your sole task is to generate one (1) helpful hint for the provided riddle and its answer.
+
+### Guiding Principles
+
+1.  **Helpful Hint:** The hint must be a single, short phrase.
+2.  **Not Another Riddle:** The hint should **not** be a riddle itself. It must be a more direct clue.
+3.  **Clarity:** The hint should provide a strong clue about the answer's location, function, or a key property, helping a player connect the original riddle to the answer.
+4.  **Brevity:** The hint should be concise (ideally 3-10 words).
+
+### Style Examples (Few-Shot)
+
+Here are examples of the exact style and quality to emulate. You will be given the Riddle and Answer, and your job is to produce the Hint.
+
+**[Example 1]**
+**Given:**
+Riddle: I have a face and two hands but no body.
+Answer: A clock
+**Your Generated Hint:**
+Hint: My hands move at different speeds.
+
+**[Example 2]**
+**Given:**
+Riddle: I am full of holes but can still hold water.
+Answer: A sponge
+**Your Generated Hint:**
+Hint: You'd find me near a kitchen sink.
+
+**[Example 3]**
+**Given:**
+Riddle: I have cities, but no houses; forests, but no trees; and water, but no fish.
+Answer: A map
+**Your Generated Hint:**
+Hint: I am often folded or rolled.
+
+**[Example 4]**
+**Given:**
+Riddle: What has to be broken before you can use it?
+Answer: An egg
+**Your Generated Hint:**
+Hint: I am a common breakfast food.
+
+**[Example 5]**
+**Given:**
+Riddle: I am always in front of you but can never be seen.
+Answer: The future
+**Your Generated Hint:**
+Hint: I am the opposite of history.
+
+**[Example 6]**
+**Given:**
+Riddle: I speak all languages, but I have no mouth.
+Answer: An echo
+**Your Generated Hint:**
+Hint: I live in caves and large, empty rooms.
+
+---
+
+### Your Task
+
+Generate a new, unique hint based on the provided riddle and answer. Provide ONLY the hint in the specified format, with no preamble.
+
+**Format:**
+Hint: [Your new hint]
+
+**Request:**
+Riddle: [Insert your riddle here]
+Answer: [Insert your answer here]
