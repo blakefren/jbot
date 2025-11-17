@@ -42,7 +42,8 @@ class RolesCog(commands.Cog):
         if not role:
             try:
                 role = await guild.create_role(
-                    name=first_place_role_name, reason="JBot: Create First Place Role",
+                    name=first_place_role_name,
+                    reason="JBot: Create First Place Role",
                 )
             except discord.Forbidden:
                 # Log that we don't have permissions to create roles

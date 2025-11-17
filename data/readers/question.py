@@ -162,7 +162,10 @@ if __name__ == "__main__":
 
     # Test with minimal data (defaults)
     q3 = Question(
-        question="A primary color.", answer="Red", category="COLORS", clue_value=100,
+        question="A primary color.",
+        answer="Red",
+        category="COLORS",
+        clue_value=100,
     )
     print("\n--- Question 3 Details (minimal) ---")
     print(q3)

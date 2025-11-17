@@ -23,6 +23,7 @@ from src.core.game_runner import GameRunner
 from data.readers.question import Question
 from data.readers.question_selector import QuestionSelector
 
+
 # Timezone Configuration
 def parse_time(time_str: str, default_time: datetime.time) -> datetime.time:
     """Parse a time string in HH:MM format."""
@@ -435,7 +436,9 @@ async def discord_bot_async(
         logging.warning(f"Could not initialize GeminiManager: {e}")
 
     question_selector = QuestionSelector(
-        questions, mode=config.get("JBOT_QUESTION_MODE"), gemini_manager=gemini_manager,
+        questions,
+        mode=config.get("JBOT_QUESTION_MODE"),
+        gemini_manager=gemini_manager,
     )
     game = GameRunner(question_selector, data_manager)
 

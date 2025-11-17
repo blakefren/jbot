@@ -1,6 +1,7 @@
 """
 Manager for interacting with the Gemini API using the google-generativeai library.
 """
+
 import google.generativeai as genai
 import logging
 

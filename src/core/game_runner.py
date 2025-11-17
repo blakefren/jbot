@@ -21,7 +21,9 @@ class GameRunner:
     """
 
     def __init__(
-        self, question_selector: QuestionSelector, data_manager: DataManager,
+        self,
+        question_selector: QuestionSelector,
+        data_manager: DataManager,
     ):
         self.question_selector = question_selector
         self.data_manager = data_manager
@@ -132,7 +134,7 @@ class GameRunner:
             tuple[bool, int]: A tuple containing:
                 - bool: True if the guess was correct, False otherwise.
                 - int: The number of guesses the player has made for this question.
-        
+
         Raises:
             AlreadyAnsweredCorrectlyError: If the player has already answered correctly.
         """
