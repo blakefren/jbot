@@ -205,19 +205,25 @@ class GameRunner:
             max(len(p["name"]) for p in all_player_data) if all_player_data else 10
         )
         max_score = max(
-            5,
+            5,  # Num chars in "score" header
             (
                 max(len(str(p["score"])) for p in all_player_data)
                 if all_player_data
                 else 0
             ),
         )
+        max_streak = max(
+            6,  # Num chars in "streak" header
+            (
+                max(len(str(p["streak"])) for p in all_player_data)
+                if all_player_data
+                else 0
+            ),
+        )
 
         # Header
-        header = (
-            f"{'Rank':<5} {'Player':<{max_name}} {'Score':<{max_score}} {'Streak'}\n"
-        )
-        divider = f"{'-'*5} {'-'*max_name} {'-'*max_score} {'-'*6}\n"
+        header = f"{'Rank'} {'Player':<{max_name}} {'Score':<{max_score}} {'Streak'}\n"
+        divider = f"{'-'*4} {'-'*max_name} {'-'*max_score} {'-'*max_streak}\n"
 
         # Body
         body = ""
@@ -225,18 +231,24 @@ class GameRunner:
         last_score = -1
         for i, p_data in enumerate(all_player_data):
             # Handle rank ties
-            if last_score == -1:
-                rank = 1
-            elif p_data["score"] < last_score:
+            if p_data["score"] < last_score:
                 rank = i + 1
+            elif last_score == -1:
+                rank = 1
 
-            last_score = p_data["score"]
             name = p_data["name"]
             score = p_data["score"]
-            streak_str = f"🔥{p_data['streak']}" if p_data["streak"] > 0 else ""
-            body += f"{rank:<5} {name:<{max_name}} {score:<{max_score}} {streak_str}\n"
+            streak = p_data["streak"]
+            streak_str = f"{streak}🔥" if streak > 0 else ""
 
-        return f"-- Player Scores --\n```{header}{divider}{body}```"
+            # For ties, only show rank and score for the first player
+            if p_data["score"] == last_score:
+                body += f"{'':>4} {name:<{max_name}} {'':>{max_score}} {streak_str:>{max_streak}}\n"
+            else:
+                body += f"{rank:>4} {name:<{max_name}} {score:>{max_score}} {streak_str:>{max_streak}}\n"
+
+            last_score = p_data["score"]
+        return f"```{header}{divider}{body}```"
 
     def get_player_history(self, player_id: int, player_name: str) -> str:
         """Computes and formats the history/metrics string for a given player."""

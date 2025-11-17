@@ -509,8 +509,8 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("Alice", leaderboard)
         self.assertIn("Bob", leaderboard)
         self.assertIn("Charlie", leaderboard)
-        self.assertIn("🔥3", leaderboard)
-        self.assertIn("🔥5", leaderboard)
+        self.assertIn("3🔥", leaderboard)
+        self.assertIn("5🔥", leaderboard)
         self.assertNotIn("Bob 🔥", leaderboard)
 
     def test_get_player_history(self):
