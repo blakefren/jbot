@@ -23,7 +23,6 @@ class TestQuestionSelector(unittest.TestCase):
         selector = QuestionSelector(
             self.questions, mode="daily", gemini_manager=self.mock_gemini_manager
         )
-
         self.assertEqual(selector.gemini_manager, self.mock_gemini_manager)
 
     @patch(
