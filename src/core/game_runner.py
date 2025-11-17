@@ -11,7 +11,7 @@ import logging
 from src.core.data_manager import DataManager
 from data.readers.question_selector import QuestionSelector
 from data.readers.question import Question
-from src.core.guess_handler import GuessHandler, AlreadyAnsweredCorrectlyError
+from src.core.guess_handler import GuessHandler
 
 
 class GameRunner:
