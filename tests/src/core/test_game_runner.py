@@ -552,6 +552,72 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("5: Bob", leaderboard)
         self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Charlie"))
 
+    def test_set_daily_question_generates_hint_if_missing(self):
+        """Test that a hint is generated if the selected question is missing one."""
+        # Arrange
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+        question_without_hint = Question(
+            question="Test Q", answer="Test A", category="Test C"
+        )
+        self.assertIsNone(question_without_hint.hint)
+
+        self.mock_question_selector.get_question_for_today.return_value = (
+            question_without_hint
+        )
+        self.mock_question_selector.get_hint_from_gemini.return_value = "Generated Hint"
+
+        # Act
+        self.game_runner.set_daily_question()
+
+        # Assert
+        self.mock_question_selector.get_hint_from_gemini.assert_called_once_with(
+            question_without_hint
+        )
+        self.assertEqual(self.game_runner.daily_q.hint, "Generated Hint")
+        self.mock_data_manager.log_daily_question.assert_called_once_with(
+            self.game_runner.daily_q
+        )
+
+    def test_set_daily_question_hint_generation_fails_gracefully(self):
+        """Test that hint generation failure doesn't stop question selection."""
+        # Arrange
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+        question_without_hint = Question(
+            question="Test Q", answer="Test A", category="Test C"
+        )
+        self.mock_question_selector.get_question_for_today.return_value = (
+            question_without_hint
+        )
+        # Simulate Gemini failure
+        self.mock_question_selector.get_hint_from_gemini.return_value = None
+
+        # Act
+        self.game_runner.set_daily_question()
+
+        # Assert
+        self.mock_question_selector.get_hint_from_gemini.assert_called_once()
+        self.assertIsNone(self.game_runner.daily_q.hint)  # Hint should still be None
+        self.mock_data_manager.log_daily_question.assert_called_once()  # Still logs
+
+    def test_set_daily_question_with_existing_hint(self):
+        """Test that a hint is not generated if one already exists."""
+        # Arrange
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+        question_with_hint = Question(
+            question="Test Q", answer="Test A", category="Test C", hint="Existing Hint"
+        )
+        self.mock_question_selector.get_question_for_today.return_value = (
+            question_with_hint
+        )
+
+        # Act
+        self.game_runner.set_daily_question()
+
+        # Assert
+        self.mock_question_selector.get_hint_from_gemini.assert_not_called()
+        self.assertEqual(self.game_runner.daily_q.hint, "Existing Hint")
+        self.mock_data_manager.log_daily_question.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

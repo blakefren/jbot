@@ -98,6 +98,23 @@ class GameRunner:
         # Otherwise, select a new question
         self.daily_q = self.question_selector.get_question_for_today()
         if self.daily_q:
+            # If the question has no hint, try to generate one.
+            if not self.daily_q.hint:
+                logging.info(
+                    f"Question {self.daily_q.id} is missing a hint. Generating one..."
+                )
+                try:
+                    new_hint = self.question_selector.get_hint_from_gemini(self.daily_q)
+                    if new_hint:
+                        self.daily_q.hint = new_hint
+                        logging.info(
+                            f"Successfully generated hint for question {self.daily_q.id}."
+                        )
+                except Exception as e:
+                    logging.error(
+                        f"Error generating hint for question {self.daily_q.id}: {e}"
+                    )
+
             self.daily_question_id = self.data_manager.log_daily_question(self.daily_q)
             if self.daily_question_id is None:
                 # If log_daily_question returns None, it means a question for today already exists.
