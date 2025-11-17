@@ -126,8 +126,6 @@ class TestQuestionSelector(unittest.TestCase):
         selector = QuestionSelector([], gemini_manager=self.mock_gemini_manager)
         question = Question("Q", "A", "C", 1)
         result = selector.get_hint_from_gemini(question)
-
-        
         self.assertIsNone(result)
         mock_logging.assert_called_with("Failed to get response from Gemini for hint.")
 
