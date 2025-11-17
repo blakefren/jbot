@@ -2,7 +2,8 @@ import unittest
 from unittest.mock import patch, MagicMock, call
 
 from data.readers.question import Question
-from src.core.game_runner import GameRunner, AlreadyAnsweredCorrectlyError
+from src.core.game_runner import GameRunner
+from src.core.guess_handler import AlreadyAnsweredCorrectlyError
 from src.core.data_manager import DataManager
 from src.core.subscriber import Subscriber
 from src.core.player import Player

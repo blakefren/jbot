@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, call
 from src.core.discord import DiscordBot
 from src.cogs.trivia import Trivia
 from src.cfg.main import ConfigReader
-from src.core.game_runner import GameRunner, AlreadyAnsweredCorrectlyError
+from src.core.game_runner import GameRunner
+from src.core.guess_handler import AlreadyAnsweredCorrectlyError
 from src.core.data_manager import DataManager
 
 

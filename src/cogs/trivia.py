@@ -1,7 +1,7 @@
 from discord.ext import commands
 import logging
 
-from src.core.game_runner import AlreadyAnsweredCorrectlyError
+from src.core.guess_handler import AlreadyAnsweredCorrectlyError
 
 
 class Trivia(commands.Cog):
