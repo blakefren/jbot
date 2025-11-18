@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
+from datetime import date
 
 from src.core.data_manager import DataManager
 from src.core.player import Player
@@ -244,6 +245,127 @@ class TestDataManager(unittest.TestCase):
         self.data_manager.db.execute_update.assert_called_once_with(
             "DELETE FROM subscribers WHERE id = ?", (1,)
         )
+
+
+class TestDataManagerStats(unittest.TestCase):
+    def setUp(self):
+        """Set up a temporary in-memory database for testing."""
+        self.db = Database(db_path=":memory:")
+        self.data_manager = DataManager(self.db)
+        self._populate_test_data()
+
+    def tearDown(self):
+        """Close the database connection after tests."""
+        self.db.close()
+
+    def _populate_test_data(self):
+        """Populate the database with data for testing."""
+        # Players
+        self.db.execute_update(
+            "INSERT INTO players (id, name) VALUES ('player1', 'Alice')"
+        )
+        self.db.execute_update(
+            "INSERT INTO players (id, name) VALUES ('player2', 'Bob')"
+        )
+        self.db.execute_update(
+            "INSERT INTO players (id, name) VALUES ('player3', 'Charlie')"
+        )
+        self.db.execute_update(
+            "INSERT INTO players (id, name) VALUES ('player4', 'David')"
+        )
+
+        # Question
+        self.db.execute_update(
+            "INSERT INTO questions (id, question_hash, question_text, answer_text) VALUES (1, 'hash1', 'q1', 'a1')"
+        )
+        today = date.today()
+        self.db.execute_update(
+            "INSERT INTO daily_questions (id, question_id, sent_at) VALUES (1, 1, ?)",
+            (today,),
+        )
+
+        # Guesses
+        # Player 1: Correct on first try (before hint)
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) VALUES (1, 'player1', 'a1', 1, '2025-11-18 10:00:00')"
+        )
+        # Player 2: Incorrect, then correct (before and after hint)
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) VALUES (1, 'player2', 'wrong', 0, '2025-11-18 09:00:00')"
+        )
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) VALUES (1, 'player2', 'a1', 1, '2025-11-18 11:00:00')"
+        )
+        # Player 3: Only incorrect guesses (after hint)
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) VALUES (1, 'player3', 'wrong', 0, '2025-11-18 12:00:00')"
+        )
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) VALUES (1, 'player3', 'another wrong', 0, '2025-11-18 12:05:00')"
+        )
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) VALUES (1, 'player3', 'the longest guess of them all', 0, '2025-11-18 12:10:00')"
+        )
+        # Player 4: Only correct guess (after hint)
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) VALUES (1, 'player4', 'a1', 1, '2025-11-18 13:00:00')"
+        )
+
+        # Hint message
+        self.db.execute_update(
+            "INSERT INTO messages (direction, method, recipient_sender, content, status, timestamp) VALUES ('outgoing', 'discord', 'channel1', 'Hint for today''s question', 'reminder_message', '2025-11-18 10:30:00')"
+        )
+
+    def test_get_hint_sent_timestamp(self):
+        """Test retrieving the hint timestamp."""
+        timestamp = self.data_manager.get_hint_sent_timestamp(1)
+        self.assertEqual(timestamp, "2025-11-18 10:30:00")
+
+    def test_get_first_try_solvers(self):
+        """Test retrieving first-try solvers."""
+        solvers = self.data_manager.get_first_try_solvers(1)
+        self.assertEqual(len(solvers), 3)
+        solver_names = {s["name"] for s in solvers}
+        self.assertIn("Alice", solver_names)
+        self.assertIn("Bob", solver_names)
+        self.assertIn("David", solver_names)
+
+    def test_get_guess_counts_per_player(self):
+        """Test getting guess counts per player."""
+        counts = self.data_manager.get_guess_counts_per_player(1)
+        self.assertEqual(len(counts), 4)
+        # Order is by guess_count DESC
+        counts_dict = {item["name"]: item["guess_count"] for item in counts}
+        self.assertEqual(counts_dict["Charlie"], 3)
+        self.assertEqual(counts_dict["Bob"], 2)
+        self.assertEqual(counts_dict["Alice"], 1)
+        self.assertEqual(counts_dict["David"], 1)
+
+    def test_get_most_common_guesses(self):
+        """Test getting most common incorrect guesses."""
+        common_guesses = self.data_manager.get_most_common_guesses(1)
+        self.assertEqual(len(common_guesses), 3)
+        self.assertEqual(common_guesses[0]["guess_text"], "wrong")
+        self.assertEqual(common_guesses[0]["count"], 2)
+
+    def test_get_craziest_guess(self):
+        """Test getting the craziest (longest) guess."""
+        crazy_guess = self.data_manager.get_craziest_guess(1)
+        self.assertIsNotNone(crazy_guess)
+        self.assertEqual(crazy_guess["player_name"], "Charlie")
+        self.assertEqual(crazy_guess["guess_text"], "the longest guess of them all")
+
+    def test_get_solvers_before_hint(self):
+        """Test getting solvers before the hint."""
+        solvers = self.data_manager.get_solvers_before_hint(1)
+        self.assertEqual(len(solvers), 1)
+        self.assertEqual(solvers[0]["name"], "Alice")
+
+    def test_get_solvers_after_hint(self):
+        """Test getting solvers who only guessed after the hint."""
+        solvers = self.data_manager.get_solvers_after_hint(1)
+        self.assertEqual(len(solvers), 1)
+        self.assertEqual(solvers[0]["name"], "David")
 
 
 if __name__ == "__main__":

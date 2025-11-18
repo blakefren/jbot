@@ -350,3 +350,162 @@ class DataManager:
             VALUES (?, ?, ?, ?)
         """
         self.db.execute_update(query, (player_id, admin_id, amount, reason))
+
+    def get_hint_sent_timestamp(self, daily_question_id: int) -> Optional[str]:
+        """
+        Retrieves the timestamp for when a hint was sent for a specific daily question.
+
+        Args:
+            daily_question_id (int): The ID of the daily question.
+
+        Returns:
+            Optional[str]: The timestamp of the hint message, or None if not found.
+        """
+        query = """
+            SELECT timestamp FROM messages
+            WHERE status = 'reminder_message' AND date(timestamp) = (
+                SELECT sent_at FROM daily_questions WHERE id = ?
+            )
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """
+        result = self.db.execute_query(query, (daily_question_id,))
+        return result[0]["timestamp"] if result else None
+
+    def get_first_try_solvers(self, daily_question_id: int) -> list[dict]:
+        """
+        Retrieves players who got the answer right on their first try for the day.
+
+        Args:
+            daily_question_id (int): The ID of the daily question.
+
+        Returns:
+            list[dict]: A list of dictionaries with player 'id' and 'name'.
+        """
+        query = """
+            SELECT p.id, p.name
+            FROM guesses g
+            JOIN players p ON g.player_id = p.id
+            WHERE g.daily_question_id = ? AND g.is_correct = 1
+            GROUP BY p.id, p.name
+            HAVING COUNT(g.id) = 1
+        """
+        return self.db.execute_query(query, (daily_question_id,))
+
+    def get_guess_counts_per_player(self, daily_question_id: int) -> list[dict]:
+        """
+        Gets the number of unique guesses per player for the day.
+
+        Args:
+            daily_question_id (int): The ID of the daily question.
+
+        Returns:
+            list[dict]: A list of dictionaries with player 'name' and 'guess_count'.
+        """
+        query = """
+            SELECT p.name, COUNT(DISTINCT g.guess_text) as guess_count
+            FROM guesses g
+            JOIN players p ON g.player_id = p.id
+            WHERE g.daily_question_id = ?
+            GROUP BY g.player_id, p.name
+            ORDER BY guess_count DESC
+        """
+        return self.db.execute_query(query, (daily_question_id,))
+
+    def get_most_common_guesses(self, daily_question_id: int) -> list[dict]:
+        """
+        Finds the most common incorrect guesses for the day.
+
+        Args:
+            daily_question_id (int): The ID of the daily question.
+
+        Returns:
+            list[dict]: A list of dictionaries with 'guess_text' and 'count'.
+        """
+        query = """
+            SELECT guess_text, COUNT(*) as count
+            FROM guesses
+            WHERE daily_question_id = ? AND is_correct = 0
+            GROUP BY guess_text
+            ORDER BY count DESC
+            LIMIT 5
+        """
+        return self.db.execute_query(query, (daily_question_id,))
+
+    def get_craziest_guess(self, daily_question_id: int) -> Optional[dict]:
+        """
+        Finds the 'craziest' guess of the day (currently defined as the longest).
+
+        Args:
+            daily_question_id (int): The ID of the daily question.
+
+        Returns:
+            Optional[dict]: A dictionary with 'player_name' and 'guess_text', or None.
+        """
+        query = """
+            SELECT p.name as player_name, g.guess_text
+            FROM guesses g
+            JOIN players p ON g.player_id = p.id
+            WHERE g.daily_question_id = ?
+            ORDER BY LENGTH(g.guess_text) DESC
+            LIMIT 1
+        """
+        result = self.db.execute_query(query, (daily_question_id,))
+        return result[0] if result else None
+
+    def get_solvers_before_hint(self, daily_question_id: int) -> list[dict]:
+        """
+        Retrieves players who solved the question before the hint was sent.
+
+        Args:
+            daily_question_id (int): The ID of the daily question.
+
+        Returns:
+            list[dict]: A list of dictionaries with player 'id' and 'name'.
+        """
+        hint_timestamp = self.get_hint_sent_timestamp(daily_question_id)
+        if not hint_timestamp:
+            return []
+
+        query = """
+            SELECT p.id, p.name
+            FROM guesses g
+            JOIN players p ON g.player_id = p.id
+            WHERE g.daily_question_id = ? AND g.is_correct = 1 AND g.guessed_at < ?
+            GROUP BY p.id, p.name
+        """
+        return self.db.execute_query(query, (daily_question_id, hint_timestamp))
+
+    def get_solvers_after_hint(self, daily_question_id: int) -> list[dict]:
+        """
+        Retrieves players who only guessed after the hint was sent.
+
+        Args:
+            daily_question_id (int): The ID of the daily question.
+
+        Returns:
+            list[dict]: A list of dictionaries with player 'id' and 'name'.
+        """
+        hint_timestamp = self.get_hint_sent_timestamp(daily_question_id)
+        if not hint_timestamp:
+            return []
+
+        query = """
+            SELECT p.id, p.name
+            FROM players p
+            WHERE p.id IN (
+                -- Players who have a correct guess after the hint
+                SELECT DISTINCT g.player_id
+                FROM guesses g
+                WHERE g.daily_question_id = ? AND g.is_correct = 1 AND g.guessed_at > ?
+            ) AND p.id NOT IN (
+                -- Exclude players who had any guess (correct or incorrect) before the hint
+                SELECT DISTINCT g.player_id
+                FROM guesses g
+                WHERE g.daily_question_id = ? AND g.guessed_at < ?
+            )
+        """
+        return self.db.execute_query(
+            query,
+            (daily_question_id, hint_timestamp, daily_question_id, hint_timestamp),
+        )
