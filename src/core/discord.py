@@ -2,7 +2,6 @@ import asyncio
 import datetime
 import discord
 import os
-from typing import TYPE_CHECKING
 
 from discord.ext import commands, tasks
 from zoneinfo import ZoneInfo
