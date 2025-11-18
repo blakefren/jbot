@@ -18,14 +18,14 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.read_guess_history.return_value = [
             {
                 "daily_question_id": 123,
-                "player_id": 111,
+                "player_id": "111",
                 "player_name": "Alice",
                 "guess_text": "Test Answer",
                 "is_correct": True,
             },
             {
                 "daily_question_id": 123,
-                "player_id": 222,
+                "player_id": "222",
                 "player_name": "Bob",
                 "guess_text": "some guess",
                 "is_correct": False,
@@ -178,7 +178,7 @@ class TestGameRunner(unittest.TestCase):
             return_value={"1": "Player1", "2": "Player2"}
         )
         self.mock_data_manager.read_guess_history.return_value = [
-            {"daily_question_id": 12345, "player_id": 1}
+            {"daily_question_id": 12345, "player_id": "1"}
         ]
 
         # With tagging enabled, with hint
@@ -217,7 +217,7 @@ class TestGameRunner(unittest.TestCase):
             # Player 'Charlie'
             {
                 "daily_question_id": 123,
-                "player_id": 333,
+                "player_id": "333",
                 "player_name": "Charlie",
                 "guess_text": "wrong answer",
                 "is_correct": False,
@@ -225,21 +225,21 @@ class TestGameRunner(unittest.TestCase):
             # Player 'Alice' - correct guess, duplicate guess, another guess
             {
                 "daily_question_id": 123,
-                "player_id": 111,
+                "player_id": "111",
                 "player_name": "Alice",
                 "guess_text": "Test Answer",
                 "is_correct": True,
             },
             {
                 "daily_question_id": 123,
-                "player_id": 111,
+                "player_id": "111",
                 "player_name": "Alice",
                 "guess_text": "another guess",
                 "is_correct": False,
             },
             {
                 "daily_question_id": 123,
-                "player_id": 111,
+                "player_id": "111",
                 "player_name": "Alice",
                 "guess_text": "another guess",
                 "is_correct": False,
@@ -247,7 +247,7 @@ class TestGameRunner(unittest.TestCase):
             # Player 'Bob'
             {
                 "daily_question_id": 123,
-                "player_id": 222,
+                "player_id": "222",
                 "player_name": "Bob",
                 "guess_text": "some guess",
                 "is_correct": False,
@@ -255,7 +255,7 @@ class TestGameRunner(unittest.TestCase):
             # Another day's guess for Alice
             {
                 "daily_question_id": 456,
-                "player_id": 111,
+                "player_id": "111",
                 "player_name": "Alice",
                 "guess_text": "yesterday's guess",
                 "is_correct": False,
@@ -322,25 +322,25 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.read_guess_history.return_value = [
             {
                 "daily_question_id": 1,
-                "player_id": 111,
+                "player_id": "111",
                 "player_name": "Player1",
                 "is_correct": True,
             },
             {
                 "daily_question_id": 1,
-                "player_id": 111,
+                "player_id": "111",
                 "player_name": "Player1",
                 "is_correct": True,
             },
             {
                 "daily_question_id": 1,
-                "player_id": 222,
+                "player_id": "222",
                 "player_name": "Player2",
                 "is_correct": True,
             },
             {
                 "daily_question_id": 1,
-                "player_id": 333,
+                "player_id": "333",
                 "player_name": "Player3",
                 "is_correct": False,
             },
@@ -380,7 +380,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.read_guess_history.return_value = [
             {
                 "daily_question_id": 1,
-                "player_id": int(new_player_id),
+                "player_id": new_player_id,
                 "player_name": new_player_name,
                 "is_correct": True,
             },

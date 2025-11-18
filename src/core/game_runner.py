@@ -311,7 +311,7 @@ class GameRunner:
 
         # Get all players
         all_players = self.player_manager.get_all_players()
-        player_ids_all = set(int(k) for k in all_players.keys())
+        player_ids_all = set(k for k in all_players.keys())
 
         # Find players who haven't guessed
         player_ids_not_guessed = player_ids_all - player_ids_who_guessed
@@ -415,7 +415,7 @@ class GameRunner:
 
         all_players = self.player_manager.get_all_players()
         for player_id, player in all_players.items():
-            if int(player_id) not in player_ids_answered_correctly:
+            if player_id not in player_ids_answered_correctly:
                 if player.answer_streak > 0:
                     player.reset_streak()
                     logging.info(

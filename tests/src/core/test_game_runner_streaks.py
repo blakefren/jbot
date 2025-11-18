@@ -34,8 +34,8 @@ class TestGameRunnerStreaks(unittest.TestCase):
         """
         # Player 1 answered correctly, Player 3 answered correctly, Player 2 did not.
         self.mock_data_manager.read_guess_history.return_value = [
-            {"daily_question_id": 1, "player_id": 1, "is_correct": True},
-            {"daily_question_id": 1, "player_id": 3, "is_correct": True},
+            {"daily_question_id": 1, "player_id": "1", "is_correct": True},
+            {"daily_question_id": 1, "player_id": "3", "is_correct": True},
         ]
 
         self.game_runner.update_streaks()
@@ -54,9 +54,9 @@ class TestGameRunnerStreaks(unittest.TestCase):
     def test_update_streaks_all_correct(self):
         """Test that no streaks are reset if all players answered correctly."""
         self.mock_data_manager.read_guess_history.return_value = [
-            {"daily_question_id": 1, "player_id": 1, "is_correct": True},
-            {"daily_question_id": 1, "player_id": 2, "is_correct": True},
-            {"daily_question_id": 1, "player_id": 3, "is_correct": True},
+            {"daily_question_id": 1, "player_id": "1", "is_correct": True},
+            {"daily_question_id": 1, "player_id": "2", "is_correct": True},
+            {"daily_question_id": 1, "player_id": "3", "is_correct": True},
         ]
 
         self.game_runner.update_streaks()
@@ -69,7 +69,7 @@ class TestGameRunnerStreaks(unittest.TestCase):
     def test_update_streaks_no_correct_answers(self):
         """Test that all streaks are reset if no one answered correctly."""
         self.mock_data_manager.read_guess_history.return_value = [
-            {"daily_question_id": 1, "player_id": 1, "is_correct": False},
+            {"daily_question_id": 1, "player_id": "1", "is_correct": False},
         ]
 
         self.game_runner.update_streaks()
