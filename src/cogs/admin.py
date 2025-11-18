@@ -1,9 +1,7 @@
 import discord
 from discord.ext import commands
 
-from src.cfg.players import PlayerManager
 from src.core.subscriber import Subscriber
-from src.cfg.players import read_players_into_dict
 
 
 class Admin(commands.Cog):
@@ -29,7 +27,7 @@ class Admin(commands.Cog):
         self, ctx: commands.Context, member: discord.Member, amount: int, *, reason: str
     ):
         """(admin) Refunds score to a player."""
-        player_manager = self.bot.game.player_manager
+        player_manager = self.bot.player_manager
         player = player_manager.get_or_create_player(
             str(member.id), member.display_name
         )
@@ -37,7 +35,7 @@ class Admin(commands.Cog):
         player_manager.refund_score(str(member.id), amount)
 
         # Reload player data in GameRunner to reflect the change
-        self.bot.game.player_manager.reload_players()
+        self.bot.player_manager.reload_players()
 
         player = player_manager.get_player(str(member.id))
         if not player:
@@ -174,7 +172,9 @@ class Admin(commands.Cog):
         # You might need to pass arguments to the manager's constructor
         kwargs = {}
         if feature_name == "powerup":
-            kwargs["players"] = [k for k in read_players_into_dict().keys()]
+            kwargs["players"] = [
+                k for k in self.bot.player_manager.get_all_players().keys()
+            ]
         elif feature_name == "roles":
             kwargs["db"] = self.bot.data_manager.db
             from src.cfg.main import ConfigReader

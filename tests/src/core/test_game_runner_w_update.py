@@ -10,7 +10,7 @@ project_root = os.path.abspath(
 sys.path.insert(0, project_root)
 
 from src.core.game_runner import GameRunner
-from src.cfg.players import PlayerManager
+from src.core.player_manager import PlayerManager
 from db.database import Database
 from data.readers.question import Question
 

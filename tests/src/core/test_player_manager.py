@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from src.cfg.players import PlayerManager
+from src.core.player_manager import PlayerManager
 from src.core.player import Player
 from db.database import Database
 
@@ -10,7 +10,7 @@ class TestPlayerManager(unittest.TestCase):
         self.mock_db = MagicMock(spec=Database)
         self.mock_data_manager = MagicMock()
         patcher = patch(
-            "src.cfg.players.DataManager", return_value=self.mock_data_manager
+            "src.core.player_manager.DataManager", return_value=self.mock_data_manager
         )
         self.addCleanup(patcher.stop)
         self.mock_data_manager_class = patcher.start()
@@ -97,7 +97,7 @@ class TestPlayerManager(unittest.TestCase):
         """Test refunding a player's score and saving via DataManager."""
         from src.core.player import Player
 
-        with patch("src.cfg.players.DataManager") as MockDataManager:
+        with patch("src.core.player_manager.DataManager") as MockDataManager:
             players_dict = {
                 "123": Player(
                     id="123",
@@ -127,7 +127,7 @@ class TestPlayerManager(unittest.TestCase):
         """Test that multiple refunds accumulate correctly."""
         from src.core.player import Player
 
-        with patch("src.cfg.players.DataManager") as MockDataManager:
+        with patch("src.core.player_manager.DataManager") as MockDataManager:
             players_dict = {
                 "123": Player(
                     id="123",

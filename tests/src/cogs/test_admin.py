@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 
 from src.cogs.admin import Admin
-from src.cfg.players import PlayerManager
+from src.core.player_manager import PlayerManager
 from src.core.game_runner import GameRunner
 from db.database import Database
 
@@ -17,7 +17,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
 
         # Mocks for refund test
         self.bot.game = MagicMock(spec=GameRunner)
-        self.bot.game.player_manager = MagicMock(spec=PlayerManager)
+        self.bot.player_manager = MagicMock(spec=PlayerManager)
         self.bot.data_manager = MagicMock()
         self.bot.data_manager.db = MagicMock(spec=Database)
 
@@ -134,7 +134,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         reason = "Test refund"
 
         # Configure the mock player_manager
-        player_manager = self.bot.game.player_manager
+        player_manager = self.bot.player_manager
 
         # We'll have it return a different mock each time to simulate the data changing.
         mock_player_before_refund = MagicMock()

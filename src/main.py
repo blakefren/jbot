@@ -4,6 +4,7 @@ from db.database import Database
 import logging
 from src.logging_config import setup_logging
 from src.core.data_manager import DataManager
+from src.core.player_manager import PlayerManager
 from data.readers.question import Question
 from data.readers.tsv import get_random_question
 import os
@@ -35,6 +36,7 @@ if __name__ == "__main__":
     # TODO: Migrate database initialization to DataManager
     db = Database(db_path)
     data_manager = DataManager(db)
+    player_manager = PlayerManager(db)
 
     # Print a single random question for verification
     if questions:
@@ -46,6 +48,6 @@ if __name__ == "__main__":
     # Start the game bot based on the messenger type
     messenger = config.get("JBOT_MESSENGER")
     if messenger == "discord":
-        run_discord_bot(config, questions, db, data_manager)
+        run_discord_bot(config, questions, db, data_manager, player_manager)
     else:
         logging.error(f"Messenger '{messenger}' is not supported.")

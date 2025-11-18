@@ -4,7 +4,6 @@ import sys
 
 from discord.ext import commands
 
-from src.cfg.players import read_players_into_dict
 from src.core.powerup import PowerUpManager
 
 
@@ -17,7 +16,7 @@ async def get_powerup_manager(bot, interaction):
         )
         return None
 
-    players = read_players_into_dict()
+    players = bot.player_manager.get_all_players()
     return PowerUpManager(players)
 
 

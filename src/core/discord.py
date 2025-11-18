@@ -20,6 +20,7 @@ sys.path.insert(0, project_root)
 import logging
 from src.core.data_manager import DataManager
 from src.core.game_runner import GameRunner
+from src.core.player_manager import PlayerManager
 from data.readers.question import Question
 from data.readers.question_selector import QuestionSelector
 
@@ -74,6 +75,7 @@ class DiscordBot(commands.Bot):
         bot_token: str,
         game: GameRunner,
         config: ConfigReader,
+        player_manager: PlayerManager,
         command_prefix: str = "!",
     ):
         # discord.py specific setup
@@ -86,6 +88,7 @@ class DiscordBot(commands.Bot):
 
         self.game = game
         self.config = config
+        self.player_manager = player_manager
         self.data_manager = self.game.data_manager
         self.bot_token = bot_token
         self.ready_event_fired = False
@@ -423,6 +426,7 @@ async def discord_bot_async(
     questions: list[Question],
     db: "Database",
     data_manager: "DataManager",
+    player_manager: "PlayerManager",
 ):
     """Main function to initialize and run the bot."""
     from src.core.gemini_manager import GeminiManager
@@ -449,7 +453,7 @@ async def discord_bot_async(
     game.register_manager("powerup", PowerUpManager)
     game.register_manager("roles", RolesGameMode)
 
-    bot = DiscordBot(config.get("JBOT_DISCORD_BOT_TOKEN"), game, config)
+    bot = DiscordBot(config.get("JBOT_DISCORD_BOT_TOKEN"), game, config, player_manager)
     bot.db = db  # Attach the database connection to the bot
     await bot.run()
 
@@ -459,8 +463,11 @@ def run_discord_bot(
     questions: list[Question],
     db: "Database",
     data_manager: "DataManager",
+    player_manager: "PlayerManager",
 ):
     try:
-        asyncio.run(discord_bot_async(config, questions, db, data_manager))
+        asyncio.run(
+            discord_bot_async(config, questions, db, data_manager, player_manager)
+        )
     except KeyboardInterrupt:
         logging.info("Bot shutdown requested by user.")

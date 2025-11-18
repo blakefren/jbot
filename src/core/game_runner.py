@@ -5,7 +5,7 @@ import re
 from collections import defaultdict
 from datetime import date
 from enum import Enum
-from src.cfg.players import PlayerManager
+from src.core.player_manager import PlayerManager
 from src.core.subscriber import Subscriber
 import logging
 from src.core.data_manager import DataManager

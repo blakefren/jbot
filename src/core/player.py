@@ -12,6 +12,8 @@ class Player:
         answer_streak: int = 0,
         active_shield: bool = False,
     ):
+        if not isinstance(id, str):
+            raise TypeError(f"Player ID must be a string, but got {type(id)}")
         self.id = id  # Discord ID
         self.name = name
         self.score = score

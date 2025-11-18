@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import Optional
 
 # Add the project root to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -8,7 +9,6 @@ sys.path.insert(0, project_root)
 from db.database import Database
 from src.core.data_manager import DataManager
 from src.core.player import Player
-from typing import Optional
 
 
 class PlayerManager:
@@ -87,10 +87,3 @@ class PlayerManager:
         Reloads player data from the database.
         """
         self.players = self.data_manager.load_players()
-
-
-# TODO: Migrate this function to DataManager
-def read_players_into_dict():
-    db = Database()
-    manager = PlayerManager(db)
-    return manager.get_all_players()
