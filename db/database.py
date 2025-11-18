@@ -111,6 +111,19 @@ class Database:
             logging.error(f"Error executing update: {e}")
             return 0, None
 
+    def execute_script(self, script: str):
+        """
+        Executes a given SQL script.
+
+        Args:
+            script (str): The SQL script to execute.
+        """
+        try:
+            with self.conn:
+                self.conn.executescript(script)
+        except sqlite3.Error as e:
+            logging.error(f"Error executing script: {e}")
+
 
 if __name__ == "__main__":
     # When run as a script, this will initialize the database.
