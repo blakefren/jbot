@@ -239,13 +239,14 @@ class GameRunner:
             name = p_data["name"]
             score = p_data["score"]
             streak = p_data["streak"]
+            # Note: most emoji are 2 chars wide in monospaced contexts.
             streak_str = f"{streak}🔥" if streak > 0 else ""
 
             # For ties, only show rank and score for the first player
             if p_data["score"] == last_score:
-                body += f"{'':>4} {name:<{max_name}} {'':>{max_score}} {streak_str:>{max_streak}}\n"
+                body += f"{'':>4} {name:<{max_name}} {'':>{max_score}} {streak_str:>{max_streak-1}}\n"
             else:
-                body += f"{rank:>4} {name:<{max_name}} {score:>{max_score}} {streak_str:>{max_streak}}\n"
+                body += f"{rank:>4} {name:<{max_name}} {score:>{max_score}} {streak_str:>{max_streak-1}}\n"
 
             last_score = p_data["score"]
         return f"```{header}{divider}{body}```"
