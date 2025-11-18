@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 
 from src.core.data_manager import DataManager
 from src.core.player import Player
+from src.core.subscriber import Subscriber
 from data.readers.question import Question
 from db.database import Database
 
@@ -142,7 +143,7 @@ class TestDataManager(unittest.TestCase):
             {"player_id": "456"},
         ]
         player_ids = self.data_manager.get_player_ids_with_role(role_name)
-        self.assertEqual(player_ids, {123, 456})
+        self.assertEqual(player_ids, {"123", "456"})
 
         # Test with no results
         self.data_manager.db.execute_query = lambda query, params: []
@@ -211,6 +212,38 @@ class TestDataManager(unittest.TestCase):
         self.data_manager.db.execute_update = MagicMock(return_value=(None, 1))
         self.data_manager.clear_player_roles()
         self.assertEqual(self.data_manager.db.execute_update.call_count, 1)
+
+    def test_get_all_subscribers(self):
+        """Test getting all subscribers from the database."""
+        self.data_manager.db.execute_query = MagicMock(
+            return_value=[
+                {"id": 1, "display_name": "Sub1", "is_channel": True},
+                {"id": 2, "display_name": "Sub2", "is_channel": False},
+            ]
+        )
+        subscribers = self.data_manager.get_all_subscribers()
+        self.assertEqual(len(subscribers), 2)
+        self.assertIn(Subscriber(1, "Sub1", True), subscribers)
+        self.assertIn(Subscriber(2, "Sub2", False), subscribers)
+
+    def test_save_subscriber(self):
+        """Test saving a subscriber to the database."""
+        subscriber = Subscriber(1, "Sub1", True)
+        self.data_manager.db.execute_update = MagicMock()
+        self.data_manager.save_subscriber(subscriber)
+        self.data_manager.db.execute_update.assert_called_once_with(
+            "INSERT OR REPLACE INTO subscribers (id, display_name, is_channel) VALUES (?, ?, ?)",  # noqa: E501
+            (1, "Sub1", True),
+        )
+
+    def test_delete_subscriber(self):
+        """Test deleting a subscriber from the database."""
+        subscriber = Subscriber(1, "Sub1", True)
+        self.data_manager.db.execute_update = MagicMock()
+        self.data_manager.delete_subscriber(subscriber)
+        self.data_manager.db.execute_update.assert_called_once_with(
+            "DELETE FROM subscribers WHERE id = ?", (1,)
+        )
 
 
 if __name__ == "__main__":

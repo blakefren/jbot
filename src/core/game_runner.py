@@ -27,8 +27,8 @@ class GameRunner:
     ):
         self.question_selector = question_selector
         self.data_manager = data_manager
-        self.player_manager = PlayerManager(self.data_manager.db)
-        self.subscribed_contexts = Subscriber.get_all(self.data_manager.db)
+        self.player_manager = PlayerManager(self.data_manager)
+        self.subscribed_contexts = self.data_manager.get_all_subscribers()
         self.daily_q = None
         self.daily_question_id = None
         self.managers = {}
@@ -125,12 +125,11 @@ class GameRunner:
             logging.info(f"Daily question set with ID: {self.daily_question_id}")
 
     def add_subscriber(self, subscriber: Subscriber):
-        subscriber.db_conn = self.data_manager.db
-        subscriber.save()
+        self.data_manager.save_subscriber(subscriber)
         self.subscribed_contexts.add(subscriber)
 
     def remove_subscriber(self, subscriber: Subscriber):
-        subscriber.delete()
+        self.data_manager.delete_subscriber(subscriber)
         self.subscribed_contexts.discard(subscriber)
 
     def get_subscribed_users(self):

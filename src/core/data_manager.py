@@ -3,6 +3,7 @@ from datetime import date
 from db.database import Database
 from data.readers.question import Question
 from src.core.player import Player
+from src.core.subscriber import Subscriber
 
 
 class DataManager:
@@ -218,7 +219,30 @@ class DataManager:
         """
         query = "SELECT player_id FROM player_roles pr JOIN roles r ON pr.role_id = r.id WHERE r.name = ?"
         result = self.db.execute_query(query, (role_name,))
-        return {int(row["player_id"]) for row in result}
+        return {row["player_id"] for row in result}
+
+    def get_all_subscribers(self) -> set[Subscriber]:
+        """Gets all subscribers from the database."""
+        rows = self.db.execute_query(
+            "SELECT id, display_name, is_channel FROM subscribers"
+        )
+        return {
+            Subscriber(row["id"], row["display_name"], row["is_channel"])
+            for row in rows
+        }
+
+    def save_subscriber(self, subscriber: Subscriber):
+        """Saves the subscriber to the database."""
+        self.db.execute_update(
+            "INSERT OR REPLACE INTO subscribers (id, display_name, is_channel) VALUES (?, ?, ?)",
+            (subscriber.sub_id, subscriber.display_name, subscriber.is_channel),
+        )
+
+    def delete_subscriber(self, subscriber: Subscriber):
+        """Deletes the subscriber from the database."""
+        self.db.execute_update(
+            "DELETE FROM subscribers WHERE id = ?", (subscriber.sub_id,)
+        )
 
     def read_guess_history(self, user_id: int = -1) -> list[dict]:
         """

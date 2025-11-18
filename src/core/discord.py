@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING
 from discord.ext import commands, tasks
 from zoneinfo import ZoneInfo
 
-if TYPE_CHECKING:
-    from db.database import Database
 
 from src.cfg.main import ConfigReader
 import sys
@@ -424,7 +422,6 @@ class DiscordBot(commands.Bot):
 async def discord_bot_async(
     config: ConfigReader,
     questions: list[Question],
-    db: "Database",
     data_manager: "DataManager",
     player_manager: "PlayerManager",
 ):
@@ -454,20 +451,16 @@ async def discord_bot_async(
     game.register_manager("roles", RolesGameMode)
 
     bot = DiscordBot(config.get("JBOT_DISCORD_BOT_TOKEN"), game, config, player_manager)
-    bot.db = db  # Attach the database connection to the bot
     await bot.run()
 
 
 def run_discord_bot(
     config: ConfigReader,
     questions: list[Question],
-    db: "Database",
     data_manager: "DataManager",
     player_manager: "PlayerManager",
 ):
     try:
-        asyncio.run(
-            discord_bot_async(config, questions, db, data_manager, player_manager)
-        )
+        asyncio.run(discord_bot_async(config, questions, data_manager, player_manager))
     except KeyboardInterrupt:
         logging.info("Bot shutdown requested by user.")

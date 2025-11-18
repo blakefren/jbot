@@ -12,8 +12,8 @@ from src.core.player import Player
 
 
 class PlayerManager:
-    def __init__(self, db: Database):
-        self.data_manager = DataManager(db)
+    def __init__(self, data_manager: DataManager):
+        self.data_manager = data_manager
         self.players = self.data_manager.load_players()
 
     def get_player(self, discord_id: str) -> Optional[Player]:

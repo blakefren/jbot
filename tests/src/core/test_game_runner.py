@@ -59,7 +59,6 @@ class TestGameRunner(unittest.TestCase):
         """Set up for the tests."""
         self.mock_question_selector = MagicMock()
         self.mock_data_manager = MagicMock(spec=DataManager)
-        self.mock_data_manager.db = MagicMock()
         self.mock_question = Question(
             question="Test Question",
             answer="Test Answer",
@@ -72,24 +71,9 @@ class TestGameRunner(unittest.TestCase):
         )
         self.mock_question_selector.questions = {"qid1": self.mock_question}
 
-        # Patch Subscriber class
-        self.subscriber_patcher = patch("src.core.game_runner.Subscriber")
-        self.MockSubscriber = self.subscriber_patcher.start()
-
-        # Patch PlayerManager
-        self.player_manager_patcher = patch("src.core.game_runner.PlayerManager")
-        self.MockPlayerManager = self.player_manager_patcher.start()
-        self.mock_player_manager_instance = self.MockPlayerManager.return_value
-
         self.game_runner = GameRunner(
             self.mock_question_selector, self.mock_data_manager
         )
-        self.game_runner.player_manager = self.mock_player_manager_instance
-
-    def tearDown(self):
-        """Tear down after tests."""
-        self.subscriber_patcher.stop()
-        self.player_manager_patcher.stop()
 
     def test_initialization(self):
         """Test GameRunner initialization."""
@@ -97,10 +81,10 @@ class TestGameRunner(unittest.TestCase):
         self.assertEqual(
             self.game_runner.question_selector, self.mock_question_selector
         )
-        self.MockSubscriber.get_all.assert_called_once_with(self.mock_data_manager.db)
+        self.mock_data_manager.get_all_subscribers.assert_called_once()
         self.assertEqual(
             self.game_runner.subscribed_contexts,
-            self.MockSubscriber.get_all.return_value,
+            self.mock_data_manager.get_all_subscribers.return_value,
         )
         self.assertIsNone(self.game_runner.daily_q)
 
@@ -138,11 +122,13 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.subscribed_contexts = set()
 
         self.game_runner.add_subscriber(mock_subscriber)
-        mock_subscriber.save.assert_called_once()
+        self.mock_data_manager.save_subscriber.assert_called_once_with(mock_subscriber)
         self.assertIn(mock_subscriber, self.game_runner.subscribed_contexts)
 
         self.game_runner.remove_subscriber(mock_subscriber)
-        mock_subscriber.delete.assert_called_once()
+        self.mock_data_manager.delete_subscriber.assert_called_once_with(
+            mock_subscriber
+        )
         self.assertNotIn(mock_subscriber, self.game_runner.subscribed_contexts)
 
     def test_format_question_and_answer(self):
@@ -174,6 +160,7 @@ class TestGameRunner(unittest.TestCase):
         """Test generating the reminder message content."""
         self.game_runner.daily_q = self.mock_question
         self.game_runner.daily_question_id = 12345  # Mock daily question ID
+        self.game_runner.player_manager = MagicMock()
         self.game_runner.player_manager.get_all_players = MagicMock(
             return_value={"1": "Player1", "2": "Player2"}
         )
@@ -303,6 +290,7 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.daily_q = self.mock_question
         self.game_runner.daily_question_id = 1
 
+        self.game_runner.player_manager = MagicMock()
         # Mock players
         mock_player_1 = MagicMock(spec=Player)
         mock_player_2 = MagicMock(spec=Player)
@@ -314,7 +302,7 @@ class TestGameRunner(unittest.TestCase):
                 return mock_player_2
             return None
 
-        self.mock_player_manager_instance.get_or_create_player.side_effect = (
+        self.game_runner.player_manager.get_or_create_player.side_effect = (
             get_or_create_player_side_effect
         )
 
@@ -358,21 +346,22 @@ class TestGameRunner(unittest.TestCase):
         )
 
         # Check that save_players was called
-        self.mock_player_manager_instance.save_players.assert_called_once()
+        self.game_runner.player_manager.save_players.assert_called_once()
 
     def test_update_scores_for_new_player(self):
         """Test that a new player's score is updated correctly."""
         self.game_runner.daily_q = self.mock_question
         self.game_runner.daily_question_id = 1
 
+        self.game_runner.player_manager = MagicMock()
         # Mock a new player who is not in the player manager's cache initially
         new_player_id = "444"
         new_player_name = "Newbie"
 
         # get_player returns None, but get_or_create_player will create them
         mock_new_player = MagicMock(spec=Player)
-        self.mock_player_manager_instance.get_player.return_value = None
-        self.mock_player_manager_instance.get_or_create_player.return_value = (
+        self.game_runner.player_manager.get_player.return_value = None
+        self.game_runner.player_manager.get_or_create_player.return_value = (
             mock_new_player
         )
 
@@ -389,7 +378,7 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.update_scores()
 
         # Verify that get_or_create_player was called for the new player
-        self.mock_player_manager_instance.get_or_create_player.assert_called_once_with(
+        self.game_runner.player_manager.get_or_create_player.assert_called_once_with(
             new_player_id, new_player_name
         )
 
@@ -399,7 +388,7 @@ class TestGameRunner(unittest.TestCase):
         )
 
         # Check that save_players was called
-        self.mock_player_manager_instance.save_players.assert_called_once()
+        self.game_runner.player_manager.save_players.assert_called_once()
 
     def test_handle_guess(self):
         """Test handling a player's guess."""
@@ -521,6 +510,7 @@ class TestGameRunner(unittest.TestCase):
             {"is_correct": True},
             {"is_correct": True},
         ]
+        self.game_runner.player_manager = MagicMock()
         from src.core.player import Player
 
         self.game_runner.player_manager.get_player = MagicMock(

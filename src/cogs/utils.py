@@ -50,8 +50,8 @@ class Utils(commands.Cog):
                 task.cancel()
 
         # Close the database connection before shutting down the bot
-        if hasattr(self.bot, "db") and self.bot.db.conn:
-            self.bot.db.close()
+        if hasattr(self.bot, "data_manager") and self.bot.data_manager.db.conn:
+            self.bot.data_manager.db.close()
 
         await self.bot.close()
 
