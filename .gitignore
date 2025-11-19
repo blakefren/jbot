@@ -8,3 +8,4 @@
 ./datasets/
 *.sqbpro
 *.db-journal
+/.vscode
