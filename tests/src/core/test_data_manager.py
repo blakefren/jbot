@@ -278,7 +278,9 @@ class TestDataManagerStats(unittest.TestCase):
         self.db.execute_update(
             "INSERT INTO questions (id, question_hash, question_text, answer_text) VALUES (1, 'hash1', 'q1', 'a1')"
         )
-        today = date.today()
+        # Use a fixed date that matches the hard-coded guess and hint timestamps below
+        # to make this test deterministic across different execution dates (e.g., CI servers).
+        today = date(2025, 11, 18)
         self.db.execute_update(
             "INSERT INTO daily_questions (id, question_id, sent_at) VALUES (1, 1, ?)",
             (today,),
