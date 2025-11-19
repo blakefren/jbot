@@ -75,6 +75,9 @@ class Database:
         Returns:
             list: A list of rows as dictionaries.
         """
+        if self.conn is None:
+            # Mirror test expectation: using the DB after close should raise AttributeError
+            raise AttributeError("Database connection is closed")
         try:
             with self.conn:
                 cursor = self.conn.cursor()
@@ -102,6 +105,8 @@ class Database:
             int: The number of rows affected.
             int: The ID of the newly inserted row.
         """
+        if self.conn is None:
+            raise AttributeError("Database connection is closed")
         try:
             with self.conn:
                 cursor = self.conn.cursor()
@@ -118,6 +123,8 @@ class Database:
         Args:
             script (str): The SQL script to execute.
         """
+        if self.conn is None:
+            raise AttributeError("Database connection is closed")
         try:
             with self.conn:
                 self.conn.executescript(script)
