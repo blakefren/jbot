@@ -143,7 +143,6 @@ class GuessHandler:
         if self.has_answered_correctly_today(player_id):
             raise AlreadyAnsweredCorrectlyError()
 
-        # TODO: streamline
         g = guess.strip().lower()
         a = str(self.daily_q.answer).strip().lower()
         is_correct = self._is_correct_guess(g, a)
