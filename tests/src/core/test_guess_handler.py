@@ -28,8 +28,8 @@ class TestGuessHandler(unittest.TestCase):
         player_name = "PlayerOne"
         guess = "Test Answer"
 
-        mock_player = MagicMock()
-        self.player_manager.get_player.return_value = mock_player
+        # No direct Player methods should be required; manager handles streaks
+        self.player_manager.get_player.return_value = None
 
         # Mock so that get_player_guesses returns the guess we are making
         self.data_manager.read_guess_history.return_value = [
@@ -46,10 +46,8 @@ class TestGuessHandler(unittest.TestCase):
             player_id, player_name, self.daily_question_id, guess.lower(), True
         )
 
-        # Verify streak logic
-        mock_player.increment_streak.assert_called_once()
-        mock_player.reset_streak.assert_not_called()
-        self.player_manager.save_players.assert_called_once()
+        # Streak should NOT be incremented here (handled during evening update)
+        self.player_manager.increment_streak.assert_not_called()
 
         self.managers["test_manager"].on_guess.assert_called_once_with(
             player_id, player_name, guess, True
@@ -61,8 +59,7 @@ class TestGuessHandler(unittest.TestCase):
         player_name = "PlayerTwo"
         guess = "Wrong Answer"
 
-        mock_player = MagicMock()
-        self.player_manager.get_player.return_value = mock_player
+        self.player_manager.get_player.return_value = None
 
         # Mock so that get_player_guesses returns the guess we are making
         self.data_manager.read_guess_history.return_value = [
@@ -80,9 +77,7 @@ class TestGuessHandler(unittest.TestCase):
         )
 
         # Verify streak logic
-        mock_player.increment_streak.assert_not_called()
-        mock_player.reset_streak.assert_not_called()
-        self.player_manager.save_players.assert_not_called()
+        self.player_manager.increment_streak.assert_not_called()
 
         self.managers["test_manager"].on_guess.assert_called_once_with(
             player_id, player_name, guess, False

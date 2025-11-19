@@ -416,7 +416,7 @@ class GameRunner:
         for player_id, player in all_players.items():
             if player_id not in player_ids_answered_correctly:
                 if player.answer_streak > 0:
-                    player.reset_streak()
+                    self.player_manager.reset_streak(player_id)
                     logging.info(
                         f"Resetting streak for player {player.name} ({player_id})."
                     )
@@ -447,14 +447,14 @@ class GameRunner:
         }
 
         for player_id, player_name in players_answered_correctly.items():
-            player = self.player_manager.get_or_create_player(
-                str(player_id), player_name
-            )
-            if player:
-                try:
-                    player.update_score(self.daily_q.clue_value)
-                except (TypeError, AttributeError):
-                    player.update_score(100)
+            self.player_manager.get_or_create_player(str(player_id), player_name)
+            try:
+                self.player_manager.update_score(
+                    str(player_id), self.daily_q.clue_value
+                )
+                self.player_manager.increment_streak(str(player_id), player_name)
+            except Exception:
+                self.player_manager.update_score(str(player_id), 100)
 
         self.player_manager.save_players()
         logging.info("Player scores updated and saved.")

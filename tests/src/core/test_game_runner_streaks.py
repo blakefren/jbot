@@ -39,16 +39,8 @@ class TestGameRunnerStreaks(unittest.TestCase):
         ]
 
         self.game_runner.update_streaks()
-
-        # Player 1's streak should not be reset
-        self.assertEqual(self.player1.answer_streak, 3)
-
-        # Player 2's streak should be reset
-        self.assertEqual(self.player2.answer_streak, 0)
-
-        # Player 3's streak should not be reset (was already 0)
-        self.assertEqual(self.player3.answer_streak, 0)
-
+        # Verify that only Player 2's streak was reset via PlayerManager
+        self.mock_player_manager.reset_streak.assert_called_once_with("2")
         self.mock_player_manager.save_players.assert_called_once()
 
     def test_update_streaks_all_correct(self):
@@ -61,9 +53,8 @@ class TestGameRunnerStreaks(unittest.TestCase):
 
         self.game_runner.update_streaks()
 
-        self.assertEqual(self.player1.answer_streak, 3)
-        self.assertEqual(self.player2.answer_streak, 5)
-        self.assertEqual(self.player3.answer_streak, 0)
+        # No resets should be triggered when all answered correctly
+        self.mock_player_manager.reset_streak.assert_not_called()
         self.mock_player_manager.save_players.assert_called_once()
 
     def test_update_streaks_no_correct_answers(self):
@@ -74,9 +65,12 @@ class TestGameRunnerStreaks(unittest.TestCase):
 
         self.game_runner.update_streaks()
 
-        self.assertEqual(self.player1.answer_streak, 0)
-        self.assertEqual(self.player2.answer_streak, 0)
-        self.assertEqual(self.player3.answer_streak, 0)
+        # Players with non-zero streaks should be reset (1 and 2), 3 stays at 0
+        calls = [
+            call.args[0]
+            for call in self.mock_player_manager.reset_streak.call_args_list
+        ]
+        self.assertCountEqual(calls, ["1", "2"])
         self.mock_player_manager.save_players.assert_called_once()
 
     def test_update_streaks_no_daily_question(self):

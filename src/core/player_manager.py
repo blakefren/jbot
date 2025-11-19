@@ -16,8 +16,12 @@ class PlayerManager:
         self.data_manager = data_manager
         self.players = self.data_manager.load_players()
 
+    def _normalize_id(self, discord_id) -> str:
+        """Normalize IDs to string keys to avoid int/str mismatches."""
+        return str(discord_id) if discord_id is not None else ""
+
     def get_player(self, discord_id: str) -> Optional[Player]:
-        return self.players.get(discord_id)
+        return self.players.get(self._normalize_id(discord_id))
 
     def get_all_players(self) -> dict:
         return self.players
@@ -34,7 +38,51 @@ class PlayerManager:
         """
         player = self.get_player(player_id)
         if player:
-            player.update_score(amount)
+            player.score += amount
+            self.save_players()
+
+    def set_name(self, player_id: str, name: str):
+        """Updates a player's display name and persists it."""
+        pid = self._normalize_id(player_id)
+        player = self.players.get(pid)
+        if player:
+            player.name = name
+            self.save_players()
+        else:
+            # create if missing
+            self.players[pid] = Player(id=pid, name=name)
+            self.save_players()
+
+    def increment_streak(self, player_id: str, player_name: Optional[str] = None):
+        """Increments a player's answer streak and immediately persists to DB."""
+        pid = self._normalize_id(player_id)
+        player = self.players.get(pid)
+        if not player:
+            # Create player if not in memory yet
+            player = Player(id=pid, name=player_name or pid)
+            self.players[pid] = player
+        player.answer_streak += 1
+        self.save_players()
+
+    def reset_streak(self, player_id: str):
+        """Resets a player's answer streak to zero and persists."""
+        player = self.get_player(player_id)
+        if player and player.answer_streak != 0:
+            player.answer_streak = 0
+            self.save_players()
+
+    def activate_shield(self, player_id: str):
+        """Activates a player's shield and persists."""
+        player = self.get_player(player_id)
+        if player and not player.active_shield:
+            player.active_shield = True
+            self.save_players()
+
+    def deactivate_shield(self, player_id: str):
+        """Deactivates a player's shield and persists."""
+        player = self.get_player(player_id)
+        if player and player.active_shield:
+            player.active_shield = False
             self.save_players()
 
     # TODO: Implement powerup logic from powerup manager
@@ -61,15 +109,16 @@ class PlayerManager:
 
     # TODO: Implement player creation and refund logic from admin cog
     def get_or_create_player(self, player_id: str, player_name: str) -> Player:
-        player = self.get_player(player_id)
+        pid = self._normalize_id(player_id)
+        player = self.get_player(pid)
         if player is None:
-            player = Player(id=player_id, name=player_name)
-            self.players[player_id] = player
+            player = Player(id=pid, name=player_name)
+            self.players[pid] = player
             self.save_players()
         else:
             # Optionally update name if changed
-            if player.name != player_name:
-                player.set_name(player_name)
+            if player_name and player.name != player_name:
+                player.name = player_name
                 self.save_players()
         return player
 
@@ -79,7 +128,7 @@ class PlayerManager:
         """
         player = self.get_player(player_id)
         if player:
-            player.update_score(amount)
+            player.score += amount
             self.save_players()
 
     def reload_players(self):

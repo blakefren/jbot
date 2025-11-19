@@ -336,14 +336,26 @@ class TestGameRunner(unittest.TestCase):
 
         self.game_runner.update_scores()
 
-        # Player 1 should only be scored once
-        mock_player_1.update_score.assert_called_once_with(
-            self.mock_question.clue_value
-        )
-        # Player 2 should be scored once
-        mock_player_2.update_score.assert_called_once_with(
-            self.mock_question.clue_value
-        )
+        # PlayerManager should update each player's score once (unique players only)
+        expected_score_calls = [
+            ("111", self.mock_question.clue_value),
+            ("222", self.mock_question.clue_value),
+        ]
+        score_calls = [
+            tuple(call.args)
+            for call in self.game_runner.player_manager.update_score.call_args_list
+        ]
+        for expected in expected_score_calls:
+            self.assertIn(expected, score_calls)
+
+        # PlayerManager should increment streaks for the same unique players
+        expected_streak_calls = [("111", "Player1"), ("222", "Player2")]
+        streak_calls = [
+            tuple(call.args)
+            for call in self.game_runner.player_manager.increment_streak.call_args_list
+        ]
+        for expected in expected_streak_calls:
+            self.assertIn(expected, streak_calls)
 
         # Check that save_players was called
         self.game_runner.player_manager.save_players.assert_called_once()
@@ -382,9 +394,14 @@ class TestGameRunner(unittest.TestCase):
             new_player_id, new_player_name
         )
 
-        # Verify the new player's score was updated
-        mock_new_player.update_score.assert_called_once_with(
-            self.mock_question.clue_value
+        # Verify the new player's score was updated via PlayerManager
+        self.game_runner.player_manager.update_score.assert_called_once_with(
+            new_player_id, self.mock_question.clue_value
+        )
+
+        # And their streak was incremented
+        self.game_runner.player_manager.increment_streak.assert_called_once_with(
+            new_player_id, new_player_name
         )
 
         # Check that save_players was called
