@@ -93,14 +93,16 @@ class GuessHandler:
                 return 2  # medium length permit minor typos
             if ans_len <= 12:
                 return 3  # longer answers permit a bit more fuzziness
-            return 4       # very long answers allow more typos
+            return 4  # very long answers allow more typos
 
         distance = jellyfish.levenshtein_distance(norm_g, norm_a)
         limit = _distance_limit(len(norm_a))
         # Preserve ability to override via constructor by treating provided fuzzy_threshold
         # as a hard cap if smaller than the dynamic limit (tighter matching).
         if self.fuzzy_threshold is not None:
-            limit = min(limit, self.fuzzy_threshold) if self.fuzzy_threshold >= 0 else limit
+            limit = (
+                min(limit, self.fuzzy_threshold) if self.fuzzy_threshold >= 0 else limit
+            )
 
         if distance <= limit:
             return True
