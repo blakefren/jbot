@@ -81,9 +81,28 @@ class GuessHandler:
         if norm_g == norm_a:
             return True
 
-        # Check for fuzzy match using Levenshtein distance
+        # Dynamic distance limit based on answer length to avoid overly lenient
+        # matching on short words while still permitting minor typos on longer ones.
+        def _distance_limit(ans_len: int) -> int:
+            # Revised thresholds: tighten for short (3-5) answers.
+            if ans_len <= 2:
+                return 0  # extremely short must be exact
+            if ans_len <= 5:
+                return 1  # short answers allow only a single edit
+            if ans_len <= 8:
+                return 2  # medium length permit minor typos
+            if ans_len <= 12:
+                return 3  # longer answers permit a bit more fuzziness
+            return 4       # very long answers allow more typos
+
         distance = jellyfish.levenshtein_distance(norm_g, norm_a)
-        if distance <= self.fuzzy_threshold:
+        limit = _distance_limit(len(norm_a))
+        # Preserve ability to override via constructor by treating provided fuzzy_threshold
+        # as a hard cap if smaller than the dynamic limit (tighter matching).
+        if self.fuzzy_threshold is not None:
+            limit = min(limit, self.fuzzy_threshold) if self.fuzzy_threshold >= 0 else limit
+
+        if distance <= limit:
             return True
 
         return False

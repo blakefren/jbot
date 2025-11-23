@@ -142,7 +142,7 @@ class TestGuessHandler(unittest.TestCase):
             (".", "clock", False),  # Normalized to empty
             ("o", "clock", False),  # Too short
             # Spell correction (fuzzy matching)
-            ("clokc", "clock", True),  # Fuzzy (dist 1)
+            ("clokc", "clock", False),  # Now too distant (dist 2) under tightened rules
             ("clocc", "clock", True),  # Fuzzy (dist 1)
             ("clockk", "clock", True),  # Fuzzy (dist 1)
             ("klock", "clock", True),  # Fuzzy (dist 1)
