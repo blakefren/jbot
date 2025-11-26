@@ -246,6 +246,133 @@ class TestDataManager(unittest.TestCase):
             "DELETE FROM subscribers WHERE id = ?", (1,)
         )
 
+    def test_initialize_database(self):
+        """Test that initialize_database reads and executes the schema."""
+        with patch("builtins.open", MagicMock()) as mock_open:
+            mock_open.return_value.__enter__.return_value.read.return_value = (
+                "CREATE TABLE test (id INTEGER);"
+            )
+            mock_db = MagicMock()
+            dm = DataManager(mock_db)
+            dm.initialize_database()
+            mock_db.execute_script.assert_called_once_with(
+                "CREATE TABLE test (id INTEGER);"
+            )
+
+    def test_get_all_players(self):
+        """Test get_all_players delegates to load_players."""
+        self.data_manager.db.execute_query = MagicMock(
+            return_value=[
+                {
+                    "id": "1",
+                    "name": "Alice",
+                    "score": 10,
+                    "answer_streak": 2,
+                    "active_shield": 1,
+                }
+            ]
+        )
+        players = self.data_manager.get_all_players()
+        self.assertEqual(len(players), 1)
+        self.assertEqual(players["1"].name, "Alice")
+
+    def test_adjust_player_score(self):
+        """Test adjusting a player's score directly in the database."""
+        self.data_manager.db.execute_update = MagicMock()
+        self.data_manager.adjust_player_score("player1", 50)
+        self.data_manager.db.execute_update.assert_called_once_with(
+            "UPDATE players SET score = score + ? WHERE id = ?", (50, "player1")
+        )
+
+    def test_log_messaging_event_incoming_ignored(self):
+        """Test that incoming messages are not logged."""
+        self.data_manager.db.execute_update = MagicMock()
+        self.data_manager.log_messaging_event(
+            "incoming", "discord", "12345", "Hello", "success"
+        )
+        self.data_manager.db.execute_update.assert_not_called()
+
+    def test_get_player_scores(self):
+        """Test retrieving player scores ordered by score."""
+        self.data_manager.db.execute_query = MagicMock(
+            return_value=[
+                {"id": "1", "name": "Alice", "score": 100},
+                {"id": "2", "name": "Bob", "score": 50},
+            ]
+        )
+        scores = self.data_manager.get_player_scores()
+        self.assertEqual(len(scores), 2)
+        self.assertEqual(scores[0]["score"], 100)
+        self.assertEqual(scores[1]["score"], 50)
+
+    def test_get_player_streaks(self):
+        """Test retrieving player streaks ordered by streak."""
+        self.data_manager.db.execute_query = MagicMock(
+            return_value=[
+                {"id": "1", "name": "Alice", "answer_streak": 5},
+                {"id": "2", "name": "Bob", "answer_streak": 3},
+            ]
+        )
+        streaks = self.data_manager.get_player_streaks()
+        self.assertEqual(len(streaks), 2)
+        self.assertEqual(streaks[0]["answer_streak"], 5)
+        self.assertEqual(streaks[1]["answer_streak"], 3)
+
+    def test_get_question_by_id_not_found(self):
+        """Test get_question_by_id returns None when not found."""
+        self.data_manager.db.execute_query = MagicMock(return_value=[])
+        result = self.data_manager.get_question_by_id(999)
+        self.assertIsNone(result)
+
+    def test_get_question_by_id_found(self):
+        """Test get_question_by_id returns a Question when found."""
+        self.data_manager.db.execute_query = MagicMock(
+            return_value=[
+                {
+                    "id": 1,
+                    "question_text": "Test Q",
+                    "answer_text": "Test A",
+                    "category": "Test Cat",
+                    "value": 100,
+                    "source": "test",
+                    "hint_text": "Test Hint",
+                }
+            ]
+        )
+        result = self.data_manager.get_question_by_id(1)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.question, "Test Q")
+        self.assertEqual(result.answer, "Test A")
+
+    def test_get_todays_daily_question_question_not_found(self):
+        """Test get_todays_daily_question returns None when question record is missing."""
+
+        # Mock to return a daily_question entry but no corresponding question
+        def mock_query(query, params=None):
+            if "daily_questions" in query:
+                return [{"id": 1, "question_id": 999}]
+            return []  # Question not found
+
+        self.data_manager.db.execute_query = mock_query
+        result = self.data_manager.get_todays_daily_question()
+        self.assertIsNone(result)
+
+    def test_assign_role_to_player_existing_role(self):
+        """Test assigning an existing role to a player."""
+
+        def mock_query(query, params=None):
+            if "SELECT id FROM roles" in query:
+                return [{"id": 5}]  # Existing role found
+            return []
+
+        self.data_manager.db.execute_query = mock_query
+        self.data_manager.db.execute_update = MagicMock()
+
+        self.data_manager.assign_role_to_player("player1", "Existing Role")
+
+        # Should only call execute_update once (to assign role, not create it)
+        self.assertEqual(self.data_manager.db.execute_update.call_count, 1)
+
 
 class TestDataManagerStats(unittest.TestCase):
     def setUp(self):
@@ -368,6 +495,45 @@ class TestDataManagerStats(unittest.TestCase):
         solvers = self.data_manager.get_solvers_after_hint(1)
         self.assertEqual(len(solvers), 1)
         self.assertEqual(solvers[0]["name"], "David")
+
+
+class TestDataManagerNoHint(unittest.TestCase):
+    """Test cases for when there's no hint timestamp."""
+
+    def setUp(self):
+        """Set up a database without hint messages."""
+        self.db = Database(db_path=":memory:")
+        self.data_manager = DataManager(self.db)
+
+        # Players
+        self.db.execute_update(
+            "INSERT INTO players (id, name) VALUES ('player1', 'Alice')"
+        )
+
+        # Question and daily question
+        self.db.execute_update(
+            "INSERT INTO questions (id, question_hash, question_text, answer_text) VALUES (1, 'hash1', 'q1', 'a1')"
+        )
+        today = date.today()
+        self.db.execute_update(
+            "INSERT INTO daily_questions (id, question_id, sent_at) VALUES (1, 1, ?)",
+            (today,),
+        )
+
+        # No hint message inserted
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_get_solvers_before_hint_no_hint(self):
+        """Test that get_solvers_before_hint returns empty list when no hint exists."""
+        result = self.data_manager.get_solvers_before_hint(1)
+        self.assertEqual(result, [])
+
+    def test_get_solvers_after_hint_no_hint(self):
+        """Test that get_solvers_after_hint returns empty list when no hint exists."""
+        result = self.data_manager.get_solvers_after_hint(1)
+        self.assertEqual(result, [])
 
 
 if __name__ == "__main__":

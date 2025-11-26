@@ -1,6 +1,7 @@
 import unittest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, call
+from datetime import datetime, timezone
 
 
 from src.core.discord import DiscordBot
@@ -26,6 +27,10 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         self.bot.data_manager = self.mock_data_manager
         self.bot.send_message = AsyncMock()
         self.bot.is_owner = AsyncMock(return_value=True)
+
+        # Mock tasks for when command
+        self.bot.morning_message_task = MagicMock()
+        self.bot.evening_message_task = MagicMock()
 
         self.trivia_cog = Trivia(self.bot)
 
@@ -146,6 +151,240 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         self.bot.send_message.assert_awaited_once()
         args, kwargs = self.bot.send_message.await_args
         assert "Hint: ||**This is a hint**||" in args[0]
+
+    async def test_question_command_without_hint(self):
+        """Test the question command without a hint."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_question = MagicMock()
+        mock_question.hint = None
+        self.mock_game_runner.question_selector.get_random_question.return_value = (
+            mock_question
+        )
+        self.mock_game_runner.format_question.return_value = "Q: What is 2+2?"
+        self.mock_game_runner.format_answer.return_value = "A: ||**4**||"
+
+        await self.trivia_cog.question.callback(self.trivia_cog, mock_ctx)
+
+        self.bot.send_message.assert_awaited_once()
+        args, kwargs = self.bot.send_message.await_args
+        assert "Hint:" not in args[0]
+
+    async def test_question_command_no_question_found(self):
+        """Test the question command when no question is found."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_ctx.interaction = MagicMock()
+        self.mock_game_runner.question_selector.get_random_question.return_value = None
+
+        await self.trivia_cog.question.callback(self.trivia_cog, mock_ctx)
+
+        self.bot.send_message.assert_awaited_once_with(
+            "Could not find a question.",
+            interaction=mock_ctx.interaction,
+            ephemeral=True,
+        )
+
+    async def test_when_command_tasks_not_running(self):
+        """Test the when command when tasks are not running."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_ctx.interaction = MagicMock()
+
+        self.bot.morning_message_task.is_running.return_value = False
+        self.bot.evening_message_task.is_running.return_value = True
+
+        await self.trivia_cog.when.callback(self.trivia_cog, mock_ctx)
+
+        self.bot.send_message.assert_awaited_once_with(
+            "Tasks are not running.",
+            interaction=mock_ctx.interaction,
+            ephemeral=True,
+        )
+
+    async def test_when_command_morning_before_evening(self):
+        """Test the when command when morning is before evening (next question)."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_ctx.interaction = MagicMock()
+
+        self.bot.morning_message_task.is_running.return_value = True
+        self.bot.evening_message_task.is_running.return_value = True
+
+        # Morning before evening
+        morning_time = datetime(2025, 1, 1, 8, 0, 0, tzinfo=timezone.utc)
+        evening_time = datetime(2025, 1, 1, 20, 0, 0, tzinfo=timezone.utc)
+        self.bot.morning_message_task.next_iteration = morning_time
+        self.bot.evening_message_task.next_iteration = evening_time
+
+        self.mock_game_runner.daily_q = None  # No active question
+
+        await self.trivia_cog.when.callback(self.trivia_cog, mock_ctx)
+
+        self.bot.send_message.assert_awaited_once()
+        args, kwargs = self.bot.send_message.await_args
+        assert "next question" in args[0]
+        assert kwargs.get("ephemeral") is True
+
+    async def test_when_command_evening_before_morning(self):
+        """Test the when command when evening is before morning (answer reveal)."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_ctx.interaction = MagicMock()
+
+        self.bot.morning_message_task.is_running.return_value = True
+        self.bot.evening_message_task.is_running.return_value = True
+
+        # Evening before morning
+        morning_time = datetime(2025, 1, 2, 8, 0, 0, tzinfo=timezone.utc)
+        evening_time = datetime(2025, 1, 1, 20, 0, 0, tzinfo=timezone.utc)
+        self.bot.morning_message_task.next_iteration = morning_time
+        self.bot.evening_message_task.next_iteration = evening_time
+
+        self.mock_game_runner.daily_q = None  # No active question
+
+        await self.trivia_cog.when.callback(self.trivia_cog, mock_ctx)
+
+        self.bot.send_message.assert_awaited_once()
+        args, kwargs = self.bot.send_message.await_args
+        assert "answer reveal" in args[0]
+
+    async def test_when_command_with_active_question(self):
+        """Test the when command shows the active question when applicable."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_ctx.interaction = MagicMock()
+
+        self.bot.morning_message_task.is_running.return_value = True
+        self.bot.evening_message_task.is_running.return_value = True
+
+        # Evening before morning (answer reveal phase) with active question
+        morning_time = datetime(2025, 1, 2, 8, 0, 0, tzinfo=timezone.utc)
+        evening_time = datetime(2025, 1, 1, 20, 0, 0, tzinfo=timezone.utc)
+        self.bot.morning_message_task.next_iteration = morning_time
+        self.bot.evening_message_task.next_iteration = evening_time
+
+        mock_question = MagicMock()
+        self.mock_game_runner.daily_q = mock_question
+        self.mock_game_runner.format_question.return_value = "Q: Test question?"
+
+        await self.trivia_cog.when.callback(self.trivia_cog, mock_ctx)
+
+        self.bot.send_message.assert_awaited_once()
+        args, kwargs = self.bot.send_message.await_args
+        assert "Today's Question:" in args[0]
+        assert "Q: Test question?" in args[0]
+
+    async def test_answer_command_no_daily_question_id(self):
+        """Test the answer command when there's no daily_question_id."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_ctx.author.id = 123
+        mock_ctx.author.display_name = "Test User"
+
+        self.mock_game_runner.handle_guess.return_value = (True, 1)
+        self.mock_game_runner.daily_q = MagicMock()
+        self.mock_game_runner.daily_question_id = None  # No daily_question_id
+
+        await self.trivia_cog.answer.callback(
+            self.trivia_cog, mock_ctx, guess="test answer"
+        )
+
+        # Should still work, just with empty guesses
+        mock_ctx.interaction.followup.send.assert_called_once()
+        args = mock_ctx.interaction.followup.send.call_args[0][0]
+        assert "That is correct!" in args
+        assert "No guesses yet." in args
+
+    async def test_answer_command_generic_exception(self):
+        """Test the answer command handles generic exceptions."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_ctx.author.id = 123
+        mock_ctx.author.display_name = "Test User"
+        self.mock_game_runner.daily_q = MagicMock()
+
+        # Configure the mock to raise a generic exception
+        self.mock_game_runner.handle_guess.side_effect = Exception("Database error")
+
+        await self.trivia_cog.answer.callback(
+            self.trivia_cog, mock_ctx, guess="any guess"
+        )
+
+        mock_ctx.interaction.followup.send.assert_called_once_with(
+            "An error occurred while processing your answer. Please try again later."
+        )
+
+    async def test_answer_command_multiple_guesses_deduplicated(self):
+        """Test that duplicate guesses are deduplicated and sorted."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_ctx.author.id = 123
+        mock_ctx.author.display_name = "Test User"
+
+        self.mock_game_runner.handle_guess.return_value = (False, 3)
+        self.mock_game_runner.daily_q = MagicMock()
+        self.mock_game_runner.daily_question_id = 1
+        # Return duplicate guesses that should be deduplicated
+        self.mock_data_manager.read_guess_history.return_value = [
+            {"guess_text": "Apple", "daily_question_id": 1},
+            {"guess_text": "Banana", "daily_question_id": 1},
+            {
+                "guess_text": "apple",
+                "daily_question_id": 1,
+            },  # Duplicate (case-insensitive)
+            {"guess_text": "Cherry", "daily_question_id": 1},
+        ]
+
+        await self.trivia_cog.answer.callback(self.trivia_cog, mock_ctx, guess="cherry")
+
+        mock_ctx.interaction.followup.send.assert_called_once()
+        args = mock_ctx.interaction.followup.send.call_args[0][0]
+        # Should be deduplicated and sorted
+        assert "apple" in args
+        assert "banana" in args
+        assert "cherry" in args
+
+    async def test_answer_command_filters_by_daily_question_id(self):
+        """Test that guesses are filtered by the current daily_question_id."""
+        await self.asyncSetUp()
+        mock_ctx = AsyncMock()
+        mock_ctx.author.id = 123
+        mock_ctx.author.display_name = "Test User"
+
+        self.mock_game_runner.handle_guess.return_value = (False, 1)
+        self.mock_game_runner.daily_q = MagicMock()
+        self.mock_game_runner.daily_question_id = 2  # Current question ID
+        # Return guesses from multiple questions
+        self.mock_data_manager.read_guess_history.return_value = [
+            {"guess_text": "Old guess", "daily_question_id": 1},  # Different question
+            {"guess_text": "Current guess", "daily_question_id": 2},  # Current question
+        ]
+
+        await self.trivia_cog.answer.callback(
+            self.trivia_cog, mock_ctx, guess="current guess"
+        )
+
+        mock_ctx.interaction.followup.send.assert_called_once()
+        args = mock_ctx.interaction.followup.send.call_args[0][0]
+        # Should only show guesses for the current question
+        assert "current guess" in args
+        assert "Old guess" not in args
+
+
+class TestTriviaSetup(unittest.IsolatedAsyncioTestCase):
+    async def test_setup(self):
+        """Test that the setup function adds the cog."""
+        from src.cogs.trivia import setup
+
+        mock_bot = MagicMock()
+        mock_bot.add_cog = AsyncMock()
+
+        await setup(mock_bot)
+
+        mock_bot.add_cog.assert_called_once()
+        call_args = mock_bot.add_cog.call_args
+        self.assertIsInstance(call_args[0][0], Trivia)
 
 
 if __name__ == "__main__":

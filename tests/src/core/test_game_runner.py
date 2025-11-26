@@ -640,6 +640,237 @@ class TestGameRunner(unittest.TestCase):
         self.assertEqual(self.game_runner.daily_q.hint, "Existing Hint")
         self.mock_data_manager.log_daily_question.assert_called_once()
 
+    def test_disable_manager_not_enabled(self):
+        """Test disabling a manager that is not enabled logs a warning."""
+        with patch("src.core.game_runner.logging") as mock_logging:
+            self.game_runner.disable_manager("nonexistent_manager")
+            mock_logging.warning.assert_called_once()
+
+    def test_disable_manager_is_none(self):
+        """Test disabling a manager that is already None logs a warning."""
+        self.game_runner.managers["test_manager"] = None
+        with patch("src.core.game_runner.logging") as mock_logging:
+            self.game_runner.disable_manager("test_manager")
+            mock_logging.warning.assert_called_once()
+
+    def test_enable_manager_not_found(self):
+        """Test enabling a manager that doesn't exist logs a warning."""
+        with patch("src.core.game_runner.logging") as mock_logging:
+            self.game_runner.enable_manager("nonexistent_manager")
+            mock_logging.warning.assert_called_once()
+
+    def test_reset_daily_question(self):
+        """Test resetting the daily question to a new one."""
+        new_question = Question(
+            question="New Question",
+            answer="New Answer",
+            category="New Cat",
+            clue_value=200,
+        )
+        self.mock_question_selector.get_question_for_today.return_value = new_question
+        self.mock_data_manager.log_daily_question.return_value = 999
+
+        result = self.game_runner.reset_daily_question()
+
+        self.assertTrue(result)
+        self.assertEqual(self.game_runner.daily_q, new_question)
+        self.assertEqual(self.game_runner.daily_question_id, 999)
+        self.mock_data_manager.log_daily_question.assert_called_once_with(
+            new_question, force_new=True
+        )
+
+    def test_reset_daily_question_no_question_available(self):
+        """Test reset_daily_question when no question is available."""
+        self.mock_question_selector.get_question_for_today.return_value = None
+
+        result = self.game_runner.reset_daily_question()
+
+        self.assertFalse(result)
+
+    def test_reset_daily_question_log_fails(self):
+        """Test reset_daily_question when logging fails."""
+        new_question = Question(question="Q", answer="A", category="C")
+        self.mock_question_selector.get_question_for_today.return_value = new_question
+        self.mock_data_manager.log_daily_question.return_value = None
+
+        result = self.game_runner.reset_daily_question()
+
+        self.assertFalse(result)
+
+    def test_set_daily_question_hint_generation_exception(self):
+        """Test hint generation handles exceptions gracefully."""
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+        question_no_hint = Question(question="Q", answer="A", category="C")
+        self.mock_question_selector.get_question_for_today.return_value = (
+            question_no_hint
+        )
+        self.mock_question_selector.get_hint_from_gemini.side_effect = Exception(
+            "API Error"
+        )
+
+        self.game_runner.set_daily_question()
+
+        # Should not raise, question should still be set
+        self.assertEqual(self.game_runner.daily_q, question_no_hint)
+        self.mock_data_manager.log_daily_question.assert_called_once()
+
+    def test_set_daily_question_fallback_on_log_none(self):
+        """Test that set_daily_question falls back to get_todays_daily_question when log returns None."""
+        question_with_hint = Question(question="Q", answer="A", category="C", hint="H")
+        self.mock_question_selector.get_question_for_today.return_value = (
+            question_with_hint
+        )
+        # First call returns None (no existing question), second returns existing after log
+        self.mock_data_manager.get_todays_daily_question.side_effect = [
+            None,
+            (question_with_hint, 555),
+        ]
+        self.mock_data_manager.log_daily_question.return_value = None
+
+        self.game_runner.set_daily_question()
+
+        self.assertEqual(self.game_runner.daily_question_id, 555)
+
+    def test_get_reminder_message_content_no_daily_question(self):
+        """Test get_reminder_message_content when no daily question is set."""
+        self.game_runner.daily_q = None
+        result = self.game_runner.get_reminder_message_content(tag_unanswered=True)
+        self.assertEqual(result, "No question to remind about.")
+
+    def test_get_scores_leaderboard_no_scores(self):
+        """Test get_scores_leaderboard when there are no player scores."""
+        self.mock_data_manager.get_player_scores.return_value = []
+        result = self.game_runner.get_scores_leaderboard()
+        self.assertEqual(result, "No scores available yet.")
+
+    def test_get_scores_leaderboard_guild_exception(self):
+        """Test get_scores_leaderboard handles guild member lookup exceptions."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 100}
+        ]
+        self.mock_data_manager.get_player_streaks.return_value = []
+
+        mock_guild = MagicMock()
+        mock_guild.get_member.side_effect = Exception("Guild error")
+
+        with patch("src.core.game_runner.logging"):
+            leaderboard = self.game_runner.get_scores_leaderboard(guild=mock_guild)
+
+        # Should fall back to using the stored name
+        self.assertIn("Alice", leaderboard)
+
+    def test_get_evening_message_content_no_daily_question(self):
+        """Test get_evening_message_content when no daily question is set."""
+        self.game_runner.daily_q = None
+        result = self.game_runner.get_evening_message_content()
+        self.assertEqual(result, "No question to answer for today.")
+
+    def test_get_evening_message_content_guild_exception(self):
+        """Test get_evening_message_content handles guild member lookup exceptions."""
+        self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 123
+        self.mock_data_manager.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "111",
+                "player_name": "Alice",
+                "guess_text": "answer",
+                "is_correct": True,
+            }
+        ]
+
+        mock_guild = MagicMock()
+        mock_guild.get_member.side_effect = Exception("Guild error")
+
+        with patch("src.core.game_runner.logging"):
+            content = self.game_runner.get_evening_message_content(guild=mock_guild)
+
+        # Should fall back to stored name
+        self.assertIn("**Alice**", content)
+
+    def test_update_streaks_no_daily_question_id(self):
+        """Test update_streaks logs warning when no daily_question_id."""
+        self.game_runner.daily_question_id = None
+        with patch("src.core.game_runner.logging") as mock_logging:
+            self.game_runner.update_streaks()
+            mock_logging.warning.assert_called()
+
+    def test_update_streaks_resets_incorrect_players(self):
+        """Test update_streaks resets streaks for players who didn't answer correctly."""
+        self.game_runner.daily_question_id = 1
+        self.game_runner.player_manager = MagicMock()
+
+        # Players: 111 answered correctly, 222 did not (but has a streak)
+        mock_player_222 = MagicMock(spec=Player)
+        mock_player_222.answer_streak = 5
+        mock_player_222.name = "Bob"
+
+        self.game_runner.player_manager.get_all_players.return_value = {
+            "111": MagicMock(answer_streak=3),
+            "222": mock_player_222,
+        }
+
+        self.mock_data_manager.read_guess_history.return_value = [
+            {"daily_question_id": 1, "player_id": "111", "is_correct": True},
+            {"daily_question_id": 1, "player_id": "222", "is_correct": False},
+        ]
+
+        self.game_runner.update_streaks()
+
+        # Only player 222's streak should be reset
+        self.game_runner.player_manager.reset_streak.assert_called_once_with("222")
+        self.game_runner.player_manager.save_players.assert_called_once()
+
+    def test_update_scores_no_daily_question_id(self):
+        """Test update_scores logs warning when no daily_question_id."""
+        self.game_runner.daily_question_id = None
+        with patch("src.core.game_runner.logging") as mock_logging:
+            self.game_runner.update_scores()
+            mock_logging.warning.assert_called()
+
+    def test_update_scores_fallback_on_exception(self):
+        """Test update_scores falls back to default score on exception."""
+        self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_q.clue_value = None  # Will cause exception
+        self.game_runner.daily_question_id = 1
+        self.game_runner.player_manager = MagicMock()
+
+        # Simulate update_score raising an exception
+        self.game_runner.player_manager.update_score.side_effect = [
+            Exception("No clue_value"),
+            None,
+        ]
+        self.game_runner.player_manager.get_or_create_player.return_value = MagicMock()
+
+        self.mock_data_manager.read_guess_history.return_value = [
+            {
+                "daily_question_id": 1,
+                "player_id": "111",
+                "player_name": "Alice",
+                "is_correct": True,
+            }
+        ]
+
+        self.game_runner.update_scores()
+
+        # Should have tried to update with clue_value first, then with fallback 100
+        calls = self.game_runner.player_manager.update_score.call_args_list
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1][0][1], 100)  # Fallback value
+
+    def test_get_player_history_no_history(self):
+        """Test get_player_history when player has no history."""
+        self.mock_data_manager.read_guess_history.return_value = []
+        result = self.game_runner.get_player_history(123, "Alice")
+        self.assertEqual(result, "No history found for Alice.")
+
+    def test_get_subscribed_users(self):
+        """Test getting subscribed users."""
+        mock_subscribers = {MagicMock(spec=Subscriber), MagicMock(spec=Subscriber)}
+        self.game_runner.subscribed_contexts = mock_subscribers
+        result = self.game_runner.get_subscribed_users()
+        self.assertEqual(result, mock_subscribers)
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -660,6 +891,18 @@ class DummyDataManagerPowerup:
     def read_guess_history(self, *a, **kw):
         return []
 
+    def load_players(self):
+        """Return empty players dict for testing."""
+        return {}
+
+    def get_all_subscribers(self):
+        """Return empty subscribers set for testing."""
+        return set()
+
+    def save_players(self, players):
+        """No-op for testing."""
+        pass
+
 
 class DummyQuestionSelectorPowerup:
     def __init__(self):
@@ -677,6 +920,7 @@ def test_handle_guess_powerup_correct():
     selector = DummyQuestionSelectorPowerup()
     game = GameRunner(selector, data_manager)
     game.daily_q = selector.get_question_for_today()
+    game.daily_question_id = 1
     called = {}
 
     class DummyPowerUpManager:
@@ -689,10 +933,9 @@ def test_handle_guess_powerup_correct():
     game.register_manager("powerup", DummyPowerUpManager)
     game.enable_manager("powerup", players={})
 
-    with patch("src.core.game_runner.PowerUpManager", DummyPowerUpManager):
-        result = game.handle_guess(1, "Player1", "test")
-        assert result is True
-        assert called["on_guess"] == (1, True)
+    result, num_guesses = game.handle_guess(1, "Player1", "test")
+    assert result is True
+    assert called["on_guess"] == (1, True)
 
 
 def test_handle_guess_powerup_incorrect():
@@ -700,6 +943,7 @@ def test_handle_guess_powerup_incorrect():
     selector = DummyQuestionSelectorPowerup()
     game = GameRunner(selector, data_manager)
     game.daily_q = selector.get_question_for_today()
+    game.daily_question_id = 1
     called = {}
 
     class DummyPowerUpManager:
@@ -712,10 +956,9 @@ def test_handle_guess_powerup_incorrect():
     game.register_manager("powerup", DummyPowerUpManager)
     game.enable_manager("powerup", players={})
 
-    with patch("src.core.game_runner.PowerUpManager", DummyPowerUpManager):
-        result = game.handle_guess(1, "Player1", "wrong")
-        assert result is False
-        assert called["on_guess"] == (1, False)
+    result, num_guesses = game.handle_guess(1, "Player1", "wrong")
+    assert result is False
+    assert called["on_guess"] == (1, False)
 
 
 def test_handle_guess_non_powerup():
@@ -723,7 +966,8 @@ def test_handle_guess_non_powerup():
     selector = DummyQuestionSelectorPowerup()
     game = GameRunner(selector, data_manager)
     game.daily_q = selector.get_question_for_today()
-    result = game.handle_guess(1, "Player1", "test")
+    game.daily_question_id = 1
+    result, num_guesses = game.handle_guess(1, "Player1", "test")
     assert result is True
 
 
@@ -732,5 +976,5 @@ def test_handle_guess_no_question():
     selector = DummyQuestionSelectorPowerup()
     game = GameRunner(selector, data_manager)
     game.daily_q = None
-    result = game.handle_guess(1, "Player1", "test")
+    result, num_guesses = game.handle_guess(1, "Player1", "test")
     assert result is False

@@ -165,6 +165,133 @@ class TestGuessHandler(unittest.TestCase):
                     self.guess_handler._is_correct_guess(guess, answer), expected
                 )
 
+    def test_normalize_empty_text(self):
+        """Test that _normalize returns empty string for empty or None input."""
+        self.assertEqual(self.guess_handler._normalize(""), "")
+        self.assertEqual(self.guess_handler._normalize(None), "")
+
+    def test_get_player_guesses_no_daily_question_id(self):
+        """Test get_player_guesses returns empty list when no daily_question_id."""
+        handler = GuessHandler(
+            self.data_manager,
+            self.daily_question,
+            daily_question_id=None,  # No daily question ID
+            managers=self.managers,
+        )
+        result = handler.get_player_guesses(player_id=123)
+        self.assertEqual(result, [])
+
+    def test_has_answered_correctly_today_no_daily_question_id(self):
+        """Test has_answered_correctly_today returns False when no daily_question_id."""
+        handler = GuessHandler(
+            self.data_manager,
+            self.daily_question,
+            daily_question_id=None,  # No daily question ID
+            managers=self.managers,
+        )
+        result = handler.has_answered_correctly_today(player_id=123)
+        self.assertFalse(result)
+
+    def test_handle_guess_no_daily_question(self):
+        """Test handle_guess returns False when there's no daily question."""
+        handler = GuessHandler(
+            self.data_manager,
+            daily_question=None,  # No daily question
+            daily_question_id=None,
+            managers=self.managers,
+        )
+        result, num_guesses = handler.handle_guess(123, "Player", "guess")
+        self.assertFalse(result)
+        self.assertEqual(num_guesses, 0)
+
+    def test_handle_guess_manager_on_guess_type_error_fallback(self):
+        """Test manager on_guess falls back when TypeError is raised."""
+        # Create a mock manager that raises TypeError on first call
+        mock_manager = MagicMock()
+        call_count = [0]
+
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise TypeError("Wrong signature")
+            # Second call (fallback) should succeed
+
+        mock_manager.on_guess.side_effect = side_effect
+
+        handler = GuessHandler(
+            self.data_manager,
+            self.daily_question,
+            self.daily_question_id,
+            managers={"test": mock_manager},
+        )
+
+        self.data_manager.read_guess_history.return_value = []
+
+        with patch("src.core.guess_handler.logging") as mock_logging:
+            result, _ = handler.handle_guess(1, "Player", "Test Answer")
+
+        # on_guess should have been called twice (initial + fallback)
+        self.assertEqual(mock_manager.on_guess.call_count, 2)
+
+    def test_handle_guess_manager_on_guess_both_fail(self):
+        """Test manager on_guess gracefully handles when both calls fail."""
+        mock_manager = MagicMock()
+        mock_manager.on_guess.side_effect = TypeError("Wrong signature")
+
+        handler = GuessHandler(
+            self.data_manager,
+            self.daily_question,
+            self.daily_question_id,
+            managers={"test": mock_manager},
+        )
+
+        self.data_manager.read_guess_history.return_value = []
+
+        with patch("src.core.guess_handler.logging"):
+            result, num_guesses = handler.handle_guess(1, "Player", "Test Answer")
+
+        # Should not raise, just log error and continue
+        self.assertTrue(result)  # Answer was still correct
+        # on_guess called twice (initial attempt + fallback attempt)
+        self.assertEqual(mock_manager.on_guess.call_count, 2)
+
+    def test_distance_limit_very_short_answer(self):
+        """Test that very short answers (<=2 chars) require exact match."""
+        # For answers <= 2 chars, distance limit is 0 (exact match required)
+        self.assertTrue(self.guess_handler._is_correct_guess("ab", "ab"))
+        self.assertFalse(self.guess_handler._is_correct_guess("ac", "ab"))
+
+    def test_distance_limit_medium_answer(self):
+        """Test distance limit for medium length answers (6-8 chars)."""
+        # For 6-8 char answers, limit is 2
+        self.assertTrue(
+            self.guess_handler._is_correct_guess("testing", "testinx")
+        )  # dist 1
+        self.assertTrue(
+            self.guess_handler._is_correct_guess("testing", "testixg")
+        )  # dist 1
+        self.assertFalse(
+            self.guess_handler._is_correct_guess("testing", "texxxxx")
+        )  # too distant
+
+    def test_distance_limit_long_answer(self):
+        """Test distance limit for longer answers (9-12 chars)."""
+        # For 9-12 char answers, limit is 3
+        self.assertTrue(
+            self.guess_handler._is_correct_guess("programming", "programminx")
+        )  # dist 1
+        self.assertTrue(
+            self.guess_handler._is_correct_guess("programming", "programxinx")
+        )  # dist 2
+
+    def test_distance_limit_very_long_answer(self):
+        """Test distance limit for very long answers (>12 chars)."""
+        # For >12 char answers, limit is 4
+        answer = "extraordinary"  # 13 chars
+        self.assertTrue(
+            self.guess_handler._is_correct_guess("extraordinari", answer)
+        )  # dist 1
+
 
 if __name__ == "__main__":
     unittest.main()

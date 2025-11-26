@@ -126,6 +126,86 @@ class TestLoadQuestions(unittest.TestCase):
         )
         mock_log_error.assert_any_call("Unknown dataset: unknown_dataset")
 
+    @patch("data.loader.read_simple_questions")
+    def test_load_questions_5th_grader(self, mock_read_simple):
+        """Test loading questions for the '5th_grader' dataset."""
+        self.mock_config.get.side_effect = lambda key: {
+            "JBOT_QUESTION_DATASET": "5th_grader",
+            "JBOT_5TH_GRADER_LOCAL_PATH": "dummy_5th_grader.csv",
+        }.get(key)
+
+        expected_question = Question("5th Q", "5th A", "5th Grader", 100)
+        mock_read_simple.return_value = [expected_question]
+
+        questions = load_questions(self.mock_config)
+
+        self.assertEqual(len(questions), 1)
+        self.assertEqual(questions[0], expected_question)
+
+        expected_path = os.path.join(self.project_root, "dummy_5th_grader.csv")
+        mock_read_simple.assert_called_once_with(expected_path, "5th Grader")
+
+    @patch("data.loader.read_general_trivia_questions")
+    def test_load_questions_general_trivia(self, mock_read_general):
+        """Test loading questions for the 'general_trivia' dataset."""
+        self.mock_config.get.side_effect = lambda key: {
+            "JBOT_QUESTION_DATASET": "general_trivia",
+            "JBOT_GENERAL_TRIVIA_LOCAL_PATH": "dummy_general.csv",
+        }.get(key)
+
+        expected_question = Question("General Q", "General A", "Trivia", 100)
+        mock_read_general.return_value = [expected_question]
+
+        questions = load_questions(self.mock_config)
+
+        self.assertEqual(len(questions), 1)
+        self.assertEqual(questions[0], expected_question)
+
+        expected_path = os.path.join(self.project_root, "dummy_general.csv")
+        mock_read_general.assert_called_once_with(expected_path)
+
+    @patch("data.loader.read_simple_questions")
+    def test_load_questions_millionaire_easy(self, mock_read_simple):
+        """Test loading questions for the 'millionaire_easy' dataset."""
+        self.mock_config.get.side_effect = lambda key: {
+            "JBOT_QUESTION_DATASET": "millionaire_easy",
+            "JBOT_MILLIONAIRE_EASY_LOCAL_PATH": "dummy_millionaire_easy.csv",
+        }.get(key)
+
+        expected_question = Question(
+            "Mill Easy Q", "Mill Easy A", "Millionaire (Easy)", 100
+        )
+        mock_read_simple.return_value = [expected_question]
+
+        questions = load_questions(self.mock_config)
+
+        self.assertEqual(len(questions), 1)
+        self.assertEqual(questions[0], expected_question)
+
+        expected_path = os.path.join(self.project_root, "dummy_millionaire_easy.csv")
+        mock_read_simple.assert_called_once_with(expected_path, "Millionaire (Easy)")
+
+    @patch("data.loader.read_simple_questions")
+    def test_load_questions_millionaire_hard(self, mock_read_simple):
+        """Test loading questions for the 'millionaire_hard' dataset."""
+        self.mock_config.get.side_effect = lambda key: {
+            "JBOT_QUESTION_DATASET": "millionaire_hard",
+            "JBOT_MILLIONAIRE_HARD_LOCAL_PATH": "dummy_millionaire_hard.csv",
+        }.get(key)
+
+        expected_question = Question(
+            "Mill Hard Q", "Mill Hard A", "Millionaire (Hard)", 100
+        )
+        mock_read_simple.return_value = [expected_question]
+
+        questions = load_questions(self.mock_config)
+
+        self.assertEqual(len(questions), 1)
+        self.assertEqual(questions[0], expected_question)
+
+        expected_path = os.path.join(self.project_root, "dummy_millionaire_hard.csv")
+        mock_read_simple.assert_called_once_with(expected_path, "Millionaire (Hard)")
+
 
 if __name__ == "__main__":
     unittest.main()

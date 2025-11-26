@@ -190,6 +190,15 @@ class TestQuestionSelector(unittest.TestCase):
                 "QuestionSelector initialized with no questions."
             )
 
+    @patch("data.readers.question_selector.randint")
+    def test_get_question_for_today_random_mode(self, mock_randint):
+        """Test get_question_for_today with 'random' mode."""
+        mock_randint.return_value = 2  # Mock the random index
+        selector = QuestionSelector(self.questions, mode="random")
+        question = selector.get_question_for_today()
+        self.assertEqual(question, self.questions[2])
+        mock_randint.assert_called_once_with(0, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

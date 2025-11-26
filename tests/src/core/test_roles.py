@@ -73,6 +73,26 @@ class TestRolesGameMode(unittest.TestCase):
         # Verify that assign_role_to_player was not called
         self.data_manager.assign_role_to_player.assert_not_called()
 
+    def test_on_guess(self):
+        """Test that on_guess is a no-op (just passes)."""
+        # on_guess should not raise any errors and is a pass-through
+        result = self.roles_game_mode.on_guess(1, "Alice", "some guess", True)
+        self.assertIsNone(result)
+
+    def test_run(self):
+        """Test that run calls assign_roles."""
+        self.data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 10}
+        ]
+
+        self.roles_game_mode.run()
+
+        # run() should trigger assign_roles(), which calls these methods
+        self.data_manager.clear_player_roles.assert_called_once()
+        self.data_manager.assign_role_to_player.assert_called_once_with(
+            "1", "first place"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

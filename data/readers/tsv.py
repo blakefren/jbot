@@ -111,7 +111,7 @@ def get_random_question(questions: list[Question]) -> Question:
     return random.choice(questions)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     # Example usage for testing the question readers
     import os
 

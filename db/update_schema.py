@@ -138,7 +138,8 @@ def main():
 
                 if table_name not in current_tables:
                     new_tables_sql.append(statement + ";")
-            except IndexError:
+            except IndexError:  # pragma: no cover
+                # This branch is unreachable due to how str.split() works
                 print(f"Warning: Could not parse statement: {statement}")
 
     # TODO: Implement ALTER TABLE for modified tables to avoid data loss.

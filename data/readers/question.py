@@ -126,7 +126,7 @@ class Question:
 
 
 # --- Example Usage ---
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     # Create a Question instance
     q1 = Question(
         question="This ancient civilization built the Great Pyramid of Giza.",

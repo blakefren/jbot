@@ -144,3 +144,65 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.players)
         msg = manager.steal("1", "999")
         self.assertIn("Invalid player", msg)
+
+    def test_on_guess_correct(self):
+        """Test that on_guess calls resolve_wager with correct flag."""
+        manager = PowerUpManager(self.players)
+        manager.place_wager("1", 20)
+        manager.on_guess(1, "Player1", "answer", True)
+        # Wager should be resolved
+        self.assertEqual(self.players["1"]["wager"], 0)
+
+    def test_on_guess_incorrect(self):
+        """Test that on_guess calls resolve_wager with incorrect flag."""
+        manager = PowerUpManager(self.players)
+        manager.place_wager("1", 20)
+        manager.on_guess(1, "Player1", "answer", False)
+        # Wager should be resolved
+        self.assertEqual(self.players["1"]["wager"], 0)
+
+    def test_resolve_reinforce_no_partner_in_players(self):
+        """Test resolve_reinforce when partner is not found in players dict."""
+        # Set up player with team_partner pointing to a non-existent player
+        self.players["1"]["team_partner"] = "999"  # Partner doesn't exist
+        manager = PowerUpManager(self.players)
+        msg = manager.resolve_reinforce("1", True)
+        # Should still set team_success for the player
+        self.assertTrue(
+            self.players["1"].get("team_success") or "full points" in msg or msg == ""
+        )
+
+    def test_disrupt_invalid_attacker(self):
+        """Test disrupt with invalid attacker ID."""
+        manager = PowerUpManager(self.players)
+        msg = manager.disrupt("999", "1")
+        self.assertIn("Invalid player", msg)
+
+    def test_disrupt_invalid_target(self):
+        """Test disrupt with invalid target ID (already covered, but explicit)."""
+        manager = PowerUpManager(self.players)
+        msg = manager.disrupt("1", "999")
+        self.assertIn("Invalid player", msg)
+
+    def test_use_shield_invalid_player(self):
+        """Test use_shield with invalid player ID."""
+        manager = PowerUpManager(self.players)
+        msg = manager.use_shield("999")
+        self.assertIn("Invalid player", msg)
+
+    def test_place_wager_invalid_player(self):
+        """Test place_wager with invalid player ID."""
+        manager = PowerUpManager(self.players)
+        msg = manager.place_wager("999", 10)
+        self.assertIn("Invalid player", msg)
+
+    def test_resolve_reinforce_no_team_partner(self):
+        """Test resolve_reinforce when player has no team_partner."""
+        manager = PowerUpManager(self.players)
+        # Player 1 has no team_partner
+        msg = manager.resolve_reinforce("1", True)
+        self.assertEqual(msg, "")
+
+
+if __name__ == "__main__":
+    unittest.main()

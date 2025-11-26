@@ -110,6 +110,91 @@ class TestRolesCog(unittest.IsolatedAsyncioTestCase):
             self.first_place_role, reason="JBot: Player achieved first place"
         )
 
+    @patch("discord.utils.get")
+    async def test_role_creation_forbidden(self, mock_utils_get):
+        """Test that the function returns gracefully when role creation is forbidden."""
+        mock_utils_get.return_value = None  # Role does not exist
+        self.guild.create_role = AsyncMock(
+            side_effect=discord.Forbidden(MagicMock(), "Missing permissions")
+        )
+
+        # DB winner: member1
+        self.bot.data_manager.get_player_ids_with_role.return_value = {101}
+
+        # Should not raise an exception
+        await self.cog.apply_discord_roles(self.guild)
+
+        # Verify role creation was attempted
+        self.guild.create_role.assert_awaited_once()
+        # Verify no role assignments were made
+        self.member1.add_roles.assert_not_awaited()
+
+    @patch("discord.utils.get")
+    async def test_no_role_name_configured(self, mock_utils_get):
+        """Test that the function returns early when no role name is configured."""
+        self.bot.config.get.return_value = None  # No role name configured
+
+        await self.cog.apply_discord_roles(self.guild)
+
+        # Verify discord.utils.get was not called
+        mock_utils_get.assert_not_called()
+        # Verify no data_manager calls were made
+        self.bot.data_manager.get_player_ids_with_role.assert_not_called()
+
+    @patch("discord.utils.get")
+    async def test_apply_roles_member_not_in_guild(self, mock_utils_get):
+        """Test that missing members are handled gracefully."""
+        mock_utils_get.return_value = self.first_place_role
+        self.first_place_role.members = []
+
+        # DB winner: member 999 who is not in the guild
+        self.bot.data_manager.get_player_ids_with_role.return_value = {999}
+        self.guild.get_member.side_effect = lambda mid: None  # No members found
+
+        # Should not raise an exception
+        await self.cog.apply_discord_roles(self.guild)
+
+        # Verify no role assignments were made (member not found)
+        self.member1.add_roles.assert_not_awaited()
+
+    async def test_update_roles_command(self):
+        """Test the update_roles command."""
+        ctx = MagicMock()
+        ctx.send = AsyncMock()
+        ctx.guild = self.guild
+
+        # Mock the roles_game_mode.run() method
+        self.cog.roles_game_mode = MagicMock()
+        self.cog.roles_game_mode.run = MagicMock()
+
+        # Mock apply_discord_roles
+        self.cog.apply_discord_roles = AsyncMock()
+
+        await self.cog.update_roles.callback(self.cog, ctx)
+
+        # Verify the flow
+        ctx.send.assert_any_call("Updating roles...")
+        self.cog.roles_game_mode.run.assert_called_once()
+        self.cog.apply_discord_roles.assert_awaited_once_with(self.guild)
+        ctx.send.assert_any_call("Roles updated.")
+
+
+class TestRolesCogSetup(unittest.IsolatedAsyncioTestCase):
+    async def test_setup(self):
+        """Test that the setup function adds the cog."""
+        from src.cogs.roles import setup
+
+        mock_bot = MagicMock()
+        mock_bot.add_cog = AsyncMock()
+        mock_bot.config = MagicMock()
+        mock_bot.data_manager = MagicMock()
+
+        await setup(mock_bot)
+
+        mock_bot.add_cog.assert_called_once()
+        call_args = mock_bot.add_cog.call_args
+        self.assertIsInstance(call_args[0][0], RolesCog)
+
 
 if __name__ == "__main__":
     unittest.main()

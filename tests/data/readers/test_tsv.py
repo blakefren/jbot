@@ -22,9 +22,9 @@ class TestTsv(unittest.TestCase):
         # Mock TSV data
         mock_data = (
             "category\tclue_value\tquestion\tanswer\tround\tair_date\tdaily_double_value\n"
-            "HISTORY\t$200\tThe year the Magna Carta was signed\tWhat is 1215?\t1\t2023-01-01\t0\n"
-            "SCIENCE\t$400\tThe atomic number of Oxygen\tWhat is 8?\t1\t2023-01-01\t0\n"
-            "FINAL\t$2000\tThe only planet that rotates clockwise\tWhat is Venus?\t3\t2023-01-01\t0\n"
+            "HISTORY\t$200\tThe year the Magna Carta was signed\tWhat is 1215?\tJeopardy!\t2023-01-01\t0\n"
+            "SCIENCE\t$400\tThe atomic number of Oxygen\tWhat is 8?\tDouble Jeopardy!\t2023-01-01\t0\n"
+            "FINAL\t$0\tThe only planet that rotates clockwise\tWhat is Venus?\tFinal Jeopardy!\t2023-01-01\t0\n"
         )
 
         with patch("builtins.open", mock_open(read_data=mock_data)):
@@ -33,19 +33,23 @@ class TestTsv(unittest.TestCase):
             )
             self.assertEqual(len(questions), 3)
 
-            # Test first question
+            # Test first question (regular Jeopardy)
             self.assertIsInstance(questions[0], Question)
             self.assertEqual(questions[0].category, "HISTORY")
             self.assertEqual(questions[0].clue_value, 200)
             self.assertEqual(questions[0].question, "What is 1215?")
             self.assertEqual(questions[0].answer, "The year the Magna Carta was signed")
             self.assertEqual(questions[0].data_source, "Jeopardy!")
-            self.assertEqual(questions[0].metadata["round"], "1")
+            self.assertEqual(questions[0].metadata["round"], "Jeopardy!")
 
-            # Test final jeopardy question
+            # Test second question (Double Jeopardy)
+            self.assertEqual(questions[1].clue_value, 400)
+            self.assertEqual(questions[1].metadata["round"], "Double Jeopardy!")
+
+            # Test final jeopardy question (should use final_jeopardy_score)
             self.assertEqual(questions[2].category, "FINAL")
             self.assertEqual(questions[2].clue_value, 2000)
-            self.assertEqual(questions[2].metadata["round"], "3")
+            self.assertEqual(questions[2].metadata["round"], "Final Jeopardy!")
 
     def test_read_jeopardy_questions_file_not_found(self):
         with patch("builtins.open", side_effect=FileNotFoundError):
@@ -77,12 +81,13 @@ class TestTsv(unittest.TestCase):
             "1\t10.General\tWhat is the capital of France?\tParis\n"
             "2\tHistory\tWho was the first US president?\tGeorge Washington\n"
             "3\t20.Science\tWhat is H2O?\tWater\n"
+            "4\tABC.NotANumber\tWhat is the sky color?\tBlue\n"
         )
         with patch("builtins.open", mock_open(read_data=mock_data)):
             questions = read_knowledge_bowl_questions("dummy_path.tsv")
-            self.assertEqual(len(questions), 3)
+            self.assertEqual(len(questions), 4)
 
-            # Test first question
+            # Test first question (with digit prefix)
             q1 = questions[0]
             self.assertIsInstance(q1, Question)
             self.assertEqual(q1.question, "What is the capital of France?")
@@ -92,15 +97,20 @@ class TestTsv(unittest.TestCase):
             self.assertEqual(q1.data_source, "Knowledge Bowl")
             self.assertEqual(q1.metadata["number"], "1")
 
-            # Test second question
+            # Test second question (no dot in subject)
             q2 = questions[1]
             self.assertEqual(q2.category, "History")
             self.assertEqual(q2.clue_value, 0)
 
-            # Test third question
+            # Test third question (with digit prefix)
             q3 = questions[2]
             self.assertEqual(q3.category, "Science")
             self.assertEqual(q3.clue_value, 20)
+
+            # Test fourth question (dot in subject but not a digit prefix)
+            q4 = questions[3]
+            self.assertEqual(q4.category, "ABC.NotANumber")
+            self.assertEqual(q4.clue_value, 0)
 
     def test_read_knowledge_bowl_questions_file_not_found(self):
         with patch("builtins.open", side_effect=FileNotFoundError):

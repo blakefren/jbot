@@ -84,6 +84,29 @@ class TestConfigReader(unittest.TestCase):
         with self.assertRaises(KeyError):
             config_reader.get_bool("JBOT_NON_EXISTENT_KEY")
 
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test_api_key_12345"})
+    def test_get_gemini_api_key_success(self):
+        """Test successfully retrieving the Gemini API key."""
+        config_reader = ConfigReader()
+        self.assertEqual(config_reader.get_gemini_api_key(), "test_api_key_12345")
+
+    def test_get_gemini_api_key_not_found(self):
+        """Test that ValueError is raised when GEMINI_API_KEY is not set."""
+        config_reader = ConfigReader()
+        # Ensure the key is not in the environment
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(ValueError) as context:
+                config_reader.get_gemini_api_key()
+            self.assertIn("GEMINI_API_KEY not found", str(context.exception))
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": ""})
+    def test_get_gemini_api_key_empty(self):
+        """Test that ValueError is raised when GEMINI_API_KEY is empty."""
+        config_reader = ConfigReader()
+        with self.assertRaises(ValueError) as context:
+            config_reader.get_gemini_api_key()
+        self.assertIn("GEMINI_API_KEY not found", str(context.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
