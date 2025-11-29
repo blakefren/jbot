@@ -667,7 +667,11 @@ class TestGameRunner(unittest.TestCase):
             category="New Cat",
             clue_value=200,
         )
-        self.mock_question_selector.get_question_for_today.return_value = new_question
+        self.mock_data_manager.get_used_question_hashes.return_value = {
+            "hash1",
+            "hash2",
+        }
+        self.mock_question_selector.get_random_question.return_value = new_question
         self.mock_data_manager.log_daily_question.return_value = 999
 
         result = self.game_runner.reset_daily_question()
@@ -675,13 +679,18 @@ class TestGameRunner(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(self.game_runner.daily_q, new_question)
         self.assertEqual(self.game_runner.daily_question_id, 999)
+        self.mock_data_manager.get_used_question_hashes.assert_called_once()
+        self.mock_question_selector.get_random_question.assert_called_once_with(
+            exclude_hashes={"hash1", "hash2"}
+        )
         self.mock_data_manager.log_daily_question.assert_called_once_with(
             new_question, force_new=True
         )
 
     def test_reset_daily_question_no_question_available(self):
         """Test reset_daily_question when no question is available."""
-        self.mock_question_selector.get_question_for_today.return_value = None
+        self.mock_data_manager.get_used_question_hashes.return_value = set()
+        self.mock_question_selector.get_random_question.return_value = None
 
         result = self.game_runner.reset_daily_question()
 
@@ -690,7 +699,8 @@ class TestGameRunner(unittest.TestCase):
     def test_reset_daily_question_log_fails(self):
         """Test reset_daily_question when logging fails."""
         new_question = Question(question="Q", answer="A", category="C")
-        self.mock_question_selector.get_question_for_today.return_value = new_question
+        self.mock_data_manager.get_used_question_hashes.return_value = set()
+        self.mock_question_selector.get_random_question.return_value = new_question
         self.mock_data_manager.log_daily_question.return_value = None
 
         result = self.game_runner.reset_daily_question()

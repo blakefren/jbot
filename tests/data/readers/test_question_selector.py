@@ -199,6 +199,47 @@ class TestQuestionSelector(unittest.TestCase):
         self.assertEqual(question, self.questions[2])
         mock_randint.assert_called_once_with(0, 2)
 
+    @patch("data.readers.question_selector.randint")
+    def test_get_random_question_with_exclude_hashes(self, mock_randint):
+        """Test that get_random_question excludes questions with specified hashes."""
+        mock_randint.return_value = 0
+        selector = QuestionSelector(self.questions)
+
+        # Exclude the first two questions by their hashes
+        exclude_hashes = {str(self.questions[0].id), str(self.questions[1].id)}
+        question = selector.get_random_question(exclude_hashes=exclude_hashes)
+
+        # Should return the third question (only one available)
+        self.assertEqual(question, self.questions[2])
+
+    @patch("logging.warning")
+    @patch("data.readers.question_selector.randint")
+    def test_get_random_question_all_excluded_falls_back(
+        self, mock_randint, mock_logging
+    ):
+        """Test that get_random_question falls back to full pool when all are excluded."""
+        mock_randint.return_value = 1
+        selector = QuestionSelector(self.questions)
+
+        # Exclude all questions
+        exclude_hashes = {str(q.id) for q in self.questions}
+        question = selector.get_random_question(exclude_hashes=exclude_hashes)
+
+        # Should fall back to full pool and return a question
+        self.assertEqual(question, self.questions[1])
+        mock_logging.assert_called_with(
+            "All questions have been used. Selecting from full pool."
+        )
+
+    @patch("data.readers.question_selector.randint")
+    def test_get_random_question_empty_exclude_hashes(self, mock_randint):
+        """Test that get_random_question works with empty exclude set."""
+        mock_randint.return_value = 0
+        selector = QuestionSelector(self.questions)
+
+        question = selector.get_random_question(exclude_hashes=set())
+        self.assertEqual(question, self.questions[0])
+
 
 if __name__ == "__main__":
     unittest.main()

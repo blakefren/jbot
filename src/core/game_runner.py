@@ -65,8 +65,12 @@ class GameRunner:
         This is intended for admin use to skip a problematic or unwanted question.
         """
         logging.info("Admin triggered reset of daily question.")
-        # Force a new question by bypassing the check
-        self.daily_q = self.question_selector.get_question_for_today()
+        # Get previously used question hashes to avoid repeats
+        used_hashes = self.data_manager.get_used_question_hashes()
+        # Force a new random question (not the daily one, which would be the same)
+        self.daily_q = self.question_selector.get_random_question(
+            exclude_hashes=used_hashes
+        )
         if self.daily_q:
             # Invalidate the old question by logging the new one for today.
             # The DB schema ensures only one question per day, so this will either

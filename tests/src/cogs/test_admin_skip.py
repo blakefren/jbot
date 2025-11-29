@@ -23,7 +23,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         await admin_cog.skip.callback(admin_cog, mock_ctx)
 
         # Assert
-        mock_ctx.defer.assert_called_once_with(ephemeral=True)
+        mock_ctx.defer.assert_called_once_with()
         mock_bot.game.reset_daily_question.assert_called_once()
         mock_ctx.send.assert_called_once_with(
             "The daily question has been skipped. The new question is:\nFormatted Question"
@@ -44,7 +44,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         await admin_cog.skip.callback(admin_cog, mock_ctx)
 
         # Assert
-        mock_ctx.defer.assert_called_once_with(ephemeral=True)
+        mock_ctx.defer.assert_called_once_with()
         mock_bot.game.reset_daily_question.assert_not_called()
         mock_ctx.send.assert_called_once_with("There is no active question to skip.")
 
@@ -64,7 +64,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         await admin_cog.skip.callback(admin_cog, mock_ctx)
 
         # Assert
-        mock_ctx.defer.assert_called_once_with(ephemeral=True)
+        mock_ctx.defer.assert_called_once_with()
         mock_bot.game.reset_daily_question.assert_called_once()
         mock_ctx.send.assert_called_once_with(
             "Failed to skip the daily question. Check the logs."

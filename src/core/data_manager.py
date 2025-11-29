@@ -282,9 +282,10 @@ class DataManager:
     def get_todays_daily_question(self) -> Optional[tuple[Question, int]]:
         """
         Retrieves today's daily question as a Question object and its ID.
+        If multiple questions exist for today (e.g., from skip), returns the newest.
         """
         today = date.today()
-        query = "SELECT id, question_id FROM daily_questions WHERE sent_at = ?"
+        query = "SELECT id, question_id FROM daily_questions WHERE sent_at = ? ORDER BY id DESC LIMIT 1"
         daily_question_info = self.db.execute_query(query, (today,))
 
         if not daily_question_info:
@@ -299,6 +300,23 @@ class DataManager:
             return None
 
         return question, daily_question_id
+
+    def get_used_question_hashes(self) -> set[str]:
+        """
+        Retrieves all question hashes that have been used as daily questions.
+
+        Returns:
+            set[str]: A set of question hashes that have been previously used.
+        """
+        query = """
+            SELECT DISTINCT q.question_hash
+            FROM daily_questions dq
+            JOIN questions q ON dq.question_id = q.id
+        """
+        results = self.db.execute_query(query)
+        if not results:
+            return set()
+        return {row["question_hash"] for row in results}
 
     def assign_role_to_player(self, player_id: str, role_name: str):
         """

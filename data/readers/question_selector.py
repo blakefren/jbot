@@ -134,12 +134,31 @@ class QuestionSelector:
                 f"Question selection mode '{self.mode}' is not yet implemented."
             )
 
-    # TODO: limit to previous questions?
-    def get_random_question(self) -> Question:
+    def get_random_question(self, exclude_hashes: set[str] = None) -> Question:
         """
-        Returns a random question from the list.
+        Returns a random question from the list, optionally excluding previously used questions.
+
+        Args:
+            exclude_hashes: Set of question hashes (as strings) to exclude from selection.
+
+        Returns:
+            A randomly selected Question, or None if no questions are available.
         """
         if not self.questions:
             return None
-        index = randint(0, len(self.questions) - 1)
-        return self.questions[index]
+
+        # Filter out excluded questions if provided
+        if exclude_hashes:
+            available_questions = [
+                q for q in self.questions if str(q.id) not in exclude_hashes
+            ]
+            if not available_questions:
+                logging.warning(
+                    "All questions have been used. Selecting from full pool."
+                )
+                available_questions = self.questions
+        else:
+            available_questions = self.questions
+
+        index = randint(0, len(available_questions) - 1)
+        return available_questions[index]

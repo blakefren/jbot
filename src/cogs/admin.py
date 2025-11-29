@@ -136,7 +136,7 @@ class Admin(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def skip(self, ctx: commands.Context):
         """(admin) Skips the current daily question."""
-        await ctx.defer(ephemeral=True)
+        await ctx.defer()
 
         if not self.bot.game.daily_q:
             await ctx.send("There is no active question to skip.")

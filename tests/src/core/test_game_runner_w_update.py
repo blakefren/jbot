@@ -59,7 +59,8 @@ class TestGameRunnerResetQuestion(unittest.TestCase):
         self.game_runner.daily_q = initial_question
         self.game_runner.daily_question_id = 1
 
-        self.mock_question_selector.get_question_for_today.return_value = new_question
+        self.mock_data_manager.get_used_question_hashes.return_value = {"old_hash"}
+        self.mock_question_selector.get_random_question.return_value = new_question
         self.mock_data_manager.log_daily_question.return_value = 2
 
         # Act
@@ -67,7 +68,10 @@ class TestGameRunnerResetQuestion(unittest.TestCase):
 
         # Assert
         self.assertTrue(result)
-        self.mock_question_selector.get_question_for_today.assert_called_once()
+        self.mock_data_manager.get_used_question_hashes.assert_called_once()
+        self.mock_question_selector.get_random_question.assert_called_once_with(
+            exclude_hashes={"old_hash"}
+        )
         self.mock_data_manager.log_daily_question.assert_called_once_with(
             new_question, force_new=True
         )
@@ -81,7 +85,8 @@ class TestGameRunnerResetQuestion(unittest.TestCase):
         self.game_runner.daily_q = initial_question
         self.game_runner.daily_question_id = 1
 
-        self.mock_question_selector.get_question_for_today.return_value = new_question
+        self.mock_data_manager.get_used_question_hashes.return_value = set()
+        self.mock_question_selector.get_random_question.return_value = new_question
         self.mock_data_manager.log_daily_question.return_value = None
 
         # Act
