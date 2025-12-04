@@ -21,7 +21,7 @@ class TestQuestionSelector(unittest.TestCase):
 
     def test_init_with_gemini(self):
         selector = QuestionSelector(
-            self.questions, mode="daily", gemini_manager=self.mock_gemini_manager
+            self.questions, gemini_manager=self.mock_gemini_manager
         )
         self.assertEqual(selector.gemini_manager, self.mock_gemini_manager)
 
@@ -146,27 +146,9 @@ class TestQuestionSelector(unittest.TestCase):
         )
 
     def test_init(self):
-        selector = QuestionSelector(self.questions, mode="daily")
+        selector = QuestionSelector(self.questions)
         self.assertEqual(selector.questions, self.questions)
-        self.assertEqual(selector.mode, "daily")
-
-    @patch("data.readers.question_selector.datetime")
-    def test_get_question_for_today_daily_mode(self, mock_datetime):
-        # Mock the current time
-        mock_now = datetime.datetime(2023, 10, 27, 12, 0, 0, tzinfo=TIMEZONE)
-        mock_datetime.datetime.now.return_value = mock_now
-
-        selector = QuestionSelector(self.questions, mode="daily")
-        question = selector.get_question_for_today()
-
-        # The index should be predictable based on the date's ordinal
-        expected_index = mock_now.date().toordinal() % len(self.questions)
-        self.assertEqual(question, self.questions[expected_index])
-
-    def test_get_question_for_today_unimplemented_mode(self):
-        selector = QuestionSelector(self.questions, mode="themed")
-        with self.assertRaises(NotImplementedError):
-            selector.get_question_for_today()
+        self.assertFalse(hasattr(selector, "mode"))
 
     @patch("data.readers.question_selector.randint")
     def test_get_random_question(self, mock_randint):
@@ -180,26 +162,12 @@ class TestQuestionSelector(unittest.TestCase):
         question = selector.get_random_question()
         self.assertIsNone(question)
 
-    def test_get_question_for_today_no_questions(self):
-        selector = QuestionSelector([], mode="daily")
-        with self.assertRaises(ValueError):
-            selector.get_question_for_today()
-
     def test_init_no_questions_warning(self):
         with patch("logging.warning") as mock_logging:
             QuestionSelector([])
             mock_logging.assert_called_with(
                 "QuestionSelector initialized with no questions."
             )
-
-    @patch("data.readers.question_selector.randint")
-    def test_get_question_for_today_random_mode(self, mock_randint):
-        """Test get_question_for_today with 'random' mode."""
-        mock_randint.return_value = 2  # Mock the random index
-        selector = QuestionSelector(self.questions, mode="random")
-        question = selector.get_question_for_today()
-        self.assertEqual(question, self.questions[2])
-        mock_randint.assert_called_once_with(0, 2)
 
     @patch("data.readers.question_selector.randint")
     def test_get_random_question_with_exclude_hashes(self, mock_randint):
@@ -281,31 +249,6 @@ class TestQuestionSelector(unittest.TestCase):
         result = selector.validate_question(self.questions[0])
 
         self.assertTrue(result)  # Fail open
-
-    @patch("data.readers.question_selector.datetime")
-    def test_get_question_for_today_retries_invalid(self, mock_datetime):
-        # Mock current time
-        mock_now = datetime.datetime(2023, 10, 27, 12, 0, 0, tzinfo=TIMEZONE)
-        mock_datetime.datetime.now.return_value = mock_now
-
-        # Setup selector with mocked validate_question
-        selector = QuestionSelector(
-            self.questions, mode="daily", gemini_manager=self.mock_gemini_manager
-        )
-
-        # Mock validate_question to fail for the first question and succeed for the second
-        with patch.object(
-            selector, "validate_question", side_effect=[False, True]
-        ) as mock_validate:
-            question = selector.get_question_for_today()
-
-            # Should return the second question in the sequence
-            # The first one (index based on date) was rejected
-            # The second one (index + 1) was accepted
-            # We don't strictly know which question object corresponds to which index without calculation,
-            # but we know validate_question was called twice.
-            self.assertEqual(mock_validate.call_count, 2)
-            self.assertIsNotNone(question)
 
     @patch("data.readers.question_selector.randint")
     def test_get_random_question_retries_invalid(self, mock_randint):

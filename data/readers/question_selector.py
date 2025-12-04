@@ -24,11 +24,9 @@ class QuestionSelector:
     def __init__(
         self,
         questions: list[Question],
-        mode: str = "daily",
         gemini_manager: Optional[GeminiManager] = None,
     ):
         self.questions = questions
-        self.mode = mode
         self.gemini_manager = gemini_manager
         if not questions:
             logging.warning("QuestionSelector initialized with no questions.")
@@ -154,40 +152,6 @@ class QuestionSelector:
 
         return True
 
-    # TODO: prevent repeated questions.
-    def get_question_for_today(self) -> Question:
-        """
-        Selects a question based on the current mode and date.
-        """
-        logging.debug(f"QuestionSelector.get_question_for_today")
-        if not self.questions:
-            raise ValueError("No questions available to select from.")
-
-        if self.mode == "daily":
-            # Use the date's ordinal number for a predictable daily question
-            today = datetime.datetime.now(TIMEZONE).date()
-            base_index = today.toordinal()
-
-            # Try up to 5 times to find a valid question
-            for i in range(5):
-                index = (base_index + i) % len(self.questions)
-                question = self.questions[index]
-                if self.validate_question(question):
-                    return question
-
-            logging.warning(
-                "Could not find a valid question after 5 attempts. Returning the default."
-            )
-            return self.questions[base_index % len(self.questions)]
-
-        elif self.mode == "random":
-            return self.get_random_question()
-        else:
-            # TODO: Implement other modes like "themed", "random_without_repeat"
-            raise NotImplementedError(
-                f"Question selection mode '{self.mode}' is not yet implemented."
-            )
-
     def get_random_question(self, exclude_hashes: set[str] = None) -> Question:
         """
         Returns a random question from the list, optionally excluding previously used questions.
@@ -198,6 +162,7 @@ class QuestionSelector:
         Returns:
             A randomly selected Question, or None if no questions are available.
         """
+        logging.debug(f"QuestionSelector.get_random_question")
         if not self.questions:
             return None
 

@@ -100,7 +100,10 @@ class GameRunner:
             return
 
         # Otherwise, select a new question
-        self.daily_q = self.question_selector.get_question_for_today()
+        used_hashes = self.data_manager.get_used_question_hashes()
+        self.daily_q = self.question_selector.get_random_question(
+            exclude_hashes=used_hashes
+        )
         if self.daily_q:
             # If the question has no hint, try to generate one.
             if not self.daily_q.hint:

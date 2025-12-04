@@ -438,7 +438,6 @@ async def discord_bot_async(
 
     question_selector = QuestionSelector(
         questions,
-        mode=config.get("JBOT_QUESTION_MODE"),
         gemini_manager=gemini_manager,
     )
     game = GameRunner(question_selector, data_manager)

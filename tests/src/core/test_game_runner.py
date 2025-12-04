@@ -66,7 +66,7 @@ class TestGameRunner(unittest.TestCase):
             clue_value=100,
         )
         self.mock_question.id = "q1"
-        self.mock_question_selector.get_question_for_today.return_value = (
+        self.mock_question_selector.get_random_question.return_value = (
             self.mock_question
         )
         self.mock_question_selector.questions = {"qid1": self.mock_question}
@@ -93,7 +93,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.get_todays_daily_question.return_value = None
         self.game_runner.daily_q = None
         self.game_runner.set_daily_question()
-        self.mock_question_selector.get_question_for_today.assert_called_once()
+        self.mock_question_selector.get_random_question.assert_called_once()
         self.assertEqual(self.game_runner.daily_q, self.mock_question)
 
     def test_set_daily_question_on_restart(self):
@@ -110,7 +110,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.get_todays_daily_question.assert_called_once()
 
         # Ensure we didn't try to select a new question
-        self.mock_question_selector.get_question_for_today.assert_not_called()
+        self.mock_question_selector.get_random_question.assert_not_called()
 
         # Verify the daily question is correctly set
         self.assertEqual(self.game_runner.daily_q, self.mock_question)
@@ -583,7 +583,7 @@ class TestGameRunner(unittest.TestCase):
         )
         self.assertIsNone(question_without_hint.hint)
 
-        self.mock_question_selector.get_question_for_today.return_value = (
+        self.mock_question_selector.get_random_question.return_value = (
             question_without_hint
         )
         self.mock_question_selector.get_hint_from_gemini.return_value = "Generated Hint"
@@ -607,7 +607,7 @@ class TestGameRunner(unittest.TestCase):
         question_without_hint = Question(
             question="Test Q", answer="Test A", category="Test C"
         )
-        self.mock_question_selector.get_question_for_today.return_value = (
+        self.mock_question_selector.get_random_question.return_value = (
             question_without_hint
         )
         # Simulate Gemini failure
@@ -628,7 +628,7 @@ class TestGameRunner(unittest.TestCase):
         question_with_hint = Question(
             question="Test Q", answer="Test A", category="Test C", hint="Existing Hint"
         )
-        self.mock_question_selector.get_question_for_today.return_value = (
+        self.mock_question_selector.get_random_question.return_value = (
             question_with_hint
         )
 
@@ -711,9 +711,7 @@ class TestGameRunner(unittest.TestCase):
         """Test hint generation handles exceptions gracefully."""
         self.mock_data_manager.get_todays_daily_question.return_value = None
         question_no_hint = Question(question="Q", answer="A", category="C")
-        self.mock_question_selector.get_question_for_today.return_value = (
-            question_no_hint
-        )
+        self.mock_question_selector.get_random_question.return_value = question_no_hint
         self.mock_question_selector.get_hint_from_gemini.side_effect = Exception(
             "API Error"
         )
@@ -727,7 +725,7 @@ class TestGameRunner(unittest.TestCase):
     def test_set_daily_question_fallback_on_log_none(self):
         """Test that set_daily_question falls back to get_todays_daily_question when log returns None."""
         question_with_hint = Question(question="Q", answer="A", category="C", hint="H")
-        self.mock_question_selector.get_question_for_today.return_value = (
+        self.mock_question_selector.get_random_question.return_value = (
             question_with_hint
         )
         # First call returns None (no existing question), second returns existing after log
@@ -918,7 +916,7 @@ class DummyQuestionSelectorPowerup:
     def __init__(self):
         self.questions = []
 
-    def get_question_for_today(self):
+    def get_random_question(self, exclude_hashes=None):
         q = MagicMock()
         q.id = "q1"
         q.answer = "test"
@@ -929,7 +927,7 @@ def test_handle_guess_powerup_correct():
     data_manager = DummyDataManagerPowerup()
     selector = DummyQuestionSelectorPowerup()
     game = GameRunner(selector, data_manager)
-    game.daily_q = selector.get_question_for_today()
+    game.daily_q = selector.get_random_question()
     game.daily_question_id = 1
     called = {}
 
@@ -952,7 +950,7 @@ def test_handle_guess_powerup_incorrect():
     data_manager = DummyDataManagerPowerup()
     selector = DummyQuestionSelectorPowerup()
     game = GameRunner(selector, data_manager)
-    game.daily_q = selector.get_question_for_today()
+    game.daily_q = selector.get_random_question()
     game.daily_question_id = 1
     called = {}
 
@@ -975,7 +973,7 @@ def test_handle_guess_non_powerup():
     data_manager = DummyDataManagerPowerup()
     selector = DummyQuestionSelectorPowerup()
     game = GameRunner(selector, data_manager)
-    game.daily_q = selector.get_question_for_today()
+    game.daily_q = selector.get_random_question()
     game.daily_question_id = 1
     result, num_guesses = game.handle_guess(1, "Player1", "test")
     assert result is True
