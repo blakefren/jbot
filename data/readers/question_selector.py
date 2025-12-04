@@ -118,6 +118,42 @@ class QuestionSelector:
             )
             return None
 
+    def validate_question(self, question: Question) -> bool:
+        """
+        Uses Gemini to check if a question is valid (e.g. not broken or malformed).
+        Returns True if valid, False if invalid.
+        """
+        if not self.gemini_manager:
+            return True  # Assume valid if no LLM
+
+        try:
+            prompt_path = os.path.join(
+                _PROJECT_ROOT, "prompts", "validate_question.txt"
+            )
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                prompt_template = f.read()
+        except FileNotFoundError:
+            logging.error("Validate question prompt file not found.")
+            return True
+
+        prompt = prompt_template.replace("[Insert Question Here]", question.question)
+        prompt = prompt.replace("[Insert Answer Here]", question.answer)
+
+        response = self.gemini_manager.generate_content(prompt)
+        if not response:
+            return True  # Fail open
+
+        cleaned_response = response.strip().upper()
+        # The prompt asks: "Is this question broken or invalid? Respond with only YES..."
+        # So YES means it IS broken/invalid.
+        if "YES" in cleaned_response:
+            logging.info(
+                f"Skipping broken question (detected by LLM): {question.question}"
+            )
+            return False
+
+        return True
+
     # TODO: prevent repeated questions.
     def get_question_for_today(self) -> Question:
         """
@@ -130,8 +166,20 @@ class QuestionSelector:
         if self.mode == "daily":
             # Use the date's ordinal number for a predictable daily question
             today = datetime.datetime.now(TIMEZONE).date()
-            index = today.toordinal() % len(self.questions)
-            return self.questions[index]
+            base_index = today.toordinal()
+
+            # Try up to 5 times to find a valid question
+            for i in range(5):
+                index = (base_index + i) % len(self.questions)
+                question = self.questions[index]
+                if self.validate_question(question):
+                    return question
+
+            logging.warning(
+                "Could not find a valid question after 5 attempts. Returning the default."
+            )
+            return self.questions[base_index % len(self.questions)]
+
         elif self.mode == "random":
             return self.get_random_question()
         else:
@@ -166,5 +214,13 @@ class QuestionSelector:
         else:
             available_questions = self.questions
 
+        # Try up to 5 times to find a valid question
+        for _ in range(5):
+            index = randint(0, len(available_questions) - 1)
+            question = available_questions[index]
+            if self.validate_question(question):
+                return question
+
+        logging.warning("Could not find a valid random question after 5 attempts.")
         index = randint(0, len(available_questions) - 1)
         return available_questions[index]

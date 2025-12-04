@@ -242,6 +242,88 @@ class TestQuestionSelector(unittest.TestCase):
         question = selector.get_random_question(exclude_hashes=set())
         self.assertEqual(question, self.questions[0])
 
+    @patch("builtins.open", new_callable=mock_open, read_data="prompt")
+    def test_validate_question_valid(self, mock_file):
+        self.mock_gemini_manager.generate_content.return_value = "NO"
+        selector = QuestionSelector(
+            self.questions, gemini_manager=self.mock_gemini_manager
+        )
+
+        result = selector.validate_question(self.questions[0])
+
+        self.assertTrue(result)
+        self.mock_gemini_manager.generate_content.assert_called_once()
+
+    @patch("builtins.open", new_callable=mock_open, read_data="prompt")
+    def test_validate_question_invalid(self, mock_file):
+        self.mock_gemini_manager.generate_content.return_value = "YES"
+        selector = QuestionSelector(
+            self.questions, gemini_manager=self.mock_gemini_manager
+        )
+
+        result = selector.validate_question(self.questions[0])
+
+        self.assertFalse(result)
+        self.mock_gemini_manager.generate_content.assert_called_once()
+
+    def test_validate_question_no_manager(self):
+        selector = QuestionSelector(self.questions)  # No manager
+        result = selector.validate_question(self.questions[0])
+        self.assertTrue(result)
+
+    @patch("builtins.open", new_callable=mock_open, read_data="prompt")
+    def test_validate_question_api_failure(self, mock_file):
+        self.mock_gemini_manager.generate_content.return_value = None
+        selector = QuestionSelector(
+            self.questions, gemini_manager=self.mock_gemini_manager
+        )
+
+        result = selector.validate_question(self.questions[0])
+
+        self.assertTrue(result)  # Fail open
+
+    @patch("data.readers.question_selector.datetime")
+    def test_get_question_for_today_retries_invalid(self, mock_datetime):
+        # Mock current time
+        mock_now = datetime.datetime(2023, 10, 27, 12, 0, 0, tzinfo=TIMEZONE)
+        mock_datetime.datetime.now.return_value = mock_now
+
+        # Setup selector with mocked validate_question
+        selector = QuestionSelector(
+            self.questions, mode="daily", gemini_manager=self.mock_gemini_manager
+        )
+
+        # Mock validate_question to fail for the first question and succeed for the second
+        with patch.object(
+            selector, "validate_question", side_effect=[False, True]
+        ) as mock_validate:
+            question = selector.get_question_for_today()
+
+            # Should return the second question in the sequence
+            # The first one (index based on date) was rejected
+            # The second one (index + 1) was accepted
+            # We don't strictly know which question object corresponds to which index without calculation,
+            # but we know validate_question was called twice.
+            self.assertEqual(mock_validate.call_count, 2)
+            self.assertIsNotNone(question)
+
+    @patch("data.readers.question_selector.randint")
+    def test_get_random_question_retries_invalid(self, mock_randint):
+        selector = QuestionSelector(
+            self.questions, gemini_manager=self.mock_gemini_manager
+        )
+
+        # Mock randint to return 0 then 1
+        mock_randint.side_effect = [0, 1]
+
+        with patch.object(
+            selector, "validate_question", side_effect=[False, True]
+        ) as mock_validate:
+            question = selector.get_random_question()
+
+            self.assertEqual(question, self.questions[1])
+            self.assertEqual(mock_validate.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
