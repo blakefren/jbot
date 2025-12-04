@@ -1,5 +1,6 @@
 import sqlite3
 import argparse
+import os
 import re
 
 
@@ -53,10 +54,14 @@ def main():
         description="Verify the database schema against a schema.sql file."
     )
     parser.add_argument(
-        "--db_path", default="db/jbot.db", help="Path to the SQLite database file."
+        "--db_path",
+        default=os.path.join(os.path.dirname(__file__), "jbot.db"),
+        help="Path to the SQLite database file.",
     )
     parser.add_argument(
-        "--sql_path", default="db/schema.sql", help="Path to the schema.sql file."
+        "--sql_path",
+        default=os.path.join(os.path.dirname(__file__), "schema.sql"),
+        help="Path to the schema.sql file.",
     )
     args = parser.parse_args()
 

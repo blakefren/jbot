@@ -5,7 +5,11 @@ from typing import Optional
 from data.readers.question import Question
 from zoneinfo import ZoneInfo
 import logging
+import os
 from src.core.gemini_manager import GeminiManager
+
+# Project root for file paths
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # TODO: This should be handled more centrally
 TIMEZONE = ZoneInfo("US/Pacific")
@@ -37,7 +41,8 @@ class QuestionSelector:
             raise ValueError("Gemini manager is not configured.")
 
         try:
-            with open("prompts/riddle.txt", "r", encoding="utf-8") as f:
+            riddle_prompt_path = os.path.join(_PROJECT_ROOT, "prompts", "riddle.txt")
+            with open(riddle_prompt_path, "r", encoding="utf-8") as f:
                 prompt = f.read()
         except FileNotFoundError:
             logging.error("Riddle prompt file not found.")
@@ -85,7 +90,8 @@ class QuestionSelector:
             raise ValueError("Gemini manager is not configured.")
 
         try:
-            with open("prompts/hint.txt", "r", encoding="utf-8") as f:
+            hint_prompt_path = os.path.join(_PROJECT_ROOT, "prompts", "hint.txt")
+            with open(hint_prompt_path, "r", encoding="utf-8") as f:
                 prompt = f.read()
         except FileNotFoundError:
             logging.error("Hint prompt file not found.")

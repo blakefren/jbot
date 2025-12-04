@@ -4,6 +4,10 @@ from db.database import Database
 from data.readers.question import Question
 from src.core.player import Player
 from src.core.subscriber import Subscriber
+import os
+
+# Project root for file paths
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
 class DataManager:
@@ -21,7 +25,8 @@ class DataManager:
         """
         Initializes the database by creating tables from the schema.
         """
-        with open("db/schema.sql", "r") as f:
+        schema_path = os.path.join(_PROJECT_ROOT, "db", "schema.sql")
+        with open(schema_path, "r") as f:
             schema = f.read()
         self.db.execute_script(schema)
 

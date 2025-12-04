@@ -93,7 +93,7 @@ class DiscordBot(commands.Bot):
     async def setup_hook(self):
         """This is called when the bot is setting up."""
         logging.info("setup_hook: loading cogs")
-        for filename in os.listdir(os.path.join("src", "cogs")):
+        for filename in os.listdir(os.path.join(project_root, "src", "cogs")):
             if filename.endswith(".py") and not filename.startswith("__"):
                 try:
                     await self.load_extension(f"cogs.{filename[:-3]}")
@@ -118,9 +118,10 @@ class DiscordBot(commands.Bot):
         Event handler that runs when the bot successfully connects to Discord.
         This is where scheduled tasks are started.
         """
-        if os.path.exists("restart.inf"):
+        restart_file = os.path.join(project_root, "restart.inf")
+        if os.path.exists(restart_file):
             try:
-                with open("restart.inf", "r") as f:
+                with open(restart_file, "r") as f:
                     data = f.read()
                 if data:
                     channel_id, author_id = data.split(",")
@@ -132,7 +133,7 @@ class DiscordBot(commands.Bot):
             except Exception as e:
                 logging.error(f"Error processing restart info: {e}")
             finally:
-                os.remove("restart.inf")
+                os.remove(restart_file)
 
         if not self.ready_event_fired:
             logging.info(f"Logged in as {self.user} (ID: {self.user.id})")
