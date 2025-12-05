@@ -298,15 +298,9 @@ class TestGuessHandler(unittest.TestCase):
         self.assertTrue(self.guess_handler._is_correct_guess("150", "150"))
 
         # Close numbers should fail (Levenshtein distance is small, but strictness rejects it)
-        self.assertFalse(
-            self.guess_handler._is_correct_guess("250", "150")
-        )  # dist 1
-        self.assertFalse(
-            self.guess_handler._is_correct_guess("151", "150")
-        )  # dist 1
-        self.assertFalse(
-            self.guess_handler._is_correct_guess("15", "150")
-        )  # dist 1
+        self.assertFalse(self.guess_handler._is_correct_guess("250", "150"))  # dist 1
+        self.assertFalse(self.guess_handler._is_correct_guess("151", "150"))  # dist 1
+        self.assertFalse(self.guess_handler._is_correct_guess("15", "150"))  # dist 1
 
         # Normalization should still apply
         self.assertTrue(self.guess_handler._is_correct_guess("one", "1"))
