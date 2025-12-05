@@ -81,6 +81,10 @@ class GuessHandler:
         if norm_g == norm_a:
             return True
 
+        # If the answer is numeric, require exact match
+        if norm_a.isdigit():
+            return False
+
         # Dynamic distance limit based on answer length to avoid overly lenient
         # matching on short words while still permitting minor typos on longer ones.
         def _distance_limit(ans_len: int) -> int:
