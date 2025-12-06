@@ -42,8 +42,8 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx.author.display_name = "Test User"
         mock_ctx.author.mention = "<@123>"
 
-        # Mock the return value of handle_guess to be (is_correct, num_guesses)
-        self.mock_game_runner.handle_guess.return_value = (True, 1)
+        # Mock the return value of handle_guess to be (is_correct, num_guesses, points, bonuses)
+        self.mock_game_runner.handle_guess.return_value = (True, 1, 100, [])
         self.mock_game_runner.daily_q = MagicMock()
         self.mock_game_runner.daily_question_id = 1
         self.mock_data_manager.read_guess_history.return_value = [
@@ -63,7 +63,8 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
             "That is correct! Nicely done.\n\nYour guesses:\n1. test answer"
         )
         mock_ctx.channel.send.assert_called_once_with(
-            f"{mock_ctx.author.mention} got the correct answer in 1 guess(es)!"
+            f"{mock_ctx.author.mention} got the correct answer in 1 guess(es)!\n"
+            f"They earned **100** points!"
         )
 
     async def test_answer_command_incorrect(self):
@@ -73,7 +74,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx.author.id = 123
         mock_ctx.author.display_name = "Test User"
 
-        self.mock_game_runner.handle_guess.return_value = (False, 2)
+        self.mock_game_runner.handle_guess.return_value = (False, 2, 0, [])
         self.mock_game_runner.daily_q = MagicMock()
         self.mock_game_runner.daily_question_id = 1
         self.mock_data_manager.read_guess_history.return_value = [
@@ -282,7 +283,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx.author.id = 123
         mock_ctx.author.display_name = "Test User"
 
-        self.mock_game_runner.handle_guess.return_value = (True, 1)
+        self.mock_game_runner.handle_guess.return_value = (True, 1, 100, [])
         self.mock_game_runner.daily_q = MagicMock()
         self.mock_game_runner.daily_question_id = None  # No daily_question_id
 
@@ -322,7 +323,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx.author.id = 123
         mock_ctx.author.display_name = "Test User"
 
-        self.mock_game_runner.handle_guess.return_value = (False, 3)
+        self.mock_game_runner.handle_guess.return_value = (False, 3, 0, [])
         self.mock_game_runner.daily_q = MagicMock()
         self.mock_game_runner.daily_question_id = 1
         # Return duplicate guesses that should be deduplicated
@@ -352,7 +353,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx.author.id = 123
         mock_ctx.author.display_name = "Test User"
 
-        self.mock_game_runner.handle_guess.return_value = (False, 1)
+        self.mock_game_runner.handle_guess.return_value = (False, 1, 0, [])
         self.mock_game_runner.daily_q = MagicMock()
         self.mock_game_runner.daily_question_id = 2  # Current question ID
         # Return guesses from multiple questions

@@ -144,7 +144,7 @@ class GameRunner:
 
     def handle_guess(
         self, player_id: int, player_name: str, guess: str
-    ) -> tuple[bool, int]:
+    ) -> tuple[bool, int, int, list[str]]:
         """
         Handles the answer submitted by a player by delegating to GuessHandler.
 
@@ -154,18 +154,20 @@ class GameRunner:
             guess (str): The player's guess.
 
         Returns:
-            tuple[bool, int]: A tuple containing:
-                - bool: True if the guess was correct, False otherwise.
-                - int: The number of guesses the player has made for this question.
+            tuple: (is_correct, num_guesses, points_earned, bonus_messages)
 
         Raises:
             AlreadyAnsweredCorrectlyError: If the player has already answered correctly.
         """
         if not self.daily_q:
-            return False, 0  # No active question
+            return False, 0, 0, []  # No active question
 
         guess_handler = GuessHandler(
-            self.data_manager, self.daily_q, self.daily_question_id, self.managers
+            self.data_manager,
+            self.player_manager,
+            self.daily_q,
+            self.daily_question_id,
+            self.managers,
         )
         return guess_handler.handle_guess(player_id, player_name, guess)
 
@@ -429,47 +431,6 @@ class GameRunner:
                     )
 
         logging.info("Player streaks updated and saved.")
-
-    def update_scores(self):
-        """
-        Finalizes and saves player scores for the day.
-        """
-        if not self.daily_question_id:
-            logging.warning("No daily question ID set, cannot update scores.")
-            return
-
-        # Get all correct guesses for the daily question
-        all_guesses = self.data_manager.read_guess_history()
-        correct_guesses = [
-            g
-            for g in all_guesses
-            if g.get("daily_question_id") == self.daily_question_id
-            and g.get("is_correct")
-        ]
-
-        # Get unique players who answered correctly
-        players_answered_correctly = {
-            g["player_id"]: g.get("player_name", "Unknown") for g in correct_guesses
-        }
-
-        for player_id, player_name in players_answered_correctly.items():
-            self.player_manager.get_or_create_player(str(player_id), player_name)
-            try:
-                self.player_manager.update_score(
-                    str(player_id), self.daily_q.clue_value
-                )
-                self.player_manager.increment_streak(str(player_id), player_name)
-            except Exception:
-                self.player_manager.update_score(str(player_id), 100)
-
-        logging.info("Player scores updated and saved.")
-
-    # TODO: Implement score adjustment logic from admin cog
-    def adjust_score(self, player_id: int, amount: int, reason: str):
-        """
-        Adjusts a player's score by a given amount.
-        """
-        pass
 
     # TODO: Implement powerup logic from powerup manager
     def reinforce(self, player1_id: str, player2_id: str):

@@ -546,3 +546,11 @@ class DataManager:
             query,
             (daily_question_id, hint_timestamp, daily_question_id, hint_timestamp),
         )
+
+    def get_correct_guess_count(self, daily_question_id: int) -> int:
+        """
+        Returns the number of correct guesses for a specific daily question.
+        """
+        query = "SELECT COUNT(*) as count FROM guesses WHERE daily_question_id = ? AND is_correct = 1"
+        result = self.db.execute_query(query, (daily_question_id,))
+        return result[0]["count"] if result else 0

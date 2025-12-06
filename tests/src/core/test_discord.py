@@ -106,7 +106,7 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
     async def test_evening_message_task_success(self):
         """Verify the evening task runs all steps successfully."""
         await self.evening_task_coro(self.bot, silent=False)
-        self.bot.game.update_scores.assert_called_once()
+        self.bot.game.update_streaks.assert_called_once()
         self.bot.get_cog.assert_called_with("RolesCog")
         self.roles_cog.roles_game_mode.run.assert_called_once()
         self.roles_cog.apply_discord_roles.assert_awaited_once_with(self.bot.guilds[0])
@@ -115,19 +115,14 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
 
     async def test_evening_message_task_update_scores_fails(self):
         """Verify task stops if updating scores fails."""
-        self.bot.game.update_scores.side_effect = Exception("Scoring error")
-        await self.evening_task_coro(self.bot, silent=False)
-        self.bot.game.update_scores.assert_called_once()
-        self.bot._log_task_error.assert_called_once()
-        # Other steps should not be called
-        self.bot.get_cog.assert_not_called()
-        self.bot._send_daily_message_to_all_subscribers.assert_not_awaited()
+        # This test is no longer relevant as update_scores is removed
+        pass
 
     async def test_evening_message_task_update_roles_fails(self):
         """Verify task continues if updating roles fails."""
         self.roles_cog.roles_game_mode.run.side_effect = Exception("Role DB error")
         await self.evening_task_coro(self.bot, silent=False)
-        self.bot.game.update_scores.assert_called_once()
+        self.bot.game.update_streaks.assert_called_once()
         self.bot.get_cog.assert_called_with("RolesCog")
         self.roles_cog.roles_game_mode.run.assert_called_once()
         self.bot._log_task_error.assert_called_once()
@@ -140,7 +135,7 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
             "Final message error"
         )
         await self.evening_task_coro(self.bot, silent=False)
-        self.bot.game.update_scores.assert_called_once()
+        self.bot.game.update_streaks.assert_called_once()
         self.bot.get_cog.assert_called_with("RolesCog")
         self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
         # The final error should be logged

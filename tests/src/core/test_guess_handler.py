@@ -17,6 +17,7 @@ class TestGuessHandler(unittest.TestCase):
 
         self.guess_handler = GuessHandler(
             self.data_manager,
+            self.player_manager,
             self.daily_question,
             self.daily_question_id,
             self.managers,
@@ -30,13 +31,14 @@ class TestGuessHandler(unittest.TestCase):
 
         # No direct Player methods should be required; manager handles streaks
         self.player_manager.get_player.return_value = None
+        self.data_manager.get_correct_guess_count.return_value = 1  # Not first
 
         # Mock so that get_player_guesses returns the guess we are making
         self.data_manager.read_guess_history.return_value = [
             {"daily_question_id": self.daily_question_id, "guess_text": guess}
         ]
 
-        is_correct, num_guesses = self.guess_handler.handle_guess(
+        is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
             player_id, player_name, guess
         )
 
@@ -46,8 +48,8 @@ class TestGuessHandler(unittest.TestCase):
             player_id, player_name, self.daily_question_id, guess.lower(), True
         )
 
-        # Streak should NOT be incremented here (handled during evening update)
-        self.player_manager.increment_streak.assert_not_called()
+        # Streak should be incremented here
+        self.player_manager.increment_streak.assert_called_once()
 
         self.managers["test_manager"].on_guess.assert_called_once_with(
             player_id, player_name, guess, True
@@ -66,7 +68,7 @@ class TestGuessHandler(unittest.TestCase):
             {"daily_question_id": self.daily_question_id, "guess_text": guess}
         ]
 
-        is_correct, num_guesses = self.guess_handler.handle_guess(
+        is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
             player_id, player_name, guess
         )
 
@@ -174,6 +176,7 @@ class TestGuessHandler(unittest.TestCase):
         """Test get_player_guesses returns empty list when no daily_question_id."""
         handler = GuessHandler(
             self.data_manager,
+            self.player_manager,
             self.daily_question,
             daily_question_id=None,  # No daily question ID
             managers=self.managers,
@@ -185,6 +188,7 @@ class TestGuessHandler(unittest.TestCase):
         """Test has_answered_correctly_today returns False when no daily_question_id."""
         handler = GuessHandler(
             self.data_manager,
+            self.player_manager,
             self.daily_question,
             daily_question_id=None,  # No daily question ID
             managers=self.managers,
@@ -196,11 +200,14 @@ class TestGuessHandler(unittest.TestCase):
         """Test handle_guess returns False when there's no daily question."""
         handler = GuessHandler(
             self.data_manager,
+            self.player_manager,
             daily_question=None,  # No daily question
             daily_question_id=None,
             managers=self.managers,
         )
-        result, num_guesses = handler.handle_guess(123, "Player", "guess")
+        result, num_guesses, points, bonuses = handler.handle_guess(
+            123, "Player", "guess"
+        )
         self.assertFalse(result)
         self.assertEqual(num_guesses, 0)
 
@@ -218,8 +225,17 @@ class TestGuessHandler(unittest.TestCase):
 
         mock_manager.on_guess.side_effect = side_effect
 
+        # Create a local player manager mock
+        local_player_manager = MagicMock()
+        # Mock get_player to return a player with answer_streak
+        mock_player = MagicMock()
+        mock_player.answer_streak = 1
+        local_player_manager.get_player.return_value = mock_player
+        local_player_manager.increment_streak.return_value = 2
+
         handler = GuessHandler(
             self.data_manager,
+            local_player_manager,
             self.daily_question,
             self.daily_question_id,
             managers={"test": mock_manager},
@@ -228,7 +244,7 @@ class TestGuessHandler(unittest.TestCase):
         self.data_manager.read_guess_history.return_value = []
 
         with patch("src.core.guess_handler.logging") as mock_logging:
-            result, _ = handler.handle_guess(1, "Player", "Test Answer")
+            result, _, _, _ = handler.handle_guess(1, "Player", "Test Answer")
 
         # on_guess should have been called twice (initial + fallback)
         self.assertEqual(mock_manager.on_guess.call_count, 2)
@@ -238,8 +254,17 @@ class TestGuessHandler(unittest.TestCase):
         mock_manager = MagicMock()
         mock_manager.on_guess.side_effect = TypeError("Wrong signature")
 
+        # Create a local player manager mock
+        local_player_manager = MagicMock()
+        # Mock get_player to return a player with answer_streak
+        mock_player = MagicMock()
+        mock_player.answer_streak = 1
+        local_player_manager.get_player.return_value = mock_player
+        local_player_manager.increment_streak.return_value = 2
+
         handler = GuessHandler(
             self.data_manager,
+            local_player_manager,
             self.daily_question,
             self.daily_question_id,
             managers={"test": mock_manager},
@@ -248,7 +273,7 @@ class TestGuessHandler(unittest.TestCase):
         self.data_manager.read_guess_history.return_value = []
 
         with patch("src.core.guess_handler.logging"):
-            result, num_guesses = handler.handle_guess(1, "Player", "Test Answer")
+            result, num_guesses, _, _ = handler.handle_guess(1, "Player", "Test Answer")
 
         # Should not raise, just log error and continue
         self.assertTrue(result)  # Answer was still correct

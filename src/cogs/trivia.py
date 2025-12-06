@@ -84,9 +84,12 @@ class Trivia(commands.Cog):
         try:
             player_id = ctx.author.id
             player_name = ctx.author.display_name
-            is_correct, num_guesses = self.bot.game.handle_guess(
-                player_id, player_name, guess
-            )
+            (
+                is_correct,
+                num_guesses,
+                points_earned,
+                bonus_messages,
+            ) = self.bot.game.handle_guess(player_id, player_name, guess)
         except AlreadyAnsweredCorrectlyError:
             await ctx.interaction.followup.send(
                 "You have already answered today's question correctly."
@@ -121,13 +124,19 @@ class Trivia(commands.Cog):
 
         # Send a confirmation message
         if is_correct:
+            # Construct bonus string
+            bonus_str = ""
+            if bonus_messages:
+                bonus_str = "\n" + "\n".join(f"• {msg}" for msg in bonus_messages)
+
             # Send the private confirmation
             await ctx.interaction.followup.send(
-                f"That is correct! Nicely done.\n\nYour guesses:\n{guesses_text}"
+                f"That is correct! Nicely done.\n\n" f"Your guesses:\n{guesses_text}"
             )
             # Announce the correct answer publicly in the channel
             await ctx.channel.send(
-                f"{ctx.author.mention} got the correct answer in {num_guesses} guess(es)!"
+                f"{ctx.author.mention} got the correct answer in {num_guesses} guess(es)!\n"
+                f"They earned **{points_earned}** points!{bonus_str}"
             )
         else:
             # Send the private confirmation for an incorrect answer

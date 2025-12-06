@@ -5,6 +5,11 @@ from src.core.data_manager import DataManager
 from data.readers.question import Question
 
 
+from src.cfg.main import ConfigReader
+
+config = ConfigReader()
+
+
 class AlreadyAnsweredCorrectlyError(Exception):
     """Raised when a player tries to answer a question they have already answered correctly."""
 
@@ -19,16 +24,19 @@ class GuessHandler:
     def __init__(
         self,
         data_manager: DataManager,
+        player_manager,
         daily_question: Question,
         daily_question_id: int,
         managers: dict,
         fuzzy_threshold=2,
     ):
         self.data_manager = data_manager
+        self.player_manager = player_manager
         self.daily_q = daily_question
         self.daily_question_id = daily_question_id
         self.managers = managers
         self.fuzzy_threshold = fuzzy_threshold
+        self.config = ConfigReader()
 
     def _normalize(self, text: str) -> str:
         """
@@ -144,7 +152,7 @@ class GuessHandler:
 
     def handle_guess(
         self, player_id: int, player_name: str, guess: str
-    ) -> tuple[bool, int]:
+    ) -> tuple[bool, int, int, list[str]]:
         """
         Handles the answer submitted by a player, logs it, and returns correctness.
 
@@ -154,15 +162,10 @@ class GuessHandler:
             guess (str): The player's guess.
 
         Returns:
-            tuple[bool, int]: A tuple containing:
-                - bool: True if the guess was correct, False otherwise.
-                - int: The number of guesses the player has made for this question.
-
-        Raises:
-            AlreadyAnsweredCorrectlyError: If the player has already answered correctly.
+            tuple: (is_correct, num_guesses, points_earned, bonus_messages)
         """
         if not self.daily_q:
-            return False, 0  # No active question
+            return False, 0, 0, []  # No active question
 
         # Check if the player has already answered correctly today
         if self.has_answered_correctly_today(player_id):
@@ -171,6 +174,54 @@ class GuessHandler:
         g = guess.strip().lower()
         a = str(self.daily_q.answer).strip().lower()
         is_correct = self._is_correct_guess(g, a)
+
+        points_earned = 0
+        bonus_messages = []
+
+        if is_correct:
+            # Base Score
+            points_earned = self.daily_q.clue_value or 100
+
+            # Check First Solver (before logging this guess)
+            existing_correct_count = self.data_manager.get_correct_guess_count(
+                self.daily_question_id
+            )
+            if existing_correct_count == 0:
+                bonus = int(self.config.get("JBOT_BONUS_FIRST_PLACE", 10))
+                points_earned += bonus
+                bonus_messages.append(f"First to answer! (+{bonus})")
+
+            # Check First Try (before logging this guess)
+            previous_guesses = self.get_player_guesses(player_id)
+            if len(previous_guesses) == 0:
+                bonus = int(self.config.get("JBOT_BONUS_FIRST_TRY", 20))
+                points_earned += bonus
+                bonus_messages.append(f"First try! (+{bonus})")
+
+            # Check Streak
+            # We need to get the player's current streak BEFORE incrementing it
+            player = self.player_manager.get_player(str(player_id))
+            current_streak = player.answer_streak if player else 0
+
+            # If they answer today, their streak becomes current_streak + 1
+            new_streak = current_streak + 1
+
+            if new_streak >= 2:
+                streak_bonus_per_day = int(
+                    self.config.get("JBOT_BONUS_STREAK_PER_DAY", 5)
+                )
+                streak_bonus_cap = int(self.config.get("JBOT_BONUS_STREAK_CAP", 25))
+
+                bonus = min(new_streak * streak_bonus_per_day, streak_bonus_cap)
+
+                points_earned += bonus
+                bonus_messages.append(f"{new_streak} day streak! (+{bonus})")
+
+            # Apply Score & Streak
+            self.player_manager.get_or_create_player(str(player_id), player_name)
+            self.player_manager.update_score(str(player_id), points_earned)
+            self.player_manager.increment_streak(str(player_id), player_name)
+
         self.data_manager.log_player_guess(
             player_id, player_name, self.daily_question_id, g, is_correct
         )
@@ -194,4 +245,4 @@ class GuessHandler:
         # Get the number of guesses for this question
         num_guesses = len(self.get_player_guesses(player_id))
 
-        return is_correct, num_guesses
+        return is_correct, num_guesses, points_earned, bonus_messages
