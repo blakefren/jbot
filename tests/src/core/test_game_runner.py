@@ -727,6 +727,27 @@ class DummyDataManagerPowerup:
         """Return empty subscribers set for testing."""
         return set()
 
+    def get_correct_guess_count(self, daily_question_id):
+        return 0
+
+    def get_player(self, discord_id):
+        return None
+
+    def get_last_correct_guess_date(self, player_id):
+        return None
+
+    def reset_streak(self, player_id):
+        pass
+
+    def create_player(self, player_id, player_name):
+        pass
+
+    def adjust_player_score(self, player_id, amount):
+        pass
+
+    def increment_streak(self, player_id):
+        pass
+
 
 class DummyQuestionSelectorPowerup:
     def __init__(self):

@@ -1,6 +1,6 @@
 # tests/src/core/test_discord.py
 import unittest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch, call
 
 import sys
 import os
@@ -12,6 +12,7 @@ project_root = os.path.abspath(
 sys.path.insert(0, project_root)
 
 from src.core.discord import DiscordBot, MORNING_TIME, REMINDER_TIME, EVENING_TIME
+from src.core.subscriber import Subscriber
 
 
 class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
@@ -137,6 +138,215 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
         # The final error should be logged
         self.bot._log_task_error.assert_called_once()
+
+
+class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.bot = MagicMock(spec=DiscordBot)
+        self.bot.game = MagicMock()
+        self.bot.data_manager = MagicMock()
+        self.bot.fetch_user = AsyncMock()
+        self.bot.get_channel = MagicMock()
+
+        # Bind the methods we want to test to the mock object
+        self.bot.send_message = DiscordBot.send_message.__get__(self.bot, DiscordBot)
+        self.bot._send_daily_message_to_all_subscribers = (
+            DiscordBot._send_daily_message_to_all_subscribers.__get__(
+                self.bot, DiscordBot
+            )
+        )
+
+    async def test_send_message_to_user(self):
+        """Test sending a message to a user by ID."""
+        mock_user = AsyncMock()
+        self.bot.fetch_user.return_value = mock_user
+
+        await self.bot.send_message("Hello", target_id=123)
+
+        self.bot.fetch_user.assert_awaited_once_with(123)
+        mock_user.send.assert_awaited_once_with("Hello")
+        self.bot.data_manager.log_messaging_event.assert_called_once()
+
+    async def test_send_message_to_channel(self):
+        """Test sending a message to a channel by ID."""
+        mock_channel = AsyncMock()
+        self.bot.get_channel.return_value = mock_channel
+
+        await self.bot.send_message("Hello Channel", is_channel=True, target_id=456)
+
+        self.bot.get_channel.assert_called_once_with(456)
+        mock_channel.send.assert_awaited_once_with("Hello Channel")
+        self.bot.data_manager.log_messaging_event.assert_called_once()
+
+    async def test_send_message_via_ctx(self):
+        """Test sending a message via context."""
+        mock_ctx = AsyncMock()
+        mock_ctx.guild = True
+        mock_ctx.channel.id = 789
+
+        await self.bot.send_message("Hello Ctx", ctx=mock_ctx)
+
+        mock_ctx.send.assert_awaited_once_with("Hello Ctx")
+        self.bot.data_manager.log_messaging_event.assert_called_once()
+
+    async def test_send_message_via_interaction_response(self):
+        """Test sending a message via interaction response."""
+        mock_interaction = AsyncMock()
+        mock_interaction.response.is_done = MagicMock(return_value=False)
+        mock_interaction.user.id = 101
+
+        await self.bot.send_message("Hello Interaction", interaction=mock_interaction)
+
+        mock_interaction.response.send_message.assert_awaited_once_with(
+            "Hello Interaction", ephemeral=False
+        )
+        self.bot.data_manager.log_messaging_event.assert_called_once()
+
+    async def test_send_message_via_interaction_followup(self):
+        """Test sending a message via interaction followup."""
+        mock_interaction = AsyncMock()
+        mock_interaction.response.is_done = MagicMock(return_value=True)
+        mock_interaction.user.id = 101
+
+        await self.bot.send_message("Hello Followup", interaction=mock_interaction)
+
+        mock_interaction.followup.send.assert_awaited_once_with(
+            "Hello Followup", ephemeral=False
+        )
+        self.bot.data_manager.log_messaging_event.assert_called_once()
+
+    async def test_send_daily_message_to_all_subscribers(self):
+        """Test sending daily message to all subscribers."""
+        # Setup subscribers
+        sub1 = Subscriber(sub_id=1, is_channel=False, display_name="User1")
+        sub2 = Subscriber(sub_id=2, is_channel=True, display_name="Channel1")
+        self.bot.game.get_subscribed_users.return_value = {sub1, sub2}
+        self.bot.game.daily_q = MagicMock()
+
+        # Mock send_message to avoid actual calls (we are testing the loop logic)
+        self.bot.send_message = AsyncMock()
+
+        content_getter = MagicMock(return_value="Daily Content")
+
+        await self.bot._send_daily_message_to_all_subscribers(
+            content_getter, "test_status"
+        )
+
+        self.assertEqual(self.bot.send_message.await_count, 2)
+        self.bot.send_message.assert_has_awaits(
+            [
+                call(
+                    "Daily Content",
+                    is_channel=False,
+                    target_id=1,
+                    success_status="test_status",
+                ),
+                call(
+                    "Daily Content",
+                    is_channel=True,
+                    target_id=2,
+                    success_status="test_status",
+                ),
+            ]
+        )
+
+    async def test_send_daily_message_with_leaderboard(self):
+        """Test sending daily message with leaderboard."""
+        sub1 = Subscriber(sub_id=1, is_channel=False, display_name="User1")
+        self.bot.game.get_subscribed_users.return_value = {sub1}
+        self.bot.game.daily_q = MagicMock()
+        self.bot.game.get_scores_leaderboard.return_value = "Leaderboard Content"
+
+        self.bot.send_message = AsyncMock()
+        content_getter = MagicMock(return_value="Daily Content")
+
+        await self.bot._send_daily_message_to_all_subscribers(
+            content_getter, "test_status", send_leaderboard=True
+        )
+
+        self.assertEqual(self.bot.send_message.await_count, 2)
+        self.bot.send_message.assert_has_awaits(
+            [
+                call(
+                    "Daily Content",
+                    is_channel=False,
+                    target_id=1,
+                    success_status="test_status",
+                ),
+                call(
+                    "Leaderboard Content",
+                    is_channel=False,
+                    target_id=1,
+                    success_status="test_status",
+                ),
+            ]
+        )
+
+    async def test_on_message_ignore_bot(self):
+        """Test that on_message ignores messages from the bot itself."""
+        self.bot.user = MagicMock()
+        message = MagicMock()
+        message.author = self.bot.user
+
+        # Bind on_message
+        self.bot.on_message = DiscordBot.on_message.__get__(self.bot, DiscordBot)
+        self.bot.process_commands = AsyncMock()
+
+        await self.bot.on_message(message)
+
+        self.bot.process_commands.assert_not_called()
+
+    async def test_on_message_process_commands(self):
+        """Test that on_message processes commands for other users."""
+        self.bot.user = MagicMock()
+        message = MagicMock()
+        message.author = MagicMock()  # Not the bot
+        self.bot.process_commands = AsyncMock()
+
+        # Bind on_message
+        self.bot.on_message = DiscordBot.on_message.__get__(self.bot, DiscordBot)
+
+        await self.bot.on_message(message)
+
+        self.bot.process_commands.assert_awaited_once_with(message)
+
+    async def test_on_command_error_missing_arg(self):
+        """Test handling of MissingRequiredArgument error."""
+        from discord.ext import commands
+
+        ctx = MagicMock()
+        ctx.command.name = "test_cmd"
+        # Create a mock param with a name attribute
+        mock_param = MagicMock()
+        mock_param.name = "arg1"
+        error = commands.MissingRequiredArgument(mock_param)
+
+        self.bot.send_message = AsyncMock()
+        self.bot.on_command_error = DiscordBot.on_command_error.__get__(
+            self.bot, DiscordBot
+        )
+
+        await self.bot.on_command_error(ctx, error)
+
+        self.bot.send_message.assert_awaited_once()
+        args, kwargs = self.bot.send_message.call_args
+        self.assertIn("missing the `arg1` argument", args[0])
+
+    async def test_on_command_error_command_not_found(self):
+        """Test handling of CommandNotFound error."""
+        from discord.ext import commands
+
+        ctx = MagicMock()
+        error = commands.CommandNotFound()
+
+        self.bot.send_message = AsyncMock()
+        self.bot.on_command_error = DiscordBot.on_command_error.__get__(
+            self.bot, DiscordBot
+        )
+
+        await self.bot.on_command_error(ctx, error)
+
+        self.bot.send_message.assert_not_awaited()
 
 
 if __name__ == "__main__":
