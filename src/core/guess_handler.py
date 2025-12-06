@@ -189,15 +189,17 @@ class GuessHandler:
             )
             if existing_correct_count == 0:
                 bonus = int(self.config.get("JBOT_BONUS_FIRST_PLACE", 10))
+                emoji = self.config.get("JBOT_EMOJI_FASTEST", "🏃")
                 points_earned += bonus
-                bonus_messages.append(f"First to answer! (+{bonus})")
+                bonus_messages.append(f"{emoji} First to answer! (+{bonus})")
 
             # Check First Try (before logging this guess)
             previous_guesses = self.get_player_guesses(player_id)
             if len(previous_guesses) == 0:
                 bonus = int(self.config.get("JBOT_BONUS_FIRST_TRY", 20))
+                emoji = self.config.get("JBOT_EMOJI_FIRST_TRY", "🥇")
                 points_earned += bonus
-                bonus_messages.append(f"First try! (+{bonus})")
+                bonus_messages.append(f"{emoji} First try! (+{bonus})")
 
             # Check Streak
             # We need to get the player's current streak BEFORE incrementing it
@@ -223,11 +225,12 @@ class GuessHandler:
                     self.config.get("JBOT_BONUS_STREAK_PER_DAY", 5)
                 )
                 streak_bonus_cap = int(self.config.get("JBOT_BONUS_STREAK_CAP", 25))
+                emoji = self.config.get("JBOT_EMOJI_STREAK", "🔥")
 
                 bonus = min(new_streak * streak_bonus_per_day, streak_bonus_cap)
 
                 points_earned += bonus
-                bonus_messages.append(f"{new_streak} day streak! (+{bonus})")
+                bonus_messages.append(f"{emoji} {new_streak} day streak! (+{bonus})")
 
             # Apply Score & Streak
             self.player_manager.get_or_create_player(str(player_id), player_name)

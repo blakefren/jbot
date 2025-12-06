@@ -1,6 +1,7 @@
 import csv
 import os
 import re
+import wcwidth
 
 from collections import defaultdict
 from datetime import date
@@ -12,6 +13,7 @@ from src.core.data_manager import DataManager
 from data.readers.question_selector import QuestionSelector
 from data.readers.question import Question
 from src.core.guess_handler import GuessHandler
+from src.cfg.main import ConfigReader
 
 
 class GameRunner:
@@ -32,6 +34,7 @@ class GameRunner:
         self.daily_q = None
         self.daily_question_id = None
         self.managers = {}
+        self.config = ConfigReader()
 
     def register_manager(self, name: str, manager_class):
         """
@@ -171,7 +174,7 @@ class GameRunner:
         )
         return guess_handler.handle_guess(player_id, player_name, guess)
 
-    def get_scores_leaderboard(self, guild=None) -> str:
+    def get_scores_leaderboard(self, guild=None, show_daily_bonuses=False) -> str:
         """Computes and formats the leaderboard string."""
         player_scores = self.data_manager.get_player_scores()
 
@@ -181,6 +184,33 @@ class GameRunner:
         streaks = {
             s["id"]: s["answer_streak"] for s in self.data_manager.get_player_streaks()
         }
+
+        # Get daily bonuses if requested
+        fastest_guesser_id = None
+        first_try_solver_ids = set()
+
+        if show_daily_bonuses and self.daily_question_id:
+            all_guesses = self.data_manager.read_guess_history()
+            daily_correct_guesses = [
+                g
+                for g in all_guesses
+                if g.get("daily_question_id") == self.daily_question_id
+                and g.get("is_correct")
+            ]
+            # Sort by guessed_at to determine order
+            daily_correct_guesses.sort(key=lambda x: x.get("guessed_at"))
+
+            if daily_correct_guesses:
+                fastest_guesser_id = daily_correct_guesses[0]["player_id"]
+
+            first_try_solvers = self.data_manager.get_first_try_solvers(
+                self.daily_question_id
+            )
+            first_try_solver_ids = {p["id"] for p in first_try_solvers}
+
+        emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST", "🏃")
+        emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY", "🥇")
+        emoji_streak = self.config.get("JBOT_EMOJI_STREAK", "🔥")
 
         # Create a list of player data
         all_player_data = []
@@ -201,8 +231,20 @@ class GameRunner:
 
             streak = streaks.get(player_id, 0)
             score = player["score"]
+
+            badges = []
+            if show_daily_bonuses:
+                if streak > 0:
+                    badges.append(f"{streak}{emoji_streak}")
+                if player_id == fastest_guesser_id:
+                    badges.append(emoji_fastest)
+                if player_id in first_try_solver_ids:
+                    badges.append(emoji_first_try)
+
+            badges_str = " ".join(badges)
+
             all_player_data.append(
-                {"name": player_name, "score": score, "streak": streak}
+                {"name": player_name, "score": score, "badges": badges_str}
             )
 
         # Sort players by score (desc), then by name (asc)
@@ -220,18 +262,25 @@ class GameRunner:
                 else 0
             ),
         )
-        max_streak = max(
-            6,  # Num chars in "streak" header
+        max_badges = max(
+            6,  # Num chars in "Badges" header
             (
-                max(len(str(p["streak"])) for p in all_player_data)
+                max(wcwidth.wcswidth(p["badges"]) for p in all_player_data)
                 if all_player_data
                 else 0
             ),
         )
 
         # Header
-        header = f"{'Rank'} {'Player':<{max_name}} {'Score':<{max_score}} {'Streak'}\n"
-        divider = f"{'-'*4} {'-'*max_name} {'-'*max_score} {'-'*max_streak}\n"
+        header = f"{'Rank'} {'Player':<{max_name}} {'Score':<{max_score}}"
+        if show_daily_bonuses:
+            header += f" {'Badges'}"
+        header += "\n"
+
+        divider = f"{'-'*4} {'-'*max_name} {'-'*max_score}"
+        if show_daily_bonuses:
+            divider += f" {'-'*max_badges}"
+        divider += "\n"
 
         # Body
         body = ""
@@ -246,15 +295,18 @@ class GameRunner:
 
             name = p_data["name"]
             score = p_data["score"]
-            streak = p_data["streak"]
-            # Note: most emoji are 2 chars wide in monospaced contexts.
-            streak_str = f"{streak}🔥" if streak > 0 else ""
+            badges = p_data["badges"]
 
             # For ties, only show rank and score for the first player
             if p_data["score"] == last_score:
-                body += f"{'':>4} {name:<{max_name}} {'':>{max_score}} {streak_str:>{max_streak-1}}\n"
+                body += f"{'':>4} {name:<{max_name}} {'':>{max_score}}"
             else:
-                body += f"{rank:>4} {name:<{max_name}} {score:>{max_score}} {streak_str:>{max_streak-1}}\n"
+                body += f"{rank:>4} {name:<{max_name}} {score:>{max_score}}"
+
+            if show_daily_bonuses:
+                body += f" {badges}"
+
+            body += "\n"
 
             last_score = p_data["score"]
         return f"```{header}{divider}{body}```"

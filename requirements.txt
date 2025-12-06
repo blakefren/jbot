@@ -8,3 +8,4 @@ openpyxl
 kaleido
 google-generativeai
 jellyfish
+wcwidth  # For calculating display width of unicode strings.

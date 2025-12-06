@@ -290,6 +290,7 @@ class DiscordBot(commands.Bot):
                     "evening_message",
                     send_leaderboard=True,
                     requires_guild=True,
+                    show_daily_bonuses=True,
                 )
             except Exception as e:
                 self._log_task_error(e, "evening_message_task - send_message")
@@ -300,6 +301,7 @@ class DiscordBot(commands.Bot):
         success_status: str,
         send_leaderboard: bool = False,
         requires_guild: bool = False,
+        show_daily_bonuses: bool = False,
     ):
         """Helper function to send a daily message to all subscribers."""
         logging.debug(f"DiscordBot._send_daily_message_to_all_subscribers")
@@ -323,7 +325,9 @@ class DiscordBot(commands.Bot):
             # Generate leaderboard if needed
             leaderboard = None
             if send_leaderboard:
-                leaderboard = self.game.get_scores_leaderboard(guild)
+                leaderboard = self.game.get_scores_leaderboard(
+                    guild, show_daily_bonuses=show_daily_bonuses
+                )
 
             await self.send_message(
                 content,

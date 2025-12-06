@@ -332,7 +332,8 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("Rank", leaderboard)
         self.assertIn("Player", leaderboard)
         self.assertIn("Score", leaderboard)
-        self.assertIn("Streak", leaderboard)
+        # Streak is no longer shown by default
+        self.assertNotIn("Streak", leaderboard)
         self.assertIn("Alice", leaderboard)
         self.assertIn("Bob", leaderboard)
         self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Bob"))
@@ -396,7 +397,14 @@ class TestGameRunner(unittest.TestCase):
             {"id": "3", "answer_streak": 5},
         ]
 
-        leaderboard = self.game_runner.get_scores_leaderboard()
+        # Mock daily question ID for show_daily_bonuses to work
+        self.game_runner.daily_question_id = 123
+        self.mock_data_manager.read_guess_history.return_value = (
+            []
+        )  # No guesses needed for streak test
+        self.mock_data_manager.get_first_try_solvers.return_value = []
+
+        leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 
         self.assertIn("Alice", leaderboard)
         self.assertIn("Bob", leaderboard)
@@ -702,6 +710,125 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.subscribed_contexts = mock_subscribers
         result = self.game_runner.get_subscribed_users()
         self.assertEqual(result, mock_subscribers)
+
+    def test_get_scores_leaderboard_fastest_guesser(self):
+        """Test that the fastest guesser is determined by guessed_at timestamp."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 100},
+            {"id": "2", "name": "Bob", "score": 100},
+        ]
+        self.mock_data_manager.get_player_streaks.return_value = []
+        self.game_runner.daily_question_id = 123
+
+        # Bob guessed first (earlier timestamp) but has higher ID
+        self.mock_data_manager.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "2",
+                "player_name": "Bob",
+                "guess_text": "answer",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "1",
+                "player_name": "Alice",
+                "guess_text": "answer",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:05:00",
+            },
+        ]
+        self.mock_data_manager.get_first_try_solvers.return_value = []
+
+        leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        # Bob should have the fastest guesser emoji (runner)
+        self.assertIn("Bob", leaderboard)
+        self.assertIn("🏃", leaderboard)
+
+        # Ensure Alice is present
+        self.assertIn("Alice", leaderboard)
+        # But verify she doesn't have the runner emoji.
+        lines = leaderboard.split("\n")
+        alice_line = next((line for line in lines if "Alice" in line), None)
+        self.assertIsNotNone(alice_line)
+        self.assertNotIn("🏃", alice_line)
+
+    def test_get_scores_leaderboard_first_try_bonus(self):
+        """Test that the first try bonus emoji is shown."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 100},
+            {"id": "2", "name": "Bob", "score": 90},
+        ]
+        self.mock_data_manager.get_player_streaks.return_value = []
+        self.game_runner.daily_question_id = 123
+
+        # Mock guess history to avoid errors, but we rely on get_first_try_solvers for the badge
+        self.mock_data_manager.read_guess_history.return_value = []
+
+        # Alice got it on the first try
+        self.mock_data_manager.get_first_try_solvers.return_value = [{"id": "1"}]
+
+        leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        # Alice should have the medal
+        self.assertIn("Alice", leaderboard)
+        self.assertIn("🥇", leaderboard)
+
+        # Bob should not
+        self.assertIn("Bob", leaderboard)
+        lines = leaderboard.split("\n")
+        bob_line = next((line for line in lines if "Bob" in line), None)
+        self.assertIsNotNone(bob_line)
+        self.assertNotIn("🥇", bob_line)
+
+    def test_get_scores_leaderboard_emoji_width(self):
+        """Test that emojis are counted as 2 characters wide for leaderboard spacing."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 100},
+        ]
+        self.mock_data_manager.get_player_streaks.return_value = [
+            {"id": "1", "answer_streak": 10}
+        ]
+        self.game_runner.daily_question_id = 123
+
+        # Alice is fastest and first try
+        self.mock_data_manager.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "1",
+                "player_name": "Alice",
+                "guess_text": "answer",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:00:00",
+            }
+        ]
+        self.mock_data_manager.get_first_try_solvers.return_value = [{"id": "1"}]
+
+        # Badges string will be "10🔥 🏃 🥇"
+        # 10 (2) + 🔥 (1) + space (1) + 🏃 (1) + space (1) + 🥇 (1) = 7 chars in Python string
+        # But user wants width 10 due to the monospaced context of the leaderboard.
+
+        leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        # We can check the divider line.
+        # The divider line format is: f"{'-'*4} {'-'*max_name} {'-'*max_score} {'-'*max_badges}"
+        # We need to extract the last part.
+
+        lines = leaderboard.split("\n")
+        # lines[0] is ```Rank...
+        # lines[1] is ---- ...
+        divider_line = lines[1]
+        parts = divider_line.split(" ")
+        badges_divider = parts[-1]
+
+        # Expected width: 10
+        self.assertEqual(
+            len(badges_divider),
+            10,
+            f"Expected divider length 10, got {len(badges_divider)}",
+        )
 
 
 if __name__ == "__main__":
