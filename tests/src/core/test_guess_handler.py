@@ -331,6 +331,66 @@ class TestGuessHandler(unittest.TestCase):
         self.assertTrue(self.guess_handler._is_correct_guess("one", "1"))
         self.assertFalse(self.guess_handler._is_correct_guess("two", "1"))
 
+    def test_handle_guess_streak_reset(self):
+        """Test that streak is reset if last correct guess was not yesterday."""
+        player_id = 1
+        player_name = "PlayerOne"
+        guess = "Test Answer"
+
+        # Mock player with existing streak
+        mock_player = MagicMock()
+        mock_player.answer_streak = 5
+        self.player_manager.get_player.return_value = mock_player
+
+        # Mock last correct guess date to be 2 days ago
+        from datetime import date, timedelta
+
+        today = date.today()
+        two_days_ago = today - timedelta(days=2)
+        self.data_manager.get_last_correct_guess_date.return_value = two_days_ago
+
+        # Mock guess history
+        self.data_manager.read_guess_history.return_value = [
+            {"daily_question_id": self.daily_question_id, "guess_text": guess}
+        ]
+
+        self.guess_handler.handle_guess(player_id, player_name, guess)
+
+        # Streak should be reset
+        self.player_manager.reset_streak.assert_called_once_with(str(player_id))
+        # And then incremented
+        self.player_manager.increment_streak.assert_called_once()
+
+    def test_handle_guess_streak_continues(self):
+        """Test that streak continues if last correct guess was yesterday."""
+        player_id = 1
+        player_name = "PlayerOne"
+        guess = "Test Answer"
+
+        # Mock player with existing streak
+        mock_player = MagicMock()
+        mock_player.answer_streak = 5
+        self.player_manager.get_player.return_value = mock_player
+
+        # Mock last correct guess date to be yesterday
+        from datetime import date, timedelta
+
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        self.data_manager.get_last_correct_guess_date.return_value = yesterday
+
+        # Mock guess history
+        self.data_manager.read_guess_history.return_value = [
+            {"daily_question_id": self.daily_question_id, "guess_text": guess}
+        ]
+
+        self.guess_handler.handle_guess(player_id, player_name, guess)
+
+        # Streak should NOT be reset
+        self.player_manager.reset_streak.assert_not_called()
+        # And then incremented
+        self.player_manager.increment_streak.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

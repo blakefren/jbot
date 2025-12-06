@@ -1,6 +1,7 @@
 import re
 import logging
 import jellyfish
+from datetime import date, timedelta
 from src.core.data_manager import DataManager
 from data.readers.question import Question
 
@@ -203,8 +204,19 @@ class GuessHandler:
             player = self.player_manager.get_player(str(player_id))
             current_streak = player.answer_streak if player else 0
 
-            # If they answer today, their streak becomes current_streak + 1
-            new_streak = current_streak + 1
+            # Determine if streak continues
+            last_correct_date = self.data_manager.get_last_correct_guess_date(
+                str(player_id)
+            )
+            today = date.today()
+
+            if last_correct_date == today - timedelta(days=1):
+                new_streak = current_streak + 1
+            else:
+                # Streak broken or new player
+                new_streak = 1
+                # Reset streak in DB so increment works correctly
+                self.player_manager.reset_streak(str(player_id))
 
             if new_streak >= 2:
                 streak_bonus_per_day = int(

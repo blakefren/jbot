@@ -682,38 +682,6 @@ class TestGameRunner(unittest.TestCase):
         # Should fall back to stored name
         self.assertIn("**Alice**", content)
 
-    def test_update_streaks_no_daily_question_id(self):
-        """Test update_streaks logs warning when no daily_question_id."""
-        self.game_runner.daily_question_id = None
-        with patch("src.core.game_runner.logging") as mock_logging:
-            self.game_runner.update_streaks()
-            mock_logging.warning.assert_called()
-
-    def test_update_streaks_resets_incorrect_players(self):
-        """Test update_streaks resets streaks for players who didn't answer correctly."""
-        self.game_runner.daily_question_id = 1
-        self.game_runner.player_manager = MagicMock()
-
-        # Players: 111 answered correctly, 222 did not (but has a streak)
-        mock_player_222 = MagicMock(spec=Player)
-        mock_player_222.answer_streak = 5
-        mock_player_222.name = "Bob"
-
-        self.game_runner.player_manager.get_all_players.return_value = {
-            "111": MagicMock(answer_streak=3),
-            "222": mock_player_222,
-        }
-
-        self.mock_data_manager.read_guess_history.return_value = [
-            {"daily_question_id": 1, "player_id": "111", "is_correct": True},
-            {"daily_question_id": 1, "player_id": "222", "is_correct": False},
-        ]
-
-        self.game_runner.update_streaks()
-
-        # Only player 222's streak should be reset
-        self.game_runner.player_manager.reset_streak.assert_called_once_with("222")
-
     def test_update_scores_no_daily_question_id(self):
         """Test update_scores logs warning when no daily_question_id."""
         pass

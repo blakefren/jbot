@@ -1,5 +1,5 @@
 from typing import Optional
-from datetime import date
+from datetime import date, datetime
 from db.database import Database
 from data.readers.question import Question
 from src.core.player import Player
@@ -222,8 +222,22 @@ class DataManager:
     def get_player_streaks(self) -> list[dict]:
         """
         Retrieves player ids, names and answer streaks from the database, ordered by streak.
+        Only includes streaks that are active (last correct guess was today or yesterday).
         """
-        query = "SELECT id, name, answer_streak FROM players WHERE answer_streak > 1 ORDER BY answer_streak DESC"
+        query = """
+            SELECT p.id, p.name, p.answer_streak
+            FROM players p
+            JOIN (
+                SELECT player_id, MAX(dq.sent_at) as last_correct_date
+                FROM guesses g
+                JOIN daily_questions dq ON g.daily_question_id = dq.id
+                WHERE g.is_correct = 1
+                GROUP BY player_id
+            ) last_guess ON p.id = last_guess.player_id
+            WHERE p.answer_streak > 1
+              AND last_guess.last_correct_date >= date('now', '-1 day')
+            ORDER BY p.answer_streak DESC
+        """
         return self.db.execute_query(query)
 
     def get_player_ids_with_role(self, role_name: str) -> set[int]:
@@ -554,3 +568,23 @@ class DataManager:
         query = "SELECT COUNT(*) as count FROM guesses WHERE daily_question_id = ? AND is_correct = 1"
         result = self.db.execute_query(query, (daily_question_id,))
         return result[0]["count"] if result else 0
+
+    def get_last_correct_guess_date(self, player_id: str) -> Optional[date]:
+        """
+        Retrieves the date of the last correct guess for a player.
+        """
+        query = """
+            SELECT dq.sent_at
+            FROM guesses g
+            JOIN daily_questions dq ON g.daily_question_id = dq.id
+            WHERE g.player_id = ? AND g.is_correct = 1
+            ORDER BY dq.sent_at DESC
+            LIMIT 1
+        """
+        result = self.db.execute_query(query, (player_id,))
+        if result:
+            date_str = result[0]["sent_at"]
+            if isinstance(date_str, str):
+                return datetime.strptime(date_str, "%Y-%m-%d").date()
+            return date_str  # In case it's already a date object
+        return None

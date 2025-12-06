@@ -268,13 +268,7 @@ class DiscordBot(commands.Bot):
             f"Evening message task running at {datetime.datetime.now(TIMEZONE)}..."
         )
 
-        # 1. Update streaks
-        try:
-            self.game.update_streaks()
-        except Exception as e:
-            self._log_task_error(e, "evening_message_task - update_streaks")
-
-        # 2. Update roles
+        # 1. Update roles
         try:
             roles_cog = self.get_cog("RolesCog")
             if roles_cog:
@@ -288,7 +282,7 @@ class DiscordBot(commands.Bot):
         except Exception as e:
             self._log_task_error(e, "evening_message_task - update_roles")
 
-        # 3. Send evening message
+        # 2. Send evening message
         if not silent:
             try:
                 await self._send_daily_message_to_all_subscribers(
