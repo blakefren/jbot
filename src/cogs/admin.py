@@ -34,9 +34,6 @@ class Admin(commands.Cog):
 
         player_manager.refund_score(str(member.id), amount)
 
-        # Reload player data in GameRunner to reflect the change
-        self.bot.player_manager.reload_players()
-
         player = player_manager.get_player(str(member.id))
         if not player:
             await ctx.send(f"Could not find player {member.display_name} after refund.")

@@ -10,39 +10,70 @@ from db.database import Database
 
 
 class TestDataManager(unittest.TestCase):
-    def test_save_players(self):
-        """Test DataManager.save_players writes correct player data to DB."""
-        mock_db = patch.object(self.data_manager, "db", autospec=True).start()
-        players = {
-            "1": Player(
-                id="1", name="Alice", score=42, answer_streak=3, active_shield=True
-            ),
-            "2": Player(
-                id="2", name="Bob", score=0, answer_streak=0, active_shield=False
-            ),
-        }
-        self.data_manager.save_players(players)
-        # Should call execute_update twice, once for each player
-        self.assertEqual(mock_db.execute_update.call_count, 2)
-        # Check first call params
-        first_call = mock_db.execute_update.call_args_list[0]
-        query = first_call[0][0]
-        params = first_call[0][1]
-        self.assertIn("INSERT INTO players", query)
-        self.assertEqual(params[0], "1")
-        self.assertEqual(params[1], "Alice")
-        self.assertEqual(params[2], 42)
-        self.assertEqual(params[3], 3)
-        self.assertEqual(params[4], True)
-        # Check second call params
-        second_call = mock_db.execute_update.call_args_list[1]
-        params2 = second_call[0][1]
-        self.assertEqual(params2[0], "2")
-        self.assertEqual(params2[1], "Bob")
-        self.assertEqual(params2[2], 0)
-        self.assertEqual(params2[3], 0)
-        self.assertEqual(params2[4], False)
-        patch.stopall()
+    def test_get_player(self):
+        """Test retrieving a single player."""
+        self.db.execute_query = MagicMock(
+            return_value=[
+                {
+                    "id": "1",
+                    "name": "Alice",
+                    "score": 42,
+                    "answer_streak": 3,
+                    "active_shield": 1,
+                }
+            ]
+        )
+        player = self.data_manager.get_player("1")
+        self.assertIsNotNone(player)
+        self.assertEqual(player.name, "Alice")
+        self.assertEqual(player.score, 42)
+        self.assertTrue(player.active_shield)
+
+        # Test not found
+        self.db.execute_query = MagicMock(return_value=[])
+        player = self.data_manager.get_player("999")
+        self.assertIsNone(player)
+
+    def test_create_player(self):
+        """Test creating a new player."""
+        self.db.execute_update = MagicMock()
+        self.data_manager.create_player("1", "Alice")
+        self.db.execute_update.assert_called_once_with(
+            "INSERT INTO players (id, name, score, answer_streak, active_shield) VALUES (?, ?, 0, 0, 0)",
+            ("1", "Alice"),
+        )
+
+    def test_update_player_name(self):
+        """Test updating a player's name."""
+        self.db.execute_update = MagicMock()
+        self.data_manager.update_player_name("1", "New Name")
+        self.db.execute_update.assert_called_once_with(
+            "UPDATE players SET name = ? WHERE id = ?", ("New Name", "1")
+        )
+
+    def test_increment_streak(self):
+        """Test incrementing a player's streak."""
+        self.db.execute_update = MagicMock()
+        self.data_manager.increment_streak("1")
+        self.db.execute_update.assert_called_once_with(
+            "UPDATE players SET answer_streak = answer_streak + 1 WHERE id = ?", ("1",)
+        )
+
+    def test_reset_streak(self):
+        """Test resetting a player's streak."""
+        self.db.execute_update = MagicMock()
+        self.data_manager.reset_streak("1")
+        self.db.execute_update.assert_called_once_with(
+            "UPDATE players SET answer_streak = 0 WHERE id = ?", ("1",)
+        )
+
+    def test_set_shield(self):
+        """Test setting a player's shield status."""
+        self.db.execute_update = MagicMock()
+        self.data_manager.set_shield("1", True)
+        self.db.execute_update.assert_called_once_with(
+            "UPDATE players SET active_shield = ? WHERE id = ?", (True, "1")
+        )
 
     def test_load_players(self):
         """Test DataManager.load_players returns correct player dict."""

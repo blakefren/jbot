@@ -124,9 +124,9 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
             "Invalid message type. Use 'morning', 'reminder', or 'evening'."
         )
 
-    async def test_refund_reloads_player_data(self):
+    async def test_refund_updates_player_data(self):
         """
-        Test that the refund command correctly calls reload_players.
+        Test that the refund command correctly updates player data.
         """
         # Setup mocks
         member = MagicMock(spec=discord.Member)
@@ -160,7 +160,6 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
             amount=amount,
             reason=reason,
         )
-        player_manager.reload_players.assert_called_once()
 
         # Verify get_or_create_player was called
         player_manager.get_or_create_player.assert_called_once()
@@ -188,7 +187,6 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         )
 
         player_manager.refund_score.assert_called_once_with(str(member.id), amount)
-        player_manager.reload_players.assert_called_once()
         self.ctx.send.assert_called_once_with(
             f"Could not find player {member.display_name} after refund."
         )

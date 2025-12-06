@@ -428,7 +428,6 @@ class GameRunner:
                         f"Resetting streak for player {player.name} ({player_id})."
                     )
 
-        self.player_manager.save_players()
         logging.info("Player streaks updated and saved.")
 
     def update_scores(self):
@@ -463,7 +462,6 @@ class GameRunner:
             except Exception:
                 self.player_manager.update_score(str(player_id), 100)
 
-        self.player_manager.save_players()
         logging.info("Player scores updated and saved.")
 
     # TODO: Implement score adjustment logic from admin cog

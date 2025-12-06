@@ -15,35 +15,6 @@ from db.database import Database
 from data.readers.question import Question
 
 
-class TestGameRunnerUpdateScores(unittest.TestCase):
-    def setUp(self):
-        """Set up a mock environment for testing."""
-        self.mock_db = MagicMock(spec=Database)
-        self.mock_data_manager = MagicMock()
-        self.mock_data_manager.db = self.mock_db
-
-        self.mock_question_selector = MagicMock()
-
-        # Patch PlayerManager to use the mock DB
-        with patch(
-            "src.core.game_runner.PlayerManager", autospec=True
-        ) as mock_player_manager_class:
-            self.mock_player_manager = mock_player_manager_class.return_value
-            self.game_runner = GameRunner(
-                self.mock_question_selector, self.mock_data_manager
-            )
-            self.game_runner.player_manager = self.mock_player_manager
-
-    def test_update_scores_calls_save_players(self):
-        """Test that update_scores calls player_manager.save_players."""
-        # Act
-        self.game_runner.daily_question_id = 1
-        self.game_runner.update_scores()
-
-        # Assert
-        self.mock_player_manager.save_players.assert_called_once()
-
-
 class TestGameRunnerResetQuestion(unittest.TestCase):
     def setUp(self):
         self.mock_question_selector = MagicMock()

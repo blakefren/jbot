@@ -357,9 +357,6 @@ class TestGameRunner(unittest.TestCase):
         for expected in expected_streak_calls:
             self.assertIn(expected, streak_calls)
 
-        # Check that save_players was called
-        self.game_runner.player_manager.save_players.assert_called_once()
-
     def test_update_scores_for_new_player(self):
         """Test that a new player's score is updated correctly."""
         self.game_runner.daily_q = self.mock_question
@@ -403,9 +400,6 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.player_manager.increment_streak.assert_called_once_with(
             new_player_id, new_player_name
         )
-
-        # Check that save_players was called
-        self.game_runner.player_manager.save_players.assert_called_once()
 
     def test_handle_guess(self):
         """Test handling a player's guess."""
@@ -827,7 +821,6 @@ class TestGameRunner(unittest.TestCase):
 
         # Only player 222's streak should be reset
         self.game_runner.player_manager.reset_streak.assert_called_once_with("222")
-        self.game_runner.player_manager.save_players.assert_called_once()
 
     def test_update_scores_no_daily_question_id(self):
         """Test update_scores logs warning when no daily_question_id."""
@@ -899,17 +892,9 @@ class DummyDataManagerPowerup:
     def read_guess_history(self, *a, **kw):
         return []
 
-    def load_players(self):
-        """Return empty players dict for testing."""
-        return {}
-
     def get_all_subscribers(self):
         """Return empty subscribers set for testing."""
         return set()
-
-    def save_players(self, players):
-        """No-op for testing."""
-        pass
 
 
 class DummyQuestionSelectorPowerup:

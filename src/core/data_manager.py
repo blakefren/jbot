@@ -54,31 +54,45 @@ class DataManager:
         """
         return self.load_players()
 
-    def save_players(self, players: dict):
-        """
-        Writes the current player data back to the database.
-        Args:
-            players (dict): Dictionary of Player objects keyed by discord_id.
-        """
-        for _, player in players.items():
-            data = player.to_dict()
-            query = """
-                INSERT INTO players (id, name, score, answer_streak, active_shield)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    name = excluded.name,
-                    score = excluded.score,
-                    answer_streak = excluded.answer_streak,
-                    active_shield = excluded.active_shield;
-            """
-            params = (
-                data["id"],
-                data["name"],
-                data["score"],
-                data["answer_streak"],
-                data["active_shield"],
+    def get_player(self, player_id: str) -> Optional[Player]:
+        """Retrieves a single player from the database."""
+        query = "SELECT id, name, score, answer_streak, active_shield FROM players WHERE id = ?"
+        result = self.db.execute_query(query, (player_id,))
+        if result:
+            record = result[0]
+            return Player(
+                id=record["id"],
+                name=record["name"],
+                score=record["score"],
+                answer_streak=record["answer_streak"],
+                active_shield=bool(record["active_shield"]),
             )
-            self.db.execute_update(query, params)
+        return None
+
+    def create_player(self, player_id: str, name: str):
+        """Creates a new player in the database."""
+        query = "INSERT INTO players (id, name, score, answer_streak, active_shield) VALUES (?, ?, 0, 0, 0)"
+        self.db.execute_update(query, (player_id, name))
+
+    def update_player_name(self, player_id: str, name: str):
+        """Updates a player's name."""
+        query = "UPDATE players SET name = ? WHERE id = ?"
+        self.db.execute_update(query, (name, player_id))
+
+    def increment_streak(self, player_id: str):
+        """Atomically increments a player's streak."""
+        query = "UPDATE players SET answer_streak = answer_streak + 1 WHERE id = ?"
+        self.db.execute_update(query, (player_id,))
+
+    def reset_streak(self, player_id: str):
+        """Resets a player's streak to 0."""
+        query = "UPDATE players SET answer_streak = 0 WHERE id = ?"
+        self.db.execute_update(query, (player_id,))
+
+    def set_shield(self, player_id: str, active: bool):
+        """Sets a player's shield status."""
+        query = "UPDATE players SET active_shield = ? WHERE id = ?"
+        self.db.execute_update(query, (active, player_id))
 
     def adjust_player_score(self, player_id: str, amount: int):
         """

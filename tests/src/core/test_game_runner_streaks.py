@@ -41,7 +41,6 @@ class TestGameRunnerStreaks(unittest.TestCase):
         self.game_runner.update_streaks()
         # Verify that only Player 2's streak was reset via PlayerManager
         self.mock_player_manager.reset_streak.assert_called_once_with("2")
-        self.mock_player_manager.save_players.assert_called_once()
 
     def test_update_streaks_all_correct(self):
         """Test that no streaks are reset if all players answered correctly."""
@@ -55,7 +54,6 @@ class TestGameRunnerStreaks(unittest.TestCase):
 
         # No resets should be triggered when all answered correctly
         self.mock_player_manager.reset_streak.assert_not_called()
-        self.mock_player_manager.save_players.assert_called_once()
 
     def test_update_streaks_no_correct_answers(self):
         """Test that all streaks are reset if no one answered correctly."""
@@ -71,14 +69,12 @@ class TestGameRunnerStreaks(unittest.TestCase):
             for call in self.mock_player_manager.reset_streak.call_args_list
         ]
         self.assertCountEqual(calls, ["1", "2"])
-        self.mock_player_manager.save_players.assert_called_once()
 
     def test_update_streaks_no_daily_question(self):
         """Test that the function exits early if there is no daily question ID."""
         self.game_runner.daily_question_id = None
         self.game_runner.update_streaks()
         self.mock_data_manager.read_guess_history.assert_not_called()
-        self.mock_player_manager.save_players.assert_not_called()
 
 
 if __name__ == "__main__":
