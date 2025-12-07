@@ -332,8 +332,8 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("Rank", leaderboard)
         self.assertIn("Player", leaderboard)
         self.assertIn("Score", leaderboard)
-        # Streak is no longer shown by default
-        self.assertNotIn("Streak", leaderboard)
+        # Streak is now shown by default
+        self.assertIn("Streak", leaderboard)
         self.assertIn("Alice", leaderboard)
         self.assertIn("Bob", leaderboard)
         self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Bob"))
@@ -829,6 +829,45 @@ class TestGameRunner(unittest.TestCase):
             10,
             f"Expected divider length 10, got {len(badges_divider)}",
         )
+
+    def test_get_scores_leaderboard_badge_order(self):
+        """Test the order of badges in the leaderboard: Streak -> First Try -> Fastest."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 100},
+        ]
+        self.mock_data_manager.get_player_streaks.return_value = [
+            {"id": "1", "answer_streak": 5}
+        ]
+        self.game_runner.daily_question_id = 123
+
+        # Alice is fastest and first try
+        self.mock_data_manager.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "1",
+                "player_name": "Alice",
+                "guess_text": "answer",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:00:00",
+            }
+        ]
+        self.mock_data_manager.get_first_try_solvers.return_value = [{"id": "1"}]
+
+        leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        # Expected order: Streak (🔥), First Try (🥇), Fastest (🏃)
+        # Note: The exact emojis depend on config, but defaults are used here.
+        # We check the relative positions in the string.
+        streak_pos = leaderboard.find("🔥")
+        first_try_pos = leaderboard.find("🥇")
+        fastest_pos = leaderboard.find("🏃")
+
+        self.assertNotEqual(streak_pos, -1)
+        self.assertNotEqual(first_try_pos, -1)
+        self.assertNotEqual(fastest_pos, -1)
+
+        self.assertLess(streak_pos, first_try_pos)
+        self.assertLess(first_try_pos, fastest_pos)
 
 
 if __name__ == "__main__":

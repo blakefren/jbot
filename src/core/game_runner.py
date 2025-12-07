@@ -233,9 +233,10 @@ class GameRunner:
             score = player["score"]
 
             badges = []
+            if streak > 0:
+                badges.append(f"{streak}{emoji_streak}")
+
             if show_daily_bonuses:
-                if streak > 0:
-                    badges.append(f"{streak}{emoji_streak}")
                 if player_id in first_try_solver_ids:
                     badges.append(emoji_first_try)
                 if player_id == fastest_guesser_id:
@@ -273,13 +274,11 @@ class GameRunner:
 
         # Header
         header = f"{'Rank'} {'Player':<{max_name}} {'Score':<{max_score}}"
-        if show_daily_bonuses:
-            header += f" {'Badges'}"
+        header += f" {'Badges' if show_daily_bonuses else 'Streak'}"
         header += "\n"
 
         divider = f"{'-'*4} {'-'*max_name} {'-'*max_score}"
-        if show_daily_bonuses:
-            divider += f" {'-'*max_badges}"
+        divider += f" {'-'*max_badges}"
         divider += "\n"
 
         # Body
@@ -303,8 +302,7 @@ class GameRunner:
             else:
                 body += f"{rank:>4} {name:<{max_name}} {score:>{max_score}}"
 
-            if show_daily_bonuses:
-                body += f" {badges}"
+            body += f" {badges}"
 
             body += "\n"
 
