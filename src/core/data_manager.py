@@ -147,17 +147,9 @@ class DataManager:
         today = date.today()
         daily_question_info = self.get_todays_daily_question()
 
-        if daily_question_info:
+        if daily_question_info and not force_new:
             _, daily_question_id = daily_question_info
-            if force_new:
-                # Update the existing daily question entry for today
-                update_query = (
-                    "UPDATE daily_questions SET question_id = ? WHERE sent_at = ?"
-                )
-                self.db.execute_update(update_query, (question_id, today))
-                return daily_question_id
-            else:
-                return daily_question_id
+            return daily_question_id
 
         # Log the daily question event
         daily_question_query = (

@@ -212,7 +212,10 @@ class GuessHandler:
             )
             today = date.today()
 
-            if last_correct_date == today - timedelta(days=1):
+            if last_correct_date == today:
+                # Already answered correctly today (e.g. skipped question)
+                new_streak = current_streak
+            elif last_correct_date == today - timedelta(days=1):
                 new_streak = current_streak + 1
             else:
                 # Streak broken or new player
@@ -235,7 +238,8 @@ class GuessHandler:
             # Apply Score & Streak
             self.player_manager.get_or_create_player(str(player_id), player_name)
             self.player_manager.update_score(str(player_id), points_earned)
-            self.player_manager.increment_streak(str(player_id), player_name)
+            if last_correct_date != today:
+                self.player_manager.increment_streak(str(player_id), player_name)
 
         self.data_manager.log_player_guess(
             player_id, player_name, self.daily_question_id, g, is_correct
