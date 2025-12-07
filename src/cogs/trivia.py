@@ -127,7 +127,7 @@ class Trivia(commands.Cog):
             # Construct bonus string
             bonus_str = ""
             if bonus_messages:
-                bonus_str = "\n" + "\n".join(f"• {msg}" for msg in bonus_messages)
+                bonus_str = "\n" + "\n".join(f"{msg}" for msg in bonus_messages)
 
             # Send the private confirmation
             await ctx.interaction.followup.send(
