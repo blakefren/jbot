@@ -16,9 +16,13 @@ class Metrics(commands.Cog):
         )
 
     @commands.hybrid_command()
-    async def leaderboard(self, ctx: commands.Context):
+    async def leaderboard(
+        self, ctx: commands.Context, show_daily_bonuses: bool = False
+    ):
         """View the current score leaderboard."""
-        leaderboard = self.bot.game.get_scores_leaderboard(ctx.guild)
+        leaderboard = self.bot.game.get_scores_leaderboard(
+            ctx.guild, show_daily_bonuses=show_daily_bonuses
+        )
         await self.bot.send_message(leaderboard, interaction=ctx.interaction)
 
 

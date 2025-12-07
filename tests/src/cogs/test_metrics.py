@@ -38,9 +38,27 @@ class TestMetricsCog(unittest.IsolatedAsyncioTestCase):
 
         await self.cog.leaderboard.callback(self.cog, self.ctx)
 
-        self.bot.game.get_scores_leaderboard.assert_called_once_with(self.ctx.guild)
+        self.bot.game.get_scores_leaderboard.assert_called_once_with(
+            self.ctx.guild, show_daily_bonuses=False
+        )
         self.bot.send_message.assert_called_once_with(
             "Leaderboard text",
+            interaction=self.ctx.interaction,
+        )
+
+    async def test_leaderboard_command_with_bonuses(self):
+        """Test the leaderboard command with daily bonuses enabled."""
+        self.bot.game.get_scores_leaderboard.return_value = (
+            "Leaderboard text with bonuses"
+        )
+
+        await self.cog.leaderboard.callback(self.cog, self.ctx, show_daily_bonuses=True)
+
+        self.bot.game.get_scores_leaderboard.assert_called_once_with(
+            self.ctx.guild, show_daily_bonuses=True
+        )
+        self.bot.send_message.assert_called_once_with(
+            "Leaderboard text with bonuses",
             interaction=self.ctx.interaction,
         )
 
