@@ -136,6 +136,11 @@ class TestPlayerManager(unittest.TestCase):
         self.manager.refund_score("123", 50)
         self.mock_data_manager.adjust_player_score.assert_called_with("123", 50)
 
+    def test_set_streak(self):
+        """Test setting a player's streak to a specific value."""
+        self.manager.set_streak("123", 10)
+        self.mock_data_manager.set_streak.assert_called_with("123", 10)
+
     def test_normalize_id_with_none(self):
         """Test _normalize_id handles None gracefully."""
         result = self.manager._normalize_id(None)

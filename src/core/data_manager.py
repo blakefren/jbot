@@ -89,6 +89,11 @@ class DataManager:
         query = "UPDATE players SET answer_streak = 0 WHERE id = ?"
         self.db.execute_update(query, (player_id,))
 
+    def set_streak(self, player_id: str, streak: int):
+        """Sets a player's streak to a specific value."""
+        query = "UPDATE players SET answer_streak = ? WHERE id = ?"
+        self.db.execute_update(query, (streak, player_id))
+
     def set_shield(self, player_id: str, active: bool):
         """Sets a player's shield status."""
         query = "UPDATE players SET active_shield = ? WHERE id = ?"

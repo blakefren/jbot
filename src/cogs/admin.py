@@ -24,15 +24,24 @@ class Admin(commands.Cog):
     @commands.hybrid_command()
     @commands.has_permissions(administrator=True)
     async def refund(
-        self, ctx: commands.Context, member: discord.Member, amount: int, *, reason: str
+        self,
+        ctx: commands.Context,
+        member: discord.Member,
+        amount: int,
+        streak: int = None,
+        *,
+        reason: str,
     ):
-        """(admin) Refunds score to a player."""
+        """(admin) Refunds score/streak to a player."""
         player_manager = self.bot.player_manager
         player = player_manager.get_or_create_player(
             str(member.id), member.display_name
         )
 
         player_manager.refund_score(str(member.id), amount)
+
+        if streak is not None:
+            player_manager.set_streak(str(member.id), streak)
 
         player = player_manager.get_player(str(member.id))
         if not player:
@@ -47,9 +56,12 @@ class Admin(commands.Cog):
             reason=reason,
         )
 
-        await ctx.send(
-            f"Refunded {amount} to {member.display_name}. New score: {player.score}. Reason: {reason}"
-        )
+        msg = f"Refunded {amount} to {member.display_name}. New score: {player.score}."
+        if streak is not None:
+            msg += f" Streak set to {streak}."
+        msg += f" Reason: {reason}"
+
+        await ctx.send(msg)
 
     @commands.hybrid_command()
     @commands.has_permissions(administrator=True)
