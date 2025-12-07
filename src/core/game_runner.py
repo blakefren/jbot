@@ -236,10 +236,10 @@ class GameRunner:
             if show_daily_bonuses:
                 if streak > 0:
                     badges.append(f"{streak}{emoji_streak}")
-                if player_id == fastest_guesser_id:
-                    badges.append(emoji_fastest)
                 if player_id in first_try_solver_ids:
                     badges.append(emoji_first_try)
+                if player_id == fastest_guesser_id:
+                    badges.append(emoji_fastest)
 
             badges_str = " ".join(badges)
 
