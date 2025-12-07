@@ -1,11 +1,12 @@
+python>=3.9
 discord
 pytest
 python-dotenv
+google-generativeai
+jellyfish  # For fuzzy string matching.
+wcwidth  # For calculating display width of unicode strings.
 # For dashboard notebook.
 pandas
 plotly
 openpyxl
 kaleido
-google-generativeai
-jellyfish
-wcwidth  # For calculating display width of unicode strings.
