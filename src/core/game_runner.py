@@ -226,6 +226,7 @@ class GameRunner:
 
         emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST", "🥇")
         emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯")
+        emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠")
         emoji_streak = self.config.get("JBOT_EMOJI_STREAK", "🔥")
 
         # Create a list of player data
@@ -255,10 +256,10 @@ class GameRunner:
             if show_daily_bonuses:
                 if player_id in first_try_solver_ids:
                     badges.append(emoji_first_try)
+                if player_id in before_hint_solver_ids:
+                    badges.append(emoji_before_hint)
                 if player_id == fastest_guesser_id:
                     badges.append(emoji_fastest)
-                if player_id in before_hint_solver_ids:
-                    badges.append(self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠"))
 
             badges_str = " ".join(badges)
 
