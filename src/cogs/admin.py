@@ -56,7 +56,7 @@ class Admin(commands.Cog):
             reason=reason,
         )
 
-        msg = f"Refunded {amount} to {member.display_name}. New score: {player.score}."
+        msg = f"Refunded {amount} to {member.mention}. New score: {player.score}."
         if streak is not None:
             msg += f" Streak set to {streak}."
         msg += f" Reason: {reason}"

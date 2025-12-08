@@ -132,6 +132,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         member = MagicMock(spec=discord.Member)
         member.id = "player_id_123"
         member.display_name = "TestPlayer"
+        member.mention = "@TestPlayer"
 
         amount = 50
         reason = "Test refund"
@@ -165,7 +166,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         player_manager.get_or_create_player.assert_called_once()
 
         # Check the final message
-        expected_message = f"Refunded {amount} to {member.display_name}. New score: {mock_player_after_refund.score}. Reason: {reason}"
+        expected_message = f"Refunded {amount} to {member.mention}. New score: {mock_player_after_refund.score}. Reason: {reason}"
         self.ctx.send.assert_called_once_with(expected_message)
 
     async def test_refund_player_not_found_after_refund(self):
