@@ -391,6 +391,45 @@ class TestGuessHandler(unittest.TestCase):
         # And then incremented
         self.player_manager.increment_streak.assert_called_once()
 
+    def test_handle_guess_before_hint_bonus(self):
+        """Test that bonus points are awarded if guess is before hint."""
+        from datetime import datetime, time
+        from zoneinfo import ZoneInfo
+
+        # Setup timezone and times
+        tz = ZoneInfo("UTC")
+        reminder_time = time(12, 0, tzinfo=tz)
+
+        # Create handler with reminder_time
+        handler = GuessHandler(
+            self.data_manager,
+            self.player_manager,
+            self.daily_question,
+            self.daily_question_id,
+            self.managers,
+            reminder_time=reminder_time,
+        )
+
+        # Mock current time to be before reminder_time
+        with patch("src.core.guess_handler.datetime") as mock_datetime:
+            # Mock now() to return 10:00 AM
+            mock_now = datetime(2023, 1, 1, 10, 0, tzinfo=tz)
+            mock_datetime.now.return_value = mock_now
+
+            # Mock other dependencies
+            self.player_manager.get_player.return_value = None
+            self.data_manager.get_correct_guess_count.return_value = 1
+            self.data_manager.read_guess_history.return_value = []
+
+            is_correct, num_guesses, points, bonuses = handler.handle_guess(
+                1, "Player", "Test Answer"
+            )
+
+            self.assertTrue(is_correct)
+            # Base points (100) + First Try (20) + Before Hint Bonus (10) = 130
+            self.assertEqual(points, 130)
+            self.assertTrue(any("Before hint!" in msg for msg in bonuses))
+
 
 if __name__ == "__main__":
     unittest.main()

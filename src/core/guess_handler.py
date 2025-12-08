@@ -1,7 +1,7 @@
 import re
 import logging
 import jellyfish
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from src.core.data_manager import DataManager
 from data.readers.question import Question
 
@@ -30,6 +30,7 @@ class GuessHandler:
         daily_question_id: int,
         managers: dict,
         fuzzy_threshold=2,
+        reminder_time=None,
     ):
         self.data_manager = data_manager
         self.player_manager = player_manager
@@ -37,6 +38,7 @@ class GuessHandler:
         self.daily_question_id = daily_question_id
         self.managers = managers
         self.fuzzy_threshold = fuzzy_threshold
+        self.reminder_time = reminder_time
         self.config = ConfigReader()
 
     def _normalize(self, text: str) -> str:
@@ -182,6 +184,15 @@ class GuessHandler:
         if is_correct:
             # Base Score
             points_earned = self.daily_q.clue_value or 100
+
+            # Check Before Hint (before logging this guess)
+            if self.reminder_time:
+                now = datetime.now(self.reminder_time.tzinfo)
+                if now.timetz() < self.reminder_time:
+                    bonus = int(self.config.get("JBOT_BONUS_BEFORE_HINT", 10))
+                    emoji = self.config.get("JBOT_EMOJI_BEFORE_HINT", "💅")
+                    points_earned += bonus
+                    bonus_messages.append(f"{emoji} Before hint! (+{bonus})")
 
             # Check First Solver (before logging this guess)
             existing_correct_count = self.data_manager.get_correct_guess_count(

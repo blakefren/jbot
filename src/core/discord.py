@@ -431,6 +431,7 @@ async def discord_bot_async(
         gemini_manager=gemini_manager,
     )
     game = GameRunner(question_selector, data_manager)
+    game.reminder_time = REMINDER_TIME
 
     # Register managers
     from core.powerup import PowerUpManager

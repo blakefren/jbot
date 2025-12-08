@@ -4,7 +4,7 @@ import re
 import wcwidth
 
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from src.core.player_manager import PlayerManager
 from src.core.subscriber import Subscriber
@@ -35,6 +35,7 @@ class GameRunner:
         self.daily_question_id = None
         self.managers = {}
         self.config = ConfigReader()
+        self.reminder_time = None
 
     def register_manager(self, name: str, manager_class):
         """
@@ -171,6 +172,7 @@ class GameRunner:
             self.daily_q,
             self.daily_question_id,
             self.managers,
+            reminder_time=self.reminder_time,
         )
         return guess_handler.handle_guess(player_id, player_name, guess)
 
@@ -188,6 +190,7 @@ class GameRunner:
         # Get daily bonuses if requested
         fastest_guesser_id = None
         first_try_solver_ids = set()
+        before_hint_solver_ids = set()
 
         if show_daily_bonuses and self.daily_question_id:
             all_guesses = self.data_manager.read_guess_history()
@@ -202,6 +205,19 @@ class GameRunner:
 
             if daily_correct_guesses:
                 fastest_guesser_id = daily_correct_guesses[0]["player_id"]
+
+            # Check for before hint solvers
+            hint_timestamp_str = self.data_manager.get_hint_sent_timestamp(
+                self.daily_question_id
+            )
+
+            for g in daily_correct_guesses:
+                if hint_timestamp_str:
+                    if g.get("guessed_at") < hint_timestamp_str:
+                        before_hint_solver_ids.add(g["player_id"])
+                else:
+                    # If hint hasn't been sent, everyone is before hint
+                    before_hint_solver_ids.add(g["player_id"])
 
             first_try_solvers = self.data_manager.get_first_try_solvers(
                 self.daily_question_id
@@ -241,6 +257,8 @@ class GameRunner:
                     badges.append(emoji_first_try)
                 if player_id == fastest_guesser_id:
                     badges.append(emoji_fastest)
+                if player_id in before_hint_solver_ids:
+                    badges.append(self.config.get("JBOT_EMOJI_BEFORE_HINT", "💅"))
 
             badges_str = " ".join(badges)
 

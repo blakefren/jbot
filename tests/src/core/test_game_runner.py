@@ -59,6 +59,7 @@ class TestGameRunner(unittest.TestCase):
         """Set up for the tests."""
         self.mock_question_selector = MagicMock()
         self.mock_data_manager = MagicMock(spec=DataManager)
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
         self.mock_question = Question(
             question="Test Question",
             answer="Test Answer",
@@ -806,6 +807,11 @@ class TestGameRunner(unittest.TestCase):
         ]
         self.mock_data_manager.get_first_try_solvers.return_value = [{"id": "1"}]
 
+        # Ensure no "before hint" bonus by setting hint timestamp before guess
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = (
+            "2023-01-01 09:00:00"
+        )
+
         # Badges string will be "10🔥 🏃 🥇"
         # 10 (2) + 🔥 (1) + space (1) + 🏃 (1) + space (1) + 🥇 (1) = 7 chars in Python string
         # But user wants width 10 due to the monospaced context of the leaderboard.
@@ -868,6 +874,38 @@ class TestGameRunner(unittest.TestCase):
 
         self.assertLess(streak_pos, first_try_pos)
         self.assertLess(first_try_pos, fastest_pos)
+
+    def test_get_scores_leaderboard_before_hint_bonus(self):
+        """Test that the before hint bonus emoji is shown."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 110},
+        ]
+        self.mock_data_manager.get_player_streaks.return_value = []
+        self.game_runner.daily_question_id = 123
+
+        # Alice guessed before hint
+        self.mock_data_manager.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "1",
+                "player_name": "Alice",
+                "guess_text": "answer",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:00:00",
+            }
+        ]
+        self.mock_data_manager.get_first_try_solvers.return_value = []
+
+        # Hint sent later
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = (
+            "2023-01-01 12:00:00"
+        )
+
+        leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        # Alice should have the nail polish emoji
+        self.assertIn("Alice", leaderboard)
+        self.assertIn("💅", leaderboard)
 
 
 if __name__ == "__main__":
