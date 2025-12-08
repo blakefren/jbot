@@ -224,8 +224,8 @@ class GameRunner:
             )
             first_try_solver_ids = {p["id"] for p in first_try_solvers}
 
-        emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST", "🏃")
-        emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY", "🥇")
+        emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST", "🥇")
+        emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯")
         emoji_streak = self.config.get("JBOT_EMOJI_STREAK", "🔥")
 
         # Create a list of player data
@@ -258,7 +258,7 @@ class GameRunner:
                 if player_id == fastest_guesser_id:
                     badges.append(emoji_fastest)
                 if player_id in before_hint_solver_ids:
-                    badges.append(self.config.get("JBOT_EMOJI_BEFORE_HINT", "💅"))
+                    badges.append(self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠"))
 
             badges_str = " ".join(badges)
 

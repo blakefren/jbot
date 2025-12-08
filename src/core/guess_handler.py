@@ -190,7 +190,7 @@ class GuessHandler:
                 now = datetime.now(self.reminder_time.tzinfo)
                 if now.timetz() < self.reminder_time:
                     bonus = int(self.config.get("JBOT_BONUS_BEFORE_HINT", 10))
-                    emoji = self.config.get("JBOT_EMOJI_BEFORE_HINT", "💅")
+                    emoji = self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠")
                     points_earned += bonus
                     bonus_messages.append(f"{emoji} Before hint! (+{bonus})")
 
@@ -200,7 +200,7 @@ class GuessHandler:
             )
             if existing_correct_count == 0:
                 bonus = int(self.config.get("JBOT_BONUS_FIRST_PLACE", 10))
-                emoji = self.config.get("JBOT_EMOJI_FASTEST", "🏃")
+                emoji = self.config.get("JBOT_EMOJI_FASTEST", "🥇")
                 points_earned += bonus
                 bonus_messages.append(f"{emoji} First to answer! (+{bonus})")
 
@@ -208,7 +208,7 @@ class GuessHandler:
             previous_guesses = self.get_player_guesses(player_id)
             if len(previous_guesses) == 0:
                 bonus = int(self.config.get("JBOT_BONUS_FIRST_TRY", 20))
-                emoji = self.config.get("JBOT_EMOJI_FIRST_TRY", "🥇")
+                emoji = self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯")
                 points_earned += bonus
                 bonus_messages.append(f"{emoji} First try! (+{bonus})")
 

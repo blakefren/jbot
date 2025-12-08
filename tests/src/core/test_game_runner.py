@@ -744,17 +744,17 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # Bob should have the fastest guesser emoji (runner)
+        # Bob should have the fastest guesser emoji (medal)
         self.assertIn("Bob", leaderboard)
-        self.assertIn("🏃", leaderboard)
+        self.assertIn("🥇", leaderboard)
 
         # Ensure Alice is present
         self.assertIn("Alice", leaderboard)
-        # But verify she doesn't have the runner emoji.
+        # But verify she doesn't have the medal emoji.
         lines = leaderboard.split("\n")
         alice_line = next((line for line in lines if "Alice" in line), None)
         self.assertIsNotNone(alice_line)
-        self.assertNotIn("🏃", alice_line)
+        self.assertNotIn("🥇", alice_line)
 
     def test_get_scores_leaderboard_first_try_bonus(self):
         """Test that the first try bonus emoji is shown."""
@@ -773,16 +773,16 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # Alice should have the medal
+        # Alice should have the bullseye
         self.assertIn("Alice", leaderboard)
-        self.assertIn("🥇", leaderboard)
+        self.assertIn("🎯", leaderboard)
 
         # Bob should not
         self.assertIn("Bob", leaderboard)
         lines = leaderboard.split("\n")
         bob_line = next((line for line in lines if "Bob" in line), None)
         self.assertIsNotNone(bob_line)
-        self.assertNotIn("🥇", bob_line)
+        self.assertNotIn("🎯", bob_line)
 
     def test_get_scores_leaderboard_emoji_width(self):
         """Test that emojis are counted as 2 characters wide for leaderboard spacing."""
@@ -812,8 +812,8 @@ class TestGameRunner(unittest.TestCase):
             "2023-01-01 09:00:00"
         )
 
-        # Badges string will be "10🔥 🏃 🥇"
-        # 10 (2) + 🔥 (1) + space (1) + 🏃 (1) + space (1) + 🥇 (1) = 7 chars in Python string
+        # Badges string will be "10🔥 🥇 🎯"
+        # 10 (2) + 🔥 (1) + space (1) + 🥇 (1) + space (1) + 🎯 (1) = 7 chars in Python string
         # But user wants width 10 due to the monospaced context of the leaderboard.
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
@@ -861,12 +861,12 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # Expected order: Streak (🔥), First Try (🥇), Fastest (🏃)
+        # Expected order: Streak (🔥), First Try (🎯), Fastest (🥇)
         # Note: The exact emojis depend on config, but defaults are used here.
         # We check the relative positions in the string.
         streak_pos = leaderboard.find("🔥")
-        first_try_pos = leaderboard.find("🥇")
-        fastest_pos = leaderboard.find("🏃")
+        first_try_pos = leaderboard.find("🎯")
+        fastest_pos = leaderboard.find("🥇")
 
         self.assertNotEqual(streak_pos, -1)
         self.assertNotEqual(first_try_pos, -1)
@@ -903,9 +903,9 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # Alice should have the nail polish emoji
+        # Alice should have the brain emoji
         self.assertIn("Alice", leaderboard)
-        self.assertIn("💅", leaderboard)
+        self.assertIn("🧠", leaderboard)
 
 
 if __name__ == "__main__":
