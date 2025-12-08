@@ -484,10 +484,10 @@ class TestDataManagerStats(unittest.TestCase):
     def test_get_first_try_solvers(self):
         """Test retrieving first-try solvers."""
         solvers = self.data_manager.get_first_try_solvers(1)
-        self.assertEqual(len(solvers), 3)
+        self.assertEqual(len(solvers), 2)
         solver_names = {s["name"] for s in solvers}
         self.assertIn("Alice", solver_names)
-        self.assertIn("Bob", solver_names)
+        self.assertNotIn("Bob", solver_names)
         self.assertIn("David", solver_names)
 
     def test_get_guess_counts_per_player(self):

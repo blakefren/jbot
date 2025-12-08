@@ -434,9 +434,9 @@ class DataManager:
             SELECT p.id, p.name
             FROM guesses g
             JOIN players p ON g.player_id = p.id
-            WHERE g.daily_question_id = ? AND g.is_correct = 1
+            WHERE g.daily_question_id = ?
             GROUP BY p.id, p.name
-            HAVING COUNT(g.id) = 1
+            HAVING COUNT(g.id) = 1 AND MAX(g.is_correct) = 1
         """
         return self.db.execute_query(query, (daily_question_id,))
 
