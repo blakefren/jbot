@@ -261,7 +261,7 @@ class GameRunner:
                 if player_id == fastest_guesser_id:
                     badges.append(emoji_fastest)
 
-            badges_str = " ".join(badges)
+            badges_str = "".join(badges)
 
             all_player_data.append(
                 {"name": player_name, "score": score, "badges": badges_str}
