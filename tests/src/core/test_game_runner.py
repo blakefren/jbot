@@ -813,8 +813,8 @@ class TestGameRunner(unittest.TestCase):
         )
 
         # Badges string will be "10🔥 🥇 🎯"
-        # 10 (2) + 🔥 (1) + space (1) + 🥇 (1) + space (1) + 🎯 (1) = 7 chars in Python string
-        # But user wants width 10 due to the monospaced context of the leaderboard.
+        # 10 (2) + 🔥 (1) + 🥇 (1) + 🎯 (1) = 5 chars in Python string
+        # But user wants width 8 due to the monospaced context of the leaderboard.
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 
@@ -829,11 +829,11 @@ class TestGameRunner(unittest.TestCase):
         parts = divider_line.split(" ")
         badges_divider = parts[-1]
 
-        # Expected width: 10
+        # Expected width: 8
         self.assertEqual(
             len(badges_divider),
-            10,
-            f"Expected divider length 10, got {len(badges_divider)}",
+            8,
+            f"Expected divider length 8, got {len(badges_divider)}",
         )
 
     def test_get_scores_leaderboard_badge_order(self):
