@@ -185,15 +185,6 @@ class GuessHandler:
             # Base Score
             points_earned = self.daily_q.clue_value or 100
 
-            # Check Before Hint (before logging this guess)
-            if self.reminder_time:
-                now = datetime.now(self.reminder_time.tzinfo)
-                if now.timetz() < self.reminder_time:
-                    bonus = int(self.config.get("JBOT_BONUS_BEFORE_HINT", 10))
-                    emoji = self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠")
-                    points_earned += bonus
-                    bonus_messages.append(f"{emoji} Before hint! (+{bonus})")
-
             # Check First Solver (before logging this guess)
             existing_correct_count = self.data_manager.get_correct_guess_count(
                 self.daily_question_id
@@ -211,6 +202,15 @@ class GuessHandler:
                 emoji = self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯")
                 points_earned += bonus
                 bonus_messages.append(f"{emoji} First try! (+{bonus})")
+
+            # Check Before Hint (before logging this guess)
+            if self.reminder_time:
+                now = datetime.now(self.reminder_time.tzinfo)
+                if now.timetz() < self.reminder_time:
+                    bonus = int(self.config.get("JBOT_BONUS_BEFORE_HINT", 10))
+                    emoji = self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠")
+                    points_earned += bonus
+                    bonus_messages.append(f"{emoji} Before hint! (+{bonus})")
 
             # Check Streak
             # We need to get the player's current streak BEFORE incrementing it
