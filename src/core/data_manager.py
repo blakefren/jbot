@@ -402,6 +402,8 @@ class DataManager:
     def get_hint_sent_timestamp(self, daily_question_id: int) -> Optional[str]:
         """
         Retrieves the timestamp for when a hint was sent for a specific daily question.
+        Uses the morning message as a reference point to ensure we get the correct day's hint,
+        handling timezone differences where the hint might fall on the next UTC day.
 
         Args:
             daily_question_id (int): The ID of the daily question.
@@ -410,11 +412,18 @@ class DataManager:
             Optional[str]: The timestamp of the hint message, or None if not found.
         """
         query = """
-            SELECT timestamp FROM messages
-            WHERE status = 'reminder_message' AND date(timestamp) = (
-                SELECT sent_at FROM daily_questions WHERE id = ?
-            )
-            ORDER BY timestamp DESC
+            SELECT m.timestamp
+            FROM messages m
+            WHERE m.status = 'reminder_message'
+              AND m.timestamp > (
+                  SELECT MIN(m2.timestamp)
+                  FROM messages m2
+                  JOIN daily_questions dq ON dq.id = ?
+                  WHERE m2.status = 'morning_message'
+                    AND m2.timestamp >= dq.sent_at
+                    AND m2.timestamp < date(dq.sent_at, '+2 days')
+              )
+            ORDER BY m.timestamp DESC
             LIMIT 1
         """
         result = self.db.execute_query(query, (daily_question_id,))

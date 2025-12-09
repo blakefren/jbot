@@ -471,6 +471,11 @@ class TestDataManagerStats(unittest.TestCase):
             "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) VALUES (1, 'player4', 'a1', 1, '2025-11-18 13:00:00')"
         )
 
+        # Morning message
+        self.db.execute_update(
+            "INSERT INTO messages (direction, method, recipient_sender, content, status, timestamp) VALUES ('outgoing', 'discord', 'channel1', 'Morning question', 'morning_message', '2025-11-18 08:00:00')"
+        )
+
         # Hint message
         self.db.execute_update(
             "INSERT INTO messages (direction, method, recipient_sender, content, status, timestamp) VALUES ('outgoing', 'discord', 'channel1', 'Hint for today''s question', 'reminder_message', '2025-11-18 10:30:00')"
@@ -565,6 +570,51 @@ class TestDataManagerNoHint(unittest.TestCase):
         """Test that get_solvers_after_hint returns empty list when no hint exists."""
         result = self.data_manager.get_solvers_after_hint(1)
         self.assertEqual(result, [])
+
+
+class TestDataManagerTimezone(unittest.TestCase):
+    def setUp(self):
+        self.db = Database(db_path=":memory:")
+        self.data_manager = DataManager(self.db)
+
+        # Setup question for 2023-10-27
+        self.db.execute_update(
+            "INSERT INTO questions (id, question_hash, question_text, answer_text) VALUES (1, 'hash1', 'q1', 'a1')"
+        )
+        self.db.execute_update(
+            "INSERT INTO daily_questions (id, question_id, sent_at) VALUES (1, 1, '2023-10-27')"
+        )
+
+        # Morning message at 15:00 UTC (8 AM Pacific)
+        self.db.execute_update(
+            "INSERT INTO messages (direction, method, recipient_sender, content, status, timestamp) VALUES ('outgoing', 'discord', 'channel1', 'Morning', 'morning_message', '2023-10-27 15:00:00')"
+        )
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_hint_next_day_utc(self):
+        # Hint sent at 02:00 UTC next day (19:00 Pacific same day)
+        self.db.execute_update(
+            "INSERT INTO messages (direction, method, recipient_sender, content, status, timestamp) VALUES ('outgoing', 'discord', 'channel1', 'Hint', 'reminder_message', '2023-10-28 02:00:00')"
+        )
+
+        timestamp = self.data_manager.get_hint_sent_timestamp(1)
+        self.assertEqual(timestamp, "2023-10-28 02:00:00")
+
+    def test_ignore_yesterday_hint(self):
+        # Yesterday's hint at 02:00 UTC (same day as sent_at)
+        self.db.execute_update(
+            "INSERT INTO messages (direction, method, recipient_sender, content, status, timestamp) VALUES ('outgoing', 'discord', 'channel1', 'Yesterday Hint', 'reminder_message', '2023-10-27 02:00:00')"
+        )
+
+        # Today's hint at 02:00 UTC next day
+        self.db.execute_update(
+            "INSERT INTO messages (direction, method, recipient_sender, content, status, timestamp) VALUES ('outgoing', 'discord', 'channel1', 'Today Hint', 'reminder_message', '2023-10-28 02:00:00')"
+        )
+
+        timestamp = self.data_manager.get_hint_sent_timestamp(1)
+        self.assertEqual(timestamp, "2023-10-28 02:00:00")
 
 
 if __name__ == "__main__":
