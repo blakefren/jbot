@@ -63,19 +63,47 @@ class GameRunner:
         else:
             logging.warning(f"Manager '{name}' is not enabled or not found.")
 
+    def _get_valid_question(self) -> Question:
+        """
+        Helper method to find a valid question, retrying if necessary.
+        Logs invalid questions as used.
+        """
+        used_hashes = self.data_manager.get_used_question_hashes()
+        retries = int(self.config.get("JBOT_QUESTION_RETRIES", 10))
+
+        for _ in range(retries):
+            question = self.question_selector.get_random_question(
+                exclude_hashes=used_hashes
+            )
+
+            if not question:
+                logging.warning("No questions available.")
+                return None
+
+            if not question.is_valid:
+                logging.info(f"Skipping invalid question: {question.question}")
+                # Log it as used so we don't pick it again
+                # Append (Invalid) to source to distinguish in DB
+                question.data_source += " (Invalid)"
+                self.data_manager.log_daily_question(question, mark_as_used_only=True)
+                used_hashes.add(str(question.id))
+                continue
+
+            return question
+
+        logging.warning(f"Could not find a valid question after {retries} attempts.")
+        return None
+
     def reset_daily_question(self):
         """
         Resets the daily question by selecting a new one.
         This is intended for admin use to skip a problematic or unwanted question.
         """
         logging.info("Admin triggered reset of daily question.")
-        # Get previously used question hashes to avoid repeats
-        used_hashes = self.data_manager.get_used_question_hashes()
-        # Force a new random question (not the daily one, which would be the same)
-        self.daily_q = self.question_selector.get_random_question(
-            exclude_hashes=used_hashes
-        )
-        if self.daily_q:
+
+        self.daily_q = self._get_valid_question()
+
+        if self.daily_q and self.daily_q.is_valid:
             # Invalidate the old question by logging the new one for today.
             # The DB schema ensures only one question per day, so this will either
             # fail if not set up correctly, or overwrite/ignore.
@@ -104,11 +132,9 @@ class GameRunner:
             return
 
         # Otherwise, select a new question
-        used_hashes = self.data_manager.get_used_question_hashes()
-        self.daily_q = self.question_selector.get_random_question(
-            exclude_hashes=used_hashes
-        )
-        if self.daily_q:
+        self.daily_q = self._get_valid_question()
+
+        if self.daily_q and self.daily_q.is_valid:
             # If the question has no hint, try to generate one.
             if not self.daily_q.hint:
                 logging.info(

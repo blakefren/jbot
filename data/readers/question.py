@@ -15,6 +15,7 @@ class Question:
         hint: str = None,
         data_source: str = "unknown",
         metadata: dict = None,
+        is_valid: bool = True,
     ):
         """
         Initializes a Question object.
@@ -30,6 +31,7 @@ class Question:
             metadata (dict, optional): A dictionary for any additional, flexible metadata
                                        related to the question (e.g., air_date, episode_number).
                                        Defaults to an empty dictionary if None is provided.
+            is_valid (bool, optional): Whether the question is considered valid. Defaults to True.
         """
         if not isinstance(question, str) or not question:
             raise ValueError("Question must be a non-empty string.")
@@ -47,6 +49,7 @@ class Question:
         self.hint = hint
         self.data_source = data_source
         self.metadata = metadata if metadata is not None else {}
+        self.is_valid = is_valid
         # Hash the question and answer to create a unique ID
         # https://stackoverflow.com/questions/2511058/persistent-hashing-of-strings-in-python
         self.id = int(

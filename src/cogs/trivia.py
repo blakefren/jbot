@@ -11,10 +11,13 @@ class Trivia(commands.Cog):
     @commands.hybrid_command()
     async def question(self, ctx: commands.Context):
         """Get a random trivia question."""
-        random_q = self.bot.game.question_selector.get_random_question()
+        # Use the game runner's helper to get a valid question
+        # Note: This will log invalid questions as used in the DB, which is fine.
+        random_q = self.bot.game._get_valid_question()
+
         if not random_q:
             await self.bot.send_message(
-                "Could not find a question.",
+                "Could not find a valid question.",
                 interaction=ctx.interaction,
                 ephemeral=True,
             )

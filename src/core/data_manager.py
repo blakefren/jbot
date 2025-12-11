@@ -110,13 +110,19 @@ class DataManager:
         query = "UPDATE players SET score = score + ? WHERE id = ?"
         self.db.execute_update(query, (amount, player_id))
 
-    def log_daily_question(self, question: Question, force_new: bool = False):
+    def log_daily_question(
+        self,
+        question: Question,
+        force_new: bool = False,
+        mark_as_used_only: bool = False,
+    ):
         """
         Logs details about a daily question that was sent out.
 
         Args:
             question (Question): The question object.
             force_new (bool): If True, will replace today's question if one exists.
+            mark_as_used_only (bool): If True, only adds to questions table (marking as used) but not daily_questions.
         """
         # First, ensure the question exists in the 'questions' table
         question_query = "SELECT id FROM questions WHERE question_hash = ?"
@@ -142,6 +148,9 @@ class DataManager:
                     str(question.id),  # Hash
                 ),
             )
+
+        if mark_as_used_only:
+            return None
 
         # Check if a daily question has already been logged for today
         today = date.today()
@@ -338,11 +347,7 @@ class DataManager:
         Returns:
             set[str]: A set of question hashes that have been previously used.
         """
-        query = """
-            SELECT DISTINCT q.question_hash
-            FROM daily_questions dq
-            JOIN questions q ON dq.question_id = q.id
-        """
+        query = "SELECT question_hash FROM questions"
         results = self.db.execute_query(query)
         if not results:
             return set()

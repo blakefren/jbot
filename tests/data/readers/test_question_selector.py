@@ -251,21 +251,22 @@ class TestQuestionSelector(unittest.TestCase):
         self.assertTrue(result)  # Fail open
 
     @patch("data.readers.question_selector.randint")
-    def test_get_random_question_retries_invalid(self, mock_randint):
+    def test_get_random_question_returns_invalid(self, mock_randint):
         selector = QuestionSelector(
             self.questions, gemini_manager=self.mock_gemini_manager
         )
 
-        # Mock randint to return 0 then 1
-        mock_randint.side_effect = [0, 1]
+        # Mock randint to return 0
+        mock_randint.return_value = 0
 
         with patch.object(
-            selector, "validate_question", side_effect=[False, True]
+            selector, "validate_question", return_value=False
         ) as mock_validate:
             question = selector.get_random_question()
 
-            self.assertEqual(question, self.questions[1])
-            self.assertEqual(mock_validate.call_count, 2)
+            self.assertEqual(question, self.questions[0])
+            self.assertFalse(question.is_valid)
+            self.assertEqual(mock_validate.call_count, 1)
 
 
 if __name__ == "__main__":

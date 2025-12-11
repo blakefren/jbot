@@ -141,9 +141,8 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx = AsyncMock()
         mock_question = MagicMock()
         mock_question.hint = "This is a hint"
-        self.mock_game_runner.question_selector.get_random_question.return_value = (
-            mock_question
-        )
+        # Mock _get_valid_question instead of question_selector.get_random_question
+        self.mock_game_runner._get_valid_question.return_value = mock_question
         self.mock_game_runner.format_question.return_value = "Q: What is 2+2?"
         self.mock_game_runner.format_answer.return_value = "A: ||**4**||"
 
@@ -159,9 +158,8 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx = AsyncMock()
         mock_question = MagicMock()
         mock_question.hint = None
-        self.mock_game_runner.question_selector.get_random_question.return_value = (
-            mock_question
-        )
+        # Mock _get_valid_question instead of question_selector.get_random_question
+        self.mock_game_runner._get_valid_question.return_value = mock_question
         self.mock_game_runner.format_question.return_value = "Q: What is 2+2?"
         self.mock_game_runner.format_answer.return_value = "A: ||**4**||"
 
@@ -176,12 +174,13 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         await self.asyncSetUp()
         mock_ctx = AsyncMock()
         mock_ctx.interaction = MagicMock()
-        self.mock_game_runner.question_selector.get_random_question.return_value = None
+        # Mock _get_valid_question instead of question_selector.get_random_question
+        self.mock_game_runner._get_valid_question.return_value = None
 
         await self.trivia_cog.question.callback(self.trivia_cog, mock_ctx)
 
         self.bot.send_message.assert_awaited_once_with(
-            "Could not find a question.",
+            "Could not find a valid question.",
             interaction=mock_ctx.interaction,
             ephemeral=True,
         )

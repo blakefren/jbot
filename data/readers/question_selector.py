@@ -145,9 +145,7 @@ class QuestionSelector:
         # The prompt asks: "Is this question broken or invalid? Respond with only YES..."
         # So YES means it IS broken/invalid.
         if "YES" in cleaned_response:
-            logging.info(
-                f"Skipping broken question (detected by LLM): {question.question}"
-            )
+            logging.info(f"Detected invalid question (by LLM): {question.question}")
             return False
 
         return True
@@ -179,13 +177,14 @@ class QuestionSelector:
         else:
             available_questions = self.questions
 
-        # Try up to 5 times to find a valid question
-        for _ in range(5):
-            index = randint(0, len(available_questions) - 1)
-            question = available_questions[index]
-            if self.validate_question(question):
-                return question
-
-        logging.warning("Could not find a valid random question after 5 attempts.")
+        # Pick a random question
         index = randint(0, len(available_questions) - 1)
-        return available_questions[index]
+        question = available_questions[index]
+
+        # Validate it
+        if self.validate_question(question):
+            question.is_valid = True
+        else:
+            question.is_valid = False
+
+        return question
