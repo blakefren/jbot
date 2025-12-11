@@ -66,8 +66,24 @@ class GuessHandler:
         for word, num in replacements.items():
             text = re.sub(word, num, text)
 
-        # Remove articles (a, an, the)
-        text = re.sub(r"\b(a|an|the)\b", "", text)
+        # Remove common stop words
+        stop_words = [
+            "a",
+            "an",
+            "the",
+            "and",
+            "or",
+            "of",
+            "to",
+            "in",
+            "on",
+            "at",
+            "by",
+            "for",
+            "with",
+        ]
+        pattern = r"\b(" + "|".join(stop_words) + r")\b"
+        text = re.sub(pattern, "", text)
 
         # Remove all non-alphanumeric characters
         text = re.sub(r"[^\w\s]", "", text)
@@ -79,47 +95,51 @@ class GuessHandler:
 
     def _is_correct_guess(self, guess: str, answer: str) -> bool:
         """
-        Checks a guess against an answer using normalization and fuzzy matching.
+        Checks a guess against an answer using normalization, fuzzy matching, and token logic.
         """
         norm_g = self._normalize(guess)
         norm_a = self._normalize(answer)
 
-        # Reject short guesses unless the answer is also short
-        if len(norm_g) <= 1 and len(norm_a) > 1:
+        # Reject empty guesses
+        if not norm_g:
             return False
 
-        # Check for exact match
+        # Step A: Exact Match
+        # Purpose: Handles exact matches and number conversions perfectly.
         if norm_g == norm_a:
             return True
 
-        # If the answer is numeric, require exact match
-        if norm_a.isdigit():
+        # Step B: Standard Fuzzy Match (Typos)
+        # Calculate Levenshtein distance between normalized strings.
+        # Allow a distance of <= 2.
+        # Purpose: Handles simple typos like "clokc" vs "clock".
+        # EXCEPTION: If the answer is numeric, skip fuzzy matching to prevent "150" matching "650".
+        if not norm_a.isdigit():
+            distance = jellyfish.levenshtein_distance(norm_g, norm_a)
+            if distance <= 2:
+                return True
+
+        # Step C: Smart Token Match (Precision/Recall)
+        tokens_g = set(norm_g.split())
+        tokens_a = set(norm_a.split())
+
+        # Avoid division by zero
+        if not tokens_g or not tokens_a:
             return False
 
-        # Dynamic distance limit based on answer length to avoid overly lenient
-        # matching on short words while still permitting minor typos on longer ones.
-        def _distance_limit(ans_len: int) -> int:
-            # Revised thresholds: tighten for short (3-5) answers.
-            if ans_len <= 2:
-                return 0  # extremely short must be exact
-            if ans_len <= 5:
-                return 1  # short answers allow only a single edit
-            if ans_len <= 8:
-                return 2  # medium length permit minor typos
-            if ans_len <= 12:
-                return 3  # longer answers permit a bit more fuzziness
-            return 4  # very long answers allow more typos
+        intersection = tokens_g.intersection(tokens_a)
+        recall = len(intersection) / len(tokens_a)
+        precision = len(intersection) / len(tokens_g)
 
-        distance = jellyfish.levenshtein_distance(norm_g, norm_a)
-        limit = _distance_limit(len(norm_a))
-        # Preserve ability to override via constructor by treating provided fuzzy_threshold
-        # as a hard cap if smaller than the dynamic limit (tighter matching).
-        if self.fuzzy_threshold is not None:
-            limit = (
-                min(limit, self.fuzzy_threshold) if self.fuzzy_threshold >= 0 else limit
-            )
+        # Subset Match (Venn Diagram): Precision == 1.0 AND Recall >= 0.5.
+        # Example: Answer "Mountain Daylight Time", Guess "Mountain Time" -> PASS.
+        if precision == 1.0 and recall >= 0.5:
+            return True
 
-        if distance <= limit:
+        # Superset Match (Over-answering): Recall == 1.0 AND len(answer) > 3.
+        # Example: Answer "Central", Guess "Central Standard Time" -> PASS.
+        # Constraint: Ensure answer length > 3 to prevent Answer "War" matching Guess "Civil War".
+        if recall == 1.0 and len(norm_a) > 3:
             return True
 
         return False

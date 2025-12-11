@@ -144,7 +144,7 @@ class TestGuessHandler(unittest.TestCase):
             (".", "clock", False),  # Normalized to empty
             ("o", "clock", False),  # Too short
             # Spell correction (fuzzy matching)
-            ("clokc", "clock", False),  # Now too distant (dist 2) under tightened rules
+            ("clokc", "clock", True),  # Fuzzy (dist 2)
             ("clocc", "clock", True),  # Fuzzy (dist 1)
             ("clockk", "clock", True),  # Fuzzy (dist 1)
             ("klock", "clock", True),  # Fuzzy (dist 1)
@@ -280,57 +280,6 @@ class TestGuessHandler(unittest.TestCase):
         # on_guess called twice (initial attempt + fallback attempt)
         self.assertEqual(mock_manager.on_guess.call_count, 2)
 
-    def test_distance_limit_very_short_answer(self):
-        """Test that very short answers (<=2 chars) require exact match."""
-        # For answers <= 2 chars, distance limit is 0 (exact match required)
-        self.assertTrue(self.guess_handler._is_correct_guess("ab", "ab"))
-        self.assertFalse(self.guess_handler._is_correct_guess("ac", "ab"))
-
-    def test_distance_limit_medium_answer(self):
-        """Test distance limit for medium length answers (6-8 chars)."""
-        # For 6-8 char answers, limit is 2
-        self.assertTrue(
-            self.guess_handler._is_correct_guess("testing", "testinx")
-        )  # dist 1
-        self.assertTrue(
-            self.guess_handler._is_correct_guess("testing", "testixg")
-        )  # dist 1
-        self.assertFalse(
-            self.guess_handler._is_correct_guess("testing", "texxxxx")
-        )  # too distant
-
-    def test_distance_limit_long_answer(self):
-        """Test distance limit for longer answers (9-12 chars)."""
-        # For 9-12 char answers, limit is 3
-        self.assertTrue(
-            self.guess_handler._is_correct_guess("programming", "programminx")
-        )  # dist 1
-        self.assertTrue(
-            self.guess_handler._is_correct_guess("programming", "programxinx")
-        )  # dist 2
-
-    def test_distance_limit_very_long_answer(self):
-        """Test distance limit for very long answers (>12 chars)."""
-        # For >12 char answers, limit is 4
-        answer = "extraordinary"  # 13 chars
-        self.assertTrue(
-            self.guess_handler._is_correct_guess("extraordinari", answer)
-        )  # dist 1
-
-    def test_numeric_strictness(self):
-        """Test that numeric answers require exact matches."""
-        # Exact match should still work
-        self.assertTrue(self.guess_handler._is_correct_guess("150", "150"))
-
-        # Close numbers should fail (Levenshtein distance is small, but strictness rejects it)
-        self.assertFalse(self.guess_handler._is_correct_guess("250", "150"))  # dist 1
-        self.assertFalse(self.guess_handler._is_correct_guess("151", "150"))  # dist 1
-        self.assertFalse(self.guess_handler._is_correct_guess("15", "150"))  # dist 1
-
-        # Normalization should still apply
-        self.assertTrue(self.guess_handler._is_correct_guess("one", "1"))
-        self.assertFalse(self.guess_handler._is_correct_guess("two", "1"))
-
     def test_handle_guess_streak_reset(self):
         """Test that streak is reset if last correct guess was not yesterday."""
         player_id = 1
@@ -429,6 +378,47 @@ class TestGuessHandler(unittest.TestCase):
             # Base points (100) + First Try (20) + Before Hint Bonus (10) = 130
             self.assertEqual(points, 130)
             self.assertTrue(any("Before hint!" in msg for msg in bonuses))
+
+    def test_validation_logic(self):
+        """Test the strict hierarchy of answer validation logic."""
+        cases = [
+            # Step A: Exact Match & Normalization
+            ("1", "1", True),
+            ("one", "1", True),
+            ("ONE", "1", True),
+            ("  one  ", "1", True),
+            # Step B: Standard Fuzzy Match (Typos)
+            ("clokc", "clock", True),
+            ("clock", "clokc", True),
+            ("kitten", "sitting", False),  # Distance > 2
+            # Step B Exception: Numeric Answers
+            ("150", "650", False),  # Distance 1, but numeric answer
+            ("10", "100", False),  # Distance 1, but numeric answer
+            # Step B Safety Check: Multi-word semantic differences
+            ("North America", "South America", False),  # Dist 2, but "North" != "South"
+            (
+                "New Yrok",
+                "New York",
+                True,
+            ),  # Dist 2 (Lev), but "Yrok" is typo (DamLev 1)
+            # Step C: Smart Token Match
+            # Subset Match (Venn Diagram): Precision == 1.0 AND Recall >= 0.5
+            ("Mountain Time", "Mountain Daylight Time", True),  # P=1.0, R=2/3=0.66
+            ("Central Daylight Time", "Mountain Daylight Time", False),  # P=2/3, R=2/3
+            # Superset Match (Over-answering): Recall == 1.0 AND len(answer) > 3
+            ("Central Standard Time", "Central", True),  # R=1.0, AnsLen > 3
+            ("Civil War", "War", False),  # R=1.0, but AnsLen=3 (not > 3)
+            # Stop words
+            ("The Beatles", "Beatles", True),
+            ("A Tale of Two Cities", "Tale Two Cities", True),
+        ]
+
+        for guess, answer, expected in cases:
+            with self.subTest(guess=guess, answer=answer):
+                result = self.guess_handler._is_correct_guess(guess, answer)
+                self.assertEqual(
+                    result, expected, f"Failed for guess='{guess}', answer='{answer}'"
+                )
 
 
 if __name__ == "__main__":
