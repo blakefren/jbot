@@ -17,7 +17,7 @@ A daily bot for group trivia questions and competition.
 Once the setup is complete, you can run the bot with the following command:
 
 ```
-python main.py
+python run.py
 ```
 
 ## Daily format
@@ -56,17 +56,17 @@ This track introduces mechanics that reward consistent play or provide other adv
     *   **Details**: Bets are capped at 25% of a player's current score (minimum 1 point).
 *   **Answering First**: The first player to answer the daily question correctly receives a point bonus.
 *   **Answering Before the Hint**: Players who answer correctly before the daily hint is revealed receive a point bonus.
-*   **Weekly Boss Fight**: A challenging weekly question with a large point reward.
+*   **Weekly Boss Fight** (Planned): A challenging weekly question with a large point reward.
 
 ### Coop Track
 
 This track focuses on collaborative features.
 
-*   **Reinforce**: Two players can form a temporary alliance for the day. If either player answers correctly, both receive full points.
+*   **Reinforce** (Planned): Two players can form a temporary alliance for the day. If either player answers correctly, both receive full points.
     *   **Command**: `/reinforce <player_id>`
     *   **Cost**: 25 points for each player.
-*   **Reveal Answer Letters**: Players can vote to reveal letters in the answer. Each vote costs points, and the cost increases with each revealed letter.
-*   **Red vs. Blue Teams**: Players are divided into two teams (either by choice or randomly). The team with the most correct responses at the end of the day gets bonus points.
+*   **Reveal Answer Letters** (Planned): Players can vote to reveal letters in the answer. Each vote costs points, and the cost increases with each revealed letter.
+*   **Red vs. Blue Teams** (Planned): Players are divided into two teams (either by choice or randomly). The team with the most correct responses at the end of the day gets bonus points.
 
 ## Database
 
@@ -76,7 +76,7 @@ The bot uses a SQLite database (`jbot.db`) to store all persistent data, includi
 *   Daily guesses
 *   Message logs
 
-The database schema is defined in `database/schema.sql`. When the bot is run for the first time, it will create the database file in the root directory.
+The database schema is defined in `db/schema.sql`. When the bot is run for the first time, it will create the database file in the root directory.
 
 ## Datasets
 
@@ -105,49 +105,3 @@ This project is being developed with the assistance of an AI programming partner
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## v2 burndown
-
-* [X] Database
-    * [X] Design table stucture
-    * [X] Migrate each use case
-    * [ ] Add metrics
-* [ ] Scale up
-    * [X] discord.py cogs
-    * [ ] update environment vars: python-dotenv, .env file with flags, etc.
-    * [ ] setup.py on first run
-    * [ ] CI/CD
-* [ ] Cleaner UI
-    * [ ] Stop spamming answers: discord.ui.Modal
-    * [ ] Don't spam commands: discord.ui.View()
-    * [ ] Explore discord.Embed for message formatting
-* [ ] Player interactions
-    * [ ] Fight
-        * [X] Disrupt
-        * [X] Steal
-        * [X] Shield
-    * [ ] Powerup
-        * [X] Wager: basic bets
-        * [ ] Extra points for answering before the hint
-        * [ ] Extra points for answering first
-        * [ ] Weekly boss fight
-    * [ ] Coop
-        * [X] Reinforce
-        * [ ] Reveal answer letters
-        * [ ] Red vs. blue teams
-* [ ] Questions
-    * [ ] Pop Culture Jeopardy!
-    * [ ] Test dataset
-
-## Bugs
-
-* [ ] Fix Discord bot shutdown errors
-* [ ] History / scores / metrics still seem off
-
-## Future ideas
-
-* [ ] SMS messaging
-* [ ] Chatbot hints, guesser, etc.
-* [ ] Add more game modes (soulslike, Jeopardy!)
-* [ ] Support multi-channel play
-* [ ] Cloud hosting
