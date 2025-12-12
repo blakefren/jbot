@@ -10,6 +10,13 @@ This document outlines my operating parameters and guidelines for assisting you 
 
 This project, `jbot`, is a daily bot designed for group trivia questions and friendly competition. The core functionality involves sending a daily trivia question to a group, with the answer revealed later in the day. Players can submit their guesses and interact with the bot based on the active game mode.
 
+**Tech Stack:**
+*   **Language**: Python 3.11+
+*   **Bot Framework**: `discord.py`
+*   **Database**: SQLite (raw SQL, no ORM)
+*   **Testing**: `unittest` (primary), `pytest` (installed)
+*   **Configuration**: `python-dotenv`
+
 The bot's features are organized into three distinct "tracks" that can be enabled or disabled independently:
 *   **Fight Track**: Player-vs-player interactions like attacking and defending.
 *   **Power-up Track**: Mechanics that reward consistent play, such as answer streaks and betting.
@@ -34,17 +41,20 @@ As your partner, I will adhere to the following principles:
 *   **File Edits**: I will make changes to files directly using the available tools, clearly explaining the changes I am making.
 *   **Dependencies**: If a task requires a new dependency, I will ask for your approval before adding it to `requirements.txt`.
 *   **Ambiguity**: If a request is unclear, I will ask for clarification before proceeding.
+*   **Configuration**: Configuration is managed via `.env` files. When adding new configuration options, I will update `.env.template` and ensure the `ConfigReader` in `src/cfg/main.py` can handle them.
+*   **Database Management**: The database schema is defined in `db/schema.sql`. To modify the database, I will update `db/schema.sql` and run `db/update_schema.py` to apply the changes to the local `jbot.db`.
+*   **Documentation**: I will check `docs/` for any architectural plans or investigation notes (e.g., `command_refactor_plan.md`) before implementing major features.
 
 ## Testing Strategy
 
-The project has a testing framework using Python's `unittest` module, with tests located in the `tests/` directory. To run the test suite, execute the `run_tests.bat` script from the root of the project. My approach to testing will be:
+The project uses Python's `unittest` module as the primary testing framework.
 
 1.  **Run Tests via Script**: I will use the `run_tests.bat` script to execute the test suite.
 2.  **Build Upon Existing Tests**: I will work with the existing `unittest` framework, adding new tests for new features and expanding coverage for existing ones.
 3.  **Unit Tests**: I will prioritize creating unit tests for core business logic, such as game mode rules, scoring, and question handling.
-4.  **Coverage**: We should aim for a reasonable level of test coverage to ensure the stability of the application. I can help set up a tool like `coverage.py` to measure this.
+4.  **Coverage**: We should aim for a reasonable level of test coverage.
 5.  **Integration Tests**: As the project grows, I will suggest adding integration tests for interactions between different components (e.g., the bot and the database).
-6.  **CI/CD**: I see a `.github/workflows/python-tests.yml` file, which suggests a GitHub Actions workflow for running tests. I will help maintain and improve this CI/CD pipeline.
+6.  **CI/CD**: The `.github/workflows/python-tests.yml` file runs tests using `unittest`. I will ensure any changes I make pass these CI checks.
 
 ## Player-Centric Development
 
