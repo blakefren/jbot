@@ -93,6 +93,65 @@ class GuessHandler:
 
         return text
 
+    def _get_adaptive_limit(self, text: str) -> int:
+        """
+        Returns the allowed edit distance based on string length.
+        """
+        length = len(text)
+        if length < 3:
+            return 0  # Exact match only
+        elif length <= 5:
+            return 1  # Strict for short words
+        else:
+            return 2  # Standard tolerance
+
+    def _smart_token_match(self, guess: str, answer: str) -> bool:
+        """
+        Checks if tokens match using Damerau-Levenshtein and adaptive thresholds.
+        """
+        tokens_g = guess.split()
+        tokens_a = answer.split()
+
+        if not tokens_g or not tokens_a:
+            return False
+
+        # Recall: Percentage of Answer words found in Guess
+        matches_a = 0
+        for ta in tokens_a:
+            limit = self._get_adaptive_limit(ta)
+            # Find closest token in guess
+            if any(
+                jellyfish.damerau_levenshtein_distance(tg, ta) <= limit
+                for tg in tokens_g
+            ):
+                matches_a += 1
+
+        recall = matches_a / len(tokens_a)
+
+        # Precision: Percentage of Guess words found in Answer
+        matches_g = 0
+        for tg in tokens_g:
+            matched = False
+            for ta in tokens_a:
+                limit = self._get_adaptive_limit(ta)
+                if jellyfish.damerau_levenshtein_distance(tg, ta) <= limit:
+                    matched = True
+                    break
+            if matched:
+                matches_g += 1
+
+        precision = matches_g / len(tokens_g)
+
+        # Subset Match (Venn Diagram): Precision == 1.0 AND Recall >= 0.5.
+        if precision == 1.0 and recall >= 0.5:
+            return True
+
+        # Superset Match (Over-answering): Recall == 1.0 AND len(answer) > 3.
+        if recall == 1.0 and len(answer) > 3:
+            return True
+
+        return False
+
     def _is_correct_guess(self, guess: str, answer: str) -> bool:
         """
         Checks a guess against an answer using normalization, fuzzy matching, and token logic.
@@ -105,44 +164,22 @@ class GuessHandler:
             return False
 
         # Step A: Exact Match
-        # Purpose: Handles exact matches and number conversions perfectly.
         if norm_g == norm_a:
             return True
 
-        # Step B: Standard Fuzzy Match (Typos)
-        # Calculate Levenshtein distance between normalized strings.
-        # Allow a distance of <= 2.
-        # Purpose: Handles simple typos like "clokc" vs "clock".
-        # EXCEPTION: If the answer is numeric, skip fuzzy matching to prevent "150" matching "650".
-        if not norm_a.isdigit():
-            distance = jellyfish.levenshtein_distance(norm_g, norm_a)
-            if distance <= 2:
+        # Numeric Exception
+        if norm_a.isdigit():
+            return norm_g == norm_a
+
+        # Step B: The Single-Word Branch
+        answer_words = norm_a.split()
+        if len(answer_words) == 1:
+            limit = self._get_adaptive_limit(norm_a)
+            if jellyfish.damerau_levenshtein_distance(norm_g, norm_a) <= limit:
                 return True
 
-        # Step C: Smart Token Match (Precision/Recall)
-        tokens_g = set(norm_g.split())
-        tokens_a = set(norm_a.split())
-
-        # Avoid division by zero
-        if not tokens_g or not tokens_a:
-            return False
-
-        intersection = tokens_g.intersection(tokens_a)
-        recall = len(intersection) / len(tokens_a)
-        precision = len(intersection) / len(tokens_g)
-
-        # Subset Match (Venn Diagram): Precision == 1.0 AND Recall >= 0.5.
-        # Example: Answer "Mountain Daylight Time", Guess "Mountain Time" -> PASS.
-        if precision == 1.0 and recall >= 0.5:
-            return True
-
-        # Superset Match (Over-answering): Recall == 1.0 AND len(answer) > 3.
-        # Example: Answer "Central", Guess "Central Standard Time" -> PASS.
-        # Constraint: Ensure answer length > 3 to prevent Answer "War" matching Guess "Civil War".
-        if recall == 1.0 and len(norm_a) > 3:
-            return True
-
-        return False
+        # Step C: Smart Token Match
+        return self._smart_token_match(norm_g, norm_a)
 
     def get_player_guesses(self, player_id: int) -> list:
         """
