@@ -2,38 +2,35 @@
 
 This document outlines a plan to refactor and consolidate JBot's command structure to improve user experience and simplify the command interface.
 
-## 1. Consolidate Game Information Commands
+## 1. Consolidate Game Information Commands (`/game`)
 
-**Observation:** Players currently use multiple commands to get a full picture of the game state. For example, `/when` shows the next event time and the current question, while other commands might show player stats or leaderboard information.
+**Goal:** Centralize game state information while keeping high-frequency commands accessible.
 
-**Suggestion:** Combine game-state-related commands into a single, powerful `/game` command. This command will use subcommands to show specific information.
+*   **`/game status`**: Replaces `/when`. Shows the current question, time until the next event (question or answer), and a summary of the player's personal stats.
+*   **`/game leaderboard`**: Moves `/leaderboard`. Displays the current leaderboard.
+*   **`/game rules`**: Provides a summary of the rules for active game modes (e.g., Fight, Power-up).
 
--   **/game status**: Shows the current question, time until the next event (question or answer), and a summary of the player's personal stats (e.g., current streak).
--   **/game leaderboard**: Displays the current leaderboard.
--   **/game rules**: Provides a summary of the rules for active game modes (e.g., Fight, Power-up).
+**Note:** `/answer` will remain as a top-level command for quick access. `/question` will be removed entirely.
 
-This approach reduces the number of top-level commands a player needs to remember and provides a more centralized way to get information about the game.
+## 2. Group Player-vs-Player Actions (`/fight`)
 
-## 2. Group Player-vs-Player Actions
+**Goal:** Group all PvP actions under a single command group to reduce clutter.
 
-**Observation:** The "Fight Track" will introduce several player-vs-player actions. If implemented as individual commands, they could clutter the main command list.
+*   **`/fight disrupt <player>`**: Moves `/disrupt`. Initiates an attack on another player.
+*   **`/fight shield`**: Moves `/shield`. Activates a defensive maneuver.
+*   **`/fight steal <player>`**: Moves `/steal`. Steals points from another player.
 
-**Suggestion:** Group all PvP actions under a single `/fight` command group.
+## 3. Create a Unified Player Command (`/player`)
 
--   **/fight attack <player>**: Initiates an attack on another player.
--   **/fight defend**: Activates a defensive maneuver.
--   **/fight status**: Shows the player's current PvP status, including active buffs or debuffs.
+**Goal:** Consolidate commands related to a player's own status and management.
 
-This makes the PvP feature set feel more cohesive and is more intuitive for players.
+*   **`/player profile`**: Moves `/history`. Shows a complete player profile, including stats and streak.
+*   **`/player team`**: Moves `/teams`. Manages team membership (join, leave, view).
+*   **`/player stats`**: (Optional) Alias for profile or specific stat view.
 
-## 3. Create a Unified `player` Command for Self-Management
+## Summary of Changes
 
-**Observation:** Players often need to check their own stats, inventory, or settings. These commands might be scattered across different cogs (e.g., `powerup`, `roles`, `coop`).
-
-**Suggestion:** Introduce a `/player` or `/me` command group that consolidates all commands related to a player's own status and items.
-
--   **/player profile**: Shows a complete player profile, including stats, streak, and team affiliation.
--   **/player powerups**: Lists available power-ups and allows the player to use them.
--   **/player team**: Manages team membership (join, leave, view).
-
-This creates a personal dashboard for each player, making it easy for them to manage their own experience within the game.
+*   **New Top-Level Groups**: `/game`, `/fight`, `/player`.
+*   **Keep Top-Level**: `/answer`.
+*   **Consolidate**: `/when`, `/disrupt`, `/shield`, `/steal`, `/history`, `/teams`, `/leaderboard`.
+*   **Remove**: `/question`.
