@@ -11,6 +11,9 @@ from src.cfg.main import ConfigReader
 config = ConfigReader()
 
 
+CRUCIAL_MODIFIERS = {"north", "south", "east", "west", "new", "no"}
+
+
 class AlreadyAnsweredCorrectlyError(Exception):
     """Raised when a player tries to answer a question they have already answered correctly."""
 
@@ -117,6 +120,7 @@ class GuessHandler:
 
         # Recall: Percentage of Answer words found in Guess
         matches_a = 0
+        matched_answer_tokens = set()
         for ta in tokens_a:
             limit = self._get_adaptive_limit(ta)
             # Find closest token in guess
@@ -125,6 +129,15 @@ class GuessHandler:
                 for tg in tokens_g
             ):
                 matches_a += 1
+                matched_answer_tokens.add(ta)
+
+        # --- NEW: CRUCIAL MODIFIER GUARD ---
+        # Find which words in the answer were NOT found in the guess
+        missing_tokens = set(tokens_a) - matched_answer_tokens
+
+        # Check if we dropped something important
+        if not missing_tokens.isdisjoint(CRUCIAL_MODIFIERS):
+            return False
 
         recall = matches_a / len(tokens_a)
 

@@ -381,6 +381,7 @@ class TestGuessHandler(unittest.TestCase):
 
     def test_validation_logic(self):
         """Test the strict hierarchy of answer validation logic."""
+        # (guess, answer, expected_result)
         cases = [
             # Step A: Exact Match & Normalization
             ("1", "1", True),
@@ -411,6 +412,9 @@ class TestGuessHandler(unittest.TestCase):
             # Stop words
             ("The Beatles", "Beatles", True),
             ("A Tale of Two Cities", "Tale Two Cities", True),
+            ("Virginia", "West Virginia", False),
+            ("Dr.", "Dr. No", False),
+            ("York", "New York", False),
         ]
 
         for guess, answer, expected in cases:
