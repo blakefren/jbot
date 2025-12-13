@@ -131,11 +131,6 @@ class TestPlayerManager(unittest.TestCase):
         self.mock_data_manager.create_player.assert_called_with("456", "New Player")
         self.assertEqual(player, new_player)
 
-    def test_refund_score(self):
-        """Test refunding a player's score."""
-        self.manager.refund_score("123", 50)
-        self.mock_data_manager.adjust_player_score.assert_called_with("123", 50)
-
     def test_set_streak(self):
         """Test setting a player's streak to a specific value."""
         self.manager.set_streak("123", 10)

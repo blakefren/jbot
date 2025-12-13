@@ -81,8 +81,8 @@ class TestConfigReader(unittest.TestCase):
     def test_get_bool_non_existing(self):
         """Test getting a boolean for a non-existing key."""
         config_reader = ConfigReader()
-        with self.assertRaises(KeyError):
-            config_reader.get_bool("JBOT_NON_EXISTENT_KEY")
+        self.assertFalse(config_reader.get_bool("JBOT_NON_EXISTENT_KEY"))
+        self.assertTrue(config_reader.get_bool("JBOT_NON_EXISTENT_KEY", default=True))
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test_api_key_12345"})
     def test_get_gemini_api_key_success(self):

@@ -8,21 +8,14 @@ class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.hybrid_command()
-    @commands.is_owner()
-    async def sync(self, ctx: commands.Context):
-        """(owner) Syncs the command tree."""
-        # TODO: error when running this command:
-        # An unexpected error occurred in command 'sync':
-        # Hybrid command raised an error:
-        # Command 'sync' raised an exception:
-        # NotFound: 404 Not Found (error code: 10062):
-        # Unknown interaction
-        await self.bot.tree.sync()
-        await ctx.send("Command tree synced.")
-
-    @commands.hybrid_command()
+    @commands.hybrid_group(name="admin", description="Administrative commands.")
     @commands.has_permissions(administrator=True)
+    async def admin(self, ctx: commands.Context):
+        """Administrative commands."""
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help(ctx.command)
+
+    @admin.command(name="refund", description="Refunds score/streak to a player.")
     async def refund(
         self,
         ctx: commands.Context,
@@ -38,7 +31,7 @@ class Admin(commands.Cog):
             str(member.id), member.display_name
         )
 
-        player_manager.refund_score(str(member.id), amount)
+        player_manager.update_score(str(member.id), amount)
 
         if streak is not None:
             player_manager.set_streak(str(member.id), streak)
@@ -63,8 +56,7 @@ class Admin(commands.Cog):
 
         await ctx.send(msg)
 
-    @commands.hybrid_command()
-    @commands.has_permissions(administrator=True)
+    @admin.command(name="subscribe", description="Sub/unsub from daily questions.")
     async def subscribe(
         self,
         ctx: commands.Context,
@@ -107,8 +99,7 @@ class Admin(commands.Cog):
             await ctx.send(f"Unsubscribed {target_name} from daily questions.")
         return
 
-    @commands.hybrid_command()
-    @commands.has_permissions(administrator=True)
+    @admin.command(name="resend", description="Resend a scheduled message.")
     @discord.app_commands.choices(
         message_type=[
             discord.app_commands.Choice(name="morning", value="morning"),
@@ -141,8 +132,7 @@ class Admin(commands.Cog):
         if silent:
             await ctx.send(f"Silently resent {message_type} message.", ephemeral=True)
 
-    @commands.hybrid_command()
-    @commands.has_permissions(administrator=True)
+    @admin.command(name="skip", description="Skips the current daily question.")
     async def skip(self, ctx: commands.Context):
         """(admin) Skips the current daily question."""
         await ctx.defer()
@@ -160,52 +150,11 @@ class Admin(commands.Cog):
         else:
             await ctx.send("Failed to skip the daily question. Check the logs.")
 
-    @commands.hybrid_group(name="feature", description="Manage game features.")
-    @commands.is_owner()
-    async def feature(self, ctx: commands.Context):
-        """(owner) Manage game features."""
-        if ctx.invoked_subcommand is None:
-            await ctx.send("Invalid feature command. Use `enable` or `disable`.")
-
-    @feature.command(name="enable", description="Enable a game feature.")
-    @discord.app_commands.choices(
-        feature_name=[
-            discord.app_commands.Choice(name="fight", value="fight"),
-            discord.app_commands.Choice(name="powerup", value="powerup"),
-            discord.app_commands.Choice(name="coop", value="coop"),
-            discord.app_commands.Choice(name="roles", value="roles"),
-        ]
-    )
-    async def enable_feature(self, ctx: commands.Context, feature_name: str):
-        """(owner) Enable a game feature."""
-        # You might need to pass arguments to the manager's constructor
-        kwargs = {}
-        if feature_name == "powerup":
-            kwargs["players"] = [
-                k for k in self.bot.player_manager.get_all_players().keys()
-            ]
-        elif feature_name == "roles":
-            kwargs["db"] = self.bot.data_manager.db
-            from src.cfg.main import ConfigReader
-
-            kwargs["config"] = ConfigReader()
-
-        self.bot.game.enable_manager(feature_name, **kwargs)
-        await ctx.send(f"Feature '{feature_name}' enabled.")
-
-    @feature.command(name="disable", description="Disable a game feature.")
-    @discord.app_commands.choices(
-        feature_name=[
-            discord.app_commands.Choice(name="fight", value="fight"),
-            discord.app_commands.Choice(name="powerup", value="powerup"),
-            discord.app_commands.Choice(name="coop", value="coop"),
-            discord.app_commands.Choice(name="roles", value="roles"),
-        ]
-    )
-    async def disable_feature(self, ctx: commands.Context, feature_name: str):
-        """(owner) Disable a game feature."""
-        self.bot.game.disable_manager(feature_name)
-        await ctx.send(f"Feature '{feature_name}' disabled.")
+    @admin.command(name="ping", description="Check bot response time.")
+    async def ping(self, ctx: commands.Context):
+        """Check the bot's response time."""
+        response_content = "Pong!"
+        await self.bot.send_message(response_content, interaction=ctx.interaction)
 
 
 async def setup(bot):

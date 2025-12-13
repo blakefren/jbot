@@ -37,31 +37,19 @@ class GameRunner:
         self.config = ConfigReader()
         self.reminder_time = None
 
-    def register_manager(self, name: str, manager_class):
-        """
-        Registers a manager class.
-        """
-        self.managers[name] = manager_class
+        # Feature flags
+        self.features = {
+            "fight": self.config.get_bool("JBOT_ENABLE_FIGHT", False),
+            "powerup": self.config.get_bool("JBOT_ENABLE_POWERUP", False),
+            "coop": self.config.get_bool("JBOT_ENABLE_COOP", False),
+        }
 
-    def enable_manager(self, name: str, **kwargs):
-        """
-        Enables a manager by creating an instance of its class.
-        """
-        if name in self.managers:
-            self.managers[name] = self.managers[name](**kwargs)
-            logging.info(f"Manager '{name}' enabled.")
-        else:
-            logging.warning(f"Manager '{name}' not found.")
+        # Initialize PowerUpManager if any related feature is enabled
+        if any(self.features.values()):
+            from src.core.powerup import PowerUpManager
 
-    def disable_manager(self, name: str):
-        """
-        Disables a manager.
-        """
-        if name in self.managers and self.managers[name] is not None:
-            self.managers[name] = None
-            logging.info(f"Manager '{name}' disabled.")
-        else:
-            logging.warning(f"Manager '{name}' is not enabled or not found.")
+            self.managers["powerup"] = PowerUpManager(self.player_manager)
+            logging.info(f"PowerUpManager enabled with features: {self.features}")
 
     def _get_valid_question(self) -> Question:
         """

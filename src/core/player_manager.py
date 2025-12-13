@@ -99,9 +99,3 @@ class PlayerManager:
                 self.data_manager.update_player_name(pid, player_name)
                 player.name = player_name
         return player
-
-    def refund_score(self, player_id: str, amount: int):
-        """
-        Refunds a player's score by a given amount and saves it to the database.
-        """
-        self.data_manager.adjust_player_score(self._normalize_id(player_id), amount)

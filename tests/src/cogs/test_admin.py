@@ -154,7 +154,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         )
 
         # Assertions
-        player_manager.refund_score.assert_called_once_with(str(member.id), amount)
+        player_manager.update_score.assert_called_once_with(str(member.id), amount)
         self.bot.data_manager.log_score_adjustment.assert_called_once_with(
             player_id=str(member.id),
             admin_id=str(self.ctx.author.id),
@@ -187,17 +187,12 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
             self.cog, self.ctx, member, amount, reason=reason
         )
 
-        player_manager.refund_score.assert_called_once_with(str(member.id), amount)
+        player_manager.update_score.assert_called_once_with(str(member.id), amount)
         self.ctx.send.assert_called_once_with(
             f"Could not find player {member.display_name} after refund."
         )
 
-    async def test_sync_command(self):
-        """Test the sync command syncs the command tree."""
-        await self.cog.sync.callback(self.cog, self.ctx)
-
-        self.bot.tree.sync.assert_called_once()
-        self.ctx.send.assert_called_once_with("Command tree synced.")
+    # Feature and sync tests removed.
 
     @patch("src.cogs.admin.Subscriber")
     async def test_subscribe_member(self, mock_subscriber):
@@ -295,76 +290,6 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         self.ctx.send.assert_called_once_with(
             "Please provide either a member or a channel, not both."
         )
-
-    async def test_feature_no_subcommand(self):
-        """Test feature command with no subcommand."""
-        self.ctx.invoked_subcommand = None
-
-        await self.cog.feature.callback(self.cog, self.ctx)
-
-        self.ctx.send.assert_called_once_with(
-            "Invalid feature command. Use `enable` or `disable`."
-        )
-
-    async def test_feature_with_subcommand(self):
-        """Test feature command with a subcommand (doesn't send error message)."""
-        self.ctx.invoked_subcommand = MagicMock()
-
-        await self.cog.feature.callback(self.cog, self.ctx)
-
-        self.ctx.send.assert_not_called()
-
-    async def test_enable_feature_fight(self):
-        """Test enabling the fight feature."""
-        await self.cog.enable_feature.callback(self.cog, self.ctx, feature_name="fight")
-
-        self.bot.game.enable_manager.assert_called_once_with("fight")
-        self.ctx.send.assert_called_once_with("Feature 'fight' enabled.")
-
-    async def test_enable_feature_powerup(self):
-        """Test enabling the powerup feature."""
-        self.bot.player_manager.get_all_players.return_value = {
-            "p1": MagicMock(),
-            "p2": MagicMock(),
-        }
-
-        await self.cog.enable_feature.callback(
-            self.cog, self.ctx, feature_name="powerup"
-        )
-
-        self.bot.game.enable_manager.assert_called_once_with(
-            "powerup", players=["p1", "p2"]
-        )
-        self.ctx.send.assert_called_once_with("Feature 'powerup' enabled.")
-
-    async def test_enable_feature_coop(self):
-        """Test enabling the coop feature."""
-        await self.cog.enable_feature.callback(self.cog, self.ctx, feature_name="coop")
-
-        self.bot.game.enable_manager.assert_called_once_with("coop")
-        self.ctx.send.assert_called_once_with("Feature 'coop' enabled.")
-
-    @patch("src.cfg.main.ConfigReader")
-    async def test_enable_feature_roles(self, mock_config_reader):
-        """Test enabling the roles feature."""
-        mock_config_instance = MagicMock()
-        mock_config_reader.return_value = mock_config_instance
-
-        await self.cog.enable_feature.callback(self.cog, self.ctx, feature_name="roles")
-
-        self.bot.game.enable_manager.assert_called_once_with(
-            "roles", db=self.bot.data_manager.db, config=mock_config_instance
-        )
-        self.ctx.send.assert_called_once_with("Feature 'roles' enabled.")
-
-    async def test_disable_feature(self):
-        """Test disabling a feature."""
-        await self.cog.disable_feature.callback(
-            self.cog, self.ctx, feature_name="fight"
-        )
-
-        self.bot.game.disable_manager.assert_called_once_with("fight")
-        self.ctx.send.assert_called_once_with("Feature 'fight' disabled.")
 
 
 class TestAdminSetup(unittest.IsolatedAsyncioTestCase):

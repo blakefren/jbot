@@ -23,14 +23,10 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         self.bot.guilds = [MagicMock()]
         self.bot.get_cog = MagicMock()
         self.bot.config = MagicMock()
+        self.bot.data_manager = MagicMock()
         self.bot._log_task_error = MagicMock()
         self.bot._send_daily_message_to_all_subscribers = AsyncMock()
-
-        # Mock the RolesCog
-        self.roles_cog = MagicMock()
-        self.roles_cog.roles_game_mode = MagicMock()
-        self.roles_cog.apply_discord_roles = AsyncMock()
-        self.bot.get_cog.return_value = self.roles_cog
+        self.bot.apply_discord_roles = AsyncMock()
 
         # Get coroutines from the tasks
         self.morning_task_coro = DiscordBot.morning_message_task.coro
@@ -104,12 +100,18 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
 
     # --- Evening Task Tests ---
 
-    async def test_evening_message_task_success(self):
+    @patch("src.core.discord.RolesGameMode")
+    async def test_evening_message_task_success(self, mock_roles_game_mode_cls):
         """Verify the evening task runs all steps successfully."""
+        mock_roles_instance = mock_roles_game_mode_cls.return_value
+
         await self.evening_task_coro(self.bot, silent=False)
-        self.bot.get_cog.assert_called_with("RolesCog")
-        self.roles_cog.roles_game_mode.run.assert_called_once()
-        self.roles_cog.apply_discord_roles.assert_awaited_once_with(self.bot.guilds[0])
+
+        mock_roles_game_mode_cls.assert_called_once_with(
+            self.bot.data_manager, self.bot.config
+        )
+        mock_roles_instance.run.assert_called_once()
+        self.bot.apply_discord_roles.assert_awaited()
         self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
         self.bot._log_task_error.assert_not_called()
 
@@ -118,23 +120,32 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         # This test is no longer relevant as update_scores is removed
         pass
 
-    async def test_evening_message_task_update_roles_fails(self):
+    @patch("src.core.discord.RolesGameMode")
+    async def test_evening_message_task_update_roles_fails(
+        self, mock_roles_game_mode_cls
+    ):
         """Verify task continues if updating roles fails."""
-        self.roles_cog.roles_game_mode.run.side_effect = Exception("Role DB error")
+        mock_roles_instance = mock_roles_game_mode_cls.return_value
+        mock_roles_instance.run.side_effect = Exception("Role DB error")
+
         await self.evening_task_coro(self.bot, silent=False)
-        self.bot.get_cog.assert_called_with("RolesCog")
-        self.roles_cog.roles_game_mode.run.assert_called_once()
+
+        mock_roles_instance.run.assert_called_once()
         self.bot._log_task_error.assert_called_once()
         # Message sending should still happen
         self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
 
-    async def test_evening_message_task_send_message_fails(self):
+    @patch("src.core.discord.RolesGameMode")
+    async def test_evening_message_task_send_message_fails(
+        self, mock_roles_game_mode_cls
+    ):
         """Verify task logs error if sending the evening message fails."""
         self.bot._send_daily_message_to_all_subscribers.side_effect = Exception(
             "Final message error"
         )
         await self.evening_task_coro(self.bot, silent=False)
-        self.bot.get_cog.assert_called_with("RolesCog")
+
+        mock_roles_game_mode_cls.assert_called_once()
         self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
         # The final error should be logged
         self.bot._log_task_error.assert_called_once()

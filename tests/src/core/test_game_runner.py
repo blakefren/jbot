@@ -435,22 +435,6 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("Correct rate:  75.00%", history)
         self.assertIn("Score:         300", history)
 
-    def test_manager_registration_and_enabling(self):
-        """Test registering, enabling, and disabling a manager."""
-        mock_manager_class = MagicMock()
-        self.game_runner.register_manager("test_manager", mock_manager_class)
-        self.assertIn("test_manager", self.game_runner.managers)
-        self.assertEqual(self.game_runner.managers["test_manager"], mock_manager_class)
-
-        # Enable the manager
-        self.game_runner.enable_manager("test_manager", arg1="value1")
-        mock_manager_class.assert_called_once_with(arg1="value1")
-        self.assertIsNotNone(self.game_runner.managers["test_manager"])
-
-        # Disable the manager
-        self.game_runner.disable_manager("test_manager")
-        self.assertIsNone(self.game_runner.managers["test_manager"])
-
     def test_get_scores_leaderboard_alphabetical_tie(self):
         """Test that players with the same score are sorted alphabetically."""
         self.mock_data_manager.get_player_scores.return_value = [
@@ -534,25 +518,6 @@ class TestGameRunner(unittest.TestCase):
         self.mock_question_selector.get_hint_from_gemini.assert_not_called()
         self.assertEqual(self.game_runner.daily_q.hint, "Existing Hint")
         self.mock_data_manager.log_daily_question.assert_called_once()
-
-    def test_disable_manager_not_enabled(self):
-        """Test disabling a manager that is not enabled logs a warning."""
-        with patch("src.core.game_runner.logging") as mock_logging:
-            self.game_runner.disable_manager("nonexistent_manager")
-            mock_logging.warning.assert_called_once()
-
-    def test_disable_manager_is_none(self):
-        """Test disabling a manager that is already None logs a warning."""
-        self.game_runner.managers["test_manager"] = None
-        with patch("src.core.game_runner.logging") as mock_logging:
-            self.game_runner.disable_manager("test_manager")
-            mock_logging.warning.assert_called_once()
-
-    def test_enable_manager_not_found(self):
-        """Test enabling a manager that doesn't exist logs a warning."""
-        with patch("src.core.game_runner.logging") as mock_logging:
-            self.game_runner.enable_manager("nonexistent_manager")
-            mock_logging.warning.assert_called_once()
 
     def test_reset_daily_question(self):
         """Test resetting the daily question to a new one."""

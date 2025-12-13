@@ -43,19 +43,20 @@ class ConfigReader:
         """
         return os.environ.get(key, default)
 
-    def get_bool(self, key: str) -> bool:
+    def get_bool(self, key: str, default: bool = False) -> bool:
         """
         Retrieves a boolean configuration value by key.
 
         Args:
             key (str): The key to look for in the configuration.
+            default (bool): The default value if the key is not found.
 
         Returns:
             bool: The boolean value associated with the key.
         """
         value = self.get(key)
         if value is None:
-            raise KeyError(f"Key '{key}' not found in environment variables.")
+            return default
         return value.lower() in ("true", "1", "t", "y", "yes")
 
     def get_gemini_api_key(self) -> str:

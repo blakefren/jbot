@@ -18,6 +18,7 @@ import logging
 from src.core.data_manager import DataManager
 from src.core.game_runner import GameRunner
 from src.core.player_manager import PlayerManager
+from src.core.roles import RolesGameMode
 from data.readers.question import Question
 from data.readers.question_selector import QuestionSelector
 
@@ -270,15 +271,12 @@ class DiscordBot(commands.Bot):
 
         # 1. Update roles
         try:
-            roles_cog = self.get_cog("RolesCog")
-            if roles_cog:
-                logging.info("Updating roles...")
-                roles_cog.roles_game_mode.run()  # Update roles in DB
-                for guild in self.guilds:
-                    await roles_cog.apply_discord_roles(guild)
-                logging.info("Roles updated.")
-            else:
-                logging.warning("RolesCog not found, skipping role update.")
+            logging.info("Updating roles...")
+            roles_manager = RolesGameMode(self.data_manager, self.config)
+            roles_manager.run()  # Update roles in DB
+            for guild in self.guilds:
+                await self.apply_discord_roles(guild)
+            logging.info("Roles updated.")
         except Exception as e:
             self._log_task_error(e, "evening_message_task - update_roles")
 
@@ -294,6 +292,54 @@ class DiscordBot(commands.Bot):
                 )
             except Exception as e:
                 self._log_task_error(e, "evening_message_task - send_message")
+
+    async def apply_discord_roles(self, guild: discord.Guild):
+        """
+        Efficiently applies the 'first place' role to the current winner(s).
+        - Fetches the role name from config.
+        - Determines who should have the role from the database.
+        - Compares against who currently has the role in Discord.
+        - Only adds or removes roles if there is a change.
+        """
+        first_place_role_name = self.config.get("JBOT_FIRST_PLACE_ROLE_NAME")
+        if not first_place_role_name:
+            return  # Or log a warning
+
+        # Get the discord.Role object, creating it if it doesn't exist.
+        role = discord.utils.get(guild.roles, name=first_place_role_name)
+        if not role:
+            try:
+                role = await guild.create_role(
+                    name=first_place_role_name,
+                    reason="JBot: Create First Place Role",
+                )
+            except discord.Forbidden:
+                # Log that we don't have permissions to create roles
+                return
+
+        # Get the set of player IDs that should have the role from the database
+        db_winners = self.data_manager.get_player_ids_with_role(first_place_role_name)
+
+        # Get the set of members who currently have the role in Discord
+        discord_winners = {member.id for member in role.members}
+
+        # Determine who to add and who to remove
+        to_add = db_winners - discord_winners
+        to_remove = discord_winners - db_winners
+
+        # Add the role to new winners
+        for member_id in to_add:
+            member = guild.get_member(member_id)
+            if member:
+                await member.add_roles(role, reason="JBot: Player achieved first place")
+
+        # Remove the role from previous winners
+        for member_id in to_remove:
+            member = guild.get_member(member_id)
+            if member:
+                await member.remove_roles(
+                    role, reason="JBot: Player no longer in first place"
+                )
 
     async def _send_daily_message_to_all_subscribers(
         self,
@@ -432,13 +478,6 @@ async def discord_bot_async(
     )
     game = GameRunner(question_selector, data_manager)
     game.reminder_time = REMINDER_TIME
-
-    # Register managers
-    from core.powerup import PowerUpManager
-    from core.roles import RolesGameMode
-
-    game.register_manager("powerup", PowerUpManager)
-    game.register_manager("roles", RolesGameMode)
 
     bot = DiscordBot(config.get("JBOT_DISCORD_BOT_TOKEN"), game, config, player_manager)
     await bot.run()
