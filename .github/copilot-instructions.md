@@ -16,8 +16,9 @@ This project, `jbot`, is a daily bot designed for group trivia questions and fri
 *   **Database**: SQLite (raw SQL, no ORM)
 *   **Testing**: `unittest` (primary), `pytest` (installed)
 *   **Configuration**: `python-dotenv`
+*   **Command Structure**: Consolidated into `/game`, `/power`, and `/admin` groups.
 
-The bot's features are organized into three distinct "tracks" that can be enabled or disabled independently:
+The bot's features are organized into three distinct "tracks" that can be enabled or disabled independently via `.env` flags:
 *   **Fight Track**: Player-vs-player interactions like attacking and defending.
 *   **Power-up Track**: Mechanics that reward consistent play, such as answer streaks and betting.
 *   **Coop Track**: Collaborative features like forming teams.

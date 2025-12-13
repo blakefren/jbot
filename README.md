@@ -10,7 +10,8 @@ A daily bot for group trivia questions and competition.
     pip install -r requirements.txt
     ```
 2.  Create a `.env` file in the root directory by copying the `.env.template` file. Fill out the required fields, such as your Discord bot token and the paths to your question datasets.
-3.  The database will be created automatically when you run the bot for the first time.
+3.  Enable or disable game tracks (Fight, Power-up, Coop) in the `.env` file using the `JBOT_ENABLE_*` flags.
+4.  The database will be created automatically when you run the bot for the first time.
 
 ## Running the Bot
 
@@ -31,20 +32,20 @@ question selection.
 
 ## Game Features
 
-The bot's features are organized into three distinct "tracks" that can be enabled or disabled independently, allowing for customized game experiences.
+The bot's features are organized into three distinct "tracks" that can be enabled or disabled independently via the `.env` file.
 
 ### Fight Track
 
 This track adds direct player-vs-player interactions.
 
 *   **Disrupt**: An offensive action that allows a player to attack another. If the target answers the daily question incorrectly, their answer streak is reset to zero.
-    *   **Command**: `/disrupt <player_id>`
+    *   **Command**: `/power disrupt <player_id>`
     *   **Cost**: 50 points.
 *   **Shield**: A defensive action that protects a player from the next incoming attack.
-    *   **Command**: `/shield`
+    *   **Command**: `/power shield`
     *   **Cost**: 25 points.
 *   **Steal**: An offensive action that allows a player to steal half of the points another player has earned *for that day*.
-    *   **Command**: `/steal <player_id>`
+    *   **Command**: `/power steal <player_id>`
 
 ### Power-up Track
 
@@ -52,7 +53,7 @@ This track introduces mechanics that reward consistent play or provide other adv
 
 *   **Answer Streaks**: Players build up a "streak" for each consecutive correct answer. This can be used for scoring bonuses or as a target for other players' attacks.
 *   **Wager**: Players can wager a portion of their points on whether their answer is correct. Winnings are calculated based on a diminishing returns formula to keep the game balanced.
-    *   **Command**: `/wager <amount>`
+    *   **Command**: `/power wager <amount>`
     *   **Details**: Bets are capped at 25% of a player's current score (minimum 1 point).
 *   **Answering First**: The first player to answer the daily question correctly receives a point bonus.
 *   **Answering Before the Hint**: Players who answer correctly before the daily hint is revealed receive a point bonus.
@@ -63,10 +64,23 @@ This track introduces mechanics that reward consistent play or provide other adv
 This track focuses on collaborative features.
 
 *   **Reinforce** (Planned): Two players can form a temporary alliance for the day. If either player answers correctly, both receive full points.
-    *   **Command**: `/reinforce <player_id>`
+    *   **Command**: `/power reinforce <player_id>`
     *   **Cost**: 25 points for each player.
 *   **Reveal Answer Letters** (Planned): Players can vote to reveal letters in the answer. Each vote costs points, and the cost increases with each revealed letter.
+    *   **Command**: `/power reveal`
 *   **Red vs. Blue Teams** (Planned): Players are divided into two teams (either by choice or randomly). The team with the most correct responses at the end of the day gets bonus points.
+
+## Commands
+
+The bot's commands are organized into groups:
+
+*   **`/game`**: General game information.
+    *   `/game status`: Check the current game status, next event time, and active question.
+    *   `/game leaderboard`: View the score leaderboard.
+    *   `/game profile`: View your player stats and history.
+    *   `/game rules`: View the currently active rules and enabled features.
+*   **`/power`**: Actions related to the Fight, Power-up, and Coop tracks.
+*   **`/answer`**: Submit your answer to the daily question.
 
 ## Database
 
