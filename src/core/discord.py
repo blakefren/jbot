@@ -463,6 +463,7 @@ async def discord_bot_async(
 ):
     """Main function to initialize and run the bot."""
     from src.core.gemini_manager import GeminiManager
+    from data.readers.question_source import StaticQuestionSource, GeminiQuestionSource
 
     gemini_manager = None
     try:
@@ -472,8 +473,19 @@ async def discord_bot_async(
     except ValueError as e:
         logging.warning(f"Could not initialize GeminiManager: {e}")
 
+    # Build sources
+    sources = []
+
+    # 1. Add the main dataset loaded by main.py as a source
+    default_weight = float(config.get("JBOT_DEFAULT_DATASET_WEIGHT", 100.0))
+    if questions:
+        sources.append(StaticQuestionSource("main_dataset", default_weight, questions))
+
+    # 2. Parse additional sources from config
+    sources.extend(config.parse_question_sources(gemini_manager))
+
     question_selector = QuestionSelector(
-        questions,
+        sources=sources,
         gemini_manager=gemini_manager,
     )
     game = GameRunner(question_selector, data_manager)

@@ -1,6 +1,6 @@
 import unittest
 import os
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, MagicMock
 from src.cfg.main import ConfigReader, load_config
 
 
@@ -98,6 +98,61 @@ class TestConfigReader(unittest.TestCase):
             with self.assertRaises(ValueError) as context:
                 config_reader.get_gemini_api_key()
             self.assertIn("GEMINI_API_KEY not found", str(context.exception))
+
+    def test_parse_question_sources_empty(self):
+        config_reader = ConfigReader()
+        with patch.dict(os.environ, {}, clear=True):
+            sources = config_reader.parse_question_sources()
+            self.assertEqual(sources, [])
+
+    def test_parse_question_sources_gemini(self):
+        config_reader = ConfigReader()
+        mock_gemini = MagicMock()
+
+        env = {
+            "JBOT_EXTRA_SOURCES": "gemini:riddle_med:20:difficulty=Medium:points=200,gemini:riddle_hard:10:difficulty=Hard"
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            sources = config_reader.parse_question_sources(gemini_manager=mock_gemini)
+
+            self.assertEqual(len(sources), 2)
+
+            s1 = sources[0]
+            self.assertEqual(s1.name, "riddle_med")
+            self.assertEqual(s1.weight, 20.0)
+            self.assertEqual(s1.difficulty, "Medium")
+            self.assertEqual(s1.default_points, 200)
+
+            s2 = sources[1]
+            self.assertEqual(s2.name, "riddle_hard")
+            self.assertEqual(s2.weight, 10.0)
+            self.assertEqual(s2.difficulty, "Hard")
+            self.assertIsNone(s2.default_points)
+
+    def test_parse_question_sources_gemini_no_manager(self):
+        config_reader = ConfigReader()
+        env = {"JBOT_EXTRA_SOURCES": "gemini:riddle:20"}
+        with patch.dict(os.environ, env, clear=True):
+            sources = config_reader.parse_question_sources(gemini_manager=None)
+            self.assertEqual(sources, [])
+
+    def test_parse_question_sources_invalid_format(self):
+        config_reader = ConfigReader()
+        env = {"JBOT_EXTRA_SOURCES": "invalid_format,gemini:ok:10"}
+        mock_gemini = MagicMock()
+        with patch.dict(os.environ, env, clear=True):
+            sources = config_reader.parse_question_sources(gemini_manager=mock_gemini)
+            self.assertEqual(len(sources), 1)
+            self.assertEqual(sources[0].name, "ok")
+
+    def test_parse_question_sources_invalid_weight(self):
+        config_reader = ConfigReader()
+        env = {"JBOT_EXTRA_SOURCES": "gemini:bad_weight:abc"}
+        mock_gemini = MagicMock()
+        with patch.dict(os.environ, env, clear=True):
+            sources = config_reader.parse_question_sources(gemini_manager=mock_gemini)
+            self.assertEqual(sources, [])
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": ""})
     def test_get_gemini_api_key_empty(self):

@@ -1,8 +1,8 @@
 import datetime
-from random import randint
-
+import random
 from typing import Optional
 from data.readers.question import Question
+from data.readers.question_source import QuestionSource, StaticQuestionSource
 from zoneinfo import ZoneInfo
 import logging
 import os
@@ -23,13 +23,19 @@ class QuestionSelector:
 
     def __init__(
         self,
-        questions: list[Question],
+        sources: list[QuestionSource] = None,
+        questions: list[Question] = None,
         gemini_manager: Optional[GeminiManager] = None,
     ):
-        self.questions = questions
         self.gemini_manager = gemini_manager
-        if not questions:
-            logging.warning("QuestionSelector initialized with no questions.")
+        self.sources = sources or []
+
+        # Legacy support: if questions are passed, treat as a default source
+        if questions:
+            self.sources.append(StaticQuestionSource("default", 100.0, questions))
+
+        if not self.sources:
+            logging.warning("QuestionSelector initialized with no sources.")
 
     def get_riddle_from_gemini(self, difficulty: str) -> Optional[Question]:
         """
@@ -152,7 +158,7 @@ class QuestionSelector:
 
     def get_random_question(self, exclude_hashes: set[str] = None) -> Question:
         """
-        Returns a random question from the list, optionally excluding previously used questions.
+        Returns a random question from the configured sources.
 
         Args:
             exclude_hashes: Set of question hashes (as strings) to exclude from selection.
@@ -161,25 +167,30 @@ class QuestionSelector:
             A randomly selected Question, or None if no questions are available.
         """
         logging.debug(f"QuestionSelector.get_random_question")
-        if not self.questions:
+        if not self.sources:
             return None
 
-        # Filter out excluded questions if provided
-        if exclude_hashes:
-            available_questions = [
-                q for q in self.questions if str(q.id) not in exclude_hashes
-            ]
-            if not available_questions:
-                logging.warning(
-                    "All questions have been used. Selecting from full pool."
-                )
-                available_questions = self.questions
+        # Weighted selection of source
+        total_weight = sum(s.weight for s in self.sources)
+        if total_weight <= 0:
+            logging.warning("Total weight of sources is 0. Picking random source.")
+            source = random.choice(self.sources)
         else:
-            available_questions = self.questions
+            pick = random.uniform(0, total_weight)
+            current = 0
+            source = self.sources[-1]  # Default to last
+            for s in self.sources:
+                current += s.weight
+                if pick <= current:
+                    source = s
+                    break
 
-        # Pick a random question
-        index = randint(0, len(available_questions) - 1)
-        question = available_questions[index]
+        logging.info(f"Selected question source: {source.name}")
+        question = source.get_question(exclude_hashes)
+
+        if not question:
+            logging.warning(f"Source {source.name} returned no question.")
+            return None
 
         # Validate it
         if self.validate_question(question):
