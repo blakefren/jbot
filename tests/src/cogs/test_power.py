@@ -107,24 +107,24 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
             "Wager placed", interaction=self.ctx.interaction
         )
 
-    async def test_reinforce_disabled(self):
+    async def test_teamup_disabled(self):
         self.bot.game.features = {"coop": False}
-        await self.cog.reinforce.callback(self.cog, self.ctx, target_id="456")
+        await self.cog.teamup.callback(self.cog, self.ctx, target_id="456")
         self.bot.send_message.assert_awaited_once_with(
             "Coop track is not enabled.",
             interaction=self.ctx.interaction,
             ephemeral=True,
         )
 
-    async def test_reinforce_enabled(self):
+    async def test_teamup_enabled(self):
         self.bot.game.features = {"coop": True}
         mock_manager = MagicMock()
-        mock_manager.reinforce.return_value = "Reinforced"
+        mock_manager.teamup.return_value = "Reinforced"
         self.bot.game.managers.get.return_value = mock_manager
 
-        await self.cog.reinforce.callback(self.cog, self.ctx, target_id="456")
+        await self.cog.teamup.callback(self.cog, self.ctx, target_id="456")
 
-        mock_manager.reinforce.assert_called_once_with("123", "456")
+        mock_manager.teamup.assert_called_once_with("123", "456")
         self.bot.send_message.assert_awaited_once_with(
             "Reinforced", interaction=self.ctx.interaction
         )

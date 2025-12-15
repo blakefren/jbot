@@ -41,9 +41,9 @@ class PowerUpManager(BaseManager):
     def on_guess(self, player_id: int, player_name: str, guess: str, is_correct: bool):
         self.resolve_wager(str(player_id), is_correct)
         # Also resolve reinforce/team-up
-        self.resolve_reinforce(str(player_id), is_correct)
+        self.resolve_teamup(str(player_id), is_correct)
 
-    def reinforce(self, player1_id: str, player2_id: str) -> str:
+    def teamup(self, player1_id: str, player2_id: str) -> str:
         """
         Team up two players for a cost of 25 points each. If either is correct,
         both get full points for the day.
@@ -79,7 +79,7 @@ class PowerUpManager(BaseManager):
             "If either answers correctly, both get full points."
         )
 
-    def resolve_reinforce(self, player_id: str, correct: bool) -> str:
+    def resolve_teamup(self, player_id: str, correct: bool) -> str:
         """
         Resolve team up effect after a player's answer. If either partner is correct,
         both get full points for the day.

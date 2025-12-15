@@ -125,33 +125,33 @@ class TestPowerUpManager(unittest.TestCase):
         msg2 = manager.resolve_wager("1", True)
         self.assertIn("Streak preserved", msg2)
 
-    def test_reinforce_success(self):
+    def test_teamup_success(self):
         manager = PowerUpManager(self.player_manager)
-        msg = manager.reinforce("1", "2")
+        msg = manager.teamup("1", "2")
         self.assertEqual(self.players["1"].score, 75)
         self.assertEqual(manager._get_daily_state("1")["team_partner"], "2")
 
-    def test_reinforce_already_teamed(self):
+    def test_teamup_already_teamed(self):
         manager = PowerUpManager(self.player_manager)
-        manager.reinforce("1", "2")
-        msg = manager.reinforce("1", "3")
+        manager.teamup("1", "2")
+        msg = manager.teamup("1", "3")
         self.assertIn("already teamed up", msg)
 
-    def test_reinforce_not_enough_points(self):
+    def test_teamup_not_enough_points(self):
         self.players["1"].score = 10
         manager = PowerUpManager(self.player_manager)
-        msg = manager.reinforce("1", "2")
+        msg = manager.teamup("1", "2")
         self.assertIn("need at least", msg)
 
-    def test_reinforce_invalid_player(self):
+    def test_teamup_invalid_player(self):
         manager = PowerUpManager(self.player_manager)
-        msg = manager.reinforce("1", "999")
+        msg = manager.teamup("1", "999")
         self.assertIn("Invalid player", msg)
 
-    def test_resolve_reinforce(self):
+    def test_resolve_teamup(self):
         manager = PowerUpManager(self.player_manager)
-        manager.reinforce("1", "2")
-        manager.resolve_reinforce("1", True)
+        manager.teamup("1", "2")
+        manager.resolve_teamup("1", True)
         self.assertTrue(manager._get_daily_state("1")["team_success"])
         self.assertTrue(manager._get_daily_state("2")["team_success"])
 
