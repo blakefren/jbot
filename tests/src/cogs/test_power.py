@@ -85,67 +85,68 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
             "Stolen points", interaction=self.ctx.interaction
         )
 
-    async def test_wager_disabled(self):
-        self.bot.game.features = {"powerup": False}
-        await self.cog.wager.callback(self.cog, self.ctx, amount=10)
-        self.bot.send_message.assert_awaited_once_with(
-            "Power-up track is not enabled.",
-            interaction=self.ctx.interaction,
-            ephemeral=True,
-        )
+    # TODO: Re-enable these tests when the commands are re-enabled
+    # async def test_wager_disabled(self):
+    #     self.bot.game.features = {"powerup": False}
+    #     await self.cog.wager.callback(self.cog, self.ctx, amount=10)
+    #     self.bot.send_message.assert_awaited_once_with(
+    #         "Power-up track is not enabled.",
+    #         interaction=self.ctx.interaction,
+    #         ephemeral=True,
+    #     )
 
-    async def test_wager_enabled(self):
-        self.bot.game.features = {"powerup": True}
-        mock_manager = MagicMock()
-        mock_manager.place_wager.return_value = "Wager placed"
-        self.bot.game.managers.get.return_value = mock_manager
+    # async def test_wager_enabled(self):
+    #     self.bot.game.features = {"powerup": True}
+    #     mock_manager = MagicMock()
+    #     mock_manager.place_wager.return_value = "Wager placed"
+    #     self.bot.game.managers.get.return_value = mock_manager
 
-        await self.cog.wager.callback(self.cog, self.ctx, amount=10)
+    #     await self.cog.wager.callback(self.cog, self.ctx, amount=10)
 
-        mock_manager.place_wager.assert_called_once_with("123", 10)
-        self.bot.send_message.assert_awaited_once_with(
-            "Wager placed", interaction=self.ctx.interaction
-        )
+    #     mock_manager.place_wager.assert_called_once_with("123", 10)
+    #     self.bot.send_message.assert_awaited_once_with(
+    #         "Wager placed", interaction=self.ctx.interaction
+    #     )
 
-    async def test_teamup_disabled(self):
-        self.bot.game.features = {"coop": False}
-        await self.cog.teamup.callback(self.cog, self.ctx, target_id="456")
-        self.bot.send_message.assert_awaited_once_with(
-            "Coop track is not enabled.",
-            interaction=self.ctx.interaction,
-            ephemeral=True,
-        )
+    # async def test_teamup_disabled(self):
+    #     self.bot.game.features = {"coop": False}
+    #     await self.cog.teamup.callback(self.cog, self.ctx, target_id="456")
+    #     self.bot.send_message.assert_awaited_once_with(
+    #         "Coop track is not enabled.",
+    #         interaction=self.ctx.interaction,
+    #         ephemeral=True,
+    #     )
 
-    async def test_teamup_enabled(self):
-        self.bot.game.features = {"coop": True}
-        mock_manager = MagicMock()
-        mock_manager.teamup.return_value = "Reinforced"
-        self.bot.game.managers.get.return_value = mock_manager
+    # async def test_teamup_enabled(self):
+    #     self.bot.game.features = {"coop": True}
+    #     mock_manager = MagicMock()
+    #     mock_manager.teamup.return_value = "Reinforced"
+    #     self.bot.game.managers.get.return_value = mock_manager
 
-        await self.cog.teamup.callback(self.cog, self.ctx, target_id="456")
+    #     await self.cog.teamup.callback(self.cog, self.ctx, target_id="456")
 
-        mock_manager.teamup.assert_called_once_with("123", "456")
-        self.bot.send_message.assert_awaited_once_with(
-            "Reinforced", interaction=self.ctx.interaction
-        )
+    #     mock_manager.teamup.assert_called_once_with("123", "456")
+    #     self.bot.send_message.assert_awaited_once_with(
+    #         "Reinforced", interaction=self.ctx.interaction
+    #     )
 
-    async def test_reveal_disabled(self):
-        self.bot.game.features = {"coop": False}
-        await self.cog.reveal.callback(self.cog, self.ctx)
-        self.bot.send_message.assert_awaited_once_with(
-            "Coop track is not enabled.",
-            interaction=self.ctx.interaction,
-            ephemeral=True,
-        )
+    # async def test_reveal_disabled(self):
+    #     self.bot.game.features = {"coop": False}
+    #     await self.cog.reveal.callback(self.cog, self.ctx)
+    #     self.bot.send_message.assert_awaited_once_with(
+    #         "Coop track is not enabled.",
+    #         interaction=self.ctx.interaction,
+    #         ephemeral=True,
+    #     )
 
-    async def test_reveal_enabled(self):
-        self.bot.game.features = {"coop": True}
-        await self.cog.reveal.callback(self.cog, self.ctx)
-        self.bot.send_message.assert_awaited_once_with(
-            "This command is not yet implemented.",
-            interaction=self.ctx.interaction,
-            ephemeral=True,
-        )
+    # async def test_reveal_enabled(self):
+    #     self.bot.game.features = {"coop": True}
+    #     await self.cog.reveal.callback(self.cog, self.ctx)
+    #     self.bot.send_message.assert_awaited_once_with(
+    #         "This command is not yet implemented.",
+    #         interaction=self.ctx.interaction,
+    #         ephemeral=True,
+    #     )
 
     async def test_power_group(self):
         """Test the power group command sends help."""
