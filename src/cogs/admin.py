@@ -152,7 +152,7 @@ class Admin(commands.Cog):
 
     @admin.command(name="ping", description="Check bot response time.")
     async def ping(self, ctx: commands.Context):
-        """Check the bot's response time."""
+        """(admin) Check the bot's response time."""
         response_content = "Pong!"
         await self.bot.send_message(response_content, interaction=ctx.interaction)
 
