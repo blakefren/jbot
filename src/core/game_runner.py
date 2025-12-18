@@ -48,7 +48,9 @@ class GameRunner:
         if any(self.features.values()):
             from src.core.powerup import PowerUpManager
 
-            self.managers["powerup"] = PowerUpManager(self.player_manager)
+            self.managers["powerup"] = PowerUpManager(
+                self.player_manager, self.data_manager
+            )
             logging.info(f"PowerUpManager enabled with features: {self.features}")
 
     def _get_valid_question(self) -> Question:

@@ -15,9 +15,11 @@ class Power(commands.Cog):
     def _get_manager(self):
         return self.bot.game.managers.get("powerup")
 
-    @power.command(name="disrupt", description="Break another player's answer streak.")
-    async def disrupt(self, ctx: commands.Context, target_id: str):
-        """Break another player's answer streak."""
+    @power.command(
+        name="jinx",
+        description="Prevents streak bonus, but you can't answer until the hint.",
+    )
+    async def jinx(self, ctx: commands.Context, target: discord.Member):
         if not self.bot.game.features.get("fight"):
             await self.bot.send_message(
                 "Fight track is not enabled.",
@@ -28,12 +30,14 @@ class Power(commands.Cog):
 
         manager = self._get_manager()
         if manager:
-            result = manager.disrupt(str(ctx.author.id), target_id)
+            result = manager.jinx(str(ctx.author.id), str(target.id))
             await self.bot.send_message(result, interaction=ctx.interaction)
 
-    @power.command(name="shield", description="Block the next attack against you.")
+    @power.command(
+        name="shield",
+        description="Reflect attacks, but lose points if you aren't attacked.",
+    )
     async def shield(self, ctx: commands.Context):
-        """Block the next attack against you."""
         if not self.bot.game.features.get("fight"):
             await self.bot.send_message(
                 "Fight track is not enabled.",
@@ -45,11 +49,14 @@ class Power(commands.Cog):
         manager = self._get_manager()
         if manager:
             result = manager.use_shield(str(ctx.author.id))
-            await self.bot.send_message(result, interaction=ctx.interaction)
+            await self.bot.send_message(
+                result, interaction=ctx.interaction, ephemeral=True
+            )
 
-    @power.command(name="steal", description="Steal points from another player.")
-    async def steal(self, ctx: commands.Context, target_id: str):
-        """Steal points from another player."""
+    @power.command(
+        name="steal", description="Steal fastest/first bonuses , but break your streak."
+    )
+    async def steal(self, ctx: commands.Context, target: discord.Member):
         if not self.bot.game.features.get("fight"):
             await self.bot.send_message(
                 "Fight track is not enabled.",
@@ -60,7 +67,7 @@ class Power(commands.Cog):
 
         manager = self._get_manager()
         if manager:
-            result = manager.steal(str(ctx.author.id), target_id)
+            result = manager.steal(str(ctx.author.id), str(target.id))
             await self.bot.send_message(result, interaction=ctx.interaction)
 
     # TODO: Re-enable these commands when they are ready

@@ -84,7 +84,7 @@ class Game(commands.Cog):
         rules_text = "**Active Game Rules:**\n"
 
         if features.get("fight"):
-            rules_text += "- **Fight Track**: PvP enabled! Use `/power disrupt` to attack streaks and `/power steal` to steal points.\n"
+            rules_text += "- **Fight Track**: PvP enabled! Use `/power jinx` to silence players and `/power steal` to steal points. Protect yourself with `/power shield` (DM only)!\n"
         if features.get("powerup"):
             rules_text += "- **Power-up Track**: Power-ups enabled! Use `/power wager` to bet points.\n"
         if features.get("coop"):

@@ -20,6 +20,14 @@ class AlreadyAnsweredCorrectlyError(Exception):
     pass
 
 
+class JinxedError(Exception):
+    """Raised when a player is jinxed and cannot answer."""
+
+    def __init__(self, message):
+        self.message = message
+        super().__init__(message)
+
+
 class GuessHandler:
     """
     Handles guess processing and validation.
@@ -244,16 +252,38 @@ class GuessHandler:
         if self.has_answered_correctly_today(player_id):
             raise AlreadyAnsweredCorrectlyError()
 
+        # Check if hint has been sent
+        hint_timestamp = self.data_manager.get_hint_sent_timestamp(
+            self.daily_question_id
+        )
+        hint_sent = hint_timestamp is not None
+
+        # Check if player is allowed to answer (e.g. Jinxed)
+        for manager in self.managers.values():
+            if hasattr(manager, "can_answer"):
+                try:
+                    can_answer, reason = manager.can_answer(
+                        str(player_id), hint_sent=hint_sent
+                    )
+                except TypeError:
+                    # Fallback for managers that don't accept hint_sent
+                    can_answer, reason = manager.can_answer(str(player_id))
+
+                if not can_answer:
+                    raise JinxedError(reason)
+
         g = guess.strip().lower()
         a = str(self.daily_q.answer).strip().lower()
         is_correct = self._is_correct_guess(g, a)
 
         points_earned = 0
         bonus_messages = []
+        bonus_values = {}
 
         if is_correct:
             # Base Score
             points_earned = self.daily_q.clue_value or 100
+            bonus_values["base"] = points_earned
 
             # Check First Solver (before logging this guess)
             existing_correct_count = self.data_manager.get_correct_guess_count(
@@ -264,6 +294,7 @@ class GuessHandler:
                 emoji = self.config.get("JBOT_EMOJI_FASTEST", "🥇")
                 points_earned += bonus
                 bonus_messages.append(f"{emoji} First to answer! (+{bonus})")
+                bonus_values["first_place"] = bonus
 
             # Check First Try (before logging this guess)
             previous_guesses = self.get_player_guesses(player_id)
@@ -272,6 +303,7 @@ class GuessHandler:
                 emoji = self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯")
                 points_earned += bonus
                 bonus_messages.append(f"{emoji} First try! (+{bonus})")
+                bonus_values["first_try"] = bonus
 
             # Check Before Hint (before logging this guess)
             if self.reminder_time:
@@ -281,6 +313,7 @@ class GuessHandler:
                     emoji = self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠")
                     points_earned += bonus
                     bonus_messages.append(f"{emoji} Before hint! (+{bonus})")
+                    bonus_values["before_hint"] = bonus
 
             # Check Streak
             # We need to get the player's current streak BEFORE incrementing it
@@ -315,6 +348,7 @@ class GuessHandler:
 
                 points_earned += bonus
                 bonus_messages.append(f"{emoji} {new_streak} day streak! (+{bonus})")
+                bonus_values["streak"] = bonus
 
             # Apply Score & Streak
             self.player_manager.get_or_create_player(str(player_id), player_name)
@@ -331,16 +365,30 @@ class GuessHandler:
         for manager in self.managers.values():
             if manager is not None and not isinstance(manager, type):
                 try:
-                    manager.on_guess(player_id, player_name, guess, is_correct)
-                except TypeError as e:
-                    logging.error(
-                        f"Error calling on_guess for {type(manager).__name__}: {e}"
+                    # Try calling with new signature first
+                    msgs = manager.on_guess(
+                        player_id,
+                        player_name,
+                        guess,
+                        is_correct,
+                        points_earned,
+                        bonus_values,
                     )
-                    # Attempt to call with fewer arguments for backward compatibility
+                    if msgs and isinstance(msgs, list):
+                        bonus_messages.extend(msgs)
+                except TypeError:
+                    # Fallback to old signature
                     try:
-                        manager.on_guess(player_id, is_correct)
-                    except TypeError:
-                        pass  # Or log that this also failed
+                        manager.on_guess(player_id, player_name, guess, is_correct)
+                    except TypeError as e:
+                        logging.error(
+                            f"Error calling on_guess for {type(manager).__name__}: {e}"
+                        )
+                        # Attempt to call with fewer arguments for backward compatibility
+                        try:
+                            manager.on_guess(player_id, is_correct)
+                        except TypeError:
+                            pass  # Or log that this also failed
 
         # Get the number of guesses for this question
         num_guesses = len(self.get_player_guesses(player_id))

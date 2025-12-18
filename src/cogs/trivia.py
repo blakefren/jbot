@@ -1,7 +1,10 @@
 from discord.ext import commands
 import logging
+from src.cfg.main import ConfigReader
 
-from src.core.guess_handler import AlreadyAnsweredCorrectlyError
+from src.core.guess_handler import AlreadyAnsweredCorrectlyError, JinxedError
+
+config = ConfigReader()
 
 
 class Trivia(commands.Cog):
@@ -33,6 +36,10 @@ class Trivia(commands.Cog):
             await ctx.interaction.followup.send(
                 "You have already answered today's question correctly."
             )
+            return
+        except JinxedError as e:
+            EMOJI_SILENCED = config.get("JBOT_EMOJI_SILENCED", "🤐")
+            await ctx.interaction.followup.send(f"{EMOJI_SILENCED} {e.message}")
             return
         except Exception as e:
             logging.error(f"Error handling guess: {e}")

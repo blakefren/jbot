@@ -17,26 +17,30 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
         self.ctx.author.id = 123
         self.ctx.author.display_name = "Attacker"
 
-    async def test_disrupt_disabled(self):
+        self.target_member = MagicMock()
+        self.target_member.id = 456
+        self.target_member.display_name = "Target"
+
+    async def test_jinx_disabled(self):
         self.bot.game.features = {"fight": False}
-        await self.cog.disrupt.callback(self.cog, self.ctx, target_id="456")
+        await self.cog.jinx.callback(self.cog, self.ctx, target=self.target_member)
         self.bot.send_message.assert_awaited_once_with(
             "Fight track is not enabled.",
             interaction=self.ctx.interaction,
             ephemeral=True,
         )
 
-    async def test_disrupt_enabled(self):
+    async def test_jinx_enabled(self):
         self.bot.game.features = {"fight": True}
 
         # Mock the manager
         mock_manager = MagicMock()
-        mock_manager.disrupt.return_value = "Success"
+        mock_manager.jinx.return_value = "Success"
         self.bot.game.managers.get.return_value = mock_manager
 
-        await self.cog.disrupt.callback(self.cog, self.ctx, target_id="456")
+        await self.cog.jinx.callback(self.cog, self.ctx, target=self.target_member)
 
-        mock_manager.disrupt.assert_called_once_with("123", "456")
+        mock_manager.jinx.assert_called_once_with("123", "456")
         self.bot.send_message.assert_awaited_once_with(
             "Success", interaction=self.ctx.interaction
         )
@@ -60,12 +64,12 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
 
         mock_manager.use_shield.assert_called_once_with("123")
         self.bot.send_message.assert_awaited_once_with(
-            "Shield activated", interaction=self.ctx.interaction
+            "Shield activated", interaction=self.ctx.interaction, ephemeral=True
         )
 
     async def test_steal_disabled(self):
         self.bot.game.features = {"fight": False}
-        await self.cog.steal.callback(self.cog, self.ctx, target_id="456")
+        await self.cog.steal.callback(self.cog, self.ctx, target=self.target_member)
         self.bot.send_message.assert_awaited_once_with(
             "Fight track is not enabled.",
             interaction=self.ctx.interaction,
@@ -78,7 +82,7 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
         mock_manager.steal.return_value = "Stolen points"
         self.bot.game.managers.get.return_value = mock_manager
 
-        await self.cog.steal.callback(self.cog, self.ctx, target_id="456")
+        await self.cog.steal.callback(self.cog, self.ctx, target=self.target_member)
 
         mock_manager.steal.assert_called_once_with("123", "456")
         self.bot.send_message.assert_awaited_once_with(
