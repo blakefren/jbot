@@ -429,9 +429,10 @@ class TestGuessHandler(unittest.TestCase):
             ("Virginia", "West Virginia", False),
             ("Dr.", "Dr. No", False),
             ("York", "New York", False),
-            # TODO: address thse cases
-            # ("carnivore", "carnivorous", True),
-            # ("tape", "a stapler", False),
+            ("carnivore", "carnivorous", True),
+            ("React", "Reaction", True),
+            ("tape", "a stapler", False),
+            ("tension", "pension", True),  # Accepted by lenient edit distance (1 <= 2)
         ]
 
         for guess, answer, expected in cases:

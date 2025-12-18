@@ -116,6 +116,25 @@ class GuessHandler:
         else:
             return 2  # Standard tolerance
 
+    def _is_token_match(self, token1: str, token2: str) -> bool:
+        """
+        Returns True if tokens match by Edit Distance (Typos) OR Jaro-Winkler (Root/Suffix).
+        """
+        # 1. Check Edit Distance (Adaptive Limit)
+        limit = self._get_adaptive_limit(token2)
+        dist = jellyfish.damerau_levenshtein_distance(token1, token2)
+
+        if dist <= limit:
+            return True
+
+        # 2. Check Jaro-Winkler (Stemming/Suffix check)
+        # 0.90 is a safe, high threshold that requires a strong prefix match.
+        score = jellyfish.jaro_winkler_similarity(token1, token2)
+        if score >= 0.90:
+            return True
+
+        return False
+
     def _smart_token_match(self, guess: str, answer: str) -> bool:
         """
         Checks if tokens match using Damerau-Levenshtein and adaptive thresholds.
@@ -130,12 +149,8 @@ class GuessHandler:
         matches_a = 0
         matched_answer_tokens = set()
         for ta in tokens_a:
-            limit = self._get_adaptive_limit(ta)
             # Find closest token in guess
-            if any(
-                jellyfish.damerau_levenshtein_distance(tg, ta) <= limit
-                for tg in tokens_g
-            ):
+            if any(self._is_token_match(tg, ta) for tg in tokens_g):
                 matches_a += 1
                 matched_answer_tokens.add(ta)
 
@@ -154,8 +169,7 @@ class GuessHandler:
         for tg in tokens_g:
             matched = False
             for ta in tokens_a:
-                limit = self._get_adaptive_limit(ta)
-                if jellyfish.damerau_levenshtein_distance(tg, ta) <= limit:
+                if self._is_token_match(tg, ta):
                     matched = True
                     break
             if matched:
@@ -195,12 +209,12 @@ class GuessHandler:
         # Step B: The Single-Word Branch
         answer_words = norm_a.split()
         if len(answer_words) == 1:
-            limit = self._get_adaptive_limit(norm_a)
-            if jellyfish.damerau_levenshtein_distance(norm_g, norm_a) <= limit:
+            if self._is_token_match(norm_g, norm_a):
                 return True
 
         # Step C: Smart Token Match
-        return self._smart_token_match(norm_g, norm_a)
+        result = self._smart_token_match(norm_g, norm_a)
+        return result
 
     def get_player_guesses(self, player_id: int) -> list:
         """
