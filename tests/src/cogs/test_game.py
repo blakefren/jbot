@@ -161,7 +161,7 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_rules_no_features(self):
         """Test rules command with no features enabled."""
-        self.bot.game.features = {"fight": False, "powerup": False, "coop": False}
+        self.bot.game.features = {"fight": False}
 
         await self.cog.rules.callback(self.cog, self.ctx)
 
@@ -171,15 +171,16 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_rules_all_features(self):
         """Test rules command with all features enabled."""
-        self.bot.game.features = {"fight": True, "powerup": True, "coop": True}
+        self.bot.game.features = {"fight": True}
 
         await self.cog.rules.callback(self.cog, self.ctx)
 
         self.bot.send_message.assert_awaited_once()
         args, kwargs = self.bot.send_message.await_args
         self.assertIn("Fight Track", args[0])
-        self.assertIn("Power-up Track", args[0])
-        self.assertIn("Coop Track", args[0])
+        # Power-up and Coop tracks are no longer toggleable features in rules
+        # self.assertIn("Power-up Track", args[0])
+        # self.assertIn("Coop Track", args[0])
 
     async def test_game_group(self):
         """Test the game group command sends help."""

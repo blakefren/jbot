@@ -84,11 +84,7 @@ class Game(commands.Cog):
         rules_text = "**Active Game Rules:**\n"
 
         if features.get("fight"):
-            rules_text += "- **Fight Track**: PvP enabled! Use `/power jinx` to silence players and `/power steal` to steal points. Protect yourself with `/power shield` (DM only)!\n"
-        if features.get("powerup"):
-            rules_text += "- **Power-up Track**: Power-ups enabled! Use `/power wager` to bet points.\n"
-        if features.get("coop"):
-            rules_text += "- **Coop Track**: Cooperation enabled! Use `/power reinforce` to team up.\n"
+            rules_text += "- **Fight Track**: PvP enabled! Use `/power jinx` to silence players and `/power steal` to steal points. Protect yourself with `/power shield`!\n"
 
         if not any(features.values()):
             rules_text += "Standard trivia rules apply. Answer daily questions to earn points and streaks!"

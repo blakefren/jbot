@@ -10,6 +10,7 @@ from src.core.player_manager import PlayerManager
 from src.core.subscriber import Subscriber
 import logging
 from src.core.data_manager import DataManager
+from src.core.powerup import PowerUpManager
 from data.readers.question_selector import QuestionSelector
 from data.readers.question import Question
 from src.core.guess_handler import GuessHandler
@@ -40,18 +41,13 @@ class GameRunner:
         # Feature flags
         self.features = {
             "fight": self.config.get_bool("JBOT_ENABLE_FIGHT", False),
-            "powerup": self.config.get_bool("JBOT_ENABLE_POWERUP", False),
-            "coop": self.config.get_bool("JBOT_ENABLE_COOP", False),
         }
 
-        # Initialize PowerUpManager if any related feature is enabled
-        if any(self.features.values()):
-            from src.core.powerup import PowerUpManager
-
-            self.managers["powerup"] = PowerUpManager(
-                self.player_manager, self.data_manager
-            )
-            logging.info(f"PowerUpManager enabled with features: {self.features}")
+        # Initialize PowerUpManager (always enabled)
+        self.managers["powerup"] = PowerUpManager(
+            self.player_manager, self.data_manager
+        )
+        logging.info(f"PowerUpManager enabled. Features: {self.features}")
 
     def _get_valid_question(self) -> Question:
         """

@@ -70,57 +70,6 @@ class Power(commands.Cog):
             result = manager.steal(str(ctx.author.id), str(target.id))
             await self.bot.send_message(result, interaction=ctx.interaction)
 
-    # TODO: Re-enable these commands when they are ready
-    # @power.command(name="wager", description="Wager points on the current question.")
-    # async def wager(self, ctx: commands.Context, amount: int):
-    #     """Wager points on the current question."""
-    #     if not self.bot.game.features.get("powerup"):
-    #         await self.bot.send_message(
-    #             "Power-up track is not enabled.",
-    #             interaction=ctx.interaction,
-    #             ephemeral=True,
-    #         )
-    #         return
-
-    #     manager = self._get_manager()
-    #     if manager:
-    #         result = manager.place_wager(str(ctx.author.id), amount)
-    #         await self.bot.send_message(result, interaction=ctx.interaction)
-
-    # @power.command(name="teamup", description="Team up with another player.")
-    # async def teamup(self, ctx: commands.Context, target_id: str):
-    #     """Team up with another player."""
-    #     if not self.bot.game.features.get("coop"):
-    #         await self.bot.send_message(
-    #             "Coop track is not enabled.",
-    #             interaction=ctx.interaction,
-    #             ephemeral=True,
-    #         )
-    #         return
-
-    #     manager = self._get_manager()
-    #     if manager:
-    #         result = manager.teamup(str(ctx.author.id), target_id)
-    #         await self.bot.send_message(result, interaction=ctx.interaction)
-
-    # @power.command(name="reveal", description="Reveal letters in the answer.")
-    # async def reveal(self, ctx: commands.Context):
-    #     """Reveal letters in the answer."""
-    #     if not self.bot.game.features.get("coop"):
-    #         await self.bot.send_message(
-    #             "Coop track is not enabled.",
-    #             interaction=ctx.interaction,
-    #             ephemeral=True,
-    #         )
-    #         return
-
-    #     # Reveal is not implemented in PowerUpManager yet.
-    #     await self.bot.send_message(
-    #         "This command is not yet implemented.",
-    #         interaction=ctx.interaction,
-    #         ephemeral=True,
-    #     )
-
 
 async def setup(bot):
     await bot.add_cog(Power(bot))

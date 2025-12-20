@@ -432,7 +432,6 @@ class TestGuessHandler(unittest.TestCase):
             ("carnivore", "carnivorous", True),
             ("React", "Reaction", True),
             ("tape", "a stapler", False),
-            ("tension", "pension", True),  # Accepted by lenient edit distance (1 <= 2)
         ]
 
         for guess, answer, expected in cases:

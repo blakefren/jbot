@@ -78,7 +78,7 @@ class TestGameRunner(unittest.TestCase):
 
     def test_initialization(self):
         """Test GameRunner initialization."""
-        self.assertEqual(self.game_runner.managers, {})
+        self.assertIn("powerup", self.game_runner.managers)
         self.assertEqual(
             self.game_runner.question_selector, self.mock_question_selector
         )
