@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS daily_questions (
 );
 
 -- This table stores information about the players.
-CREATE TABLE IF NOT EXISTS players (
+CREATE TABLE IF NOT EXISTS "players" (
     id TEXT PRIMARY KEY, -- Corresponds to discord_id
     name TEXT,
     score INTEGER DEFAULT 0,
