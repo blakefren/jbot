@@ -17,7 +17,85 @@ from db.update_schema import (
     compare_schemas,
     update_schema,
     main,
+    get_db_columns,
+    parse_columns,
 )
+
+
+class TestGetDbColumns(unittest.TestCase):
+    """Tests for get_db_columns function."""
+
+    def test_get_db_columns_returns_column_names(self):
+        """Test that get_db_columns returns a set of column names."""
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE test_table (id INTEGER, name TEXT)")
+        conn.commit()
+
+        columns = get_db_columns(conn, "test_table")
+
+        self.assertEqual(columns, {"id", "name"})
+        conn.close()
+
+
+class TestParseColumns(unittest.TestCase):
+    """Tests for parse_columns function."""
+
+    def test_parse_columns_simple(self):
+        """Test parsing simple column definitions."""
+        create_statement = "CREATE TABLE users (id INTEGER, name TEXT)"
+        columns = parse_columns(create_statement)
+
+        self.assertIn("id", columns)
+        self.assertIn("name", columns)
+        self.assertEqual(columns["id"], "id INTEGER")
+        self.assertEqual(columns["name"], "name TEXT")
+
+    def test_parse_columns_with_constraints(self):
+        """Test parsing columns with constraints."""
+        create_statement = """
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE
+        )
+        """
+        columns = parse_columns(create_statement)
+
+        self.assertIn("id", columns)
+        self.assertIn("name", columns)
+        self.assertIn("email", columns)
+        self.assertTrue("PRIMARY KEY" in columns["id"])
+        self.assertTrue("NOT NULL" in columns["name"])
+        self.assertTrue("UNIQUE" in columns["email"])
+
+    def test_parse_columns_ignores_table_constraints(self):
+        """Test that table-level constraints are ignored."""
+        create_statement = """
+        CREATE TABLE users (
+            id INTEGER,
+            name TEXT,
+            PRIMARY KEY (id),
+            FOREIGN KEY (name) REFERENCES other(name)
+        )
+        """
+        columns = parse_columns(create_statement)
+
+        self.assertIn("id", columns)
+        self.assertIn("name", columns)
+        self.assertNotIn("PRIMARY KEY", columns)
+        self.assertNotIn("FOREIGN KEY", columns)
+
+    def test_parse_columns_handles_parentheses(self):
+        """Test parsing columns with parentheses in types (e.g. VARCHAR(255))."""
+        create_statement = (
+            "CREATE TABLE users (name VARCHAR(255), score DECIMAL(10, 2))"
+        )
+        columns = parse_columns(create_statement)
+
+        self.assertIn("name", columns)
+        self.assertIn("score", columns)
+        self.assertEqual(columns["name"], "name VARCHAR(255)")
+        self.assertEqual(columns["score"], "score DECIMAL(10, 2)")
 
 
 class TestGetDbConnection(unittest.TestCase):
@@ -314,6 +392,53 @@ class TestMain(unittest.TestCase):
         main()
 
         # Should handle the error and still close the connection
+        mock_conn.close.assert_called_once()
+
+    @patch("db.update_schema.get_db_connection")
+    @patch("db.update_schema.get_current_schema")
+    @patch("db.update_schema.get_target_schema")
+    @patch("db.update_schema.get_db_columns")
+    @patch("builtins.input", return_value="y")
+    @patch("builtins.print")
+    def test_main_alter_table_applied(
+        self,
+        mock_print,
+        mock_input,
+        mock_get_cols,
+        mock_get_target,
+        mock_get_current,
+        mock_get_conn,
+    ):
+        """Test main when a column is missing and ALTER TABLE is applied."""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+        mock_get_conn.return_value = mock_conn
+
+        # Current schema has table 'users'
+        mock_get_current.return_value = ["CREATE TABLE users (id INTEGER)"]
+        # Target schema has 'users' with an extra column 'email'
+        mock_get_target.return_value = (
+            "CREATE TABLE IF NOT EXISTS users (id INTEGER, email TEXT);"
+        )
+
+        # Mock get_db_columns to return only 'id' initially
+        mock_get_cols.return_value = {"id"}
+
+        main()
+
+        # Verify ALTER TABLE was executed
+        # We expect: ALTER TABLE users ADD COLUMN email TEXT;
+        found_alter = False
+        for call in mock_cursor.execute.call_args_list:
+            args, _ = call
+            if "ALTER TABLE users ADD COLUMN email TEXT" in args[0]:
+                found_alter = True
+                break
+
+        self.assertTrue(found_alter, "ALTER TABLE statement was not executed")
+        mock_conn.commit.assert_called_once()
+        mock_print.assert_any_call("Schema updated.")
         mock_conn.close.assert_called_once()
 
     @patch("db.update_schema.get_db_connection")

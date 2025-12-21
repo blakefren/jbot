@@ -32,32 +32,33 @@ def parse_schema(schema_sql):
         if "CREATE TABLE" in statement:
             # This parsing is simplistic and might need to be more robust
             try:
-                table_name = statement.split("IF NOT EXISTS ")[1].split(" (")[0].strip()
+                if "IF NOT EXISTS" in statement:
+                    table_name = (
+                        statement.split("IF NOT EXISTS ")[1].split(" (")[0].strip()
+                    )
+                else:
+                    table_name = (
+                        statement.split("CREATE TABLE ")[1].split(" (")[0].strip()
+                    )
+
                 # Normalize by removing comments and standardizing whitespace
-                normalized_statement = " ".join(
-                    line.strip()
-                    for line in statement.splitlines()
-                    if not line.strip().startswith("--")
-                )
+                lines = []
+                for line in statement.splitlines():
+                    line = line.strip()
+                    if line.startswith("--"):
+                        continue
+                    # Remove inline comments
+                    if "--" in line:
+                        line = line.split("--")[0].strip()
+                    lines.append(line)
+
+                normalized_statement = " ".join(lines)
                 normalized_statement = " ".join(normalized_statement.split()).replace(
                     "IF NOT EXISTS ", ""
                 )
                 schema_dict[table_name] = normalized_statement
             except IndexError:
-                # Handle cases without 'IF NOT EXISTS'
-                try:
-                    table_name = (
-                        statement.split("CREATE TABLE ")[1].split(" (")[0].strip()
-                    )
-                    normalized_statement = " ".join(
-                        line.strip()
-                        for line in statement.splitlines()
-                        if not line.strip().startswith("--")
-                    )
-                    normalized_statement = " ".join(normalized_statement.split())
-                    schema_dict[table_name] = normalized_statement
-                except IndexError:
-                    print(f"Warning: Could not parse table name from: {statement}")
+                print(f"Warning: Could not parse table name from: {statement}")
     return schema_dict
 
 
@@ -85,6 +86,65 @@ def compare_schemas(current_schema_list, target_schema_sql):
                 }
 
     return new_tables, modified_tables
+
+
+def get_db_columns(conn, table_name):
+    """Retrieves the set of column names for a table from the database."""
+    cursor = conn.cursor()
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    return {row[1] for row in cursor.fetchall()}
+
+
+def parse_columns(create_statement):
+    """
+    Extracts column definitions from a CREATE TABLE statement.
+    Returns a dict of {column_name: full_definition_string}.
+    """
+    # Extract content inside the first ( and last )
+    start = create_statement.find("(")
+    end = create_statement.rfind(")")
+    if start == -1 or end == -1:
+        return {}
+
+    content = create_statement[start + 1 : end]
+
+    # Split by comma, respecting parentheses
+    definitions = []
+    current = []
+    paren_depth = 0
+    for char in content:
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+        elif char == "," and paren_depth == 0:
+            definitions.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    if current:
+        definitions.append("".join(current).strip())
+
+    columns = {}
+    for definition in definitions:
+        # Skip table constraints
+        upper_def = definition.upper()
+        if (
+            upper_def.startswith("PRIMARY KEY")
+            or upper_def.startswith("FOREIGN KEY")
+            or upper_def.startswith("CONSTRAINT")
+            or upper_def.startswith("UNIQUE")
+            or upper_def.startswith("CHECK")
+        ):
+            continue
+
+        # Extract column name (first token)
+        parts = definition.split()
+        if parts:
+            col_name = parts[0].strip('"[]`')
+            columns[col_name] = definition
+
+    return columns
 
 
 def update_schema(conn, new_schema):
@@ -142,27 +202,56 @@ def main():
                 # This branch is unreachable due to how str.split() works
                 print(f"Warning: Could not parse statement: {statement}")
 
-    # TODO: Implement ALTER TABLE for modified tables to avoid data loss.
-    # The current implementation only handles new tables.
+    alter_statements = []
+    target_schema_dict = parse_schema(target_schema_sql)
 
-    if not new_tables_sql:
+    for table_name, create_statement in target_schema_dict.items():
+        if table_name in current_tables:
+            db_columns = get_db_columns(conn, table_name)
+            target_columns = parse_columns(create_statement)
+
+            for col_name, col_def in target_columns.items():
+                if col_name not in db_columns:
+                    print(
+                        f"Detected missing column '{col_name}' in table '{table_name}'"
+                    )
+                    alter_statements.append(
+                        f"ALTER TABLE {table_name} ADD COLUMN {col_def};"
+                    )
+
+    if not new_tables_sql and not alter_statements:
         print("Database schema is up to date.")
         conn.close()
         return
 
-    print("The following new tables are proposed:")
-    for sql in new_tables_sql:
-        print(sql)
+    if new_tables_sql:
+        print("The following new tables are proposed:")
+        for sql in new_tables_sql:
+            print(sql)
+
+    if alter_statements:
+        print("The following schema updates are proposed:")
+        for sql in alter_statements:
+            print(sql)
 
     confirm = input("Do you want to apply these changes? (y/n): ")
     if confirm.lower() == "y":
         cursor = conn.cursor()
+
         for sql in new_tables_sql:
             try:
                 cursor.execute(sql)
             except sqlite3.OperationalError as e:
                 print(f"Could not execute: {sql}")
                 print(e)
+
+        for sql in alter_statements:
+            try:
+                cursor.execute(sql)
+            except sqlite3.OperationalError as e:
+                print(f"Could not execute: {sql}")
+                print(e)
+
         conn.commit()
         print("Schema updated.")
     else:
