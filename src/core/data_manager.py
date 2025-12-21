@@ -404,6 +404,24 @@ class DataManager:
         """
         self.db.execute_update(query, (player_id, admin_id, amount, reason))
 
+    def add_alternative_answer(self, question_id: int, answer_text: str, admin_id: str):
+        """Adds an alternative correct answer for a question."""
+        query = "INSERT INTO alternative_answers (question_id, answer_text, added_by) VALUES (?, ?, ?)"
+        self.db.execute_update(query, (question_id, answer_text, admin_id))
+
+    def get_alternative_answers(self, question_id: int) -> list[str]:
+        """Retrieves all alternative answers for a question."""
+        query = "SELECT answer_text FROM alternative_answers WHERE question_id = ?"
+        results = self.db.execute_query(query, (question_id,))
+        return [r["answer_text"] for r in results]
+
+    def get_guesses_for_daily_question(self, daily_question_id: int) -> list[dict]:
+        """Retrieves all guesses for a specific daily question."""
+        query = (
+            "SELECT * FROM guesses WHERE daily_question_id = ? ORDER BY guessed_at ASC"
+        )
+        return self.db.execute_query(query, (daily_question_id,))
+
     def get_hint_sent_timestamp(self, daily_question_id: int) -> Optional[str]:
         """
         Retrieves the timestamp for when a hint was sent for a specific daily question.
@@ -599,3 +617,10 @@ class DataManager:
                 return datetime.strptime(date_str, "%Y-%m-%d").date()
             return date_str  # In case it's already a date object
         return None
+
+    def mark_guess_as_correct(self, guess_id: int):
+        """
+        Updates a specific guess to be marked as correct.
+        """
+        query = "UPDATE guesses SET is_correct = 1 WHERE id = ?"
+        self.db.execute_update(query, (guess_id,))

@@ -82,6 +82,16 @@ CREATE TABLE IF NOT EXISTS player_roles (
     FOREIGN KEY (role_id) REFERENCES roles (id)
 );
 
+-- This table stores alternative correct answers for questions.
+CREATE TABLE IF NOT EXISTS alternative_answers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_id INTEGER NOT NULL,
+    answer_text TEXT NOT NULL,
+    added_by TEXT NOT NULL, -- Admin ID
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (question_id) REFERENCES questions (id)
+);
+
 -- This table stores the subscribers for daily questions.
 CREATE TABLE IF NOT EXISTS subscribers (
     id TEXT PRIMARY KEY, -- Corresponds to user_id or channel_id

@@ -51,6 +51,9 @@ class GuessHandler:
         self.fuzzy_threshold = fuzzy_threshold
         self.reminder_time = reminder_time
         self.config = ConfigReader()
+        self.alternative_answers = self.data_manager.get_alternative_answers(
+            self.daily_question_id
+        )
 
     def _normalize(self, text: str) -> str:
         """
@@ -289,6 +292,14 @@ class GuessHandler:
         g = guess.strip().lower()
         a = str(self.daily_q.answer).strip().lower()
         is_correct = self._is_correct_guess(g, a)
+
+        # Check alternative answers if primary answer is incorrect
+        if not is_correct:
+            for alt_answer in self.alternative_answers:
+                alt_a = str(alt_answer).strip().lower()
+                if self._is_correct_guess(g, alt_a):
+                    is_correct = True
+                    break
 
         points_earned = 0
         bonus_messages = []

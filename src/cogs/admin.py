@@ -99,6 +99,44 @@ class Admin(commands.Cog):
             await ctx.send(f"Unsubscribed {target_name} from daily questions.")
         return
 
+    @admin.command(
+        name="add_answer",
+        description="(admin) Adds an alternative answer and refunds points.",
+    )
+    async def add_answer(self, ctx: commands.Context, *, answer_text: str):
+        await ctx.defer()
+
+        result = self.bot.game.recalculate_scores_for_new_answer(
+            answer_text, str(ctx.author.id)
+        )
+
+        if result["status"] == "error":
+            await ctx.send(f"Error: {result['message']}")
+            return
+
+        # Determine if answer has been revealed
+        is_revealed = False
+        try:
+            morning_task = self.bot.morning_message_task
+            evening_task = self.bot.evening_message_task
+            if morning_task.is_running() and evening_task.is_running():
+                if morning_task.next_iteration < evening_task.next_iteration:
+                    is_revealed = True
+        except Exception:
+            pass
+
+        msg = (
+            f"Updated scores for {result['updated_players']} players.\n"
+            f"Total points refunded: {result['total_refunded']}."
+        )
+
+        if is_revealed:
+            msg = f"Added '{answer_text}' as a correct answer.\n" + msg
+        else:
+            msg = f"Added alternative answer.\n" + msg
+
+        await ctx.send(msg)
+
     @admin.command(name="resend", description="Resend a scheduled message.")
     @discord.app_commands.choices(
         message_type=[
