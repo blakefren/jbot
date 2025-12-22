@@ -51,6 +51,8 @@ class PowerUpManager(BaseManager):
                 "earned_today": 0,  # Total points earned today
                 "bonuses_today": {},  # Breakdown of bonuses earned today
                 "silenced": False,  # Whether the player is currently silenced
+                "jinx_used_today": False,
+                "steal_used_today": False,
             }
         return self.daily_state[player_id]
 
@@ -255,9 +257,14 @@ class PowerUpManager(BaseManager):
         last_correct = self.data_manager.get_last_correct_guess_date(attacker_id)
         if last_correct == date.today():
             return "You have already answered correctly today. You cannot use Jinx."
-        self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
 
         attacker_state = self._get_daily_state(attacker_id)
+        if attacker_state["jinx_used_today"]:
+            return "You have already used Jinx today."
+
+        self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
+        attacker_state["jinx_used_today"] = True
+
         target_state = self._get_daily_state(target_id)
 
         # Mark Attacker as SILENCED until the hint is sent
@@ -291,11 +298,15 @@ class PowerUpManager(BaseManager):
         if last_correct == date.today():
             return "You have already answered correctly today. You cannot use Steal."
 
+        thief_state = self._get_daily_state(thief_id)
+        if thief_state["steal_used_today"]:
+            return "You have already used Steal today."
+
         # Attacker Penalty: Reset Streak
         self.player_manager.reset_streak(thief_id)
         self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
+        thief_state["steal_used_today"] = True
 
-        thief_state = self._get_daily_state(thief_id)
         target_state = self._get_daily_state(target_id)
 
         thief_state["stealing_from"] = target_id
@@ -324,8 +335,8 @@ class PowerUpManager(BaseManager):
             return "You have already answered correctly today. You cannot use Shield."
 
         state = self._get_daily_state(player_id)
-        if state.get("shield_active"):
-            return "Shield already active."
+        if state.get("shield_active") or state.get("shield_used"):
+            return "You have already activated a shield today."
 
         state["shield_active"] = True
         self.data_manager.log_powerup_usage(player_id, "shield", None, question_id)

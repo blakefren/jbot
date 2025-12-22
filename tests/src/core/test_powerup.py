@@ -83,7 +83,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.use_shield("1", "q1")
         msg = manager.use_shield("1", "q1")
-        self.assertIn("already active", msg)
+        self.assertIn("already activated a shield today", msg)
 
     def test_steal_success(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -273,3 +273,23 @@ class TestPowerUpManager(unittest.TestCase):
         self.assertTrue(any("stole 20 points" in m for m in msgs))
         self.assertEqual(self.players["1"].score, 120)  # 100 + 20
         self.assertEqual(self.players["2"].score, 80)  # 100 - 20
+
+    def test_jinx_limit(self):
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        # First use
+        msg = manager.jinx("1", "2", "q1")
+        self.assertIn("jinxed", msg)
+
+        # Second use
+        msg = manager.jinx("1", "3", "q1")
+        self.assertIn("already used Jinx today", msg)
+
+    def test_steal_limit(self):
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        # First use
+        msg = manager.steal("1", "2", "q1")
+        self.assertIn("sacrificed their streak", msg)
+
+        # Second use
+        msg = manager.steal("1", "3", "q1")
+        self.assertIn("already used Steal today", msg)
