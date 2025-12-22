@@ -18,6 +18,14 @@ This project, `jbot`, is a daily bot designed for group trivia questions and fri
 *   **Configuration**: `python-dotenv`
 *   **Command Structure**: Consolidated into `/game`, `/power`, and `/admin` groups.
 
+## Architecture
+
+### Event Sourcing / Replay Engine
+The project uses an Event Sourcing pattern to calculate daily scores retroactively for corrections. In practice, scores are calculated in real time.
+*   **DailyGameSimulator**: Located in `src/core/daily_game_simulator.py`, this class replays all events (guesses, power-ups) for a specific day to determine the final state and scores.
+*   **Retroactive Corrections**: When an answer is corrected (e.g., via `/admin correct`), the simulator replays the day's events with the new answer to recalculate scores and streaks accurately.
+*   **Events**: Defined in `src/core/events.py`, these dataclasses (`GuessEvent`, `PowerUpEvent`) represent the immutable history of actions.
+
 The bot's features are organized into three distinct "tracks" that can be enabled or disabled independently via `.env` flags:
 *   **Fight Track**: Player-vs-player interactions like attacking and defending.
 *   **Power-up Track**: Mechanics that reward consistent play, such as answer streaks and betting.

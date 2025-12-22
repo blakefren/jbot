@@ -30,7 +30,9 @@ class Power(commands.Cog):
 
         manager = self._get_manager()
         if manager:
-            result = manager.jinx(str(ctx.author.id), str(target.id))
+            result = manager.jinx(
+                str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
+            )
             await self.bot.send_message(result, interaction=ctx.interaction)
 
     @power.command(
@@ -48,7 +50,9 @@ class Power(commands.Cog):
 
         manager = self._get_manager()
         if manager:
-            result = manager.use_shield(str(ctx.author.id))
+            result = manager.use_shield(
+                str(ctx.author.id), self.bot.game.daily_question_id
+            )
             await self.bot.send_message(
                 result, interaction=ctx.interaction, ephemeral=True
             )
@@ -67,7 +71,9 @@ class Power(commands.Cog):
 
         manager = self._get_manager()
         if manager:
-            result = manager.steal(str(ctx.author.id), str(target.id))
+            result = manager.steal(
+                str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
+            )
             await self.bot.send_message(result, interaction=ctx.interaction)
 
     # TODO: Re-enable these commands when they are ready

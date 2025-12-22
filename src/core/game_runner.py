@@ -15,6 +15,8 @@ from data.readers.question_selector import QuestionSelector
 from data.readers.question import Question
 from src.core.guess_handler import GuessHandler
 from src.cfg.main import ConfigReader
+from src.core.daily_game_simulator import DailyGameSimulator
+from src.core.events import GuessEvent, PowerUpEvent
 
 
 class GameRunner:
@@ -515,7 +517,9 @@ class GameRunner:
     def resolve_wager(self, player_id: str, correct: bool):
         pass
 
-    def recalculate_scores_for_new_answer(self, new_answer: str, admin_id: str) -> dict:
+    def recalculate_scores_for_new_answer(
+        self, new_answer: str, admin_id: str, dry_run: bool = False
+    ) -> dict:
         """
         Re-evaluates guesses for the current daily question against a new accepted answer.
         Returns a summary of changes.
@@ -523,92 +527,111 @@ class GameRunner:
         if not self.daily_q or not self.daily_question_id:
             return {"status": "error", "message": "No active daily question."}
 
-        # Add the alternative answer to DB
-        self.data_manager.add_alternative_answer(
-            self.daily_question_id, new_answer, admin_id
+        # 1. Get Data
+        hint_ts = self.data_manager.get_hint_sent_timestamp(self.daily_question_id)
+        existing_alts = self.data_manager.get_alternative_answers(
+            self.daily_question_id
         )
+        old_answers = [self.daily_q.answer] + existing_alts
+        new_answers = old_answers + [new_answer]
 
-        # Get all guesses
+        events = []
         guesses = self.data_manager.get_guesses_for_daily_question(
             self.daily_question_id
         )
-
-        # Group by player
-        player_guesses = defaultdict(list)
         for g in guesses:
-            player_guesses[g["player_id"]].append(g)
-
-        updated_players = 0
-        total_refunded = 0
-
-        # We need a temporary GuessHandler to use its matching logic
-        # We can pass None for managers as we only use _is_correct_guess
-        temp_handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_q,
-            self.daily_question_id,
-            {},
-        )
-
-        # Pre-fetch hint timestamp to avoid repeated DB calls
-        hint_ts_str = self.data_manager.get_hint_sent_timestamp(self.daily_question_id)
-        bonus_first_try = int(self.config.get("JBOT_BONUS_FIRST_TRY", 20))
-        bonus_before_hint = int(self.config.get("JBOT_BONUS_BEFORE_HINT", 10))
-
-        # TODO: fully simulate bonuses (first try, before hint) as in normal guess handling
-        for player_id, p_guesses in player_guesses.items():
-            # Check if player already got it right
-            already_correct = any(g["is_correct"] for g in p_guesses)
-
-            if already_correct:
-                continue  # Skip already correct players for MVP
-
-            # Find the first guess that matches the NEW answer
-            first_new_correct_guess = None
-            for g in p_guesses:
-                if temp_handler._is_correct_guess(g["guess_text"], new_answer):
-                    first_new_correct_guess = g
-                    break
-
-            if not first_new_correct_guess:
-                continue  # No matching guess for this player
-
-            # Calculate points for this guess
-            guess_index = p_guesses.index(first_new_correct_guess)
-            num_guesses = guess_index + 1
-
-            points = self.daily_q.clue_value or 100
-
-            # First Try Bonus
-            if num_guesses == 1:
-                points += bonus_first_try
-
-            # Before Hint Bonus
-            # If hint hasn't been sent (None), or guess was before hint (string comparison works for ISO timestamps)
-            if not hint_ts_str or first_new_correct_guess["guessed_at"] < hint_ts_str:
-                points += bonus_before_hint
-
-            # Apply changes
-            # 1. Update guess to correct
-            self.data_manager.mark_guess_as_correct(first_new_correct_guess["id"])
-
-            # 2. Update player score
-            self.player_manager.update_score(player_id, points)
-
-            # 3. Fix streak
-            self.player_manager.increment_streak(player_id)
-
-            # 4. Log adjustment
-            self.data_manager.log_score_adjustment(
-                player_id, admin_id, points, f"Correction for answer: {new_answer}"
+            events.append(
+                GuessEvent(
+                    timestamp=g["guessed_at"],
+                    user_id=g["player_id"],
+                    guess_text=g["guess_text"],
+                )
             )
 
-            updated_players += 1
-            total_refunded += points
+        powerups = self.data_manager.get_powerup_usages_for_question(
+            self.daily_question_id
+        )
+        for p in powerups:
+            if p["powerup_type"] == "wager":
+                continue
+            events.append(
+                PowerUpEvent(
+                    timestamp=p["used_at"],
+                    user_id=p["user_id"],
+                    powerup_type=p["powerup_type"],
+                    target_user_id=p["target_user_id"],
+                    amount=0,
+                )
+            )
+
+        players = self.player_manager.get_all_players()
+        initial_states = players
+
+        # 2. Run Scorer (Old)
+        scorer_old = DailyGameSimulator(
+            self.daily_q, old_answers, hint_ts, events, initial_states, self.config
+        )
+        results_old = scorer_old.run()
+
+        # 3. Run Scorer (New)
+        scorer_new = DailyGameSimulator(
+            self.daily_q, new_answers, hint_ts, events, initial_states, self.config
+        )
+        results_new = scorer_new.run()
+
+        # 4. Diff and Apply
+        updated_players = 0
+        total_refunded = 0
+        details = []
+
+        if not dry_run:
+            self.data_manager.add_alternative_answer(
+                self.daily_question_id, new_answer, admin_id
+            )
+
+        for user_id, new_res in results_new.items():
+            old_res = results_old.get(user_id, {"score_earned": 0, "streak_delta": 0})
+
+            score_diff = new_res["score_earned"] - old_res["score_earned"]
+            streak_diff = new_res["streak_delta"] - old_res["streak_delta"]
+
+            if score_diff != 0 or streak_diff != 0:
+                if not dry_run:
+                    if score_diff != 0:
+                        self.player_manager.update_score(user_id, score_diff)
+
+                    if streak_diff != 0:
+                        current_player = self.player_manager.get_player(user_id)
+                        if current_player:
+                            new_streak = current_player.answer_streak + streak_diff
+                            self.player_manager.set_streak(user_id, max(0, new_streak))
+
+                    self.data_manager.log_score_adjustment(
+                        user_id,
+                        admin_id,
+                        score_diff,
+                        f"Correction for answer: {new_answer}",
+                    )
+
+                total_refunded += score_diff
+                updated_players += 1
+
+                # Add to details
+                player_name = players[user_id].name if user_id in players else user_id
+                details.append(
+                    {
+                        "name": player_name,
+                        "score_before": new_res["initial_score"]
+                        + old_res["score_earned"],
+                        "score_after": new_res["final_score"],
+                        "diff": score_diff,
+                        "badges": new_res["badges"],
+                    }
+                )
 
         return {
             "status": "success",
             "updated_players": updated_players,
             "total_refunded": total_refunded,
+            "details": details,
         }

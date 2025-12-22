@@ -386,6 +386,26 @@ class DataManager:
         query = "DELETE FROM player_roles"
         self.db.execute_update(query)
 
+    def log_powerup_usage(
+        self,
+        user_id: str,
+        powerup_type: str,
+        target_user_id: str = None,
+        question_id: int = None,
+    ):
+        """Logs a powerup usage."""
+        query = "INSERT INTO powerup_usage (user_id, powerup_type, target_user_id, question_id) VALUES (?, ?, ?, ?)"
+        self.db.execute_update(
+            query, (user_id, powerup_type, target_user_id, question_id)
+        )
+
+    def get_powerup_usages_for_question(self, question_id: int) -> list[dict]:
+        """Retrieves powerup usages for a specific question."""
+        query = "SELECT * FROM powerup_usage WHERE question_id = ?"
+        results = self.db.execute_query(query, (question_id,))
+        return results
+
+    # TODO: log streak adjustment as well
     def log_score_adjustment(
         self, player_id: str, admin_id: str, amount: int, reason: str
     ):

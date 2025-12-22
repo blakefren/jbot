@@ -38,23 +38,23 @@ The bot's features are organized into three distinct "tracks" that can be enable
 
 This track adds direct player-vs-player interactions.
 
-*   **Disrupt**: An offensive action that allows a player to attack another. If the target answers the daily question incorrectly, their answer streak is reset to zero.
-    *   **Command**: `/power disrupt <player_id>`
-    *   **Cost**: 50 points.
-*   **Shield**: A defensive action that protects a player from the next incoming attack.
-    *   **Command**: `/power shield`
-    *   **Cost**: 25 points.
-*   **Steal**: An offensive action that allows a player to steal half of the points another player has earned *for that day*.
+*   **Jinx**: An offensive action that prevents a player from earning streak bonuses that day. If the target answers correctly, they still get base points, but the attacker is silenced until the hint is revealed.
+    *   **Command**: `/power jinx <player_id>`
+    *   **Cost**: No point cost, but attacker is silenced.
+*   **Steal**: An offensive action that allows a player to steal some bonuses (First Try, Fastest) the target earns that day.
     *   **Command**: `/power steal <player_id>`
+    *   **Cost**: Resets the attacker's answer streak to zero.
+*   **Shield**: A defensive action that protects a player from the next incoming attack (Jinx or Steal).
+    *   **Command**: `/power shield`
+    *   **Cost**: No upfront cost, but -10 points if unused by end of day.
 
 ### Power-up Track
 
 This track introduces mechanics that reward consistent play or provide other advantages.
 
 *   **Answer Streaks**: Players build up a "streak" for each consecutive correct answer. This can be used for scoring bonuses or as a target for other players' attacks.
-*   **Wager**: Players can wager a portion of their points on whether their answer is correct. Winnings are calculated based on a diminishing returns formula to keep the game balanced.
+*   **Wager** (Planned): Players can wager a portion of their points on whether their answer is correct.
     *   **Command**: `/power wager <amount>`
-    *   **Details**: Bets are capped at 25% of a player's current score (minimum 1 point).
 *   **Answering First**: The first player to answer the daily question correctly receives a point bonus.
 *   **Answering Before the Hint**: Players who answer correctly before the daily hint is revealed receive a point bonus.
 *   **Weekly Boss Fight** (Planned): A challenging weekly question with a large point reward.
@@ -63,8 +63,8 @@ This track introduces mechanics that reward consistent play or provide other adv
 
 This track focuses on collaborative features.
 
-*   **Reinforce** (Planned): Two players can form a temporary alliance for the day. If either player answers correctly, both receive full points.
-    *   **Command**: `/power reinforce <player_id>`
+*   **Teamup** (Planned): Two players can form a temporary alliance for the day. If either player answers correctly, both receive full points.
+    *   **Command**: `/power teamup <player_id>`
     *   **Cost**: 25 points for each player.
 *   **Reveal Answer Letters** (Planned): Players can vote to reveal letters in the answer. Each vote costs points, and the cost increases with each revealed letter.
     *   **Command**: `/power reveal`

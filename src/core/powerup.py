@@ -154,7 +154,7 @@ class PowerUpManager(BaseManager):
 
         return ""
 
-    def teamup(self, player1_id: str, player2_id: str) -> str:
+    def teamup(self, player1_id: str, player2_id: str, question_id: int = None) -> str:
         """
         Team up two players for a cost of 25 points each. If either is correct,
         both get full points for the day.
@@ -184,6 +184,9 @@ class PowerUpManager(BaseManager):
 
         p1_state["team_partner"] = player2_id
         p2_state["team_partner"] = player1_id
+        self.data_manager.log_powerup_usage(
+            player1_id, "teamup", player2_id, question_id
+        )
 
         return (
             f"{player1_id} and {player2_id} are now teamed up! "
@@ -234,7 +237,7 @@ class PowerUpManager(BaseManager):
 
         return msg
 
-    def jinx(self, attacker_id: str, target_id: str) -> str:
+    def jinx(self, attacker_id: str, target_id: str, question_id: int = None) -> str:
         """
         Jinx another player.
         Attacker is silenced until 7 PM.
@@ -252,6 +255,7 @@ class PowerUpManager(BaseManager):
         last_correct = self.data_manager.get_last_correct_guess_date(attacker_id)
         if last_correct == date.today():
             return "You have already answered correctly today. You cannot use Jinx."
+        self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
 
         attacker_state = self._get_daily_state(attacker_id)
         target_state = self._get_daily_state(target_id)
@@ -268,7 +272,7 @@ class PowerUpManager(BaseManager):
             target_state["jinxed_by"] = attacker_id
             return f"{EMOJI_SILENCED} <@{attacker_id}> jinxed <@{target_id}>! <@{attacker_id}> is silenced until the hint is revealed."
 
-    def steal(self, thief_id: str, target_id: str) -> str:
+    def steal(self, thief_id: str, target_id: str, question_id: int = None) -> str:
         """
         Steal points from another player.
         Attacker's streak is reset immediately.
@@ -289,6 +293,7 @@ class PowerUpManager(BaseManager):
 
         # Attacker Penalty: Reset Streak
         self.player_manager.reset_streak(thief_id)
+        self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
 
         thief_state = self._get_daily_state(thief_id)
         target_state = self._get_daily_state(target_id)
@@ -303,7 +308,7 @@ class PowerUpManager(BaseManager):
             target_state["steal_attempt_by"] = thief_id
             return f"{EMOJI_STEALING} <@{thief_id}> has sacrificed their streak to steal from <@{target_id}>!"
 
-    def use_shield(self, player_id: str) -> str:
+    def use_shield(self, player_id: str, question_id: int = None) -> str:
         """
         Activate a shield for the player.
         """
@@ -323,6 +328,7 @@ class PowerUpManager(BaseManager):
             return "Shield already active."
 
         state["shield_active"] = True
+        self.data_manager.log_powerup_usage(player_id, "shield", None, question_id)
         return f"{EMOJI_SHIELD} Shield active. You are safe from Jinx and Steal."
 
     def check_shield_usage(self) -> list[str]:
@@ -340,7 +346,7 @@ class PowerUpManager(BaseManager):
                 )
         return messages
 
-    def place_wager(self, player_id: str, amount: int) -> str:
+    def place_wager(self, player_id: str, amount: int, question_id: int = None) -> str:
         """
         Place a wager with points for the current question.
         Wager is capped at 25% of current score (min 1 point).
@@ -367,6 +373,9 @@ class PowerUpManager(BaseManager):
 
         player_state = self._get_daily_state(player_id)
         player_state["wager"] = final_wager
+        self.data_manager.log_powerup_usage(
+            player_id, "wager", str(final_wager), question_id
+        )
 
         return f"{player_id} wagered {final_wager} points! (Max allowed: {max_wager})"
 

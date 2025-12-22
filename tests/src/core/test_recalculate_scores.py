@@ -25,6 +25,13 @@ class TestRecalculateScores(unittest.TestCase):
         # Mock PlayerManager
         self.game_runner.player_manager = MagicMock()
 
+        # Mock get_player to return a mock object with answer_streak
+        mock_player = MagicMock()
+        mock_player.answer_streak = 0
+        mock_player.score = 0
+        self.game_runner.player_manager.get_player.return_value = mock_player
+        self.game_runner.player_manager.get_all_players.return_value = {}
+
     def test_recalculate_scores_success(self):
         # Setup guesses
         # Player 1: "800" (Wrong initially)
@@ -49,6 +56,8 @@ class TestRecalculateScores(unittest.TestCase):
         ]
         self.mock_data_manager.get_guesses_for_daily_question.return_value = guesses
         self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        self.mock_data_manager.get_alternative_answers.return_value = []
+        self.mock_data_manager.get_powerup_usage_for_daily_question.return_value = []
 
         # Run recalculation with "800"
         result = self.game_runner.recalculate_scores_for_new_answer("800", "admin1")
@@ -56,16 +65,15 @@ class TestRecalculateScores(unittest.TestCase):
         # Verify
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["updated_players"], 1)
-        # 100 base + 20 first try + 10 before hint (since no hint sent)
-        self.assertEqual(result["total_refunded"], 130)
+        # 100 base + 20 first try + 10 before hint + 20 fastest = 150
+        self.assertEqual(result["total_refunded"], 150)
 
         # Check DB calls
         self.mock_data_manager.add_alternative_answer.assert_called_with(
             1, "800", "admin1"
         )
-        self.mock_data_manager.mark_guess_as_correct.assert_called()  # Should update guess
-        self.game_runner.player_manager.update_score.assert_called_with("p1", 130)
-        self.game_runner.player_manager.increment_streak.assert_called_with("p1")
+        self.game_runner.player_manager.update_score.assert_called_with("p1", 150)
+        self.game_runner.player_manager.set_streak.assert_called_with("p1", 1)
 
     def test_recalculate_scores_already_correct(self):
         # Player 1: "800-899" (Correct)
@@ -85,3 +93,36 @@ class TestRecalculateScores(unittest.TestCase):
 
         self.assertEqual(result["updated_players"], 0)
         self.game_runner.player_manager.update_score.assert_not_called()
+
+    def test_recalculate_scores_dry_run(self):
+        # Setup guesses
+        guesses = [
+            {
+                "id": 1,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "800",
+                "is_correct": 0,
+                "guessed_at": "2023-01-01 10:00:00",
+            }
+        ]
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = guesses
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        self.mock_data_manager.get_alternative_answers.return_value = []
+        self.mock_data_manager.get_powerup_usage_for_daily_question.return_value = []
+
+        # Run recalculation with dry_run=True
+        result = self.game_runner.recalculate_scores_for_new_answer(
+            "800", "admin1", dry_run=True
+        )
+
+        # Verify results are calculated but not applied
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["updated_players"], 1)
+        self.assertEqual(result["total_refunded"], 150)
+
+        # Check DB calls are NOT made
+        self.mock_data_manager.add_alternative_answer.assert_not_called()
+        self.game_runner.player_manager.update_score.assert_not_called()
+        self.game_runner.player_manager.set_streak.assert_not_called()
+        self.mock_data_manager.log_score_adjustment.assert_not_called()

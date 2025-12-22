@@ -51,9 +51,13 @@ class GuessHandler:
         self.fuzzy_threshold = fuzzy_threshold
         self.reminder_time = reminder_time
         self.config = ConfigReader()
-        self.alternative_answers = self.data_manager.get_alternative_answers(
-            self.daily_question_id
-        )
+
+        if self.data_manager:
+            self.alternative_answers = self.data_manager.get_alternative_answers(
+                self.daily_question_id
+            )
+        else:
+            self.alternative_answers = []
 
     def _normalize(self, text: str) -> str:
         """

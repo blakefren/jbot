@@ -99,3 +99,16 @@ CREATE TABLE IF NOT EXISTS subscribers (
     is_channel BOOLEAN NOT NULL,
     subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- This table tracks when a powerup was actually consumed.
+CREATE TABLE IF NOT EXISTS powerup_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    powerup_type TEXT NOT NULL,
+    target_user_id TEXT,
+    question_id INTEGER,
+    used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES players (id),
+    FOREIGN KEY (target_user_id) REFERENCES players (id),
+    FOREIGN KEY (question_id) REFERENCES questions (id)
+);

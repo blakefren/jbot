@@ -40,7 +40,9 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
 
         await self.cog.jinx.callback(self.cog, self.ctx, target=self.target_member)
 
-        mock_manager.jinx.assert_called_once_with("123", "456")
+        mock_manager.jinx.assert_called_once_with(
+            "123", "456", self.bot.game.daily_question_id
+        )
         self.bot.send_message.assert_awaited_once_with(
             "Success", interaction=self.ctx.interaction
         )
@@ -62,7 +64,9 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
 
         await self.cog.shield.callback(self.cog, self.ctx)
 
-        mock_manager.use_shield.assert_called_once_with("123")
+        mock_manager.use_shield.assert_called_once_with(
+            "123", self.bot.game.daily_question_id
+        )
         self.bot.send_message.assert_awaited_once_with(
             "Shield activated", interaction=self.ctx.interaction, ephemeral=True
         )
@@ -84,7 +88,9 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
 
         await self.cog.steal.callback(self.cog, self.ctx, target=self.target_member)
 
-        mock_manager.steal.assert_called_once_with("123", "456")
+        mock_manager.steal.assert_called_once_with(
+            "123", "456", self.bot.game.daily_question_id
+        )
         self.bot.send_message.assert_awaited_once_with(
             "Stolen points", interaction=self.ctx.interaction
         )

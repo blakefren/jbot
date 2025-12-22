@@ -103,11 +103,13 @@ class Admin(commands.Cog):
         name="add_answer",
         description="(admin) Adds an alternative answer and refunds points.",
     )
-    async def add_answer(self, ctx: commands.Context, *, answer_text: str):
+    async def add_answer(
+        self, ctx: commands.Context, answer_text: str, apply: bool = False
+    ):
         await ctx.defer()
 
         result = self.bot.game.recalculate_scores_for_new_answer(
-            answer_text, str(ctx.author.id)
+            answer_text, str(ctx.author.id), dry_run=not apply
         )
 
         if result["status"] == "error":
@@ -129,6 +131,17 @@ class Admin(commands.Cog):
             f"Updated scores for {result['updated_players']} players.\n"
             f"Total points refunded: {result['total_refunded']}."
         )
+
+        if result.get("details"):
+            msg += "\n\n**Details:**\n"
+            for d in result["details"]:
+                badges = "".join(d["badges"])
+                msg += f"{d['name']}: {d['score_before']} -> {d['score_after']} ({d['diff']:+}) {badges}\n"
+        if not apply:
+            msg = (
+                f"**[DRY RUN]** No changes applied. Run with `apply=True` to execute.\n"
+                + msg
+            )
 
         if is_revealed:
             msg = f"Added '{answer_text}' as a correct answer.\n" + msg
