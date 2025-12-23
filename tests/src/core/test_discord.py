@@ -156,6 +156,7 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
         self.bot = MagicMock(spec=DiscordBot)
         self.bot.game = MagicMock()
         self.bot.data_manager = MagicMock()
+        self.bot.config = MagicMock()
         self.bot.fetch_user = AsyncMock()
         self.bot.get_channel = MagicMock()
 
@@ -233,11 +234,19 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
         sub2 = Subscriber(sub_id=2, is_channel=True, display_name="Channel1")
         self.bot.game.get_subscribed_users.return_value = {sub1, sub2}
         self.bot.game.daily_q = MagicMock()
+        self.bot.config.get.return_value = None  # No player role name
 
         # Mock send_message to avoid actual calls (we are testing the loop logic)
         self.bot.send_message = AsyncMock()
 
         content_getter = MagicMock(return_value="Daily Content")
+
+        # Bind the real method to the mock bot
+        self.bot._send_daily_message_to_all_subscribers = (
+            DiscordBot._send_daily_message_to_all_subscribers.__get__(
+                self.bot, DiscordBot
+            )
+        )
 
         await self.bot._send_daily_message_to_all_subscribers(
             content_getter, "test_status"
@@ -254,6 +263,60 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
                 ),
                 call(
                     "Daily Content",
+                    is_channel=True,
+                    target_id=2,
+                    success_status="test_status",
+                ),
+            ]
+        )
+
+    async def test_send_daily_message_with_player_tag(self):
+        """Test sending daily message with player role tag."""
+        # Setup subscribers
+        sub1 = Subscriber(sub_id=1, is_channel=False, display_name="User1")
+        sub2 = Subscriber(sub_id=2, is_channel=True, display_name="Channel1")
+        self.bot.game.get_subscribed_users.return_value = {sub1, sub2}
+        self.bot.game.daily_q = MagicMock()
+
+        # Mock config to return a role name
+        self.bot.config.get.return_value = "players"
+
+        # Mock channel and role
+        mock_channel = MagicMock()
+        mock_role = MagicMock()
+        mock_role.mention = "<@&12345>"
+        mock_channel.guild.roles = [mock_role]
+        # discord.utils.get is used, so we need to mock it or ensure the list works
+        # Since we are using discord.utils.get(guild.roles, name=player_role_name)
+        mock_role.name = "players"
+
+        self.bot.get_channel.return_value = mock_channel
+        self.bot.send_message = AsyncMock()
+
+        content_getter = MagicMock(return_value="Daily Content")
+
+        # Bind the real method to the mock bot
+        self.bot._send_daily_message_to_all_subscribers = (
+            DiscordBot._send_daily_message_to_all_subscribers.__get__(
+                self.bot, DiscordBot
+            )
+        )
+
+        await self.bot._send_daily_message_to_all_subscribers(
+            content_getter, "test_status"
+        )
+
+        self.assertEqual(self.bot.send_message.await_count, 2)
+        self.bot.send_message.assert_has_awaits(
+            [
+                call(
+                    "Daily Content",
+                    is_channel=False,
+                    target_id=1,
+                    success_status="test_status",
+                ),
+                call(
+                    "<@&12345>\nDaily Content",
                     is_channel=True,
                     target_id=2,
                     success_status="test_status",

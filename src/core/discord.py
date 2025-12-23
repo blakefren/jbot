@@ -370,18 +370,28 @@ class DiscordBot(commands.Bot):
             logging.warning("No question available for today.")
             return
 
+        player_role_name = self.config.get("JBOT_PLAYER_ROLE_NAME")
+
         for sub in self.game.get_subscribed_users():
             guild = None
+            player_tag = ""
             if sub.is_channel:
                 channel = self.get_channel(sub.sub_id)
                 if channel:
                     guild = channel.guild
+                    if player_role_name:
+                        role = discord.utils.get(guild.roles, name=player_role_name)
+                        if role:
+                            player_tag = f"{role.mention}\n"
 
             # Generate content
             if requires_guild:
                 content = content_getter(guild=guild)
             else:
                 content = content_getter()
+
+            if sub.is_channel and player_tag:
+                content = f"{player_tag}{content}"
 
             # Generate leaderboard if needed
             leaderboard = None
