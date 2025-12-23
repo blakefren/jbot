@@ -149,6 +149,18 @@ class GameRunner:
                     self.daily_question_id = daily_question_data[1]
             logging.info(f"Daily question set with ID: {self.daily_question_id}")
 
+    def end_daily_game(self):
+        """
+        Ends the daily game by clearing the current question and resetting manager states.
+        """
+        logging.info("Ending daily game.")
+        self.daily_q = None
+        self.daily_question_id = None
+
+        for manager in self.managers.values():
+            if hasattr(manager, "reset_daily_state"):
+                manager.reset_daily_state()
+
     def add_subscriber(self, subscriber: Subscriber):
         self.data_manager.save_subscriber(subscriber)
         self.subscribed_contexts.add(subscriber)

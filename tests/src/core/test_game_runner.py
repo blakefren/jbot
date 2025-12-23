@@ -197,6 +197,21 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("Hint: ||**This is a test hint.**||", content_with_hint)
         self.mock_question.hint = None  # Reset for other tests
 
+    def test_end_daily_game(self):
+        """Test ending the daily game resets state."""
+        self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 123
+
+        # Mock a manager with reset_daily_state
+        mock_manager = MagicMock()
+        self.game_runner.managers["test_manager"] = mock_manager
+
+        self.game_runner.end_daily_game()
+
+        self.assertIsNone(self.game_runner.daily_q)
+        self.assertIsNone(self.game_runner.daily_question_id)
+        mock_manager.reset_daily_state.assert_called_once()
+
     def test_get_evening_message_content(self):
         """Test generating the evening message content with deduplicated, sorted, and bolded guesses."""
         self.game_runner.daily_q = self.mock_question

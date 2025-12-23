@@ -293,3 +293,34 @@ class TestPowerUpManager(unittest.TestCase):
         # Second use
         msg = manager.steal("1", "3", "q1")
         self.assertIn("already used Steal today", msg)
+
+    def test_reset_daily_state(self):
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager.jinx("1", "2", "q1")
+        self.assertTrue(manager._get_daily_state("1")["silenced"])
+        self.assertTrue(manager._get_daily_state("1")["jinx_used_today"])
+
+        manager.reset_daily_state()
+        state = manager._get_daily_state("1")
+        self.assertFalse(state["silenced"])
+        self.assertFalse(state["jinx_used_today"])
+        self.assertIsNone(state["jinxed_by"])
+
+    def test_powerups_blocked_without_question(self):
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+
+        # Test Jinx
+        msg = manager.jinx("1", "2", None)
+        self.assertEqual(msg, "There is no active question right now.")
+
+        # Test Steal
+        msg = manager.steal("1", "2", None)
+        self.assertEqual(msg, "There is no active question right now.")
+
+        # Test Shield
+        msg = manager.use_shield("1", None)
+        self.assertEqual(msg, "There is no active question right now.")
+
+        # Test Wager
+        msg = manager.place_wager("1", 10, None)
+        self.assertEqual(msg, "There is no active question right now.")

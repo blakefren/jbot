@@ -3,6 +3,7 @@ POWERUP mode logic for jbot trivia game.
 Implements power-up actions: attack, shield, and wager.
 """
 
+import logging
 from typing import Dict, Optional
 from src.cfg.main import ConfigReader
 from src.core.base_manager import BaseManager
@@ -55,6 +56,14 @@ class PowerUpManager(BaseManager):
                 "steal_used_today": False,
             }
         return self.daily_state[player_id]
+
+    def reset_daily_state(self):
+        """
+        Reset the transient daily state for all players.
+        Called at the end of the game day.
+        """
+        self.daily_state.clear()
+        logging.info("PowerUpManager daily state reset.")
 
     def can_answer(self, player_id: str, hint_sent: bool = False) -> tuple[bool, str]:
         """
@@ -245,6 +254,9 @@ class PowerUpManager(BaseManager):
         Attacker is silenced until 7 PM.
         Target's streak points are blocked if they answer correctly (unless shielded).
         """
+        if question_id is None:
+            return "There is no active question right now."
+
         attacker = self.player_manager.get_player(attacker_id)
         target = self.player_manager.get_player(target_id)
 
@@ -285,6 +297,9 @@ class PowerUpManager(BaseManager):
         Attacker's streak is reset immediately.
         If attacker answers correctly, they steal bonuses from target.
         """
+        if question_id is None:
+            return "There is no active question right now."
+
         thief = self.player_manager.get_player(thief_id)
         target = self.player_manager.get_player(target_id)
 
@@ -323,6 +338,9 @@ class PowerUpManager(BaseManager):
         """
         Activate a shield for the player.
         """
+        if question_id is None:
+            return "There is no active question right now."
+
         player = self.player_manager.get_player(player_id)
         if not player:
             return "Invalid player."
@@ -367,6 +385,9 @@ class PowerUpManager(BaseManager):
         Returns:
             str: Result message of the wager action.
         """
+        if question_id is None:
+            return "There is no active question right now."
+
         player = self.player_manager.get_player(player_id)
         if not player:
             return "Invalid player."

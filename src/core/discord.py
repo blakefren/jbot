@@ -305,6 +305,9 @@ class DiscordBot(commands.Bot):
                 except Exception as e:
                     self._log_task_error(e, "evening_message_task - check_shield_usage")
 
+        # 4. End the daily game (clear question, reset powerup states)
+        self.game.end_daily_game()
+
     async def apply_discord_roles(self, guild: discord.Guild):
         """
         Efficiently applies the 'first place' role to the current winner(s).
