@@ -83,7 +83,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.use_shield("1", "q1")
         msg = manager.use_shield("1", "q1")
-        self.assertIn("already activated a shield today", msg)
+        self.assertIn("already used a power-up today", msg)
 
     def test_steal_success(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -282,7 +282,7 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Second use
         msg = manager.jinx("1", "3", "q1")
-        self.assertIn("already used Jinx today", msg)
+        self.assertIn("already used a power-up today", msg)
 
     def test_steal_limit(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -292,19 +292,34 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Second use
         msg = manager.steal("1", "3", "q1")
-        self.assertIn("already used Steal today", msg)
+        self.assertIn("already used a power-up today", msg)
+
+    def test_powerup_lockout(self):
+        """Test that using one powerup blocks others."""
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+
+        # Use Shield
+        manager.use_shield("1", "q1")
+
+        # Try Jinx
+        msg = manager.jinx("1", "2", "q1")
+        self.assertIn("already used a power-up today", msg)
+
+        # Try Steal
+        msg = manager.steal("1", "3", "q1")
+        self.assertIn("already used a power-up today", msg)
 
     def test_reset_daily_state(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.jinx("1", "2", "q1")
         self.assertTrue(manager._get_daily_state("1")["silenced"])
-        self.assertTrue(manager._get_daily_state("1")["jinx_used_today"])
+        self.assertTrue(manager._get_daily_state("1")["powerup_used_today"])
 
         manager.reset_daily_state()
         state = manager._get_daily_state("1")
         self.assertFalse(state["silenced"])
-        self.assertFalse(state["jinx_used_today"])
-        self.assertIsNone(state["jinxed_by"])
+        self.assertFalse(state.get("powerup_used_today", False))
+        self.assertIsNone(state.get("jinxed_by"))
 
     def test_powerups_blocked_without_question(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
