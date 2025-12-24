@@ -131,7 +131,7 @@ class PowerUpManager(BaseManager):
         streak_bonus = bonus_values.get("streak", 0)
         if streak_bonus > 0:
             self.player_manager.update_score(player_id, -streak_bonus)
-            return f"{EMOJI_JINXED} <@{player_id}> answered correctly, but <@{attacker_id}>'s Jinx froze their streak bonus!"
+            return f"{EMOJI_JINXED} <@{player_id}> answered correctly, but <@{attacker_id}>'s Jinx froze their streak bonus of {streak_bonus} points!"
         return ""
 
     def resolve_steal(self, target_id: str, correct: bool) -> str:
@@ -278,6 +278,10 @@ class PowerUpManager(BaseManager):
 
         target_state = self._get_daily_state(target_id)
 
+        # Check for duplicate Jinx
+        if target_state.get("jinxed_by"):
+            return f"<@{target_id}> has already been jinxed!"
+
         # Mark Attacker as SILENCED until the hint is sent
         attacker_state["silenced"] = True
 
@@ -288,7 +292,7 @@ class PowerUpManager(BaseManager):
             return f"{EMOJI_SHIELD_REFLECT} <@{target_id}>'s Shield blocked <@{attacker_id}>'s Jinx!"
         else:
             target_state["jinxed_by"] = attacker_id
-            return f"{EMOJI_SILENCED} <@{attacker_id}> jinxed <@{target_id}>! <@{attacker_id}> is silenced until the hint is revealed."
+            return f"{EMOJI_SILENCED} <@{attacker_id}> jinxed <@{target_id}>! <@{attacker_id}> is silenced until the hint is revealed. <@{target_id}>'s streak bonus is frozen!"
 
     def steal(self, thief_id: str, target_id: str, question_id: int = None) -> str:
         """
@@ -323,6 +327,10 @@ class PowerUpManager(BaseManager):
 
         target_state = self._get_daily_state(target_id)
 
+        # Check for duplicate Steal
+        if target_state.get("steal_attempt_by"):
+            return f"<@{target_id}> is already being targeted for theft!"
+
         thief_state["stealing_from"] = target_id
 
         # Shield Check
@@ -331,7 +339,7 @@ class PowerUpManager(BaseManager):
             return f"{EMOJI_SHIELD_REFLECT} <@{thief_id}> tried to rob <@{target_id}>, but hit their shield! No points stolen."
         else:
             target_state["steal_attempt_by"] = thief_id
-            return f"{EMOJI_STEALING} <@{thief_id}> has sacrificed their streak to steal from <@{target_id}>!"
+            return f"{EMOJI_STEALING} <@{thief_id}> has sacrificed their streak to steal from <@{target_id}>! If <@{target_id}> answers correctly, their speed bonuses will be stolen."
 
     def use_shield(self, player_id: str, question_id: int = None) -> str:
         """

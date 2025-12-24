@@ -280,11 +280,26 @@ class DiscordBot(commands.Bot):
         except Exception as e:
             self._log_task_error(e, "evening_message_task - update_roles")
 
-        # 2. Send evening message
+        # 2. Check shield usage (Fight Track)
+        shield_messages = []
+        if "powerup" in self.game.managers:
+            try:
+                shield_messages = self.game.managers["powerup"].check_shield_usage()
+            except Exception as e:
+                self._log_task_error(e, "evening_message_task - check_shield_usage")
+
+        # 3. Send evening message
         if not silent:
             try:
+
+                def content_getter_with_shield(**kwargs):
+                    content = self.game.get_evening_message_content(**kwargs)
+                    if shield_messages:
+                        content += "\n\n" + "\n".join(shield_messages)
+                    return content
+
                 await self._send_daily_message_to_all_subscribers(
-                    self.game.get_evening_message_content,
+                    content_getter_with_shield,
                     "evening_message",
                     send_leaderboard=True,
                     requires_guild=True,
@@ -292,18 +307,6 @@ class DiscordBot(commands.Bot):
                 )
             except Exception as e:
                 self._log_task_error(e, "evening_message_task - send_message")
-
-            # 3. Check shield usage (Fight Track)
-            if "powerup" in self.game.managers:
-                try:
-                    messages = self.game.managers["powerup"].check_shield_usage()
-                    if messages:
-                        content = "\n".join(messages)
-                        await self._send_daily_message_to_all_subscribers(
-                            lambda **kwargs: content, "shield_shatter_message"
-                        )
-                except Exception as e:
-                    self._log_task_error(e, "evening_message_task - check_shield_usage")
 
         # 4. End the daily game (clear question, reset powerup states)
         self.game.end_daily_game()

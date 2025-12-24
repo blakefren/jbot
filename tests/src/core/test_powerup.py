@@ -339,3 +339,54 @@ class TestPowerUpManager(unittest.TestCase):
         # Test Wager
         msg = manager.place_wager("1", 10, None)
         self.assertEqual(msg, "There is no active question right now.")
+
+    def test_duplicate_jinx(self):
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        # First jinx should succeed
+        msg1 = manager.jinx("1", "2", "q1")
+        self.assertIn("jinxed", msg1)
+
+        # Second jinx on same target should fail
+        # Need a different attacker because attacker 1 is now silenced/used powerup
+        msg2 = manager.jinx("3", "2", "q1")
+        self.assertIn("already been jinxed", msg2)
+
+    def test_duplicate_steal(self):
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        # First steal should succeed
+        msg1 = manager.steal("1", "2", "q1")
+        self.assertIn("sacrificed their streak", msg1)
+
+        # Second steal on same target should fail
+        msg2 = manager.steal("3", "2", "q1")
+        self.assertIn("already being targeted for theft", msg2)
+
+    def test_jinx_resolution_message_content(self):
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager.jinx("1", "2", "q1")
+
+        # Target (P2) answers correctly with a streak bonus
+        # on_guess calls resolve_jinx
+        msgs = manager.on_guess(
+            2, "P2", "ans", True, points_earned=100, bonus_values={"streak": 50}
+        )
+
+        # Verify message contains points lost
+        self.assertTrue(any("streak bonus of 50 points" in m for m in msgs))
+
+    def test_steal_resolution_message_content(self):
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager.steal("1", "2", "q1")
+
+        # Target (P2) answers correctly with bonuses
+        msgs = manager.on_guess(
+            2,
+            "P2",
+            "ans",
+            True,
+            points_earned=100,
+            bonus_values={"first_place": 20, "first_try": 10},
+        )
+
+        # Verify message contains points stolen
+        self.assertTrue(any("stole 30 points" in m for m in msgs))
