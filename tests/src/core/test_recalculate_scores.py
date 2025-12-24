@@ -32,6 +32,9 @@ class TestRecalculateScores(unittest.TestCase):
         self.game_runner.player_manager.get_player.return_value = mock_player
         self.game_runner.player_manager.get_all_players.return_value = {}
 
+        # Default snapshot to None (so tests fall back to player_manager)
+        self.mock_data_manager.get_daily_snapshot.return_value = None
+
     def test_recalculate_scores_success(self):
         # Setup guesses
         # Player 1: "800" (Wrong initially)
@@ -93,6 +96,36 @@ class TestRecalculateScores(unittest.TestCase):
 
         self.assertEqual(result["updated_players"], 0)
         self.game_runner.player_manager.update_score.assert_not_called()
+
+    def test_recalculate_scores_uses_snapshot(self):
+        # Setup guesses
+        guesses = [
+            {
+                "id": 1,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "800",
+                "is_correct": 0,
+                "guessed_at": "2023-01-01 10:00:00",
+            }
+        ]
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = guesses
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        self.mock_data_manager.get_alternative_answers.return_value = []
+        self.mock_data_manager.get_powerup_usages_for_question.return_value = []
+
+        # Mock snapshot
+        mock_snapshot = {"p1": MagicMock(score=1000, answer_streak=10)}
+        self.mock_data_manager.get_daily_snapshot.return_value = mock_snapshot
+
+        # Run recalculation
+        self.game_runner.recalculate_scores_for_new_answer("800", "admin1")
+
+        # Verify snapshot was requested
+        self.mock_data_manager.get_daily_snapshot.assert_called_with(1)
+
+        # Verify player manager was NOT called to get current players (since snapshot was used)
+        self.game_runner.player_manager.get_all_players.assert_not_called()
 
     def test_recalculate_scores_dry_run(self):
         # Setup guesses

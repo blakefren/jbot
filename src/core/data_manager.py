@@ -168,7 +168,66 @@ class DataManager:
             daily_question_query, (question_id, today)
         )
 
+        # Create a snapshot of player states for this new daily question
+        self.create_daily_snapshot(daily_question_id)
+
         return daily_question_id
+
+    def create_daily_snapshot(self, daily_question_id: int):
+        """
+        Creates a snapshot of all players' current state (score, streak)
+        associated with the given daily_question_id.
+        """
+        # Get all current players
+        players = self.load_players()
+
+        if not players:
+            return
+
+        query = """
+            INSERT INTO daily_player_states (daily_question_id, player_id, score, answer_streak)
+            VALUES (?, ?, ?, ?)
+        """
+
+        for player in players.values():
+            try:
+                self.db.execute_update(
+                    query,
+                    (daily_question_id, player.id, player.score, player.answer_streak),
+                )
+            except Exception as e:
+                # Log error but continue for other players
+                # In a real scenario, we might want to be more aggressive, but we don't have a logger here easily accessible
+                # actually logging is imported in other files, let's check imports
+                print(f"Failed to snapshot player {player.id}: {e}")
+
+    def get_daily_snapshot(self, daily_question_id: int) -> dict[str, Player]:
+        """
+        Retrieves the player state snapshot for a specific daily question.
+        Returns a dictionary of Player objects keyed by player_id.
+        """
+        query = """
+            SELECT dps.player_id, dps.score, dps.answer_streak, p.name
+            FROM daily_player_states dps
+            LEFT JOIN players p ON dps.player_id = p.id
+            WHERE dps.daily_question_id = ?
+        """
+        records = self.db.execute_query(query, (daily_question_id,))
+
+        snapshot = {}
+        for record in records:
+            player_id = record["player_id"]
+            name = record["name"] if record["name"] else "Unknown"
+
+            snapshot[player_id] = Player(
+                id=player_id,
+                name=name,
+                score=record["score"],
+                answer_streak=record["answer_streak"],
+                active_shield=False,
+            )
+
+        return snapshot
 
     def log_player_guess(
         self,

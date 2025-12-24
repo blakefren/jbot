@@ -112,3 +112,16 @@ CREATE TABLE IF NOT EXISTS powerup_usage (
     FOREIGN KEY (target_user_id) REFERENCES players (id),
     FOREIGN KEY (question_id) REFERENCES questions (id)
 );
+
+-- This table stores a snapshot of player state at the start of each daily question.
+CREATE TABLE IF NOT EXISTS daily_player_states (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    daily_question_id INTEGER NOT NULL,
+    player_id TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    answer_streak INTEGER NOT NULL,
+    snapshot_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (daily_question_id) REFERENCES daily_questions (id),
+    FOREIGN KEY (player_id) REFERENCES players (id),
+    UNIQUE(daily_question_id, player_id)
+);

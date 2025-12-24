@@ -617,5 +617,68 @@ class TestDataManagerTimezone(unittest.TestCase):
         self.assertEqual(timestamp, "2023-10-28 02:00:00")
 
 
+class TestSnapshot(unittest.TestCase):
+    def setUp(self):
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+        self.data_manager.initialize_database()
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_snapshot_creation_and_retrieval(self):
+        # 1. Create some players
+        self.data_manager.create_player("p1", "Player 1")
+        self.data_manager.create_player("p2", "Player 2")
+
+        # Set some scores/streaks
+        self.data_manager.adjust_player_score("p1", 100)
+        self.data_manager.set_streak("p1", 5)
+
+        self.data_manager.adjust_player_score("p2", 50)
+        self.data_manager.set_streak("p2", 2)
+
+        # 2. Create a question
+        q = Question(
+            question="What is 2+2?",
+            answer="4",
+            category="Math",
+            clue_value=10,
+            data_source="test",
+            hint="Use your fingers",
+        )
+
+        # 3. Log daily question (should trigger snapshot)
+        dq_id = self.data_manager.log_daily_question(q)
+        self.assertIsNotNone(dq_id)
+
+        # 4. Verify snapshot
+        snapshot = self.data_manager.get_daily_snapshot(dq_id)
+
+        self.assertIn("p1", snapshot)
+        self.assertIn("p2", snapshot)
+
+        p1 = snapshot["p1"]
+        self.assertEqual(p1.score, 100)
+        self.assertEqual(p1.answer_streak, 5)
+        self.assertEqual(p1.name, "Player 1")
+
+        p2 = snapshot["p2"]
+        self.assertEqual(p2.score, 50)
+        self.assertEqual(p2.answer_streak, 2)
+        self.assertEqual(p2.name, "Player 2")
+
+        # 5. Modify current state
+        self.data_manager.adjust_player_score("p1", 10)  # p1 score becomes 110
+
+        # 6. Verify snapshot is unchanged
+        snapshot_again = self.data_manager.get_daily_snapshot(dq_id)
+        self.assertEqual(snapshot_again["p1"].score, 100)
+
+        # 7. Verify current state is changed
+        current_p1 = self.data_manager.get_player("p1")
+        self.assertEqual(current_p1.score, 110)
+
+
 if __name__ == "__main__":
     unittest.main()

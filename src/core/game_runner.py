@@ -581,8 +581,13 @@ class GameRunner:
                 )
             )
 
-        players = self.player_manager.get_all_players()
-        initial_states = players
+        # Try to get snapshot first
+        snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
+        if snapshot:
+            initial_states = snapshot
+        else:
+            players = self.player_manager.get_all_players()
+            initial_states = players
 
         # 2. Run Scorer (Old)
         scorer_old = DailyGameSimulator(
@@ -634,7 +639,11 @@ class GameRunner:
                 updated_players += 1
 
                 # Add to details
-                player_name = players[user_id].name if user_id in players else user_id
+                player_name = (
+                    initial_states[user_id].name
+                    if user_id in initial_states
+                    else user_id
+                )
                 details.append(
                     {
                         "name": player_name,
