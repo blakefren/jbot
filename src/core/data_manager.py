@@ -228,23 +228,32 @@ class DataManager:
     def get_player_streaks(self) -> list[dict]:
         """
         Retrieves player ids, names and answer streaks from the database, ordered by streak.
-        Only includes streaks that are active (last correct guess was today or yesterday).
+        Only includes streaks that are active (streak > 0).
         """
         query = """
-            SELECT p.id, p.name, p.answer_streak
-            FROM players p
-            JOIN (
-                SELECT player_id, MAX(dq.sent_at) as last_correct_date
-                FROM guesses g
-                JOIN daily_questions dq ON g.daily_question_id = dq.id
-                WHERE g.is_correct = 1
-                GROUP BY player_id
-            ) last_guess ON p.id = last_guess.player_id
-            WHERE p.answer_streak > 1
-              AND last_guess.last_correct_date >= date('now', '-1 day')
-            ORDER BY p.answer_streak DESC
+            SELECT id, name, answer_streak
+            FROM players
+            WHERE answer_streak > 0
+            ORDER BY answer_streak DESC
         """
         return self.db.execute_query(query)
+
+    def reset_unanswered_streaks(self, daily_question_id: int):
+        """
+        Resets the answer streak to 0 for all players who did not have a correct guess
+        for the specified daily question.
+        """
+        query = """
+            UPDATE players
+            SET answer_streak = 0
+            WHERE id NOT IN (
+                SELECT player_id
+                FROM guesses
+                WHERE daily_question_id = ? AND is_correct = 1
+            )
+            AND answer_streak > 0
+        """
+        self.db.execute_update(query, (daily_question_id,))
 
     def get_player_ids_with_role(self, role_name: str) -> set[int]:
         """

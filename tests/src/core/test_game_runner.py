@@ -198,7 +198,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_question.hint = None  # Reset for other tests
 
     def test_end_daily_game(self):
-        """Test ending the daily game resets state."""
+        """Test ending the daily game resets state and streaks."""
         self.game_runner.daily_q = self.mock_question
         self.game_runner.daily_question_id = 123
 
@@ -211,6 +211,8 @@ class TestGameRunner(unittest.TestCase):
         self.assertIsNone(self.game_runner.daily_q)
         self.assertIsNone(self.game_runner.daily_question_id)
         mock_manager.reset_daily_state.assert_called_once()
+        # Verify streaks were reset for unanswered players
+        self.mock_data_manager.reset_unanswered_streaks.assert_called_once_with(123)
 
     def test_get_evening_message_content(self):
         """Test generating the evening message content with deduplicated, sorted, and bolded guesses."""

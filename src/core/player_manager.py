@@ -52,6 +52,11 @@ class PlayerManager:
         """Resets a player's answer streak to zero and persists."""
         self.data_manager.reset_streak(self._normalize_id(player_id))
 
+    def reset_unanswered_streaks(self, daily_question_id: int):
+        """Resets streaks for all players who didn't answer correctly today."""
+        if daily_question_id:
+            self.data_manager.reset_unanswered_streaks(daily_question_id)
+
     def set_streak(self, player_id: str, streak: int):
         """Sets a player's answer streak to a specific value and persists."""
         self.data_manager.set_streak(self._normalize_id(player_id), streak)

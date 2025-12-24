@@ -358,13 +358,8 @@ class GuessHandler:
             if last_correct_date == today:
                 # Already answered correctly today (e.g. skipped question)
                 new_streak = current_streak
-            elif last_correct_date == today - timedelta(days=1):
-                new_streak = current_streak + 1
             else:
-                # Streak broken or new player
-                new_streak = 1
-                # Reset streak in DB so increment works correctly
-                self.player_manager.reset_streak(str(player_id))
+                new_streak = current_streak + 1
 
             if new_streak >= 2:
                 streak_bonus_per_day = int(

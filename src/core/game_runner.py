@@ -154,6 +154,11 @@ class GameRunner:
         Ends the daily game by clearing the current question and resetting manager states.
         """
         logging.info("Ending daily game.")
+
+        # Reset streaks for players who didn't answer correctly
+        if self.daily_question_id:
+            self.player_manager.reset_unanswered_streaks(self.daily_question_id)
+
         self.daily_q = None
         self.daily_question_id = None
 

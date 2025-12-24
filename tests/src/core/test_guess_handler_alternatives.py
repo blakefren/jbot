@@ -10,6 +10,7 @@ class TestGuessHandlerAlternatives(unittest.TestCase):
         self.daily_question = Question("Q", "Original Answer", "C", 100)
         self.daily_question_id = 1
         self.player_manager = MagicMock()
+        self.player_manager.get_player.return_value = None
         self.managers = {}
 
         # Mock alternative answers

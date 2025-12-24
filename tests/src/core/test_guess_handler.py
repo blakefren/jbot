@@ -294,38 +294,8 @@ class TestGuessHandler(unittest.TestCase):
         # on_guess called 3 times (initial + fallback + fallback 2)
         self.assertEqual(mock_manager.on_guess.call_count, 3)
 
-    def test_handle_guess_streak_reset(self):
-        """Test that streak is reset if last correct guess was not yesterday."""
-        player_id = 1
-        player_name = "PlayerOne"
-        guess = "Test Answer"
-
-        # Mock player with existing streak
-        mock_player = MagicMock()
-        mock_player.answer_streak = 5
-        self.player_manager.get_player.return_value = mock_player
-
-        # Mock last correct guess date to be 2 days ago
-        from datetime import date, timedelta
-
-        today = date.today()
-        two_days_ago = today - timedelta(days=2)
-        self.data_manager.get_last_correct_guess_date.return_value = two_days_ago
-
-        # Mock guess history
-        self.data_manager.read_guess_history.return_value = [
-            {"daily_question_id": self.daily_question_id, "guess_text": guess}
-        ]
-
-        self.guess_handler.handle_guess(player_id, player_name, guess)
-
-        # Streak should be reset
-        self.player_manager.reset_streak.assert_called_once_with(str(player_id))
-        # And then incremented
-        self.player_manager.increment_streak.assert_called_once()
-
-    def test_handle_guess_streak_continues(self):
-        """Test that streak continues if last correct guess was yesterday."""
+    def test_handle_guess_streak_increment(self):
+        """Test that streak is incremented upon correct guess."""
         player_id = 1
         player_name = "PlayerOne"
         guess = "Test Answer"
@@ -338,21 +308,55 @@ class TestGuessHandler(unittest.TestCase):
         # Mock last correct guess date to be yesterday
         from datetime import date, timedelta
 
-        today = date.today()
-        yesterday = today - timedelta(days=1)
-        self.data_manager.get_last_correct_guess_date.return_value = yesterday
+        self.data_manager.get_last_correct_guess_date.return_value = (
+            date.today() - timedelta(days=1)
+        )
 
         # Mock guess history
-        self.data_manager.read_guess_history.return_value = [
-            {"daily_question_id": self.daily_question_id, "guess_text": guess}
-        ]
+        self.data_manager.read_guess_history.return_value = []
 
-        self.guess_handler.handle_guess(player_id, player_name, guess)
+        is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
+            player_id, player_name, guess
+        )
 
-        # Streak should NOT be reset
-        self.player_manager.reset_streak.assert_not_called()
-        # And then incremented
+        self.assertTrue(is_correct)
+        # Streak should be incremented
         self.player_manager.increment_streak.assert_called_once()
+        # Bonus should be based on new streak (6)
+        # 100 (base) + 20 (first try) + 25 (streak: min(6 * 5, 25)) = 145
+        self.assertEqual(points, 145)
+        self.assertTrue(any("6 day streak!" in msg for msg in bonuses))
+
+    def test_handle_guess_streak_no_double_increment(self):
+        """Test that streak is NOT incremented twice on the same day (e.g. after a skip)."""
+        player_id = 1
+        player_name = "PlayerOne"
+        guess = "Test Answer"
+
+        # Mock player with existing streak (already incremented today)
+        mock_player = MagicMock()
+        mock_player.answer_streak = 6
+        self.player_manager.get_player.return_value = mock_player
+
+        # Mock last correct guess date to be TODAY
+        from datetime import date
+
+        self.data_manager.get_last_correct_guess_date.return_value = date.today()
+
+        # Mock guess history (empty for this NEW question)
+        self.data_manager.read_guess_history.return_value = []
+
+        is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
+            player_id, player_name, guess
+        )
+
+        self.assertTrue(is_correct)
+        # Streak should NOT be incremented again
+        self.player_manager.increment_streak.assert_not_called()
+        # Bonus should still be awarded based on current streak (6)
+        # 100 (base) + 20 (first try) + 25 (streak: min(6 * 5, 25)) = 145
+        self.assertEqual(points, 145)
+        self.assertTrue(any("6 day streak!" in msg for msg in bonuses))
 
     def test_handle_guess_before_hint_bonus(self):
         """Test that bonus points are awarded if guess is before hint."""
