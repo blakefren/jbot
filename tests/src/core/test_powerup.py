@@ -394,6 +394,43 @@ class TestPowerUpManager(unittest.TestCase):
         # Verify message contains points lost
         self.assertTrue(any("streak bonus of 50 points" in m for m in msgs))
 
+    def test_jinx_freezes_streak(self):
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager.jinx("1", "2", "q1")
+
+        # Simulate P2 answering correctly.
+        # Assume P2 had streak 5, and GuessHandler incremented it to 6 before calling on_guess.
+        self.players["2"].answer_streak = 6
+
+        # on_guess calls resolve_jinx
+        msgs = manager.on_guess(
+            2, "P2", "ans", True, points_earned=100, bonus_values={"streak": 25}
+        )
+
+        # Verify streak was decremented back to 5
+        self.player_manager.set_streak.assert_called_with("2", 5)
+
+        # Verify points deducted
+        self.assertTrue(any("froze their streak bonus" in m for m in msgs))
+
+    def test_jinx_freezes_streak_no_bonus(self):
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager.jinx("1", "3", "q1")  # P3 has 0 streak
+
+        # Simulate P3 answering correctly.
+        # GuessHandler increments 0 -> 1.
+        self.players["3"].answer_streak = 1
+
+        msgs = manager.on_guess(
+            3, "P3", "ans", True, points_earned=100, bonus_values={}
+        )
+
+        # Verify streak was decremented back to 0
+        self.player_manager.set_streak.assert_called_with("3", 0)
+
+        # Verify message
+        self.assertTrue(any("froze their streak" in m for m in msgs))
+
     def test_steal_resolution_message_content(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.steal("1", "2", "q1")

@@ -135,12 +135,18 @@ class PowerUpManager(BaseManager):
         if not attacker_id or not correct:
             return ""
 
+        # Revert streak increment (Freeze streak)
+        player = self.player_manager.get_player(player_id)
+        if player and player.answer_streak > 0:
+            self.player_manager.set_streak(player_id, player.answer_streak - 1)
+
         # Grant Base points only. Award 0 Streak Points.
         streak_bonus = bonus_values.get("streak", 0)
         if streak_bonus > 0:
             self.player_manager.update_score(player_id, -streak_bonus)
             return f"{EMOJI_JINXED} <@{player_id}> answered correctly, but <@{attacker_id}>'s Jinx froze their streak bonus of {streak_bonus} points!"
-        return ""
+
+        return f"{EMOJI_JINXED} <@{player_id}> answered correctly, but <@{attacker_id}>'s Jinx froze their streak!"
 
     def resolve_steal(self, target_id: str, correct: bool) -> str:
         """
