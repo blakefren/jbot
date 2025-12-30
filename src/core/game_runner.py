@@ -260,6 +260,34 @@ class GameRunner:
         emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠")
         emoji_streak = self.config.get("JBOT_EMOJI_STREAK", "🔥")
 
+        # Powerup badges
+        emoji_jinxed = self.config.get("JBOT_EMOJI_JINXED", "⚡")
+        emoji_silenced = self.config.get("JBOT_EMOJI_SILENCED", "🤐")
+        emoji_stolen_from = self.config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
+        emoji_stealing = self.config.get("JBOT_EMOJI_STEALING", "💰")
+        emoji_shield = self.config.get("JBOT_EMOJI_SHIELD", "🛡️")
+
+        powerup_badges = defaultdict(list)
+        if self.daily_question_id:
+            powerups = self.data_manager.get_powerup_usages_for_question(
+                self.daily_question_id
+            )
+            for p in powerups:
+                p_type = p["powerup_type"]
+                user_id = p["user_id"]
+                target_id = p["target_user_id"]
+
+                if p_type == "jinx":
+                    powerup_badges[user_id].append(emoji_silenced)
+                    if target_id:
+                        powerup_badges[target_id].append(emoji_jinxed)
+                elif p_type == "steal":
+                    powerup_badges[user_id].append(emoji_stealing)
+                    if target_id:
+                        powerup_badges[target_id].append(emoji_stolen_from)
+                elif p_type == "shield":
+                    powerup_badges[user_id].append(emoji_shield)
+
         # Create a list of player data
         all_player_data = []
         for player in player_scores:
@@ -291,6 +319,10 @@ class GameRunner:
                     badges.append(emoji_before_hint)
                 if player_id == fastest_guesser_id:
                     badges.append(emoji_fastest)
+
+                # Add powerup badges
+                if player_id in powerup_badges:
+                    badges.extend(powerup_badges[player_id])
 
             badges_str = "".join(badges)
 
