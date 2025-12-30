@@ -21,6 +21,14 @@ EMOJI_SHIELD = config.get("JBOT_EMOJI_SHIELD", "🛡️")
 EMOJI_SHIELD_REFLECT = config.get("JBOT_EMOJI_SHIELD_REFLECT", "💀")
 
 
+class PowerUpError(Exception):
+    """Exception raised for errors in power-up usage."""
+
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+
 class PowerUpManager(BaseManager):
     """
     Manages power-up actions for POWERUP game mode, including attacking streaks,
@@ -178,16 +186,16 @@ class PowerUpManager(BaseManager):
         p2 = self.player_manager.get_player(player2_id)
 
         if not p1 or not p2:
-            return "Invalid player(s)."
+            raise PowerUpError("Invalid player(s).")
 
         p1_state = self._get_daily_state(player1_id)
         p2_state = self._get_daily_state(player2_id)
 
         cost = int(config.get("JBOT_REINFORCE_COST", 25))
         if p1.score < cost or p2.score < cost:
-            return f"Both players need at least {cost} points to team up."
+            raise PowerUpError(f"Both players need at least {cost} points to team up.")
         if p1_state["team_partner"] or p2_state["team_partner"]:
-            return "One or both players are already teamed up today."
+            raise PowerUpError("One or both players are already teamed up today.")
 
         self.player_manager.update_score(player1_id, -cost)
         self.player_manager.update_score(player2_id, -cost)
@@ -254,24 +262,26 @@ class PowerUpManager(BaseManager):
         Target's streak points are blocked if they answer correctly (unless shielded).
         """
         if question_id is None:
-            return "There is no active question right now."
+            raise PowerUpError("There is no active question right now.")
 
         attacker = self.player_manager.get_player(attacker_id)
         target = self.player_manager.get_player(target_id)
 
         if not attacker or not target:
-            return "Invalid player(s)."
+            raise PowerUpError("Invalid player(s).")
 
         # Validation: Attacker must not have answered yet
         from datetime import date
 
         last_correct = self.data_manager.get_last_correct_guess_date(attacker_id)
         if last_correct == date.today():
-            return "You have already answered correctly today. You cannot use Jinx."
+            raise PowerUpError(
+                "You have already answered correctly today. You cannot use Jinx."
+            )
 
         attacker_state = self._get_daily_state(attacker_id)
         if attacker_state["powerup_used_today"]:
-            return "You have already used a power-up today."
+            raise PowerUpError("You have already used a power-up today.")
 
         self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
         attacker_state["powerup_used_today"] = True
@@ -280,7 +290,7 @@ class PowerUpManager(BaseManager):
 
         # Check for duplicate Jinx
         if target_state.get("jinxed_by"):
-            return f"<@{target_id}> has already been jinxed!"
+            raise PowerUpError(f"<@{target_id}> has already been jinxed!")
 
         # Mark Attacker as SILENCED until the hint is sent
         attacker_state["silenced"] = True
@@ -301,24 +311,26 @@ class PowerUpManager(BaseManager):
         If attacker answers correctly, they steal bonuses from target.
         """
         if question_id is None:
-            return "There is no active question right now."
+            raise PowerUpError("There is no active question right now.")
 
         thief = self.player_manager.get_player(thief_id)
         target = self.player_manager.get_player(target_id)
 
         if not thief or not target:
-            return "Invalid player(s)."
+            raise PowerUpError("Invalid player(s).")
 
         # Validation: Attacker must not have answered yet.
         from datetime import date
 
         last_correct = self.data_manager.get_last_correct_guess_date(thief_id)
         if last_correct == date.today():
-            return "You have already answered correctly today. You cannot use Steal."
+            raise PowerUpError(
+                "You have already answered correctly today. You cannot use Steal."
+            )
 
         thief_state = self._get_daily_state(thief_id)
         if thief_state["powerup_used_today"]:
-            return "You have already used a power-up today."
+            raise PowerUpError("You have already used a power-up today.")
 
         # Attacker Penalty: Reset Streak
         self.player_manager.reset_streak(thief_id)
@@ -329,7 +341,7 @@ class PowerUpManager(BaseManager):
 
         # Check for duplicate Steal
         if target_state.get("steal_attempt_by"):
-            return f"<@{target_id}> is already being targeted for theft!"
+            raise PowerUpError(f"<@{target_id}> is already being targeted for theft!")
 
         thief_state["stealing_from"] = target_id
 
@@ -346,22 +358,24 @@ class PowerUpManager(BaseManager):
         Activate a shield for the player.
         """
         if question_id is None:
-            return "There is no active question right now."
+            raise PowerUpError("There is no active question right now.")
 
         player = self.player_manager.get_player(player_id)
         if not player:
-            return "Invalid player."
+            raise PowerUpError("Invalid player.")
 
         # Validation: User DMs !shield before answering.
         from datetime import date
 
         last_correct = self.data_manager.get_last_correct_guess_date(player_id)
         if last_correct == date.today():
-            return "You have already answered correctly today. You cannot use Shield."
+            raise PowerUpError(
+                "You have already answered correctly today. You cannot use Shield."
+            )
 
         state = self._get_daily_state(player_id)
         if state["powerup_used_today"]:
-            return "You have already used a power-up today."
+            raise PowerUpError("You have already used a power-up today.")
 
         state["powerup_used_today"] = True
         state["shield_active"] = True
@@ -394,18 +408,18 @@ class PowerUpManager(BaseManager):
             str: Result message of the wager action.
         """
         if question_id is None:
-            return "There is no active question right now."
+            raise PowerUpError("There is no active question right now.")
 
         player = self.player_manager.get_player(player_id)
         if not player:
-            return "Invalid player."
+            raise PowerUpError("Invalid player.")
         score = player.score
 
         cap_percentage = int(config.get("JBOT_WAGER_CAP_PERCENTAGE", 25))
         max_wager = max(1, score // (100 // cap_percentage))
 
         if amount <= 0 or amount > score:
-            return "Invalid wager amount."
+            raise PowerUpError("Invalid wager amount.")
 
         final_wager = min(amount, max_wager)
 

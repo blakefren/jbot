@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from src.core.powerup import PowerUpError
 
 
 class Power(commands.Cog):
@@ -30,10 +31,15 @@ class Power(commands.Cog):
 
         manager = self._get_manager()
         if manager:
-            result = manager.jinx(
-                str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
-            )
-            await self.bot.send_message(result, interaction=ctx.interaction)
+            try:
+                result = manager.jinx(
+                    str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
+                )
+                await self.bot.send_message(result, interaction=ctx.interaction)
+            except PowerUpError as e:
+                await self.bot.send_message(
+                    str(e), interaction=ctx.interaction, ephemeral=True
+                )
 
     @power.command(
         name="shield",
@@ -50,12 +56,17 @@ class Power(commands.Cog):
 
         manager = self._get_manager()
         if manager:
-            result = manager.use_shield(
-                str(ctx.author.id), self.bot.game.daily_question_id
-            )
-            await self.bot.send_message(
-                result, interaction=ctx.interaction, ephemeral=True
-            )
+            try:
+                result = manager.use_shield(
+                    str(ctx.author.id), self.bot.game.daily_question_id
+                )
+                await self.bot.send_message(
+                    result, interaction=ctx.interaction, ephemeral=True
+                )
+            except PowerUpError as e:
+                await self.bot.send_message(
+                    str(e), interaction=ctx.interaction, ephemeral=True
+                )
 
     @power.command(
         name="steal", description="Steal fastest/first bonuses, but break your streak."
@@ -71,10 +82,15 @@ class Power(commands.Cog):
 
         manager = self._get_manager()
         if manager:
-            result = manager.steal(
-                str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
-            )
-            await self.bot.send_message(result, interaction=ctx.interaction)
+            try:
+                result = manager.steal(
+                    str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
+                )
+                await self.bot.send_message(result, interaction=ctx.interaction)
+            except PowerUpError as e:
+                await self.bot.send_message(
+                    str(e), interaction=ctx.interaction, ephemeral=True
+                )
 
     # TODO: Re-enable these commands when they are ready
     # @power.command(name="wager", description="Wager points on the current question.")

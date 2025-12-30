@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock
-from src.core.powerup import PowerUpManager
+from src.core.powerup import PowerUpManager, PowerUpError
 from src.core.player import Player
 
 
@@ -82,8 +82,9 @@ class TestPowerUpManager(unittest.TestCase):
     def test_use_shield_already_active(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.use_shield("1", "q1")
-        msg = manager.use_shield("1", "q1")
-        self.assertIn("already used a power-up today", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.use_shield("1", "q1")
+        self.assertIn("already used a power-up today", str(cm.exception))
 
     def test_steal_success(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -135,10 +136,12 @@ class TestPowerUpManager(unittest.TestCase):
 
     def test_wager_points_invalid(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.place_wager("1", 0, "q1")
-        self.assertIn("Invalid wager amount", msg)
-        msg2 = manager.place_wager("1", 200, "q1")
-        self.assertIn("Invalid wager amount", msg2)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.place_wager("1", 0, "q1")
+        self.assertIn("Invalid wager amount", str(cm.exception))
+        with self.assertRaises(PowerUpError) as cm2:
+            manager.place_wager("1", 200, "q1")
+        self.assertIn("Invalid wager amount", str(cm2.exception))
 
     def test_resolve_wager_win(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -176,19 +179,22 @@ class TestPowerUpManager(unittest.TestCase):
     def test_teamup_already_teamed(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.teamup("1", "2", "q1")
-        msg = manager.teamup("1", "3", "q1")
-        self.assertIn("already teamed up", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.teamup("1", "3", "q1")
+        self.assertIn("already teamed up", str(cm.exception))
 
     def test_teamup_not_enough_points(self):
         self.players["1"].score = 10
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.teamup("1", "2", "q1")
-        self.assertIn("need at least", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.teamup("1", "2", "q1")
+        self.assertIn("need at least", str(cm.exception))
 
     def test_teamup_invalid_player(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.teamup("1", "999", "q1")
-        self.assertIn("Invalid player", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.teamup("1", "999", "q1")
+        self.assertIn("Invalid player", str(cm.exception))
 
     def test_resolve_teamup(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -199,8 +205,9 @@ class TestPowerUpManager(unittest.TestCase):
 
     def test_steal_invalid_player(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.steal("1", "999", "q1")
-        self.assertIn("Invalid player", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.steal("1", "999", "q1")
+        self.assertIn("Invalid player", str(cm.exception))
 
     def test_on_guess_correct(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -216,8 +223,9 @@ class TestPowerUpManager(unittest.TestCase):
 
     def test_jinx_invalid_attacker(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.jinx("999", "1", "q1")
-        self.assertIn("Invalid player", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.jinx("999", "1", "q1")
+        self.assertIn("Invalid player", str(cm.exception))
 
     def test_can_answer_hint_sent(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -235,13 +243,15 @@ class TestPowerUpManager(unittest.TestCase):
 
     def test_jinx_invalid_target(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.jinx("1", "999", "q1")
-        self.assertIn("Invalid player", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.jinx("1", "999", "q1")
+        self.assertIn("Invalid player", str(cm.exception))
 
     def test_place_wager_invalid_player(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.place_wager("999", 10, "q1")
-        self.assertIn("Invalid player", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.place_wager("999", 10, "q1")
+        self.assertIn("Invalid player", str(cm.exception))
 
     def test_shield_shatter_penalty(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -281,8 +291,9 @@ class TestPowerUpManager(unittest.TestCase):
         self.assertIn("jinxed", msg)
 
         # Second use
-        msg = manager.jinx("1", "3", "q1")
-        self.assertIn("already used a power-up today", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.jinx("1", "3", "q1")
+        self.assertIn("already used a power-up today", str(cm.exception))
 
     def test_steal_limit(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -291,8 +302,9 @@ class TestPowerUpManager(unittest.TestCase):
         self.assertIn("sacrificed their streak", msg)
 
         # Second use
-        msg = manager.steal("1", "3", "q1")
-        self.assertIn("already used a power-up today", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.steal("1", "3", "q1")
+        self.assertIn("already used a power-up today", str(cm.exception))
 
     def test_powerup_lockout(self):
         """Test that using one powerup blocks others."""
@@ -302,12 +314,14 @@ class TestPowerUpManager(unittest.TestCase):
         manager.use_shield("1", "q1")
 
         # Try Jinx
-        msg = manager.jinx("1", "2", "q1")
-        self.assertIn("already used a power-up today", msg)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.jinx("1", "2", "q1")
+        self.assertIn("already used a power-up today", str(cm.exception))
 
         # Try Steal
-        msg = manager.steal("1", "3", "q1")
-        self.assertIn("already used a power-up today", msg)
+        with self.assertRaises(PowerUpError) as cm2:
+            manager.steal("1", "3", "q1")
+        self.assertIn("already used a power-up today", str(cm2.exception))
 
     def test_reset_daily_state(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -325,20 +339,24 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
 
         # Test Jinx
-        msg = manager.jinx("1", "2", None)
-        self.assertEqual(msg, "There is no active question right now.")
+        with self.assertRaises(PowerUpError) as cm:
+            manager.jinx("1", "2", None)
+        self.assertEqual(str(cm.exception), "There is no active question right now.")
 
         # Test Steal
-        msg = manager.steal("1", "2", None)
-        self.assertEqual(msg, "There is no active question right now.")
+        with self.assertRaises(PowerUpError) as cm2:
+            manager.steal("1", "2", None)
+        self.assertEqual(str(cm2.exception), "There is no active question right now.")
 
         # Test Shield
-        msg = manager.use_shield("1", None)
-        self.assertEqual(msg, "There is no active question right now.")
+        with self.assertRaises(PowerUpError) as cm3:
+            manager.use_shield("1", None)
+        self.assertEqual(str(cm3.exception), "There is no active question right now.")
 
         # Test Wager
-        msg = manager.place_wager("1", 10, None)
-        self.assertEqual(msg, "There is no active question right now.")
+        with self.assertRaises(PowerUpError) as cm4:
+            manager.place_wager("1", 10, None)
+        self.assertEqual(str(cm4.exception), "There is no active question right now.")
 
     def test_duplicate_jinx(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -348,8 +366,9 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Second jinx on same target should fail
         # Need a different attacker because attacker 1 is now silenced/used powerup
-        msg2 = manager.jinx("3", "2", "q1")
-        self.assertIn("already been jinxed", msg2)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.jinx("3", "2", "q1")
+        self.assertIn("already been jinxed", str(cm.exception))
 
     def test_duplicate_steal(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -358,8 +377,9 @@ class TestPowerUpManager(unittest.TestCase):
         self.assertIn("sacrificed their streak", msg1)
 
         # Second steal on same target should fail
-        msg2 = manager.steal("3", "2", "q1")
-        self.assertIn("already being targeted for theft", msg2)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.steal("3", "2", "q1")
+        self.assertIn("already being targeted for theft", str(cm.exception))
 
     def test_jinx_resolution_message_content(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
