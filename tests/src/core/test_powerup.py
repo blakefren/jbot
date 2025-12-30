@@ -402,9 +402,20 @@ class TestPowerUpManager(unittest.TestCase):
         # Assume P2 had streak 5, and GuessHandler incremented it to 6 before calling on_guess.
         self.players["2"].answer_streak = 6
 
+        # Mock bonus messages
+        bonus_messages = ["🔥 6 day streak! (+25)"]
+        points_tracker = {"earned": 125}  # 100 base + 25 streak
+
         # on_guess calls resolve_jinx
         msgs = manager.on_guess(
-            2, "P2", "ans", True, points_earned=100, bonus_values={"streak": 25}
+            2,
+            "P2",
+            "ans",
+            True,
+            points_earned=125,
+            bonus_values={"streak": 25},
+            bonus_messages=bonus_messages,
+            points_tracker=points_tracker,
         )
 
         # Verify streak was decremented back to 5
@@ -412,6 +423,12 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Verify points deducted
         self.assertTrue(any("froze their streak bonus" in m for m in msgs))
+
+        # Verify streak message removed
+        self.assertEqual(len(bonus_messages), 0)
+
+        # Verify points tracker updated
+        self.assertEqual(points_tracker["earned"], 100)
 
     def test_jinx_freezes_streak_no_bonus(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)

@@ -19,6 +19,7 @@ EMOJI_STOLEN_FROM = config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
 EMOJI_STEALING = config.get("JBOT_EMOJI_STEALING", "💰")
 EMOJI_SHIELD = config.get("JBOT_EMOJI_SHIELD", "🛡️")
 EMOJI_SHIELD_REFLECT = config.get("JBOT_EMOJI_SHIELD_REFLECT", "💀")
+EMOJI_STREAK = config.get("JBOT_EMOJI_STREAK", "🔥")
 
 
 class PowerUpError(Exception):
@@ -93,6 +94,8 @@ class PowerUpManager(BaseManager):
         is_correct: bool,
         points_earned: int = 0,
         bonus_values: dict = None,
+        bonus_messages: list[str] = None,
+        points_tracker: dict = None,
     ) -> list[str]:
         if bonus_values is None:
             bonus_values = {}
@@ -107,7 +110,7 @@ class PowerUpManager(BaseManager):
 
         messages = []
 
-        msg = self.resolve_wager(pid, is_correct)
+        msg = self.resolve_wager(pid, is_correct, points_tracker)
         if msg:
             messages.append(msg)
 
@@ -115,17 +118,26 @@ class PowerUpManager(BaseManager):
         if msg:
             messages.append(msg)
 
-        msg = self.resolve_jinx(pid, is_correct, bonus_values)
+        msg = self.resolve_jinx(
+            pid, is_correct, bonus_values, bonus_messages, points_tracker
+        )
         if msg:
             messages.append(msg)
 
-        msg = self.resolve_steal(pid, is_correct)
+        msg = self.resolve_steal(pid, is_correct, points_tracker)
         if msg:
             messages.append(msg)
 
         return messages
 
-    def resolve_jinx(self, player_id: str, correct: bool, bonus_values: dict) -> str:
+    def resolve_jinx(
+        self,
+        player_id: str,
+        correct: bool,
+        bonus_values: dict,
+        bonus_messages: list[str] = None,
+        points_tracker: dict = None,
+    ) -> str:
         """
         Resolve Jinx effect on the target.
         """
@@ -144,11 +156,23 @@ class PowerUpManager(BaseManager):
         streak_bonus = bonus_values.get("streak", 0)
         if streak_bonus > 0:
             self.player_manager.update_score(player_id, -streak_bonus)
+            if points_tracker:
+                points_tracker["earned"] -= streak_bonus
+
+            # Remove streak message if present
+            if bonus_messages is not None:
+                for i, msg in enumerate(bonus_messages):
+                    if EMOJI_STREAK in msg:
+                        bonus_messages.pop(i)
+                        break
+
             return f"{EMOJI_JINXED} <@{player_id}> answered correctly, but <@{attacker_id}>'s Jinx froze their streak bonus of {streak_bonus} points!"
 
         return f"{EMOJI_JINXED} <@{player_id}> answered correctly, but <@{attacker_id}>'s Jinx froze their streak!"
 
-    def resolve_steal(self, target_id: str, correct: bool) -> str:
+    def resolve_steal(
+        self, target_id: str, correct: bool, points_tracker: dict = None
+    ) -> str:
         """
         Resolve Steal effect when the target answers.
         """
@@ -170,6 +194,8 @@ class PowerUpManager(BaseManager):
         if stealable_amount > 0:
             self.player_manager.update_score(target_id, -stealable_amount)
             self.player_manager.update_score(attacker_id, stealable_amount)
+            if points_tracker:
+                points_tracker["earned"] -= stealable_amount
 
             # Clear the steal attempt
             target_state["steal_attempt_by"] = None
@@ -439,7 +465,9 @@ class PowerUpManager(BaseManager):
 
         return f"{player_id} wagered {final_wager} points! (Max allowed: {max_wager})"
 
-    def resolve_wager(self, player_id: str, correct: bool) -> str:
+    def resolve_wager(
+        self, player_id: str, correct: bool, points_tracker: dict = None
+    ) -> str:
         """
         Resolve a player's wager after answering a question.
         Also resolves attack effect if player was attacked.
@@ -462,6 +490,9 @@ class PowerUpManager(BaseManager):
             # Winnings calculation might need adjustment if score changed
             winnings = int(wager * (100 / (score + 100)))
             self.player_manager.update_score(player_id, winnings + wager)
+            if points_tracker:
+                points_tracker["earned"] += winnings + wager
+
             msg += (
                 f"{player_id} won the wager and now has {player.score + winnings + wager} points! "
                 f"(Winnings: {winnings})\n"

@@ -385,11 +385,14 @@ class GuessHandler:
         )
         logging.info(f"Player {player_name} guessed '{g}'. Correct: {is_correct}")
 
+        # Track points earned for message display
+        points_tracker = {"earned": points_earned}
+
         # Resolve with active managers
         for manager in self.managers.values():
             if manager is not None and not isinstance(manager, type):
                 try:
-                    # Try calling with new signature first
+                    # Try calling with newest signature (including points_tracker)
                     msgs = manager.on_guess(
                         player_id,
                         player_name,
@@ -397,22 +400,50 @@ class GuessHandler:
                         is_correct,
                         points_earned,
                         bonus_values,
+                        bonus_messages,
+                        points_tracker,
                     )
                     if msgs and isinstance(msgs, list):
                         bonus_messages.extend(msgs)
                 except TypeError:
-                    # Fallback to old signature
+                    # Fallback to previous signature (without points_tracker)
                     try:
-                        manager.on_guess(player_id, player_name, guess, is_correct)
-                    except TypeError as e:
-                        logging.error(
-                            f"Error calling on_guess for {type(manager).__name__}: {e}"
+                        msgs = manager.on_guess(
+                            player_id,
+                            player_name,
+                            guess,
+                            is_correct,
+                            points_earned,
+                            bonus_values,
+                            bonus_messages,
                         )
-                        # Attempt to call with fewer arguments for backward compatibility
+                        if msgs and isinstance(msgs, list):
+                            bonus_messages.extend(msgs)
+                    except TypeError:
+                        # Fallback to old signature (without bonus_messages)
                         try:
-                            manager.on_guess(player_id, is_correct)
-                        except TypeError:
-                            pass  # Or log that this also failed
+                            msgs = manager.on_guess(
+                                player_id,
+                                player_name,
+                                guess,
+                                is_correct,
+                                points_earned,
+                                bonus_values,
+                            )
+                            if msgs and isinstance(msgs, list):
+                                bonus_messages.extend(msgs)
+                        except TypeError as e:
+                            logging.error(
+                                f"Error calling on_guess for {type(manager).__name__}: {e}"
+                            )
+                            # Attempt to call with fewer arguments for backward compatibility
+                            try:
+                                manager.on_guess(player_id, is_correct)
+                            except TypeError:
+                                pass  # Or log that this also failed
+
+        # Update points_earned from tracker
+        points_earned = points_tracker["earned"]
 
         # Get the number of guesses for this question
         num_guesses = len(self.get_player_guesses(player_id))

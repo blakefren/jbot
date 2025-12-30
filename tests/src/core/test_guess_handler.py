@@ -291,8 +291,8 @@ class TestGuessHandler(unittest.TestCase):
 
         # Should not raise, just log error and continue
         self.assertTrue(result)  # Answer was still correct
-        # on_guess called 3 times (initial + fallback + fallback 2)
-        self.assertEqual(mock_manager.on_guess.call_count, 3)
+        # on_guess called 4 times (initial + fallback 1 + fallback 2 + fallback 3)
+        self.assertEqual(mock_manager.on_guess.call_count, 4)
 
     def test_handle_guess_streak_increment(self):
         """Test that streak is incremented upon correct guess."""
