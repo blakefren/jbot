@@ -73,6 +73,29 @@ class PowerUpManager(BaseManager):
         self.daily_state.clear()
         logging.info("PowerUpManager daily state reset.")
 
+    def restore_daily_state(self, player_id: str, simulated_state: dict):
+        """
+        Restores the daily state for a player from the simulator.
+        """
+        state = self._get_daily_state(player_id)
+
+        # Bulk update matching fields
+        state.update(simulated_state)
+
+        # Map mismatched fields
+        state["earned_today"] = simulated_state.get("score_earned", 0)
+        state["bonuses_today"] = simulated_state.get("bonuses", {})
+
+        # Determine if powerup was used
+        if (
+            state.get("silenced")
+            or state.get("shield_active")
+            or state.get("wager", 0) > 0
+            or state.get("team_partner")
+            or state.get("stealing_from")
+        ):
+            state["powerup_used_today"] = True
+
     def can_answer(self, player_id: str, hint_sent: bool = False) -> tuple[bool, str]:
         """
         Check if a player is allowed to answer.

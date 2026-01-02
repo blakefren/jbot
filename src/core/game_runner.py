@@ -117,6 +117,11 @@ class GameRunner:
             logging.info(
                 f"Daily question already set with ID: {self.daily_question_id}"
             )
+            try:
+                self.restore_game_state()
+                logging.info(f"Game state restored")
+            except Exception as e:
+                logging.error(f"Failed to restore game state: {e}")
             return
 
         # Otherwise, select a new question
@@ -176,6 +181,83 @@ class GameRunner:
 
     def get_subscribed_users(self):
         return self.subscribed_contexts
+
+    def _fetch_daily_events(self, daily_question_id: int) -> list:
+        """
+        Fetches and parses all game events (guesses and powerups) for a given daily question.
+        """
+        guesses = self.data_manager.get_guesses_for_daily_question(daily_question_id)
+        powerups = self.data_manager.get_powerup_usages_for_question(daily_question_id)
+
+        events = []
+        for g in guesses:
+            ts = g["guessed_at"]
+            if isinstance(ts, str):
+                try:
+                    ts = datetime.fromisoformat(ts)
+                except ValueError:
+                    pass
+            events.append(GuessEvent(ts, g["player_id"], g["guess_text"]))
+
+        for p in powerups:
+            ts = p["used_at"]
+            if isinstance(ts, str):
+                try:
+                    ts = datetime.fromisoformat(ts)
+                except ValueError:
+                    pass
+
+            amount = 0
+            target = p["target_user_id"]
+            if p["powerup_type"] == "wager":
+                try:
+                    amount = int(target)
+                    target = None
+                except (ValueError, TypeError):
+                    pass
+
+            events.append(
+                PowerUpEvent(ts, p["user_id"], p["powerup_type"], target, amount)
+            )
+
+        return events
+
+    def restore_game_state(self):
+        """
+        Restores the game state from the database using DailyGameSimulator.
+        """
+        logging.info("Restoring game state from database...")
+        if not self.daily_question_id:
+            logging.warning("Cannot restore state without a daily question ID.")
+            return
+
+        # 1. Fetch all events for the day
+        events = self._fetch_daily_events(self.daily_question_id)
+
+        initial_players = self.data_manager.get_all_players()
+
+        answers = [self.daily_q.answer] + self.data_manager.get_alternative_answers(
+            self.daily_q.id
+        )
+        hint_ts = self.data_manager.get_hint_sent_timestamp(self.daily_question_id)
+
+        simulator = DailyGameSimulator(
+            self.daily_q,
+            answers,
+            hint_ts,
+            events,
+            initial_players,
+            self.config,
+        )
+
+        # Run simulation (without end_of_day logic)
+        simulator.run(apply_end_of_day=False)
+
+        # Now restore state to PowerUpManager
+        for player_id, state in simulator.daily_state.items():
+            self.managers["powerup"].restore_daily_state(player_id, state)
+
+        logging.info("Game state restored.")
 
     def handle_guess(
         self, player_id: int, player_name: str, guess: str
@@ -584,34 +666,7 @@ class GameRunner:
         old_answers = [self.daily_q.answer] + existing_alts
         new_answers = old_answers + [new_answer]
 
-        events = []
-        guesses = self.data_manager.get_guesses_for_daily_question(
-            self.daily_question_id
-        )
-        for g in guesses:
-            events.append(
-                GuessEvent(
-                    timestamp=g["guessed_at"],
-                    user_id=g["player_id"],
-                    guess_text=g["guess_text"],
-                )
-            )
-
-        powerups = self.data_manager.get_powerup_usages_for_question(
-            self.daily_question_id
-        )
-        for p in powerups:
-            if p["powerup_type"] == "wager":
-                continue
-            events.append(
-                PowerUpEvent(
-                    timestamp=p["used_at"],
-                    user_id=p["user_id"],
-                    powerup_type=p["powerup_type"],
-                    target_user_id=p["target_user_id"],
-                    amount=0,
-                )
-            )
+        events = self._fetch_daily_events(self.daily_question_id)
 
         # Try to get snapshot first
         snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
