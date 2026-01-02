@@ -5,6 +5,7 @@ from typing import Optional
 from src.core.guess_handler import GuessHandler
 from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 from src.core.player import Player
+from src.core.state import DailyPlayerState
 
 
 class DailyGameSimulator:
@@ -29,24 +30,7 @@ class DailyGameSimulator:
         self.config = config
 
         # Daily State per player
-        self.daily_state = defaultdict(
-            lambda: {
-                "score_earned": 0,
-                "streak_delta": 0,  # Change in streak
-                "is_correct": False,
-                "guesses_count": 0,
-                "jinxed_by": None,
-                "shield_active": False,
-                "shield_used": False,
-                "silenced": False,
-                "bonuses": {},
-                "steal_attempt_by": None,
-                "stealing_from": None,
-                "wager": 0,
-                "team_partner": None,
-                "team_success": False,
-            }
-        )
+        self.daily_state = defaultdict(DailyPlayerState)
 
         # Global daily state
         self.first_correct_timestamp = None
@@ -89,17 +73,17 @@ class DailyGameSimulator:
         state = self.daily_state[user_id]
 
         if ptype == "shield":
-            state["shield_active"] = True
+            state.shield_active = True
 
         elif ptype == "jinx":
             if target_id:
                 target_state = self.daily_state[target_id]
-                if target_state["shield_active"]:
-                    target_state["shield_used"] = True
+                if target_state.shield_active:
+                    target_state.shield_used = True
                     # Jinx blocked
                 else:
-                    target_state["jinxed_by"] = user_id
-                    state["silenced"] = True  # Attacker is silenced
+                    target_state.jinxed_by = user_id
+                    state.silenced = True  # Attacker is silenced
 
         elif ptype == "steal":
             if target_id:
@@ -107,36 +91,36 @@ class DailyGameSimulator:
                 # Attacker resets streak immediately
                 player = self.initial_player_states.get(user_id)
                 initial_streak = player.answer_streak if player else 0
-                state["streak_delta"] = -initial_streak
+                state.streak_delta = -initial_streak
 
-                state["stealing_from"] = target_id
+                state.stealing_from = target_id
 
-                if target_state["shield_active"]:
-                    target_state["shield_used"] = True
+                if target_state.shield_active:
+                    target_state.shield_used = True
                     # Steal blocked
                 else:
-                    target_state["steal_attempt_by"] = user_id
+                    target_state.steal_attempt_by = user_id
 
         elif ptype == "wager":
             try:
                 amount = int(event.amount)
             except (ValueError, TypeError):
                 amount = 0
-            state["wager"] = amount
+            state.wager = amount
             # Wager is deducted immediately in real-time.
-            state["score_earned"] -= amount
+            state.score_earned -= amount
 
         elif ptype == "teamup":
             if target_id:
-                state["team_partner"] = target_id
+                state.team_partner = target_id
                 # Also set partner's partner
                 partner_state = self.daily_state[target_id]
-                partner_state["team_partner"] = user_id
+                partner_state.team_partner = user_id
 
                 # Teamup cost
                 cost = int(self.config.get("JBOT_REINFORCE_COST", 25))
-                state["score_earned"] -= cost
-                partner_state["score_earned"] -= cost
+                state.score_earned -= cost
+                partner_state.score_earned -= cost
 
     def handle_guess(self, event: GuessEvent):
         user_id = event.user_id
@@ -144,10 +128,10 @@ class DailyGameSimulator:
         timestamp = event.timestamp
 
         state = self.daily_state[user_id]
-        state["guesses_count"] += 1
+        state.guesses_count += 1
 
         # Check correctness
-        if state["is_correct"]:
+        if state.is_correct:
             return  # Already answered correctly
         is_correct = False
         for ans in self.answers:
@@ -156,40 +140,40 @@ class DailyGameSimulator:
                 break
         if not is_correct:
             # Resolve Wager (Loss)
-            if state.get("wager", 0) > 0:
-                state["wager"] = 0
+            if state.wager > 0:
+                state.wager = 0
             return
 
-        state["is_correct"] = True
+        state.is_correct = True
 
         # Resolve Wager (Win)
-        wager = state.get("wager", 0)
+        wager = state.wager
         if wager > 0:
             # Calculate winnings
             player = self.initial_player_states.get(user_id)
             initial_score = player.score if player else 0
             # Current score before this guess (including wager deduction)
-            current_score = initial_score + state["score_earned"]
+            current_score = initial_score + state.score_earned
 
             # Match PowerUpManager logic: winnings = int(wager * (100 / (score + 100)))
             # We add back the wager amount plus the winnings
             winnings = int(wager * (100 / (current_score + 100)))
 
-            state["score_earned"] += winnings + wager
-            state["wager"] = 0  # Consumed
+            state.score_earned += winnings + wager
+            state.wager = 0  # Consumed
 
         # Resolve Teamup
-        partner_id = state.get("team_partner")
+        partner_id = state.team_partner
         if partner_id:
-            state["team_success"] = True
-            self.daily_state[partner_id]["team_success"] = True
+            state.team_success = True
+            self.daily_state[partner_id].team_success = True
 
         # Calculate Points
         points = self.question.clue_value or 100
         bonuses = {}
 
         # 1. First Try Bonus
-        if state["guesses_count"] == 1:
+        if state.guesses_count == 1:
             bonus = int(self.config.get("JBOT_BONUS_FIRST_TRY", 20))
             points += bonus
             bonuses["first_try"] = bonus
@@ -218,10 +202,10 @@ class DailyGameSimulator:
         initial_streak = player.answer_streak if player else 0
 
         # If player used steal, their streak was reset to 0 for this calculation
-        if state["stealing_from"]:
+        if state.stealing_from:
             initial_streak = 0
 
-        if state["jinxed_by"] or state["silenced"]:
+        if state.jinxed_by or state.silenced:
             # Jinxed or Silenced: No streak bonus
             pass
         else:
@@ -232,12 +216,12 @@ class DailyGameSimulator:
                 points += streak_bonus
                 bonuses["streak"] = streak_bonus
 
-        state["score_earned"] += points
-        state["bonuses"] = bonuses
-        state["streak_delta"] += 1
+        state.score_earned += points
+        state.bonuses = bonuses
+        state.streak_delta += 1
 
         # Resolve Steal
-        attacker_id = state.get("steal_attempt_by")
+        attacker_id = state.steal_attempt_by
         if attacker_id:
             stealable = 0
             if "first_try" in bonuses:
@@ -246,12 +230,12 @@ class DailyGameSimulator:
                 stealable += bonuses["fastest"]
 
             if stealable > 0:
-                state["score_earned"] -= stealable
+                state.score_earned -= stealable
                 attacker_state = self.daily_state[attacker_id]
-                attacker_state["score_earned"] += stealable
+                attacker_state.score_earned += stealable
                 # Do not clear stealing_from, as it marks the player as having used steal (resetting streak)
 
-            state["steal_attempt_by"] = None
+            state.steal_attempt_by = None
 
     def end_of_day(self):
         # Ensure all players are processed for streak resets if they didn't answer
@@ -261,20 +245,20 @@ class DailyGameSimulator:
                 # If they didn't answer, reset streak.
                 # Assuming standard rules: No answer = Streak Reset.
                 if player.answer_streak > 0:
-                    self.daily_state[user_id]["streak_delta"] = -player.answer_streak
+                    self.daily_state[user_id].streak_delta = -player.answer_streak
 
         for user_id, state in self.daily_state.items():
             # Shield Decay
-            if state["shield_active"] and not state["shield_used"]:
-                state["score_earned"] -= 10
+            if state.shield_active and not state.shield_used:
+                state.score_earned -= 10
 
             # Steal Resolution
-            steal_attempt_by = state.get("steal_attempt_by")
+            steal_attempt_by = state.steal_attempt_by
             if steal_attempt_by:
                 thief_state = self.daily_state[steal_attempt_by]
                 # Thief must also be correct to steal
-                if thief_state["is_correct"] and state["is_correct"]:
-                    target_bonuses = state.get("bonuses", {})
+                if thief_state.is_correct and state.is_correct:
+                    target_bonuses = state.bonuses
                     stolen_amount = 0
 
                     # Steal specific bonuses
@@ -284,8 +268,8 @@ class DailyGameSimulator:
                             stolen_amount += amount
 
                     if stolen_amount > 0:
-                        state["score_earned"] -= stolen_amount
-                        thief_state["score_earned"] += stolen_amount
+                        state.score_earned -= stolen_amount
+                        thief_state.score_earned += stolen_amount
 
     def calculate_final_results(self):
         results = {}
@@ -294,26 +278,26 @@ class DailyGameSimulator:
             initial_score = player.score if player else 0
             initial_streak = player.answer_streak if player else 0
 
-            final_score = initial_score + state["score_earned"]
-            final_streak = initial_streak + state["streak_delta"]
+            final_score = initial_score + state.score_earned
+            final_streak = initial_streak + state.streak_delta
             if final_streak < 0:
                 final_streak = 0
 
             results[user_id] = {
                 "initial_score": initial_score,
                 "final_score": final_score,
-                "score_earned": state["score_earned"],
+                "score_earned": state.score_earned,
                 "initial_streak": initial_streak,
                 "final_streak": final_streak,
-                "streak_delta": state["streak_delta"],
-                "bonuses": state["bonuses"],
+                "streak_delta": state.streak_delta,
+                "bonuses": state.bonuses,
                 "badges": self._get_badges(state),
             }
         return results
 
     def _get_badges(self, state):
         badges = []
-        bonuses = state.get("bonuses", {})
+        bonuses = state.bonuses
         if "first_try" in bonuses:
             badges.append(self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯"))
         if "before_hint" in bonuses:

@@ -9,6 +9,7 @@ from src.cfg.main import ConfigReader
 from src.core.base_manager import BaseManager
 from src.core.data_manager import DataManager
 from src.core.player_manager import PlayerManager
+from src.core.state import DailyPlayerState
 
 config = ConfigReader()
 
@@ -46,23 +47,11 @@ class PowerUpManager(BaseManager):
         self.player_manager = player_manager
         self.data_manager = data_manager
         # Transient state for the day
-        self.daily_state: Dict[str, dict] = {}
+        self.daily_state: Dict[str, DailyPlayerState] = {}
 
-    def _get_daily_state(self, player_id: str) -> dict:
+    def _get_daily_state(self, player_id: str) -> DailyPlayerState:
         if player_id not in self.daily_state:
-            self.daily_state[player_id] = {
-                "wager": 0,
-                "jinxed_by": None,  # ID of player who jinxed this player
-                "steal_attempt_by": None,  # ID of player attempting to steal from this player
-                "shield_active": False,
-                "shield_used": False,  # Track if shield blocked something
-                "team_partner": None,
-                "team_success": False,
-                "earned_today": 0,  # Total points earned today
-                "bonuses_today": {},  # Breakdown of bonuses earned today
-                "silenced": False,  # Whether the player is currently silenced
-                "powerup_used_today": False,  # Track if any power-up (jinx, steal, shield) was used
-            }
+            self.daily_state[player_id] = DailyPlayerState()
         return self.daily_state[player_id]
 
     def reset_daily_state(self):
@@ -73,28 +62,17 @@ class PowerUpManager(BaseManager):
         self.daily_state.clear()
         logging.info("PowerUpManager daily state reset.")
 
-    def restore_daily_state(self, player_id: str, simulated_state: dict):
+    def restore_daily_state(self, player_id: str, simulated_state: DailyPlayerState):
         """
         Restores the daily state for a player from the simulator.
         """
-        state = self._get_daily_state(player_id)
-
-        # Bulk update matching fields
-        state.update(simulated_state)
-
-        # Map mismatched fields
-        state["earned_today"] = simulated_state.get("score_earned", 0)
-        state["bonuses_today"] = simulated_state.get("bonuses", {})
-
-        # Determine if powerup was used
-        if (
-            state.get("silenced")
-            or state.get("shield_active")
-            or state.get("wager", 0) > 0
-            or state.get("team_partner")
-            or state.get("stealing_from")
-        ):
-            state["powerup_used_today"] = True
+        # If simulated_state is already the class (which it should be now), just assign it
+        if isinstance(simulated_state, DailyPlayerState):
+            self.daily_state[player_id] = simulated_state
+        else:
+            # Fallback for safety if passed a dict (e.g. from old tests)
+            # But we should update tests too.
+            pass
 
     def can_answer(self, player_id: str, hint_sent: bool = False) -> tuple[bool, str]:
         """
@@ -102,7 +80,7 @@ class PowerUpManager(BaseManager):
         Returns (bool, reason).
         """
         state = self._get_daily_state(player_id)
-        if not state["silenced"] or hint_sent:
+        if not state.silenced or hint_sent:
             return True, ""
         return (
             False,
@@ -128,8 +106,8 @@ class PowerUpManager(BaseManager):
 
         # Store earnings for potential theft
         if is_correct:
-            state["earned_today"] = points_earned
-            state["bonuses_today"] = bonus_values
+            state.score_earned = points_earned
+            state.bonuses = bonus_values
 
         messages = []
 
@@ -165,7 +143,7 @@ class PowerUpManager(BaseManager):
         Resolve Jinx effect on the target.
         """
         state = self._get_daily_state(player_id)
-        attacker_id = state.get("jinxed_by")
+        attacker_id = state.jinxed_by
 
         if not attacker_id or not correct:
             return ""
@@ -200,13 +178,13 @@ class PowerUpManager(BaseManager):
         Resolve Steal effect when the target answers.
         """
         target_state = self._get_daily_state(target_id)
-        attacker_id = target_state.get("steal_attempt_by")
+        attacker_id = target_state.steal_attempt_by
 
         if not attacker_id or not correct:
             return ""
 
         # Success Check
-        target_bonuses = target_state.get("bonuses_today", {})
+        target_bonuses = target_state.bonuses
         stealable_amount = 0
 
         if "first_place" in target_bonuses:  # Speed
@@ -221,7 +199,7 @@ class PowerUpManager(BaseManager):
                 points_tracker["earned"] -= stealable_amount
 
             # Clear the steal attempt
-            target_state["steal_attempt_by"] = None
+            target_state.steal_attempt_by = None
 
             return f"{EMOJI_STEALING} <@{attacker_id}> just stole {stealable_amount} points from <@{target_id}> {EMOJI_STOLEN_FROM}!"
 
@@ -249,14 +227,14 @@ class PowerUpManager(BaseManager):
         cost = int(config.get("JBOT_REINFORCE_COST", 25))
         if p1.score < cost or p2.score < cost:
             raise PowerUpError(f"Both players need at least {cost} points to team up.")
-        if p1_state["team_partner"] or p2_state["team_partner"]:
+        if p1_state.team_partner or p2_state.team_partner:
             raise PowerUpError("One or both players are already teamed up today.")
 
         self.player_manager.update_score(player1_id, -cost)
         self.player_manager.update_score(player2_id, -cost)
 
-        p1_state["team_partner"] = player2_id
-        p2_state["team_partner"] = player1_id
+        p1_state.team_partner = player2_id
+        p2_state.team_partner = player1_id
         self.data_manager.log_powerup_usage(
             player1_id, "teamup", player2_id, question_id
         )
@@ -277,7 +255,7 @@ class PowerUpManager(BaseManager):
             str: Result message of the team up resolution.
         """
         player_state = self._get_daily_state(player_id)
-        partner_id = player_state.get("team_partner")
+        partner_id = player_state.team_partner
 
         if not partner_id:
             return ""
@@ -286,8 +264,8 @@ class PowerUpManager(BaseManager):
         msg = ""
 
         if correct:
-            player_state["team_success"] = True
-            partner_state["team_success"] = True
+            player_state.team_success = True
+            partner_state.team_success = True
 
         # After both have answered, resolve points
         # Note: This logic is slightly tricky because we don't know if the partner has answered yet.
@@ -298,7 +276,7 @@ class PowerUpManager(BaseManager):
         # But let's stick to the existing logic structure.
         # TODO: resolve actual point granting elsewhere (happens at guess time).
 
-        if player_state.get("team_success") or partner_state.get("team_success"):
+        if player_state.team_success or partner_state.team_success:
             # This message implies immediate feedback
             msg = (
                 f"Team up: {player_id} and {partner_id} both get full points for today!"
@@ -335,28 +313,27 @@ class PowerUpManager(BaseManager):
             )
 
         attacker_state = self._get_daily_state(attacker_id)
-        if attacker_state["powerup_used_today"]:
+        if attacker_state.powerup_used_today:
             raise PowerUpError("You have already used a power-up today.")
 
         self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
-        attacker_state["powerup_used_today"] = True
 
         target_state = self._get_daily_state(target_id)
 
         # Check for duplicate Jinx
-        if target_state.get("jinxed_by"):
+        if target_state.jinxed_by:
             raise PowerUpError(f"<@{target_id}> has already been jinxed!")
 
         # Mark Attacker as SILENCED until the hint is sent
-        attacker_state["silenced"] = True
+        attacker_state.silenced = True
 
         # Shield Check
-        if target_state.get("shield_active"):
-            target_state["shield_used"] = True
+        if target_state.shield_active:
+            target_state.shield_used = True
             # Notify: Shield blocked Jinx
             return f"{EMOJI_SHIELD_REFLECT} <@{target_id}>'s Shield blocked <@{attacker_id}>'s Jinx!"
         else:
-            target_state["jinxed_by"] = attacker_id
+            target_state.jinxed_by = attacker_id
             return f"{EMOJI_SILENCED} <@{attacker_id}> jinxed <@{target_id}>! <@{attacker_id}> is silenced until the hint is revealed. <@{target_id}>'s streak bonus is frozen!"
 
     def steal(self, thief_id: str, target_id: str, question_id: int = None) -> str:
@@ -384,28 +361,27 @@ class PowerUpManager(BaseManager):
             )
 
         thief_state = self._get_daily_state(thief_id)
-        if thief_state["powerup_used_today"]:
+        if thief_state.powerup_used_today:
             raise PowerUpError("You have already used a power-up today.")
 
         # Attacker Penalty: Reset Streak
         self.player_manager.reset_streak(thief_id)
         self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
-        thief_state["powerup_used_today"] = True
 
         target_state = self._get_daily_state(target_id)
 
         # Check for duplicate Steal
-        if target_state.get("steal_attempt_by"):
+        if target_state.steal_attempt_by:
             raise PowerUpError(f"<@{target_id}> is already being targeted for theft!")
 
-        thief_state["stealing_from"] = target_id
+        thief_state.stealing_from = target_id
 
         # Shield Check
-        if target_state.get("shield_active"):
-            target_state["shield_used"] = True
+        if target_state.shield_active:
+            target_state.shield_used = True
             return f"{EMOJI_SHIELD_REFLECT} <@{thief_id}> tried to rob <@{target_id}>, but hit their shield! No points stolen."
         else:
-            target_state["steal_attempt_by"] = thief_id
+            target_state.steal_attempt_by = thief_id
             return f"{EMOJI_STEALING} <@{thief_id}> has sacrificed their streak to steal from <@{target_id}>! If <@{target_id}> answers correctly, their speed bonuses will be stolen."
 
     def use_shield(self, player_id: str, question_id: int = None) -> str:
@@ -429,11 +405,10 @@ class PowerUpManager(BaseManager):
             )
 
         state = self._get_daily_state(player_id)
-        if state["powerup_used_today"]:
+        if state.powerup_used_today:
             raise PowerUpError("You have already used a power-up today.")
 
-        state["powerup_used_today"] = True
-        state["shield_active"] = True
+        state.shield_active = True
         self.data_manager.log_powerup_usage(player_id, "shield", None, question_id)
         return f"{EMOJI_SHIELD} Shield active. You are safe from Jinx and Steal."
 
@@ -445,7 +420,7 @@ class PowerUpManager(BaseManager):
         """
         messages = []
         for player_id, state in self.daily_state.items():
-            if state.get("shield_active") and not state.get("shield_used"):
+            if state.shield_active and not state.shield_used:
                 self.player_manager.update_score(player_id, -10)
                 messages.append(
                     f"{EMOJI_SHIELD} <@{player_id}>'s shield shattered from disuse. -10 points."
@@ -481,7 +456,7 @@ class PowerUpManager(BaseManager):
         self.player_manager.update_score(player_id, -final_wager)
 
         player_state = self._get_daily_state(player_id)
-        player_state["wager"] = final_wager
+        player_state.wager = final_wager
         self.data_manager.log_powerup_usage(
             player_id, "wager", str(final_wager), question_id
         )
@@ -504,7 +479,7 @@ class PowerUpManager(BaseManager):
         """
         player = self.player_manager.get_player(player_id)
         player_state = self._get_daily_state(player_id)
-        wager = player_state.get("wager", 0)
+        wager = player_state.wager
         msg = ""
 
         if wager != 0 and correct:
@@ -522,6 +497,6 @@ class PowerUpManager(BaseManager):
             )
         elif wager != 0 and not correct:
             msg += f"{player_id} lost the wager.\n"
-        player_state["wager"] = 0
+        player_state.wager = 0
 
         return msg.strip()

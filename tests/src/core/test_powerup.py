@@ -56,8 +56,8 @@ class TestPowerUpManager(unittest.TestCase):
         self.assertIn("jinxed", msg)
         # No cost for jinx
         self.assertEqual(self.players["1"].score, 100)
-        self.assertEqual(manager._get_daily_state("2").get("jinxed_by"), "1")
-        self.assertTrue(manager._get_daily_state("1").get("silenced"))
+        self.assertEqual(manager._get_daily_state("2").jinxed_by, "1")
+        self.assertTrue(manager._get_daily_state("1").silenced)
 
     def test_jinx_with_shield(self):
         # Shield is now tracked in daily_state, not player object directly for this manager logic
@@ -67,15 +67,15 @@ class TestPowerUpManager(unittest.TestCase):
 
         msg = manager.jinx("1", "2", "q1")
         self.assertIn("Shield blocked", msg)
-        self.assertTrue(manager._get_daily_state("2").get("shield_used"))
+        self.assertTrue(manager._get_daily_state("2").shield_used)
         # jinx_status is no longer used, we check if jinxed_by is NOT set
-        self.assertIsNone(manager._get_daily_state("2").get("jinxed_by"))
+        self.assertIsNone(manager._get_daily_state("2").jinxed_by)
 
     def test_use_shield_basic(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.use_shield("1", "q1")
         self.assertIn("Shield active", msg)
-        self.assertTrue(manager._get_daily_state("1").get("shield_active"))
+        self.assertTrue(manager._get_daily_state("1").shield_active)
         # No upfront cost
         self.assertEqual(self.players["1"].score, 100)
 
@@ -125,14 +125,14 @@ class TestPowerUpManager(unittest.TestCase):
         msg = manager.place_wager("1", 10, "q1")
         self.assertIn("wagered 10 points", msg)
         self.assertEqual(self.players["1"].score, 90)
-        self.assertEqual(manager._get_daily_state("1")["wager"], 10)
+        self.assertEqual(manager._get_daily_state("1").wager, 10)
 
     def test_wager_points_max_wager(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.place_wager("1", 100, "q1")
         self.assertIn("wagered 25 points", msg)  # 100//4 = 25
         self.assertEqual(self.players["1"].score, 75)
-        self.assertEqual(manager._get_daily_state("1")["wager"], 25)
+        self.assertEqual(manager._get_daily_state("1").wager, 25)
 
     def test_wager_points_invalid(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -148,18 +148,18 @@ class TestPowerUpManager(unittest.TestCase):
         manager.place_wager("1", 20, "q1")
         msg = manager.resolve_wager("1", True)
         self.assertIn("won the wager", msg)
-        self.assertEqual(manager._get_daily_state("1")["wager"], 0)
+        self.assertEqual(manager._get_daily_state("1").wager, 0)
 
     def test_resolve_wager_lose(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.place_wager("1", 20, "q1")
         msg = manager.resolve_wager("1", False)
         self.assertIn("lost the wager", msg)
-        self.assertEqual(manager._get_daily_state("1")["wager"], 0)
+        self.assertEqual(manager._get_daily_state("1").wager, 0)
 
     def test_can_answer_hint_sent(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager._get_daily_state("1")["silenced"] = True
+        manager._get_daily_state("1").silenced = True
 
         # Case 1: Hint NOT sent -> Should be False
         can_answer, reason = manager.can_answer("1", hint_sent=False)
@@ -174,7 +174,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.teamup("1", "2", "q1")
         self.assertEqual(self.players["1"].score, 75)
-        self.assertEqual(manager._get_daily_state("1")["team_partner"], "2")
+        self.assertEqual(manager._get_daily_state("1").team_partner, "2")
 
     def test_teamup_already_teamed(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -200,8 +200,8 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.teamup("1", "2", "q1")
         manager.resolve_teamup("1", True)
-        self.assertTrue(manager._get_daily_state("1")["team_success"])
-        self.assertTrue(manager._get_daily_state("2")["team_success"])
+        self.assertTrue(manager._get_daily_state("1").team_success)
+        self.assertTrue(manager._get_daily_state("2").team_success)
 
     def test_steal_invalid_player(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -213,13 +213,13 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.place_wager("1", 20, "q1")
         manager.on_guess("1", "P1", "guess", True)
-        self.assertEqual(manager._get_daily_state("1")["wager"], 0)
+        self.assertEqual(manager._get_daily_state("1").wager, 0)
 
     def test_on_guess_incorrect(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.place_wager("1", 20, "q1")
         manager.on_guess("1", "P1", "guess", False)
-        self.assertEqual(manager._get_daily_state("1")["wager"], 0)
+        self.assertEqual(manager._get_daily_state("1").wager, 0)
 
     def test_jinx_invalid_attacker(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -230,7 +230,7 @@ class TestPowerUpManager(unittest.TestCase):
     def test_can_answer_hint_sent(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # Set silenced to True
-        manager._get_daily_state("1")["silenced"] = True
+        manager._get_daily_state("1").silenced = True
 
         # Case 1: Hint NOT sent -> Should be False
         can_answer, reason = manager.can_answer("1", hint_sent=False)
@@ -257,8 +257,8 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # Player 1 activates shield
         manager.use_shield("1", "q1")
-        self.assertTrue(manager._get_daily_state("1")["shield_active"])
-        self.assertFalse(manager._get_daily_state("1")["shield_used"])
+        self.assertTrue(manager._get_daily_state("1").shield_active)
+        self.assertFalse(manager._get_daily_state("1").shield_used)
 
         # End of day check - Shield unused
         messages = manager.check_shield_usage()
@@ -326,14 +326,14 @@ class TestPowerUpManager(unittest.TestCase):
     def test_reset_daily_state(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.jinx("1", "2", "q1")
-        self.assertTrue(manager._get_daily_state("1")["silenced"])
-        self.assertTrue(manager._get_daily_state("1")["powerup_used_today"])
+        self.assertTrue(manager._get_daily_state("1").silenced)
+        self.assertTrue(manager._get_daily_state("1").powerup_used_today)
 
         manager.reset_daily_state()
         state = manager._get_daily_state("1")
-        self.assertFalse(state["silenced"])
-        self.assertFalse(state.get("powerup_used_today", False))
-        self.assertIsNone(state.get("jinxed_by"))
+        self.assertFalse(state.silenced)
+        self.assertFalse(state.powerup_used_today)
+        self.assertIsNone(state.jinxed_by)
 
     def test_powerups_blocked_without_question(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)

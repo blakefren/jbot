@@ -64,7 +64,7 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
 
         # P1: Shield active, no decay (-10)
         self.assertEqual(results["p1"]["score_earned"], 0)
-        self.assertTrue(simulator.daily_state["p1"]["shield_active"])
+        self.assertTrue(simulator.daily_state["p1"].shield_active)
 
         # P3: No answer, no streak reset (and thus not in results because apply_end_of_day=False)
         self.assertNotIn("p3", results)
@@ -183,7 +183,7 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
         # Cost: -25
         # Team Success: True (via P1)
 
-        self.assertTrue(simulator.daily_state["p1"]["team_success"])
-        self.assertTrue(simulator.daily_state["p2"]["team_success"])
-        self.assertEqual(simulator.daily_state["p1"]["team_partner"], "p2")
-        self.assertEqual(simulator.daily_state["p2"]["team_partner"], "p1")
+        self.assertTrue(simulator.daily_state["p1"].team_success)
+        self.assertTrue(simulator.daily_state["p2"].team_success)
+        self.assertEqual(simulator.daily_state["p1"].team_partner, "p2")
+        self.assertEqual(simulator.daily_state["p2"].team_partner, "p1")
