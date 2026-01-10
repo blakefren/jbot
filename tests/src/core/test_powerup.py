@@ -66,7 +66,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager.use_shield("2", "q1")
 
         msg = manager.jinx("1", "2", "q1")
-        self.assertIn("Shield blocked", msg)
+        self.assertIn("blocked", msg)
         self.assertTrue(manager._get_daily_state("2").shield_used)
         # jinx_status is no longer used, we check if jinxed_by is NOT set
         self.assertIsNone(manager._get_daily_state("2").jinxed_by)
@@ -74,7 +74,7 @@ class TestPowerUpManager(unittest.TestCase):
     def test_use_shield_basic(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.use_shield("1", "q1")
-        self.assertIn("Shield active", msg)
+        self.assertIn("Shield up", msg)
         self.assertTrue(manager._get_daily_state("1").shield_active)
         # No upfront cost
         self.assertEqual(self.players["1"].score, 100)
@@ -123,14 +123,14 @@ class TestPowerUpManager(unittest.TestCase):
     def test_wager_points_basic(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.place_wager("1", 10, "q1")
-        self.assertIn("wagered 10 points", msg)
+        self.assertIn("wagered 10 pts", msg)
         self.assertEqual(self.players["1"].score, 90)
         self.assertEqual(manager._get_daily_state("1").wager, 10)
 
     def test_wager_points_max_wager(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.place_wager("1", 100, "q1")
-        self.assertIn("wagered 25 points", msg)  # 100//4 = 25
+        self.assertIn("wagered 25 pts", msg)  # 100//4 = 25
         self.assertEqual(self.players["1"].score, 75)
         self.assertEqual(manager._get_daily_state("1").wager, 25)
 
@@ -147,14 +147,14 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.place_wager("1", 20, "q1")
         msg = manager.resolve_wager("1", True)
-        self.assertIn("won the wager", msg)
+        self.assertIn("won their wager", msg)
         self.assertEqual(manager._get_daily_state("1").wager, 0)
 
     def test_resolve_wager_lose(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.place_wager("1", 20, "q1")
         msg = manager.resolve_wager("1", False)
-        self.assertIn("lost the wager", msg)
+        self.assertIn("lost wager", msg)
         self.assertEqual(manager._get_daily_state("1").wager, 0)
 
     def test_can_answer_hint_sent(self):
@@ -392,7 +392,7 @@ class TestPowerUpManager(unittest.TestCase):
         )
 
         # Verify message contains points lost
-        self.assertTrue(any("streak bonus of 50 points" in m for m in msgs))
+        self.assertTrue(any("froze their streak bonus" in m for m in msgs))
 
     def test_jinx_freezes_streak(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)

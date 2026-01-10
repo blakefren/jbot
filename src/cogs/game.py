@@ -29,15 +29,15 @@ class Game(commands.Cog):
         evening_time_next = evening_task.next_iteration
 
         if morning_time_next < evening_time_next:
-            event_name = "next question"
+            event_name = "Next question"
             next_datetime = morning_time_next
         else:
-            event_name = "answer reveal"
+            event_name = "Answer reveal"
             next_datetime = evening_time_next
 
         response_content = (
-            f"The {event_name} is <t:{int(next_datetime.timestamp())}:R> "
-            f"(at <t:{int(next_datetime.timestamp())}:T>)."
+            f"{event_name} in <t:{int(next_datetime.timestamp())}:R> "
+            f"(<t:{int(next_datetime.timestamp())}:T>)."
         )
 
         # If there's an active question, show it.

@@ -325,7 +325,7 @@ class TestGuessHandler(unittest.TestCase):
         # Bonus should be based on new streak (6)
         # 100 (base) + 20 (first try) + 25 (streak: min(6 * 5, 25)) = 145
         self.assertEqual(points, 145)
-        self.assertTrue(any("6 day streak!" in msg for msg in bonuses))
+        self.assertTrue(any("6-day streak!" in msg for msg in bonuses))
 
     def test_handle_guess_streak_no_double_increment(self):
         """Test that streak is NOT incremented twice on the same day (e.g. after a skip)."""
@@ -356,7 +356,7 @@ class TestGuessHandler(unittest.TestCase):
         # Bonus should still be awarded based on current streak (6)
         # 100 (base) + 20 (first try) + 25 (streak: min(6 * 5, 25)) = 145
         self.assertEqual(points, 145)
-        self.assertTrue(any("6 day streak!" in msg for msg in bonuses))
+        self.assertTrue(any("6-day streak!" in msg for msg in bonuses))
 
     def test_handle_guess_before_hint_bonus(self):
         """Test that bonus points are awarded if guess is before hint."""
@@ -395,7 +395,7 @@ class TestGuessHandler(unittest.TestCase):
             self.assertTrue(is_correct)
             # Base points (100) + First Try (20) + Before Hint Bonus (10) = 130
             self.assertEqual(points, 130)
-            self.assertTrue(any("Before hint!" in msg for msg in bonuses))
+            self.assertTrue(any("Pre-hint!" in msg for msg in bonuses))
 
     def test_validation_logic(self):
         """Test the strict hierarchy of answer validation logic."""

@@ -49,10 +49,10 @@ class Admin(commands.Cog):
             reason=reason,
         )
 
-        msg = f"Refunded {amount} to {member.mention}. New score: {player.score}."
+        msg = f"Refunded {member.mention}: {amount:+} (Score: {player.score}"
         if streak is not None:
-            msg += f" Streak set to {streak}."
-        msg += f" Reason: {reason}"
+            msg += f", Streak: {streak}"
+        msg += f"). Reason: {reason}"
 
         await ctx.send(msg)
 

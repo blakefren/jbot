@@ -45,7 +45,7 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
 
         self.bot.send_message.assert_awaited_once()
         args, kwargs = self.bot.send_message.await_args
-        self.assertIn("next question", args[0])
+        self.assertIn("Next question", args[0])
 
     async def test_status_answer_reveal(self):
         """Test status when it's time for answer reveal (evening < morning)."""
@@ -68,7 +68,7 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
 
         self.bot.send_message.assert_awaited_once()
         args, kwargs = self.bot.send_message.await_args
-        self.assertIn("answer reveal", args[0])
+        self.assertIn("Answer reveal", args[0])
 
     async def test_status_with_active_question(self):
         """Test status showing the active question."""

@@ -240,7 +240,7 @@ class PowerUpManager(BaseManager):
         )
 
         return (
-            f"{player1_id} and {player2_id} are now teamed up! "
+            f"<@{player1_id}> & <@{player2_id}> teamed up! "
             "If either answers correctly, both get full points."
         )
 
@@ -279,7 +279,7 @@ class PowerUpManager(BaseManager):
         if player_state.team_success or partner_state.team_success:
             # This message implies immediate feedback
             msg = (
-                f"Team up: {player_id} and {partner_id} both get full points for today!"
+                f"Team up: <@{player_id}> & <@{partner_id}> both get full points today!"
             )
             # Reset for next day? Or keep until end of day?
             # If we reset now, we might miss granting points if logic is elsewhere.
@@ -334,7 +334,7 @@ class PowerUpManager(BaseManager):
             return f"{EMOJI_SHIELD_REFLECT} <@{target_id}>'s Shield blocked <@{attacker_id}>'s Jinx!"
         else:
             target_state.jinxed_by = attacker_id
-            return f"{EMOJI_SILENCED} <@{attacker_id}> jinxed <@{target_id}>! <@{attacker_id}> is silenced until the hint is revealed. <@{target_id}>'s streak bonus is frozen!"
+            return f"{EMOJI_SILENCED} <@{attacker_id}> jinxed <@{target_id}>! <@{attacker_id}> is silenced, <@{target_id}>'s streak is frozen."
 
     def steal(self, thief_id: str, target_id: str, question_id: int = None) -> str:
         """
@@ -379,10 +379,10 @@ class PowerUpManager(BaseManager):
         # Shield Check
         if target_state.shield_active:
             target_state.shield_used = True
-            return f"{EMOJI_SHIELD_REFLECT} <@{thief_id}> tried to rob <@{target_id}>, but hit their shield! No points stolen."
+            return f"{EMOJI_SHIELD_REFLECT} <@{thief_id}> tried to rob <@{target_id}>, but hit their shield!"
         else:
             target_state.steal_attempt_by = thief_id
-            return f"{EMOJI_STEALING} <@{thief_id}> has sacrificed their streak to steal from <@{target_id}>! If <@{target_id}> answers correctly, their speed bonuses will be stolen."
+            return f"{EMOJI_STEALING} <@{thief_id}> sacrificed their streak to rob <@{target_id}>'s speed bonuses!"
 
     def use_shield(self, player_id: str, question_id: int = None) -> str:
         """
@@ -410,7 +410,7 @@ class PowerUpManager(BaseManager):
 
         state.shield_active = True
         self.data_manager.log_powerup_usage(player_id, "shield", None, question_id)
-        return f"{EMOJI_SHIELD} Shield active. You are safe from Jinx and Steal."
+        return f"{EMOJI_SHIELD} Shield up! You are safe from Jinx and Steal."
 
     def check_shield_usage(self) -> list[str]:
         """
@@ -423,7 +423,7 @@ class PowerUpManager(BaseManager):
             if state.shield_active and not state.shield_used:
                 self.player_manager.update_score(player_id, -10)
                 messages.append(
-                    f"{EMOJI_SHIELD} <@{player_id}>'s shield shattered from disuse. -10 points."
+                    f"{EMOJI_SHIELD} <@{player_id}>'s shield shattered from disuse (-10 pts)."
                 )
         return messages
 
@@ -461,7 +461,7 @@ class PowerUpManager(BaseManager):
             player_id, "wager", str(final_wager), question_id
         )
 
-        return f"{player_id} wagered {final_wager} points! (Max allowed: {max_wager})"
+        return f"<@{player_id}> wagered {final_wager} pts! (Max: {max_wager})"
 
     def resolve_wager(
         self, player_id: str, correct: bool, points_tracker: dict = None
@@ -491,12 +491,9 @@ class PowerUpManager(BaseManager):
             if points_tracker:
                 points_tracker["earned"] += winnings + wager
 
-            msg += (
-                f"{player_id} won the wager and now has {player.score + winnings + wager} points! "
-                f"(Winnings: {winnings})\n"
-            )
+            msg += f"<@{player_id}> won their wager of +{winnings} pts! Total: {player.score + winnings + wager}.\n"
         elif wager != 0 and not correct:
-            msg += f"{player_id} lost the wager.\n"
+            msg += f"<@{player_id}> lost wager.\n"
         player_state.wager = 0
 
         return msg.strip()

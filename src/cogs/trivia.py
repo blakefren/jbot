@@ -18,9 +18,7 @@ class Trivia(commands.Cog):
         await ctx.interaction.response.defer(ephemeral=True)
 
         if not self.bot.game.daily_q:
-            await ctx.interaction.followup.send(
-                "There is no active question right now."
-            )
+            await ctx.interaction.followup.send("There is no active question.")
             return
 
         try:
@@ -33,9 +31,7 @@ class Trivia(commands.Cog):
                 bonus_messages,
             ) = self.bot.game.handle_guess(player_id, player_name, guess)
         except AlreadyAnsweredCorrectlyError:
-            await ctx.interaction.followup.send(
-                "You have already answered today's question correctly."
-            )
+            await ctx.interaction.followup.send("You already solved today.")
             return
         except JinxedError as e:
             EMOJI_SILENCED = config.get("JBOT_EMOJI_SILENCED", "🤐")
@@ -77,17 +73,16 @@ class Trivia(commands.Cog):
 
             # Send the private confirmation
             await ctx.interaction.followup.send(
-                f"That is correct! Nicely done.\n\n" f"Your guesses:\n{guesses_text}"
+                f"Correct! Nicely done.\n\nGuesses:\n{guesses_text}"
             )
             # Announce the correct answer publicly in the channel
             await ctx.channel.send(
-                f"{ctx.author.mention} got the correct answer in {num_guesses} guess(es)!\n"
-                f"They earned **{points_earned}** points!{bonus_str}"
+                f"{ctx.author.mention} solved it in {num_guesses}! (+**{points_earned}** pts){bonus_str}"
             )
         else:
             # Send the private confirmation for an incorrect answer
             await ctx.interaction.followup.send(
-                f"Sorry, that is not the correct answer.\n\nYour guesses:\n{guesses_text}"
+                f"Sorry, that was incorrect.\n\nGuesses:\n{guesses_text}"
             )
 
 

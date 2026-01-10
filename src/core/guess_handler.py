@@ -322,7 +322,7 @@ class GuessHandler:
                 bonus = int(self.config.get("JBOT_BONUS_FIRST_PLACE", 10))
                 emoji = self.config.get("JBOT_EMOJI_FASTEST", "🥇")
                 points_earned += bonus
-                bonus_messages.append(f"{emoji} First to answer! (+{bonus})")
+                bonus_messages.append(f"{emoji} First! (+{bonus})")
                 bonus_values["first_place"] = bonus
 
             # Check First Try (before logging this guess)
@@ -331,7 +331,7 @@ class GuessHandler:
                 bonus = int(self.config.get("JBOT_BONUS_FIRST_TRY", 20))
                 emoji = self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯")
                 points_earned += bonus
-                bonus_messages.append(f"{emoji} First try! (+{bonus})")
+                bonus_messages.append(f"{emoji} 1st try! (+{bonus})")
                 bonus_values["first_try"] = bonus
 
             # Check Before Hint (before logging this guess)
@@ -341,7 +341,7 @@ class GuessHandler:
                     bonus = int(self.config.get("JBOT_BONUS_BEFORE_HINT", 10))
                     emoji = self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠")
                     points_earned += bonus
-                    bonus_messages.append(f"{emoji} Before hint! (+{bonus})")
+                    bonus_messages.append(f"{emoji} Pre-hint! (+{bonus})")
                     bonus_values["before_hint"] = bonus
 
             # Check Streak
@@ -371,7 +371,7 @@ class GuessHandler:
                 bonus = min(new_streak * streak_bonus_per_day, streak_bonus_cap)
 
                 points_earned += bonus
-                bonus_messages.append(f"{emoji} {new_streak} day streak! (+{bonus})")
+                bonus_messages.append(f"{emoji} {new_streak}-day streak! (+{bonus})")
                 bonus_values["streak"] = bonus
 
             # Apply Score & Streak

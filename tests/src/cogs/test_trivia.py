@@ -60,11 +60,10 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
 
         # Check for the two calls to send_message
         mock_ctx.interaction.followup.send.assert_called_once_with(
-            "That is correct! Nicely done.\n\nYour guesses:\n1. test answer"
+            "Correct! Nicely done.\n\nGuesses:\n1. test answer"
         )
         mock_ctx.channel.send.assert_called_once_with(
-            f"{mock_ctx.author.mention} got the correct answer in 1 guess(es)!\n"
-            f"They earned **100** points!"
+            f"{mock_ctx.author.mention} solved it in 1! (+**100** pts)"
         )
 
     async def test_answer_command_incorrect(self):
@@ -89,7 +88,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
             123, "Test User", "wrong answer"
         )
         mock_ctx.interaction.followup.send.assert_called_once_with(
-            "Sorry, that is not the correct answer.\n\nYour guesses:\n1. wrong answer"
+            "Sorry, that was incorrect.\n\nGuesses:\n1. wrong answer"
         )
 
     async def test_answer_command_no_question(self):
@@ -104,7 +103,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
 
         self.mock_game_runner.handle_guess.assert_not_called()
         mock_ctx.interaction.followup.send.assert_called_once_with(
-            "There is no active question right now."
+            "There is no active question."
         )
 
     async def test_answer_command_already_answered_correctly(self):
@@ -129,7 +128,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
 
         # Check that the correct feedback is sent
         mock_ctx.interaction.followup.send.assert_called_once_with(
-            "You have already answered today's question correctly."
+            "You already solved today."
         )
 
         # Ensure no other messages were sent
@@ -153,7 +152,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         # Should still work, just with empty guesses
         mock_ctx.interaction.followup.send.assert_called_once()
         args = mock_ctx.interaction.followup.send.call_args[0][0]
-        assert "That is correct!" in args
+        assert "Correct!" in args
         assert "No guesses yet." in args
 
     async def test_answer_command_generic_exception(self):
