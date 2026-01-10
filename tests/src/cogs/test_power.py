@@ -92,7 +92,7 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
             "123", "456", self.bot.game.daily_question_id
         )
         self.bot.send_message.assert_awaited_once_with(
-            "Stolen points", interaction=self.ctx.interaction
+            "Stolen points", interaction=self.ctx.interaction, ephemeral=True
         )
 
     # TODO: Re-enable these tests when the commands are re-enabled
