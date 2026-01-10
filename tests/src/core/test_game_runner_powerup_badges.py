@@ -15,7 +15,7 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
         # Mock config to ensure emojis are what we expect
         self.runner.config = MagicMock()
         self.runner.config.get.side_effect = lambda key, default=None: {
-            "JBOT_EMOJI_JINXED": "⚡",
+            "JBOT_EMOJI_JINXED": "🥶",
             "JBOT_EMOJI_SILENCED": "🤐",
             "JBOT_EMOJI_STOLEN_FROM": "💸",
             "JBOT_EMOJI_STEALING": "💰",
@@ -53,7 +53,7 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
 
         # p2 should have jinxed emoji (victim)
         self.assertIn("Player2", leaderboard)
-        self.assertIn("⚡", leaderboard)  # p2 badge
+        self.assertIn("🥶", leaderboard)  # p2 badge
 
     def test_leaderboard_steal_badges(self):
         # p1 stole from p2

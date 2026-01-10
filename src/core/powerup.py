@@ -14,7 +14,7 @@ from src.core.state import DailyPlayerState
 config = ConfigReader()
 
 # TODO: Add these emojis to leaderboard badges later
-EMOJI_JINXED = config.get("JBOT_EMOJI_JINXED", "⚡")
+EMOJI_JINXED = config.get("JBOT_EMOJI_JINXED", "🥶")
 EMOJI_SILENCED = config.get("JBOT_EMOJI_SILENCED", "🤐")
 EMOJI_STOLEN_FROM = config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
 EMOJI_STEALING = config.get("JBOT_EMOJI_STEALING", "💰")

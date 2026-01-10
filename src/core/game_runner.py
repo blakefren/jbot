@@ -343,7 +343,7 @@ class GameRunner:
         emoji_streak = self.config.get("JBOT_EMOJI_STREAK", "🔥")
 
         # Powerup badges
-        emoji_jinxed = self.config.get("JBOT_EMOJI_JINXED", "⚡")
+        emoji_jinxed = self.config.get("JBOT_EMOJI_JINXED", "🥶")
         emoji_silenced = self.config.get("JBOT_EMOJI_SILENCED", "🤐")
         emoji_stolen_from = self.config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
         emoji_stealing = self.config.get("JBOT_EMOJI_STEALING", "💰")
