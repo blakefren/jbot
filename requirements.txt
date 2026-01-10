@@ -9,3 +9,5 @@ pandas
 plotly
 openpyxl
 kaleido
+seaborn
+matplotlib
