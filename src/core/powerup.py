@@ -379,10 +379,10 @@ class PowerUpManager(BaseManager):
         # Shield Check
         if target_state.shield_active:
             target_state.shield_used = True
-            return f"{EMOJI_SHIELD_REFLECT} <@{thief_id}> tried to rob <@{target_id}>, but hit their shield!"
+            return f"{EMOJI_SHIELD_REFLECT} You tried to rob <@{target_id}>, but hit their shield!"
         else:
             target_state.steal_attempt_by = thief_id
-            return f"{EMOJI_STEALING} <@{thief_id}> sacrificed their streak to rob <@{target_id}>'s speed bonuses!"
+            return f"{EMOJI_STEALING} You sacrificed your streak to rob <@{target_id}>! If you answer correctly, you'll steal their speed bonuses."
 
     def use_shield(self, player_id: str, question_id: int = None) -> str:
         """

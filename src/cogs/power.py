@@ -86,7 +86,9 @@ class Power(commands.Cog):
                 result = manager.steal(
                     str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
                 )
-                await self.bot.send_message(result, interaction=ctx.interaction)
+                await self.bot.send_message(
+                    result, interaction=ctx.interaction, ephemeral=True
+                )
             except PowerUpError as e:
                 await self.bot.send_message(
                     str(e), interaction=ctx.interaction, ephemeral=True

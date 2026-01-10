@@ -91,7 +91,7 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Attacker steals
         msg = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed their streak", msg)
+        self.assertIn("sacrificed your streak", msg)
         self.assertEqual(self.players["1"].answer_streak, 0)
 
         # Target answers correctly and earns bonuses
@@ -113,7 +113,7 @@ class TestPowerUpManager(unittest.TestCase):
     def test_steal_no_points(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed their streak", msg)
+        self.assertIn("sacrificed your streak", msg)
 
         # Attacker answers correctly but target has no bonuses
         msgs = manager.on_guess(1, "P1", "ans", True)
@@ -299,7 +299,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First use
         msg = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed their streak", msg)
+        self.assertIn("sacrificed your streak", msg)
 
         # Second use
         with self.assertRaises(PowerUpError) as cm:
@@ -374,7 +374,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First steal should succeed
         msg1 = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed their streak", msg1)
+        self.assertIn("sacrificed your streak", msg1)
 
         # Second steal on same target should fail
         with self.assertRaises(PowerUpError) as cm:
