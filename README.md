@@ -55,6 +55,7 @@ This track introduces mechanics that reward consistent play or provide other adv
 *   **Answer Streaks**: Players build up a "streak" for each consecutive correct answer. This can be used for scoring bonuses or as a target for other players' attacks.
 *   **Wager** (Planned): Players can wager a portion of their points on whether their answer is correct.
     *   **Command**: `/power wager <amount>`
+    *   **Details**: Bets are capped at 25% of a player's current score (minimum 1 point).
 *   **Answering First**: The first player to answer the daily question correctly receives a point bonus.
 *   **Answering Before the Hint**: Players who answer correctly before the daily hint is revealed receive a point bonus.
 *   **Weekly Boss Fight** (Planned): A challenging weekly question with a large point reward.
