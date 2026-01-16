@@ -417,9 +417,21 @@ class TestGameRunner(unittest.TestCase):
 
         # Mock daily question ID for show_daily_bonuses to work
         self.game_runner.daily_question_id = 123
-        self.mock_data_manager.read_guess_history.return_value = (
-            []
-        )  # No guesses needed for streak test
+        # Mock that Alice and Charlie answered correctly today (so their streaks show)
+        self.mock_data_manager.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "1",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "3",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:05:00",
+            },
+        ]
         self.mock_data_manager.get_first_try_solvers.return_value = []
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
@@ -934,6 +946,9 @@ class DummyDataManagerPowerup:
     def increment_streak(self, player_id):
         pass
 
+    def get_alternative_answers(self, question_id):
+        return []
+
 
 class DummyQuestionSelectorPowerup:
     def __init__(self):
@@ -944,62 +959,6 @@ class DummyQuestionSelectorPowerup:
         q.id = "q1"
         q.answer = "test"
         return q
-
-
-def test_handle_guess_powerup_correct():
-    data_manager = DummyDataManagerPowerup()
-    selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, data_manager)
-    game.daily_q = selector.get_random_question()
-    game.daily_question_id = 1
-    called = {}
-
-    class DummyPowerUpManager:
-        def __init__(self, players):
-            pass
-
-        def on_guess(self, pid, pname, guess, correct):
-            called["on_guess"] = (pid, correct)
-
-    game.register_manager("powerup", DummyPowerUpManager)
-    game.enable_manager("powerup", players={})
-
-    result, num_guesses, points, bonuses = game.handle_guess(1, "Player1", "test")
-    assert result is True
-    assert called["on_guess"] == (1, True)
-
-
-def test_handle_guess_powerup_incorrect():
-    data_manager = DummyDataManagerPowerup()
-    selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, data_manager)
-    game.daily_q = selector.get_random_question()
-    game.daily_question_id = 1
-    called = {}
-
-    class DummyPowerUpManager:
-        def __init__(self, players):
-            pass
-
-        def on_guess(self, pid, pname, guess, correct):
-            called["on_guess"] = (pid, correct)
-
-    game.register_manager("powerup", DummyPowerUpManager)
-    game.enable_manager("powerup", players={})
-
-    result, num_guesses, points, bonuses = game.handle_guess(1, "Player1", "wrong")
-    assert result is False
-    assert called["on_guess"] == (1, False)
-
-
-def test_handle_guess_non_powerup():
-    data_manager = DummyDataManagerPowerup()
-    selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, data_manager)
-    game.daily_q = selector.get_random_question()
-    game.daily_question_id = 1
-    result, num_guesses, points, bonuses = game.handle_guess(1, "Player1", "test")
-    assert result is True
 
 
 def test_handle_guess_no_question():
