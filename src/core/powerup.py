@@ -19,7 +19,8 @@ EMOJI_JINXED = config.get("JBOT_EMOJI_JINXED", "🥶")
 EMOJI_SILENCED = config.get("JBOT_EMOJI_SILENCED", "🤐")
 EMOJI_STOLEN_FROM = config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
 EMOJI_STEALING = config.get("JBOT_EMOJI_STEALING", "💰")
-EMOJI_SHIELD = config.get("JBOT_EMOJI_SHIELD", "🛡️")
+EMOJI_SHIELD = config.get("JBOT_EMOJI_SHIELD", "💝")
+EMOJI_SHIELD_BROKEN = config.get("JBOT_EMOJI_SHIELD_BROKEN", "💔")
 EMOJI_SHIELD_REFLECT = config.get("JBOT_EMOJI_SHIELD_REFLECT", "💀")
 EMOJI_STREAK = config.get("JBOT_EMOJI_STREAK", "🔥")
 
@@ -421,9 +422,10 @@ class PowerUpManager(BaseManager):
         messages = []
         for player_id, state in self.daily_state.items():
             if state.shield_active and not state.shield_used:
+                state.shield_broken = True
                 self.player_manager.update_score(player_id, -10)
                 messages.append(
-                    f"{EMOJI_SHIELD} <@{player_id}>'s shield shattered from disuse (-10 pts)."
+                    f"{EMOJI_SHIELD_BROKEN} <@{player_id}>'s shield shattered from disuse (-10 pts)."
                 )
         return messages
 

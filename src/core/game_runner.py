@@ -304,6 +304,7 @@ class GameRunner:
         fastest_guesser_id = None
         first_try_solver_ids = set()
         before_hint_solver_ids = set()
+        players_answered_correctly_today = set()
 
         if show_daily_bonuses and self.daily_question_id:
             all_guesses = self.data_manager.read_guess_history()
@@ -313,6 +314,9 @@ class GameRunner:
                 if g.get("daily_question_id") == self.daily_question_id
                 and g.get("is_correct")
             ]
+            players_answered_correctly_today = {
+                g["player_id"] for g in daily_correct_guesses
+            }
             # Sort by guessed_at to determine order
             daily_correct_guesses.sort(key=lambda x: x.get("guessed_at"))
 
@@ -347,7 +351,8 @@ class GameRunner:
         emoji_silenced = self.config.get("JBOT_EMOJI_SILENCED", "🤐")
         emoji_stolen_from = self.config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
         emoji_stealing = self.config.get("JBOT_EMOJI_STEALING", "💰")
-        emoji_shield = self.config.get("JBOT_EMOJI_SHIELD", "🛡️")
+        emoji_shield = self.config.get("JBOT_EMOJI_SHIELD", "💝")
+        emoji_shield_broken = self.config.get("JBOT_EMOJI_SHIELD_BROKEN", "💔")
 
         powerup_badges = defaultdict(list)
         if self.daily_question_id:
@@ -360,15 +365,45 @@ class GameRunner:
                 target_id = p["target_user_id"]
 
                 if p_type == "jinx":
+                    # Always show silenced emoji (attacker is silenced regardless)
                     powerup_badges[user_id].append(emoji_silenced)
+
+                    # Only show jinxed emoji if target answered today
                     if target_id:
-                        powerup_badges[target_id].append(emoji_jinxed)
+                        if (
+                            show_daily_bonuses
+                            and target_id in players_answered_correctly_today
+                        ):
+                            powerup_badges[target_id].append(emoji_jinxed)
+                        elif not show_daily_bonuses:
+                            powerup_badges[target_id].append(emoji_jinxed)
                 elif p_type == "steal":
-                    powerup_badges[user_id].append(emoji_stealing)
+                    # Only show stealing emoji if attacker answered correctly today
+                    if (
+                        show_daily_bonuses
+                        and user_id in players_answered_correctly_today
+                    ):
+                        powerup_badges[user_id].append(emoji_stealing)
+                    elif not show_daily_bonuses:
+                        powerup_badges[user_id].append(emoji_stealing)
+
+                    # Only show stolen_from emoji if target answered correctly today
                     if target_id:
-                        powerup_badges[target_id].append(emoji_stolen_from)
+                        if (
+                            show_daily_bonuses
+                            and target_id in players_answered_correctly_today
+                        ):
+                            powerup_badges[target_id].append(emoji_stolen_from)
+                        elif not show_daily_bonuses:
+                            powerup_badges[target_id].append(emoji_stolen_from)
                 elif p_type == "shield":
-                    powerup_badges[user_id].append(emoji_shield)
+                    # Check if shield is broken via powerup manager state
+                    shield_emoji = emoji_shield
+                    if "powerup" in self.managers:
+                        state = self.managers["powerup"]._get_daily_state(user_id)
+                        if state.shield_broken:
+                            shield_emoji = emoji_shield_broken
+                    powerup_badges[user_id].append(shield_emoji)
 
         # Create a list of player data
         all_player_data = []
@@ -391,8 +426,13 @@ class GameRunner:
             score = player["score"]
 
             badges = []
-            if streak > 0:
-                badges.append(f"{streak}{emoji_streak}")
+            # Only show streaks of 2+ when player answered today (or when not showing daily bonuses)
+            if streak >= 2:
+                if show_daily_bonuses:
+                    if player_id in players_answered_correctly_today:
+                        badges.append(f"{streak}{emoji_streak}")
+                else:
+                    badges.append(f"{streak}{emoji_streak}")
 
             if show_daily_bonuses:
                 if player_id in first_try_solver_ids:

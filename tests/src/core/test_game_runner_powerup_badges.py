@@ -19,7 +19,8 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
             "JBOT_EMOJI_SILENCED": "🤐",
             "JBOT_EMOJI_STOLEN_FROM": "💸",
             "JBOT_EMOJI_STEALING": "💰",
-            "JBOT_EMOJI_SHIELD": "🛡️",
+            "JBOT_EMOJI_SHIELD": "💝",
+            "JBOT_EMOJI_SHIELD_BROKEN": "💔",
             "JBOT_EMOJI_STREAK": "🔥",
             "JBOT_EMOJI_FASTEST": "🥇",
             "JBOT_EMOJI_FIRST_TRY": "🎯",
@@ -40,9 +41,24 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
         self.mock_dm.get_first_try_solvers.return_value = []
 
     def test_leaderboard_jinx_badges(self):
-        # p1 jinxed p2
+        # p1 jinxed p2 - both answered correctly
         self.mock_dm.get_powerup_usages_for_question.return_value = [
             {"powerup_type": "jinx", "user_id": "p1", "target_user_id": "p2"}
+        ]
+        # Mock that both players answered correctly today
+        self.mock_dm.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "p1",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "p2",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:05:00",
+            },
         ]
 
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
@@ -56,9 +72,24 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
         self.assertIn("🥶", leaderboard)  # p2 badge
 
     def test_leaderboard_steal_badges(self):
-        # p1 stole from p2
+        # p1 stole from p2 - both answered correctly
         self.mock_dm.get_powerup_usages_for_question.return_value = [
             {"powerup_type": "steal", "user_id": "p1", "target_user_id": "p2"}
+        ]
+        # Mock that both players answered correctly today
+        self.mock_dm.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "p1",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "p2",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:05:00",
+            },
         ]
 
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
@@ -78,7 +109,7 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
 
         # p1 should have shield emoji
-        self.assertIn("🛡️", leaderboard)
+        self.assertIn("💝", leaderboard)
 
     def test_leaderboard_no_badges_if_not_show_daily_bonuses(self):
         # p1 used shield
@@ -89,4 +120,4 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=False)
 
         # Should NOT have shield emoji
-        self.assertNotIn("🛡️", leaderboard)
+        self.assertNotIn("💝", leaderboard)

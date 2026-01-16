@@ -23,6 +23,7 @@ class DailyPlayerState:
     # Power-up: Defense
     shield_active: bool = False
     shield_used: bool = False
+    shield_broken: bool = False
 
     # Power-up: Attack (Incoming)
     jinxed_by: Optional[str] = None  # User ID
