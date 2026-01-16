@@ -15,7 +15,7 @@ from src.core.player import Player
 from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 
 # --- Configuration ---
-SIMULATION_DAYS = 100
+SIMULATION_DAYS = 730  # Increased to 2 years for much tighter CIs
 PLAYERS_PER_CATEGORY = 10  # Number of players per category
 VERBOSE = False
 GUESS_ACCURACY = 0.90
@@ -277,7 +277,17 @@ class GameState:
 # --- Simulation Engine ---
 
 
-def run_simulation(return_data=False):
+def run_simulation(return_data=False, seed=None):
+    """
+    Run the powerup simulation.
+
+    Args:
+        return_data: If True, returns (players, player_strategies) dict
+        seed: Random seed for reproducibility. If None, uses system randomness.
+    """
+    if seed is not None:
+        random.seed(seed)
+
     print(f"Starting simulation for {SIMULATION_DAYS} days...")
 
     players = {}
@@ -329,7 +339,7 @@ def run_simulation(return_data=False):
     aggressions = ["Aggressive", "Frequent", "Rarely"]
     cores = ["Troll", "Turtle", "Thief", "Random", "Passive"]
 
-    for i in range(500):
+    for i in range(1500):  # Increased from 500 to 1500 players
         pid = f"player_{i+1}"
 
         s = random.choice(speeds)
