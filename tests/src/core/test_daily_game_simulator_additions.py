@@ -21,7 +21,7 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
                 return 20
             if key == "JBOT_BONUS_BEFORE_HINT":
                 return 10
-            if key == "JBOT_BONUS_FIRST_PLACE":
+            if key == "JBOT_BONUS_FASTEST":
                 return 10
             if key == "JBOT_BONUS_STREAK_PER_DAY":
                 return 5
@@ -104,13 +104,13 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
         #   First Try: 20
         #   Before Hint: 10
         #   Fastest: 10
-        #   Streak: 2*5 = 10
-        #   Total Earned: 150
-        # Score before wager resolution: 50 + 150 = 200
+        #   Streak: 3*5 = 15
+        #   Total Earned: 155
+        # Score before wager resolution: 50 + 155 = 205 ? NO. Wager calc uses pre-points score.
         # Wager Winnings: 50 * (100 / (50 + 100)) = 33
-        # Total Score Earned: 150 + 33 = 183
+        # Total Score Earned: 155 + 33 = 188
 
-        self.assertEqual(results["p1"]["score_earned"], 183)
+        self.assertEqual(results["p1"]["score_earned"], 188)
 
     def test_wager_loss(self):
         """Test wager logic: deduction and loss."""

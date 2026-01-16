@@ -6,6 +6,7 @@ from src.core.guess_handler import GuessHandler
 from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 from src.core.player import Player
 from src.core.state import DailyPlayerState
+from src.core.scoring import ScoreCalculator
 
 
 class DailyGameSimulator:
@@ -28,6 +29,7 @@ class DailyGameSimulator:
         self.events = events  # List of GameEvent objects
         self.initial_player_states = initial_player_states
         self.config = config
+        self.score_calculator = ScoreCalculator(self.config)
 
         # Daily State per player
         self.daily_state = defaultdict(DailyPlayerState)
@@ -169,35 +171,25 @@ class DailyGameSimulator:
             self.daily_state[partner_id].team_success = True
 
         # Calculate Points
-        points = self.question.clue_value or 100
-        bonuses = {}
+        base_value = self.question.clue_value or 100
 
-        # 1. First Try Bonus
-        if state.guesses_count == 1:
-            bonus = int(self.config.get("JBOT_BONUS_FIRST_TRY", 20))
-            points += bonus
-            bonuses["first_try"] = bonus
+        is_first_try = state.guesses_count == 1
 
-        # 2. Before Hint Bonus
         is_before_hint = True
         if self.hint_timestamp:
             # Assuming timestamp is datetime or comparable string
             if timestamp > self.hint_timestamp:
                 is_before_hint = False
 
-        if is_before_hint:
-            bonus = int(self.config.get("JBOT_BONUS_BEFORE_HINT", 10))
-            points += bonus
-            bonuses["before_hint"] = bonus
-
-        # 3. Fastest / First Place
+        # Check Fastest
+        is_fastest = False
         if self.first_correct_timestamp is None:
             self.first_correct_timestamp = timestamp
-            bonus = int(self.config.get("JBOT_BONUS_FIRST_PLACE", 20))
-            points += bonus
-            bonuses["fastest"] = bonus
+            is_fastest = True
+        elif self.first_correct_timestamp == timestamp:
+            is_fastest = True
 
-        # 4. Streak Bonus
+        # Streak Prep
         player = self.initial_player_states.get(user_id)
         initial_streak = player.answer_streak if player else 0
 
@@ -205,16 +197,22 @@ class DailyGameSimulator:
         if state.stealing_from:
             initial_streak = 0
 
+        streak_length = initial_streak + 1
+
+        # Calculate via shared engine
+        points, bonuses, _ = self.score_calculator.calculate_points(
+            question_value=base_value,
+            is_first_try=is_first_try,
+            is_before_hint=is_before_hint,
+            is_fastest=is_fastest,
+            streak_length=streak_length,
+        )
+
+        # Apply Jinx/Silence Logic (Remove Streak Bonus)
         if state.jinxed_by or state.silenced:
-            # Jinxed or Silenced: No streak bonus
-            pass
-        else:
-            per_day = int(self.config.get("JBOT_BONUS_STREAK_PER_DAY", 5))
-            cap = int(self.config.get("JBOT_BONUS_STREAK_CAP", 25))
-            streak_bonus = min(initial_streak * per_day, cap)
-            if streak_bonus > 0:
-                points += streak_bonus
-                bonuses["streak"] = streak_bonus
+            if "streak" in bonuses:
+                streak_val = bonuses.pop("streak")
+                points -= streak_val
 
         state.score_earned += points
         state.bonuses = bonuses
@@ -223,11 +221,7 @@ class DailyGameSimulator:
         # Resolve Steal
         attacker_id = state.steal_attempt_by
         if attacker_id:
-            stealable = 0
-            if "first_try" in bonuses:
-                stealable += bonuses["first_try"]
-            if "fastest" in bonuses:
-                stealable += bonuses["fastest"]
+            stealable = self.score_calculator.get_stealable_amount(bonuses)
 
             if stealable > 0:
                 state.score_earned -= stealable
@@ -259,13 +253,9 @@ class DailyGameSimulator:
                 # Thief must also be correct to steal
                 if thief_state.is_correct and state.is_correct:
                     target_bonuses = state.bonuses
-                    stolen_amount = 0
-
-                    # Steal specific bonuses
-                    for bonus_key in ["first_try", "fastest"]:
-                        if bonus_key in target_bonuses:
-                            amount = target_bonuses[bonus_key]
-                            stolen_amount += amount
+                    stolen_amount = self.score_calculator.get_stealable_amount(
+                        target_bonuses
+                    )
 
                     if stolen_amount > 0:
                         state.score_earned -= stolen_amount

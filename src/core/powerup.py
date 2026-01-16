@@ -10,6 +10,7 @@ from src.core.base_manager import BaseManager
 from src.core.data_manager import DataManager
 from src.core.player_manager import PlayerManager
 from src.core.state import DailyPlayerState
+from src.core.scoring import ScoreCalculator
 
 config = ConfigReader()
 
@@ -46,6 +47,7 @@ class PowerUpManager(BaseManager):
         """
         self.player_manager = player_manager
         self.data_manager = data_manager
+        self.score_calculator = ScoreCalculator(config)
         # Transient state for the day
         self.daily_state: Dict[str, DailyPlayerState] = {}
 
@@ -185,25 +187,23 @@ class PowerUpManager(BaseManager):
 
         # Success Check
         target_bonuses = target_state.bonuses
-        stealable_amount = 0
+        stealable_amount = self.score_calculator.get_stealable_amount(target_bonuses)
 
-        if "first_place" in target_bonuses:  # Speed
-            stealable_amount += target_bonuses["first_place"]
-        if "first_try" in target_bonuses:
-            stealable_amount += target_bonuses["first_try"]
-
-        if stealable_amount > 0:
-            self.player_manager.update_score(target_id, -stealable_amount)
-            self.player_manager.update_score(attacker_id, stealable_amount)
-            if points_tracker:
-                points_tracker["earned"] -= stealable_amount
-
-            # Clear the steal attempt
+        if stealable_amount == 0:
+            # Clear the steal attempt even if nothing stolen?
+            # Logic suggests yes, the attempt is used up.
             target_state.steal_attempt_by = None
+            return f"{EMOJI_STEALING} <@{attacker_id}> tried to steal from <@{target_id}>, but there was nothing to steal!"
 
-            return f"{EMOJI_STEALING} <@{attacker_id}> just stole {stealable_amount} points from <@{target_id}> {EMOJI_STOLEN_FROM}!"
+        self.player_manager.update_score(target_id, -stealable_amount)
+        self.player_manager.update_score(attacker_id, stealable_amount)
+        if points_tracker:
+            points_tracker["earned"] -= stealable_amount
 
-        return ""
+        # Clear the steal attempt
+        target_state.steal_attempt_by = None
+
+        return f"{EMOJI_STEALING} <@{attacker_id}> stole {stealable_amount} pts from <@{target_id}>!"
 
     def teamup(self, player1_id: str, player2_id: str, question_id: int = None) -> str:
         """

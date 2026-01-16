@@ -103,10 +103,10 @@ class TestPowerUpManager(unittest.TestCase):
         # But on_guess calls resolve_steal AFTER setting it.
 
         msgs = manager.on_guess(
-            2, "P2", "ans", True, points_earned=100, bonus_values={"first_place": 10}
+            2, "P2", "ans", True, points_earned=100, bonus_values={"fastest": 10}
         )
 
-        self.assertTrue(any("stole 10 points" in m for m in msgs))
+        self.assertTrue(any("stole 10 pts" in m for m in msgs))
         self.assertEqual(self.players["1"].score, 110)  # 100 + 10 stolen
         self.assertEqual(self.players["2"].score, 90)  # 100 - 10 stolen
 
@@ -280,7 +280,7 @@ class TestPowerUpManager(unittest.TestCase):
         )
 
         # Verify steal
-        self.assertTrue(any("stole 20 points" in m for m in msgs))
+        self.assertTrue(any("stole 20 pts" in m for m in msgs))
         self.assertEqual(self.players["1"].score, 120)  # 100 + 20
         self.assertEqual(self.players["2"].score, 80)  # 100 - 20
 
@@ -459,8 +459,8 @@ class TestPowerUpManager(unittest.TestCase):
             "ans",
             True,
             points_earned=100,
-            bonus_values={"first_place": 20, "first_try": 10},
+            bonus_values={"fastest": 20, "first_try": 10},
         )
 
         # Verify message contains points stolen
-        self.assertTrue(any("stole 30 points" in m for m in msgs))
+        self.assertTrue(any("stole 30 pts" in m for m in msgs))

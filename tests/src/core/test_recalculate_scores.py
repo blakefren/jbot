@@ -68,14 +68,14 @@ class TestRecalculateScores(unittest.TestCase):
         # Verify
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["updated_players"], 1)
-        # 100 base + 20 first try + 10 before hint + 20 fastest = 150
-        self.assertEqual(result["total_refunded"], 150)
+        # 100 base + 20 first try + 10 before hint + 10 fastest = 140
+        self.assertEqual(result["total_refunded"], 140)
 
         # Check DB calls
         self.mock_data_manager.add_alternative_answer.assert_called_with(
             1, "800", "admin1"
         )
-        self.game_runner.player_manager.update_score.assert_called_with("p1", 150)
+        self.game_runner.player_manager.update_score.assert_called_with("p1", 140)
         self.game_runner.player_manager.set_streak.assert_called_with("p1", 1)
 
     def test_recalculate_scores_already_correct(self):
@@ -152,7 +152,7 @@ class TestRecalculateScores(unittest.TestCase):
         # Verify results are calculated but not applied
         self.assertEqual(result["status"], "success")
         self.assertEqual(result["updated_players"], 1)
-        self.assertEqual(result["total_refunded"], 150)
+        self.assertEqual(result["total_refunded"], 140)
 
         # Check DB calls are NOT made
         self.mock_data_manager.add_alternative_answer.assert_not_called()

@@ -21,7 +21,7 @@ class TestDailyGameSimulator(unittest.TestCase):
                 return 20
             if key == "JBOT_BONUS_BEFORE_HINT":
                 return 10
-            if key == "JBOT_BONUS_FIRST_PLACE":
+            if key == "JBOT_BONUS_FASTEST":
                 return 10
             if key == "JBOT_BONUS_STREAK_PER_DAY":
                 return 5
@@ -68,11 +68,11 @@ class TestDailyGameSimulator(unittest.TestCase):
         # First Try: 20
         # Before Hint: 10
         # Fastest: 10 (First correct)
-        # Streak: 2 * 5 = 10
-        # Total: 150
-        self.assertEqual(results["p1"]["score_earned"], 150)
+        # Streak: 3 * 5 = 15 (Initial 2 + 1 = 3)
+        # Total: 155
+        self.assertEqual(results["p1"]["score_earned"], 155)
         self.assertEqual(results["p1"]["streak_delta"], 1)
-        self.assertEqual(results["p1"]["final_score"], 250)
+        self.assertEqual(results["p1"]["final_score"], 255)
         self.assertEqual(results["p1"]["final_streak"], 3)
 
         # P2: Incorrect. 0 points.

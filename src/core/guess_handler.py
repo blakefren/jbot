@@ -4,6 +4,7 @@ import jellyfish
 from datetime import date, timedelta, datetime
 from src.core.data_manager import DataManager
 from data.readers.question import Question
+from src.core.scoring import ScoreCalculator
 
 
 from src.cfg.main import ConfigReader
@@ -51,6 +52,7 @@ class GuessHandler:
         self.fuzzy_threshold = fuzzy_threshold
         self.reminder_time = reminder_time
         self.config = ConfigReader()
+        self.score_calculator = ScoreCalculator(self.config)
 
         if self.data_manager:
             self.alternative_answers = self.data_manager.get_alternative_answers(
@@ -310,46 +312,30 @@ class GuessHandler:
         bonus_values = {}
 
         if is_correct:
-            # Base Score
-            points_earned = self.daily_q.clue_value or 100
-            bonus_values["base"] = points_earned
+            # Gather inputs for ScoreCalculator
+            base_value = self.daily_q.clue_value or 100
 
-            # Check First Solver (before logging this guess)
+            # Check Fastest (before logging this guess)
             existing_correct_count = self.data_manager.get_correct_guess_count(
                 self.daily_question_id
             )
-            if existing_correct_count == 0:
-                bonus = int(self.config.get("JBOT_BONUS_FIRST_PLACE", 10))
-                emoji = self.config.get("JBOT_EMOJI_FASTEST", "🥇")
-                points_earned += bonus
-                bonus_messages.append(f"{emoji} First! (+{bonus})")
-                bonus_values["first_place"] = bonus
+            is_fastest = existing_correct_count == 0
 
             # Check First Try (before logging this guess)
             previous_guesses = self.get_player_guesses(player_id)
-            if len(previous_guesses) == 0:
-                bonus = int(self.config.get("JBOT_BONUS_FIRST_TRY", 20))
-                emoji = self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯")
-                points_earned += bonus
-                bonus_messages.append(f"{emoji} 1st try! (+{bonus})")
-                bonus_values["first_try"] = bonus
+            is_first_try = len(previous_guesses) == 0
 
             # Check Before Hint (before logging this guess)
+            is_before_hint = False
             if self.reminder_time:
                 now = datetime.now(self.reminder_time.tzinfo)
                 if now.timetz() < self.reminder_time:
-                    bonus = int(self.config.get("JBOT_BONUS_BEFORE_HINT", 10))
-                    emoji = self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠")
-                    points_earned += bonus
-                    bonus_messages.append(f"{emoji} Pre-hint! (+{bonus})")
-                    bonus_values["before_hint"] = bonus
+                    is_before_hint = True
 
-            # Check Streak
-            # We need to get the player's current streak BEFORE incrementing it
+            # Determine Streak details
             player = self.player_manager.get_player(str(player_id))
             current_streak = player.answer_streak if player else 0
 
-            # Determine if streak continues
             last_correct_date = self.data_manager.get_last_correct_guess_date(
                 str(player_id)
             )
@@ -361,18 +347,16 @@ class GuessHandler:
             else:
                 new_streak = current_streak + 1
 
-            if new_streak >= 2:
-                streak_bonus_per_day = int(
-                    self.config.get("JBOT_BONUS_STREAK_PER_DAY", 5)
+            # Calculate Points via shared engine
+            points_earned, bonus_values, bonus_messages = (
+                self.score_calculator.calculate_points(
+                    question_value=base_value,
+                    is_first_try=is_first_try,
+                    is_before_hint=is_before_hint,
+                    is_fastest=is_fastest,
+                    streak_length=new_streak,
                 )
-                streak_bonus_cap = int(self.config.get("JBOT_BONUS_STREAK_CAP", 25))
-                emoji = self.config.get("JBOT_EMOJI_STREAK", "🔥")
-
-                bonus = min(new_streak * streak_bonus_per_day, streak_bonus_cap)
-
-                points_earned += bonus
-                bonus_messages.append(f"{emoji} {new_streak}-day streak! (+{bonus})")
-                bonus_values["streak"] = bonus
+            )
 
             # Apply Score & Streak
             self.player_manager.get_or_create_player(str(player_id), player_name)
