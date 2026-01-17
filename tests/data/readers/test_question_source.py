@@ -45,7 +45,7 @@ class TestGeminiQuestionSource(unittest.TestCase):
     def setUp(self):
         self.mock_gemini = MagicMock()
         self.source = GeminiQuestionSource(
-            "test_gemini", 20.0, self.mock_gemini, difficulty="Hard"
+            "test_gemini", 20.0, self.mock_gemini, difficulty="Medium"
         )
 
     @patch("builtins.open", new_callable=mock_open, read_data="Prompt template")
@@ -60,8 +60,8 @@ class TestGeminiQuestionSource(unittest.TestCase):
         self.assertEqual(question.question, "My Riddle")
         self.assertEqual(question.answer, "My Answer")
         self.assertEqual(question.hint, "My Hint")
-        self.assertEqual(question.category, "Riddle")
-        self.assertEqual(question.data_source, "gemini_hard")
+        self.assertEqual(question.category, "Riddle (medium)")
+        self.assertEqual(question.data_source, "gemini_medium")
         self.assertEqual(question.clue_value, 100)  # Default
 
     @patch("builtins.open", new_callable=mock_open, read_data="Prompt template")

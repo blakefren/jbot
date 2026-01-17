@@ -40,7 +40,7 @@ def load_questions(config: ConfigReader) -> list[Question]:
         return read_riddle_with_hints_questions(path)
     elif dataset == "5th_grader":
         path = os.path.join(PROJECT_ROOT, config.get("JBOT_5TH_GRADER_LOCAL_PATH"))
-        return read_simple_questions(path, "5th Grader")
+        return read_simple_questions(path, "Are You Smarter Than a Fifth Grader")
     elif dataset == "general_trivia":
         path = os.path.join(PROJECT_ROOT, config.get("JBOT_GENERAL_TRIVIA_LOCAL_PATH"))
         return read_general_trivia_questions(path)

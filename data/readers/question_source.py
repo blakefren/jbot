@@ -116,7 +116,7 @@ class GeminiQuestionSource(QuestionSource):
             return Question(
                 question=riddle,
                 answer=answer,
-                category="Riddle",
+                category=f"Riddle ({self.difficulty.lower()})",
                 hint=hint,
                 data_source=f"gemini_{self.difficulty.lower()}",
                 clue_value=self.default_points if self.default_points else 100,

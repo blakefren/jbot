@@ -56,7 +56,7 @@ class TestQuestionSelector(unittest.TestCase):
         self.assertEqual(question.question, "I have cities, but no houses.")
         self.assertEqual(question.answer, "A map")
         self.assertEqual(question.hint, "I am often folded.")
-        self.assertEqual(question.category, "Riddle")
+        self.assertEqual(question.category, "Riddle (medium)")
         # File is opened with an absolute path via os.path.join
         self.assertTrue(mock_file.called)
         self.mock_gemini_manager.generate_content.assert_called_once()

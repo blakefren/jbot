@@ -134,7 +134,9 @@ class TestLoadQuestions(unittest.TestCase):
             "JBOT_5TH_GRADER_LOCAL_PATH": "dummy_5th_grader.csv",
         }.get(key)
 
-        expected_question = Question("5th Q", "5th A", "5th Grader", 100)
+        expected_question = Question(
+            "5th Q", "5th A", "Are You Smarter Than a Fifth Grader", 100
+        )
         mock_read_simple.return_value = [expected_question]
 
         questions = load_questions(self.mock_config)
@@ -143,7 +145,9 @@ class TestLoadQuestions(unittest.TestCase):
         self.assertEqual(questions[0], expected_question)
 
         expected_path = os.path.join(self.project_root, "dummy_5th_grader.csv")
-        mock_read_simple.assert_called_once_with(expected_path, "5th Grader")
+        mock_read_simple.assert_called_once_with(
+            expected_path, "Are You Smarter Than a Fifth Grader"
+        )
 
     @patch("data.loader.read_general_trivia_questions")
     def test_load_questions_general_trivia(self, mock_read_general):

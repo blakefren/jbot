@@ -76,7 +76,7 @@ class QuestionSelector:
             return Question(
                 question=riddle,
                 answer=answer,
-                category="Riddle",
+                category=f"Riddle ({difficulty.lower()})",
                 hint=hint,
                 data_source="gemini",
             )
