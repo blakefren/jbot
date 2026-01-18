@@ -449,6 +449,60 @@ class TestDataManager(unittest.TestCase):
         # Should only call execute_update once (to assign role, not create it)
         self.assertEqual(self.data_manager.db.execute_update.call_count, 1)
 
+    def test_get_most_recent_daily_question(self):
+        """Test retrieving the most recent daily question."""
+        from datetime import date, timedelta
+
+        # Mock database to return a daily question from yesterday
+        yesterday = date.today() - timedelta(days=1)
+
+        def mock_query(query, params=None):
+            if "daily_questions" in query and "ORDER BY id DESC" in query:
+                return [{"id": 5, "question_id": 10, "sent_at": yesterday.isoformat()}]
+            elif "questions" in query and "id = ?" in query:
+                return [
+                    {
+                        "question_text": "Test Q",
+                        "answer_text": "Test A",
+                        "category": "Test Cat",
+                        "value": 100,
+                        "source": "test",
+                        "hint_text": "Test Hint",
+                    }
+                ]
+            return []
+
+        self.data_manager.db.execute_query = mock_query
+        result = self.data_manager.get_most_recent_daily_question()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result), 3)  # question, id, date
+        question, daily_question_id, sent_date = result
+        self.assertEqual(question.question, "Test Q")
+        self.assertEqual(daily_question_id, 5)
+        self.assertEqual(sent_date, yesterday)
+
+    def test_get_most_recent_daily_question_no_questions(self):
+        """Test get_most_recent_daily_question returns None when no questions exist."""
+        self.data_manager.db.execute_query = MagicMock(return_value=[])
+        result = self.data_manager.get_most_recent_daily_question()
+        self.assertIsNone(result)
+
+    def test_get_most_recent_daily_question_question_not_found(self):
+        """Test get_most_recent_daily_question returns None when question record is missing."""
+        from datetime import date
+
+        def mock_query(query, params=None):
+            if "daily_questions" in query:
+                return [
+                    {"id": 1, "question_id": 999, "sent_at": date.today().isoformat()}
+                ]
+            return []  # Question not found
+
+        self.data_manager.db.execute_query = mock_query
+        result = self.data_manager.get_most_recent_daily_question()
+        self.assertIsNone(result)
+
 
 class TestDataManagerStats(unittest.TestCase):
     def setUp(self):

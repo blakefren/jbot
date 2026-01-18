@@ -707,21 +707,32 @@ class GameRunner:
         Re-evaluates guesses for the current daily question against a new accepted answer.
         Returns a summary of changes.
         """
-        if not self.daily_q or not self.daily_question_id:
-            return {"status": "error", "message": "No active daily question."}
+        # Use active question if available, otherwise fall back to most recent
+        daily_q = self.daily_q
+        daily_question_id = self.daily_question_id
+        question_date = date.today()
+
+        if not daily_q or not daily_question_id:
+            # Try to get the most recent daily question
+            recent_question = self.data_manager.get_most_recent_daily_question()
+            if not recent_question:
+                return {"status": "error", "message": "No daily question found."}
+
+            daily_q, daily_question_id, question_date = recent_question
+            logging.info(
+                f"Using most recent daily question from {question_date} (ID: {daily_question_id})"
+            )
 
         # 1. Get Data
-        hint_ts = self.data_manager.get_hint_sent_timestamp(self.daily_question_id)
-        existing_alts = self.data_manager.get_alternative_answers(
-            self.daily_question_id
-        )
-        old_answers = [self.daily_q.answer] + existing_alts
+        hint_ts = self.data_manager.get_hint_sent_timestamp(daily_question_id)
+        existing_alts = self.data_manager.get_alternative_answers(daily_question_id)
+        old_answers = [daily_q.answer] + existing_alts
         new_answers = old_answers + [new_answer]
 
-        events = self._fetch_daily_events(self.daily_question_id)
+        events = self._fetch_daily_events(daily_question_id)
 
         # Try to get snapshot first
-        snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
+        snapshot = self.data_manager.get_daily_snapshot(daily_question_id)
         if snapshot:
             initial_states = snapshot
         else:
@@ -730,13 +741,13 @@ class GameRunner:
 
         # 2. Run Scorer (Old)
         scorer_old = DailyGameSimulator(
-            self.daily_q, old_answers, hint_ts, events, initial_states, self.config
+            daily_q, old_answers, hint_ts, events, initial_states, self.config
         )
         results_old = scorer_old.run()
 
         # 3. Run Scorer (New)
         scorer_new = DailyGameSimulator(
-            self.daily_q, new_answers, hint_ts, events, initial_states, self.config
+            daily_q, new_answers, hint_ts, events, initial_states, self.config
         )
         results_new = scorer_new.run()
 
@@ -745,9 +756,15 @@ class GameRunner:
         total_refunded = 0
         details = []
 
+        # Check if correcting an old question
+        days_old = (date.today() - question_date).days
+        age_warning = ""
+        if days_old > 0:
+            age_warning = f" (Warning: This question is {days_old} day(s) old)"
+
         if not dry_run:
             self.data_manager.add_alternative_answer(
-                self.daily_question_id, new_answer, admin_id
+                daily_question_id, new_answer, admin_id
             )
 
         for user_id, new_res in results_new.items():
@@ -799,4 +816,5 @@ class GameRunner:
             "updated_players": updated_players,
             "total_refunded": total_refunded,
             "details": details,
+            "age_warning": age_warning,
         }

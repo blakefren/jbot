@@ -418,6 +418,32 @@ class DataManager:
 
         return question, daily_question_id
 
+    def get_most_recent_daily_question(self) -> Optional[tuple[Question, int, date]]:
+        """
+        Retrieves the most recent daily question from the database, regardless of date.
+        Returns the Question object, its daily_question_id, and the date it was sent.
+        """
+        query = "SELECT id, question_id, sent_at FROM daily_questions ORDER BY id DESC LIMIT 1"
+        daily_question_info = self.db.execute_query(query)
+
+        if not daily_question_info:
+            return None
+
+        daily_question_info = daily_question_info[0]
+
+        question = self.get_question_by_id(daily_question_info["question_id"])
+        daily_question_id = daily_question_info["id"]
+        sent_at = (
+            date.fromisoformat(daily_question_info["sent_at"])
+            if isinstance(daily_question_info["sent_at"], str)
+            else daily_question_info["sent_at"]
+        )
+
+        if not question:
+            return None
+
+        return question, daily_question_id, sent_at
+
     def get_used_question_hashes(self) -> set[str]:
         """
         Retrieves all question hashes that have been used as daily questions.

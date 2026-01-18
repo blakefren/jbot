@@ -132,6 +132,10 @@ class Admin(commands.Cog):
             f"Total points refunded: {result['total_refunded']}."
         )
 
+        # Add age warning if present
+        if result.get("age_warning"):
+            msg = result["age_warning"] + "\n" + msg
+
         if result.get("details"):
             msg += "\n\n**Details:**\n"
             for d in result["details"]:
