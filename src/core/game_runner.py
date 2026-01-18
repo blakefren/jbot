@@ -599,7 +599,7 @@ class GameRunner:
 
         flavor_message = (
             "Friendly reminder to get your guesses in!\n"
-            f"Today's question is:\n{self.format_question(self.daily_q)}"
+            f"Question: **{self.daily_q.question}**"
             f"{hint_part}"
         )
         return f"{flavor_message}\n{mentions}"
@@ -661,10 +661,11 @@ class GameRunner:
                 player_answers += f"**{player_name}**: {formatted_guesses_str}\n"
 
         flavor_message = (
-            "Good evening players!\n" f"Here is the answer to today's trivia question:"
+            "Good evening players!\n" f"Here is the answer to today's question:"
         )
+        question_part = f"**{self.daily_q.question}**"
         answer_part = self.format_answer(self.daily_q)
-        return f"{flavor_message}\n{answer_part}\n{player_answers}"
+        return f"{flavor_message}\n{question_part}\n{answer_part}\n{player_answers}"
 
     # TODO: Implement powerup logic from powerup manager
     def reinforce(self, player1_id: str, player2_id: str):
