@@ -21,7 +21,6 @@ def load_configs() -> ConfigReader:
 
 from data.loader import load_questions
 
-
 # --- Main execution block ---
 if __name__ == "__main__":
     # Setup
