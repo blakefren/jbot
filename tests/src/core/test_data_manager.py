@@ -336,6 +336,51 @@ class TestDataManager(unittest.TestCase):
         self.assertEqual(scores[0]["score"], 100)
         self.assertEqual(scores[1]["score"], 50)
 
+    def test_get_player_scores_excludes_inactive_players(self):
+        """Test that get_player_scores excludes players who haven't guessed in 28 days."""
+        # Create players
+        self.db.execute_update(
+            "INSERT INTO players (id, name, score) VALUES ('1', 'Alice', 100)"
+        )
+        self.db.execute_update(
+            "INSERT INTO players (id, name, score) VALUES ('2', 'Bob', 50)"
+        )
+        self.db.execute_update(
+            "INSERT INTO players (id, name, score) VALUES ('3', 'Charlie', 75)"
+        )
+
+        # Create a daily question
+        self.db.execute_update(
+            "INSERT INTO daily_questions (id, question_id, sent_at) VALUES (1, 1, date('now'))"
+        )
+
+        # Alice guessed today (active)
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) "
+            "VALUES (1, '1', 'answer', 1, datetime('now'))"
+        )
+
+        # Bob guessed 10 days ago (active)
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) "
+            "VALUES (1, '2', 'answer', 1, datetime('now', '-10 days'))"
+        )
+
+        # Charlie guessed 30 days ago (inactive)
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct, guessed_at) "
+            "VALUES (1, '3', 'answer', 1, datetime('now', '-30 days'))"
+        )
+
+        scores = self.data_manager.get_player_scores()
+
+        # Should only include Alice and Bob, not Charlie
+        self.assertEqual(len(scores), 2)
+        player_ids = [s["id"] for s in scores]
+        self.assertIn("1", player_ids)  # Alice
+        self.assertIn("2", player_ids)  # Bob
+        self.assertNotIn("3", player_ids)  # Charlie (inactive)
+
     def test_get_player_streaks(self):
         """Test retrieving player streaks ordered by streak."""
         self.data_manager.db.execute_query = MagicMock(
