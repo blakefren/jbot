@@ -410,7 +410,7 @@ def run_simulation(return_data=False, seed=None):
         return players, player_strategies
 
     # 3. Report
-    print("\n--- Final Results ---")
+    print("\n--- Final Results (Top 10 Players) ---")
     print(f"{'Strategy':<15} | {'Name':<15} | {'Score':<10} | {'Streak':<10}")
     print("-" * 60)
 
@@ -422,6 +422,7 @@ def run_simulation(return_data=False, seed=None):
 
     sorted_players = sorted(players.values(), key=lambda p: p.score, reverse=True)
 
+    # Collect stats for all players
     for p in sorted_players:
         s_obj = player_strategies[p.id]
         strat_name = s_obj.name
@@ -436,6 +437,14 @@ def run_simulation(return_data=False, seed=None):
             speed_scores[s_obj.speed].append(p.score)
             correct_scores[s_obj.correctness].append(p.score)
             aggro_scores[s_obj.aggression].append(p.score)
+
+    # Only print top 10 players
+    for p in sorted_players[:10]:
+        s_obj = player_strategies[p.id]
+        strat_name = s_obj.name
+
+        if p.id == "perfect_player":
+            strat_name = "Perfect"
 
         print(
             f"{strat_name:<15} | {p.name:<15} | {p.score:<10} | {p.answer_streak:<10}"
