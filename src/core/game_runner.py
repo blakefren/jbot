@@ -128,21 +128,32 @@ class GameRunner:
         self.daily_q = self._get_valid_question()
 
         if self.daily_q and self.daily_q.is_valid:
-            # If the question has no hint, try to generate one.
-            if not self.daily_q.hint:
-                logging.info(
-                    f"Question {self.daily_q.id} is missing a hint. Generating one..."
-                )
-                try:
-                    new_hint = self.question_selector.get_hint_from_gemini(self.daily_q)
-                    if new_hint:
-                        self.daily_q.hint = new_hint
-                        logging.info(
-                            f"Successfully generated hint for question {self.daily_q.id}."
-                        )
-                except Exception as e:
+            # Always try to generate a hint using Gemini, falling back to provided hint if generation fails.
+            original_hint = self.daily_q.hint
+            logging.info(f"Generating hint for question {self.daily_q.id}...")
+            try:
+                new_hint = self.question_selector.get_hint_from_gemini(self.daily_q)
+                if new_hint:
+                    self.daily_q.hint = new_hint
+                    logging.info(
+                        f"Successfully generated hint for question {self.daily_q.id}."
+                    )
+                elif original_hint:
+                    logging.warning(
+                        f"Hint generation returned empty result for question {self.daily_q.id}. Using original hint."
+                    )
+                else:
+                    logging.warning(
+                        f"Hint generation returned empty result for question {self.daily_q.id} and no original hint available."
+                    )
+            except Exception as e:
+                if original_hint:
                     logging.error(
-                        f"Error generating hint for question {self.daily_q.id}: {e}"
+                        f"Error generating hint for question {self.daily_q.id}: {e}. Using original hint."
+                    )
+                else:
+                    logging.error(
+                        f"Error generating hint for question {self.daily_q.id}: {e}. No original hint available."
                     )
 
             self.daily_question_id = self.data_manager.log_daily_question(self.daily_q)

@@ -499,7 +499,7 @@ class TestGameRunner(unittest.TestCase):
         # Act
         self.game_runner.set_daily_question()
 
-        # Assert
+        # Assert - Always attempts generation
         self.mock_question_selector.get_hint_from_gemini.assert_called_once_with(
             question_without_hint
         )
@@ -524,13 +524,13 @@ class TestGameRunner(unittest.TestCase):
         # Act
         self.game_runner.set_daily_question()
 
-        # Assert
+        # Assert - Always attempts generation
         self.mock_question_selector.get_hint_from_gemini.assert_called_once()
-        self.assertIsNone(self.game_runner.daily_q.hint)  # Hint should still be None
+        self.assertIsNone(self.game_runner.daily_q.hint)  # No fallback, hint stays None
         self.mock_data_manager.log_daily_question.assert_called_once()  # Still logs
 
     def test_set_daily_question_with_existing_hint(self):
-        """Test that a hint is not generated if one already exists."""
+        """Test that a hint is always generated, overwriting existing hint."""
         # Arrange
         self.mock_data_manager.get_todays_daily_question.return_value = None
         question_with_hint = Question(
@@ -539,13 +539,16 @@ class TestGameRunner(unittest.TestCase):
         self.mock_question_selector.get_random_question.return_value = (
             question_with_hint
         )
+        self.mock_question_selector.get_hint_from_gemini.return_value = (
+            "New Generated Hint"
+        )
 
         # Act
         self.game_runner.set_daily_question()
 
-        # Assert
-        self.mock_question_selector.get_hint_from_gemini.assert_not_called()
-        self.assertEqual(self.game_runner.daily_q.hint, "Existing Hint")
+        # Assert - Always generates, overwrites existing
+        self.mock_question_selector.get_hint_from_gemini.assert_called_once()
+        self.assertEqual(self.game_runner.daily_q.hint, "New Generated Hint")
         self.mock_data_manager.log_daily_question.assert_called_once()
 
     def test_reset_daily_question(self):
@@ -597,7 +600,7 @@ class TestGameRunner(unittest.TestCase):
         self.assertFalse(result)
 
     def test_set_daily_question_hint_generation_exception(self):
-        """Test hint generation handles exceptions gracefully."""
+        """Test hint generation handles exceptions gracefully with no fallback."""
         self.mock_data_manager.get_todays_daily_question.return_value = None
         question_no_hint = Question(question="Q", answer="A", category="C")
         self.mock_question_selector.get_random_question.return_value = question_no_hint
@@ -607,8 +610,47 @@ class TestGameRunner(unittest.TestCase):
 
         self.game_runner.set_daily_question()
 
-        # Should not raise, question should still be set
+        # Should not raise, question should still be set, no hint (no fallback available)
         self.assertEqual(self.game_runner.daily_q, question_no_hint)
+        self.assertIsNone(self.game_runner.daily_q.hint)
+        self.mock_data_manager.log_daily_question.assert_called_once()
+
+    def test_set_daily_question_hint_generation_exception_with_fallback(self):
+        """Test hint generation falls back to original hint when exception occurs."""
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+        question_with_hint = Question(
+            question="Q", answer="A", category="C", hint="Original Hint"
+        )
+        self.mock_question_selector.get_random_question.return_value = (
+            question_with_hint
+        )
+        self.mock_question_selector.get_hint_from_gemini.side_effect = Exception(
+            "API Error"
+        )
+
+        self.game_runner.set_daily_question()
+
+        # Should not raise, question should still be set with original hint
+        self.assertEqual(self.game_runner.daily_q, question_with_hint)
+        self.assertEqual(self.game_runner.daily_q.hint, "Original Hint")
+        self.mock_data_manager.log_daily_question.assert_called_once()
+
+    def test_set_daily_question_hint_generation_returns_none_with_fallback(self):
+        """Test hint generation falls back to original hint when it returns None."""
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+        question_with_hint = Question(
+            question="Q", answer="A", category="C", hint="Original Hint"
+        )
+        self.mock_question_selector.get_random_question.return_value = (
+            question_with_hint
+        )
+        self.mock_question_selector.get_hint_from_gemini.return_value = None
+
+        self.game_runner.set_daily_question()
+
+        # Should keep original hint when generation returns None
+        self.assertEqual(self.game_runner.daily_q, question_with_hint)
+        self.assertEqual(self.game_runner.daily_q.hint, "Original Hint")
         self.mock_data_manager.log_daily_question.assert_called_once()
 
     def test_set_daily_question_fallback_on_log_none(self):
