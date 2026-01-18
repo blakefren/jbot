@@ -1,67 +1,85 @@
-Act as an expert riddle-smith and master of concise wordplay. Your sole task is to generate one (1) helpful hint for the provided riddle and its answer.
+Act as an expert hint generator with mastery in both wordplay and factual knowledge. Your sole task is to generate one (1) helpful hint for the provided question and its answer.
 
 ### Guiding Principles
 
 1.  **Helpful Hint:** The hint must be a single, short phrase.
-2.  **Not Another Riddle:** The hint should **not** be a riddle itself. It must be a more direct clue.
-3.  **Clarity:** The hint should provide a strong clue about the answer's location, function, or a key property, helping a player connect the original riddle to the answer.
+2.  **Not Another Question:** The hint should **not** be another question or riddle. It must be a more direct clue.
+3.  **Clarity:** The hint should provide a strong clue to help the player identify the answer. For riddles, focus on physical properties, location, or function. For trivia, focus on category, time period, nationality, or a distinguishing characteristic.
 4.  **Brevity:** The hint should be concise (ideally 3-10 words).
 
 ### Style Examples (Few-Shot)
 
-Here are examples of the exact style and quality to emulate. You will be given the Riddle and Answer, and your job is to produce the Hint.
+Here are examples of the exact style and quality to emulate. You will be given the Question and Answer, and your job is to produce the Hint.
+
+**RIDDLE EXAMPLES:**
 
 **[Example 1]**
 **Given:**
-Riddle: I have a face and two hands but no body.
+Question: I have a face and two hands but no body.
 Answer: A clock
 **Your Generated Hint:**
 Hint: My hands move at different speeds.
 
 **[Example 2]**
 **Given:**
-Riddle: I am full of holes but can still hold water.
+Question: I am full of holes but can still hold water.
 Answer: A sponge
 **Your Generated Hint:**
 Hint: You'd find me near a kitchen sink.
 
 **[Example 3]**
 **Given:**
-Riddle: I have cities, but no houses; forests, but no trees; and water, but no fish.
+Question: I have cities, but no houses; forests, but no trees; and water, but no fish.
 Answer: A map
 **Your Generated Hint:**
 Hint: I am often folded or rolled.
 
 **[Example 4]**
 **Given:**
-Riddle: What has to be broken before you can use it?
+Question: What has to be broken before you can use it?
 Answer: An egg
 **Your Generated Hint:**
 Hint: I am a common breakfast food.
 
+**TRIVIA EXAMPLES:**
+
 **[Example 5]**
 **Given:**
-Riddle: I am always in front of you but can never be seen.
-Answer: The future
+Question: What year did the Berlin Wall fall?
+Answer: 1989
 **Your Generated Hint:**
-Hint: I am the opposite of history.
+Hint: Late in the Cold War, 1980s.
 
 **[Example 6]**
 **Given:**
-Riddle: I speak all languages, but I have no mouth.
-Answer: An echo
+Question: What is the capital of Australia?
+Answer: Canberra
 **Your Generated Hint:**
-Hint: I live in caves and large, empty rooms.
+Hint: Not Sydney or Melbourne.
+
+**[Example 7]**
+**Given:**
+Question: Who painted the Mona Lisa?
+Answer: Leonardo da Vinci
+**Your Generated Hint:**
+Hint: Italian Renaissance polymath and inventor.
+
+**[Example 8]**
+**Given:**
+Question: What is the largest planet in our solar system?
+Answer: Jupiter
+**Your Generated Hint:**
+Hint: Named after the Roman king of gods.
 
 ---
 
 ### Your Task
 
-Generate a new, unique hint based on the provided riddle and answer. Provide ONLY the hint in the specified format, with no preamble.
+Generate a new, unique hint based on the provided question and answer. Provide ONLY the hint in the specified format, with no preamble.
 
 **Format:**
 Hint: [Your new hint]
 
 **Request:**
-Riddle: [Insert your riddle here]
+Question: [Insert your question here]
 Answer: [Insert your answer here]

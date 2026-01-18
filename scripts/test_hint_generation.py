@@ -36,26 +36,38 @@ async def main():
     # 3. Initialize QuestionSelector with the GeminiManager
     question_selector = QuestionSelector(questions=[], gemini_manager=gemini_manager)
 
-    # 4. Create a sample question to get a hint for
-    sample_question = Question(
+    # 4. Create sample questions to get hints for
+    riddle_question = Question(
         question="I have cities, but no houses; forests, but no trees; and water, but no fish. What am I?",
         answer="A map",
         category="Riddle",
     )
 
-    logging.info(f"Requesting a hint for the question: '{sample_question.question}'")
-    hint = question_selector.get_hint_from_gemini(sample_question)
+    trivia_question = Question(
+        question="What is the largest planet in our solar system?",
+        answer="Jupiter",
+        category="Science",
+    )
 
-    # 5. Print the result
-    if hint:
-        print("\n--- Generated Hint ---")
-        print(f"Question: {sample_question.question}")
-        print(f"Answer:   {sample_question.answer}")
-        print(f"Hint:     {hint}")
-        print("-----------------------\n")
-    else:
-        print("\n--- Failed to generate hint. ---")
-        print("Check the logs for more details.\n")
+    # 5. Test both questions
+    test_questions = [("Riddle", riddle_question), ("Trivia", trivia_question)]
+
+    for question_type, sample_question in test_questions:
+        logging.info(
+            f"Requesting a hint for {question_type}: '{sample_question.question}'"
+        )
+        hint = question_selector.get_hint_from_gemini(sample_question)
+
+        # Print the result
+        if hint:
+            print(f"\n--- Generated Hint ({question_type}) ---")
+            print(f"Question: {sample_question.question}")
+            print(f"Answer:   {sample_question.answer}")
+            print(f"Hint:     {hint}")
+            print("-----------------------\n")
+        else:
+            print(f"\n--- Failed to generate hint for {question_type}. ---")
+            print("Check the logs for more details.\n")
 
 
 if __name__ == "__main__":
