@@ -26,10 +26,51 @@ The project uses an Event Sourcing pattern to calculate daily scores retroactive
 *   **Retroactive Corrections**: When an answer is corrected (e.g., via `/admin correct`), the simulator replays the day's events with the new answer to recalculate scores and streaks accurately.
 *   **Events**: Defined in `src/core/events.py`, these dataclasses (`GuessEvent`, `PowerUpEvent`) represent the immutable history of actions.
 
-The bot's features are organized into three distinct "tracks" that can be enabled or disabled independently via `.env` flags:
-*   **Fight Track**: Player-vs-player interactions like attacking and defending.
-*   **Power-up Track**: Mechanics that reward consistent play, such as answer streaks and betting.
-*   **Coop Track**: Collaborative features like forming teams.
+### AI-Generated Content
+The project uses Google's Gemini AI for dynamic content generation:
+*   **GeminiManager**: Located in `src/core/gemini_manager.py`, handles all interactions with the Gemini API.
+*   **Question Generation**: Configured via `JBOT_EXTRA_SOURCES` in `.env`, allows creating riddles with varying difficulty.
+*   **Hint Generation**: Falls back to Gemini if no hint is provided with the question.
+*   **API Key**: Required in `.env` as `GEMINI_API_KEY` (not in template for security).
+*   When adding Gemini features, use the existing `GeminiManager` singleton and ensure graceful fallback if the API is unavailable.
+
+### Feature Tracks
+The bot's features are organized into distinct "tracks":
+*   **Fight Track**: Player-vs-player interactions like attacking and defending (controlled by `JBOT_ENABLE_FIGHT`).
+*   **Power-up Track**: Mechanics that reward consistent play, such as answer streaks and bonuses (always enabled).
+*   **Coop Track**: [Future] Collaborative features like forming teams (not yet implemented).
+
+### Database Access Pattern
+The project follows a strict "DataManager-Only" pattern:
+*   **DataManager**: The ONLY class that directly accesses the database (see `docs/database_access_architecture.md`)
+*   **PlayerManager**: Contains business logic, uses DataManager for data access
+*   **Never** import or instantiate `Database` directly in cogs or managers
+*   When adding new database operations, add methods to `DataManager`, not direct SQL in other classes
+
+### Scoring System
+*   **ScoreCalculator**: Located in `src/core/scoring.py`, centralizes all scoring calculations
+*   Bonuses: First try, before hint, fastest answer, and answer streaks
+*   Configuration via `.env` (e.g., `JBOT_BONUS_FIRST_TRY`, `JBOT_BONUS_STREAK_PER_DAY`)
+*   Used by both live game (`GuessHandler`) and event replay (`DailyGameSimulator`) to ensure consistency
+*   When modifying scoring, update `ScoreCalculator` to maintain consistency across the system
+
+### Command Architecture
+*   **Hybrid Commands**: All commands use `discord.py`'s hybrid command system (text prefix + slash commands)
+*   **Command Groups**: Commands are organized into `/game`, `/power`, and `/admin` groups
+*   **Cogs**: Each major feature area has its own cog in `src/cogs/`
+    - `trivia.py`: Question handling and guessing
+    - `game.py`: Game status and information
+    - `power.py`: Power-up activation
+    - `admin.py`: Administrative functions
+
+### Core Managers
+*   **GameRunner**: Orchestrates the daily game flow, question delivery, and answer reveals
+*   **GuessHandler**: Processes player guesses and calculates scores in real-time
+*   **PowerUpManager**: Manages power-up mechanics and streak tracking
+*   **PlayerManager**: Business logic for player operations
+*   **DataManager**: Exclusive database access layer
+*   **GeminiManager**: AI content generation
+*   Managers follow dependency injection patterns - passed through constructors
 
 ## My Persona
 
@@ -50,9 +91,24 @@ As your partner, I will adhere to the following principles:
 *   **File Edits**: I will make changes to files directly using the available tools, clearly explaining the changes I am making.
 *   **Dependencies**: If a task requires a new dependency, I will ask for your approval before adding it to `requirements.txt`.
 *   **Ambiguity**: If a request is unclear, I will ask for clarification before proceeding.
-*   **Configuration**: Configuration is managed via `.env` files. When adding new configuration options, I will update `.env.template` and ensure the `ConfigReader` in `src/cfg/main.py` can handle them.
+*   **Configuration**: Configuration is managed via `.env` files. When adding new configuration options:
+    - Always add new config keys to `.env.template` with descriptive comments
+    - Ensure the `ConfigReader` in `src/cfg/main.py` can handle them
+    - Use appropriate getter methods: `get()`, `get_bool()`, or add specialized getters
+    - **Configuration Categories**:
+        - **Features**: `JBOT_ENABLE_*` flags for feature toggles
+        - **Scheduling**: `JBOT_MORNING_TIME`, `JBOT_REMINDER_TIME` for daily events
+        - **Question Selection**: `JBOT_QUESTION_DATASET`, `JBOT_EXTRA_SOURCES`, dataset weights
+        - **Scoring/Bonuses**: `JBOT_BONUS_*` for point calculations
+        - **Discord**: Bot tokens, role names
 *   **Database Management**: The database schema is defined in `db/schema.sql`. To modify the database, I will update `db/schema.sql` and run `db/update_schema.py` to apply the changes to the local `jbot.db`.
-*   **Documentation**: I will check `docs/` for any architectural plans or investigation notes (e.g., `command_refactor_plan.md`) before implementing major features.
+*   **Documentation**: I will check `docs/` for any architectural plans or investigation notes before implementing major features.
+*   **Logging**: Use Python's standard `logging` module throughout (configured in `src/logging_config.py`). Log levels: INFO for normal operations, WARNING for recoverable issues, ERROR for failures. Include appropriate logging for debugging and monitoring when adding features.
+*   **Code Quality Tools**:
+    - **Coverage Reports**: Generated in `htmlcov_*/` directories per module
+    - **Linting**: GitHub Actions workflow at `.github/workflows/lint.yml`
+    - **Multiple Workflows**: CI workflows for tests, linting, and simulation
+    - Run tests locally with coverage to ensure adequate test coverage
 
 ## Testing Strategy
 
