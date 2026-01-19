@@ -106,14 +106,15 @@ class Admin(commands.Cog):
     async def add_answer(
         self, ctx: commands.Context, answer_text: str, apply: bool = False
     ):
-        await ctx.defer()
+        # Defer as ephemeral to prevent players from seeing the new answer
+        await ctx.interaction.response.defer(ephemeral=True)
 
         result = self.bot.game.recalculate_scores_for_new_answer(
             answer_text, str(ctx.author.id), dry_run=not apply
         )
 
         if result["status"] == "error":
-            await ctx.send(f"Error: {result['message']}")
+            await ctx.interaction.followup.send(f"Error: {result['message']}")
             return
 
         # Determine if answer has been revealed
@@ -147,12 +148,18 @@ class Admin(commands.Cog):
                 + msg
             )
 
+        # Send ephemeral details message
         if is_revealed:
-            msg = f"Added '{answer_text}' as a correct answer.\n" + msg
+            details_msg = f"Added '{answer_text}' as a correct answer.\n" + msg
         else:
-            msg = f"Added alternative answer.\n" + msg
+            details_msg = f"Added alternative answer.\n" + msg
 
-        await ctx.send(msg)
+        await ctx.interaction.followup.send(details_msg)
+
+        # If apply=True, also send a public announcement
+        if apply:
+            public_msg = f"Scores updated for {result['updated_players']} players. (+{result['total_refunded']} pts total)"
+            await ctx.channel.send(public_msg)
 
     @admin.command(name="resend", description="Resend a scheduled message.")
     @discord.app_commands.choices(
