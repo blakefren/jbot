@@ -243,7 +243,7 @@ class TestDataManager(unittest.TestCase):
         """Test retrieving player IDs for a given role."""
         role_name = "Winner"
         # Mock the DB response
-        self.data_manager.db.execute_query = lambda query, params: [
+        self.data_manager._db.execute_query = lambda query, params: [
             {"player_id": "123"},
             {"player_id": "456"},
         ]
@@ -251,7 +251,7 @@ class TestDataManager(unittest.TestCase):
         self.assertEqual(player_ids, {"123", "456"})
 
         # Test with no results
-        self.data_manager.db.execute_query = lambda query, params: []
+        self.data_manager._db.execute_query = lambda query, params: []
         player_ids = self.data_manager.get_player_ids_with_role(role_name)
         self.assertEqual(player_ids, set())
 
@@ -303,24 +303,24 @@ class TestDataManager(unittest.TestCase):
         role_name = "New Role"
 
         # Mock DB methods
-        self.data_manager.db.execute_query = MagicMock(return_value=[])
-        self.data_manager.db.execute_update = MagicMock(return_value=(None, 1))
+        self.data_manager._db.execute_query = MagicMock(return_value=[])
+        self.data_manager._db.execute_update = MagicMock(return_value=(None, 1))
 
         self.data_manager.assign_role_to_player(player_id, role_name)
 
         # Verify role was created and assigned
-        self.assertEqual(self.data_manager.db.execute_update.call_count, 2)
+        self.assertEqual(self.data_manager._db.execute_update.call_count, 2)
 
     def test_clear_player_roles(self):
         """Test clearing all player roles."""
         # Mock DB method
-        self.data_manager.db.execute_update = MagicMock(return_value=(None, 1))
+        self.data_manager._db.execute_update = MagicMock(return_value=(None, 1))
         self.data_manager.clear_player_roles()
-        self.assertEqual(self.data_manager.db.execute_update.call_count, 1)
+        self.assertEqual(self.data_manager._db.execute_update.call_count, 1)
 
     def test_get_all_subscribers(self):
         """Test getting all subscribers from the database."""
-        self.data_manager.db.execute_query = MagicMock(
+        self.data_manager._db.execute_query = MagicMock(
             return_value=[
                 {"id": 1, "display_name": "Sub1", "is_channel": True},
                 {"id": 2, "display_name": "Sub2", "is_channel": False},
@@ -334,9 +334,9 @@ class TestDataManager(unittest.TestCase):
     def test_save_subscriber(self):
         """Test saving a subscriber to the database."""
         subscriber = Subscriber(1, "Sub1", True)
-        self.data_manager.db.execute_update = MagicMock()
+        self.data_manager._db.execute_update = MagicMock()
         self.data_manager.save_subscriber(subscriber)
-        self.data_manager.db.execute_update.assert_called_once_with(
+        self.data_manager._db.execute_update.assert_called_once_with(
             "INSERT OR REPLACE INTO subscribers (id, display_name, is_channel) VALUES (?, ?, ?)",  # noqa: E501
             (1, "Sub1", True),
         )
@@ -344,9 +344,9 @@ class TestDataManager(unittest.TestCase):
     def test_delete_subscriber(self):
         """Test deleting a subscriber from the database."""
         subscriber = Subscriber(1, "Sub1", True)
-        self.data_manager.db.execute_update = MagicMock()
+        self.data_manager._db.execute_update = MagicMock()
         self.data_manager.delete_subscriber(subscriber)
-        self.data_manager.db.execute_update.assert_called_once_with(
+        self.data_manager._db.execute_update.assert_called_once_with(
             "DELETE FROM subscribers WHERE id = ?", (1,)
         )
 
@@ -365,7 +365,7 @@ class TestDataManager(unittest.TestCase):
 
     def test_get_all_players(self):
         """Test get_all_players delegates to load_players."""
-        self.data_manager.db.execute_query = MagicMock(
+        self.data_manager._db.execute_query = MagicMock(
             return_value=[
                 {
                     "id": "1",
@@ -382,23 +382,23 @@ class TestDataManager(unittest.TestCase):
 
     def test_adjust_player_score(self):
         """Test adjusting a player's score directly in the database."""
-        self.data_manager.db.execute_update = MagicMock()
+        self.data_manager._db.execute_update = MagicMock()
         self.data_manager.adjust_player_score("player1", 50)
-        self.data_manager.db.execute_update.assert_called_once_with(
+        self.data_manager._db.execute_update.assert_called_once_with(
             "UPDATE players SET score = score + ? WHERE id = ?", (50, "player1")
         )
 
     def test_log_messaging_event_incoming_ignored(self):
         """Test that incoming messages are not logged."""
-        self.data_manager.db.execute_update = MagicMock()
+        self.data_manager._db.execute_update = MagicMock()
         self.data_manager.log_messaging_event(
             "incoming", "discord", "12345", "Hello", "success"
         )
-        self.data_manager.db.execute_update.assert_not_called()
+        self.data_manager._db.execute_update.assert_not_called()
 
     def test_get_player_scores(self):
         """Test retrieving player scores ordered by score."""
-        self.data_manager.db.execute_query = MagicMock(
+        self.data_manager._db.execute_query = MagicMock(
             return_value=[
                 {"id": "1", "name": "Alice", "score": 100},
                 {"id": "2", "name": "Bob", "score": 50},
@@ -456,7 +456,7 @@ class TestDataManager(unittest.TestCase):
 
     def test_get_player_streaks(self):
         """Test retrieving player streaks ordered by streak."""
-        self.data_manager.db.execute_query = MagicMock(
+        self.data_manager._db.execute_query = MagicMock(
             return_value=[
                 {"id": "1", "name": "Alice", "answer_streak": 5},
                 {"id": "2", "name": "Bob", "answer_streak": 3},
@@ -469,13 +469,13 @@ class TestDataManager(unittest.TestCase):
 
     def test_get_question_by_id_not_found(self):
         """Test get_question_by_id returns None when not found."""
-        self.data_manager.db.execute_query = MagicMock(return_value=[])
+        self.data_manager._db.execute_query = MagicMock(return_value=[])
         result = self.data_manager.get_question_by_id(999)
         self.assertIsNone(result)
 
     def test_get_question_by_id_found(self):
         """Test get_question_by_id returns a Question when found."""
-        self.data_manager.db.execute_query = MagicMock(
+        self.data_manager._db.execute_query = MagicMock(
             return_value=[
                 {
                     "id": 1,
@@ -502,7 +502,7 @@ class TestDataManager(unittest.TestCase):
                 return [{"id": 1, "question_id": 999}]
             return []  # Question not found
 
-        self.data_manager.db.execute_query = mock_query
+        self.data_manager._db.execute_query = mock_query
         result = self.data_manager.get_todays_daily_question()
         self.assertIsNone(result)
 
@@ -514,13 +514,13 @@ class TestDataManager(unittest.TestCase):
                 return [{"id": 5}]  # Existing role found
             return []
 
-        self.data_manager.db.execute_query = mock_query
-        self.data_manager.db.execute_update = MagicMock()
+        self.data_manager._db.execute_query = mock_query
+        self.data_manager._db.execute_update = MagicMock()
 
         self.data_manager.assign_role_to_player("player1", "Existing Role")
 
         # Should only call execute_update once (to assign role, not create it)
-        self.assertEqual(self.data_manager.db.execute_update.call_count, 1)
+        self.assertEqual(self.data_manager._db.execute_update.call_count, 1)
 
     def test_get_most_recent_daily_question(self):
         """Test retrieving the most recent daily question."""
@@ -545,7 +545,7 @@ class TestDataManager(unittest.TestCase):
                 ]
             return []
 
-        self.data_manager.db.execute_query = mock_query
+        self.data_manager._db.execute_query = mock_query
         result = self.data_manager.get_most_recent_daily_question()
 
         self.assertIsNotNone(result)
@@ -557,7 +557,7 @@ class TestDataManager(unittest.TestCase):
 
     def test_get_most_recent_daily_question_no_questions(self):
         """Test get_most_recent_daily_question returns None when no questions exist."""
-        self.data_manager.db.execute_query = MagicMock(return_value=[])
+        self.data_manager._db.execute_query = MagicMock(return_value=[])
         result = self.data_manager.get_most_recent_daily_question()
         self.assertIsNone(result)
 
@@ -572,7 +572,7 @@ class TestDataManager(unittest.TestCase):
                 ]
             return []  # Question not found
 
-        self.data_manager.db.execute_query = mock_query
+        self.data_manager._db.execute_query = mock_query
         result = self.data_manager.get_most_recent_daily_question()
         self.assertIsNone(result)
 

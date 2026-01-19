@@ -6,7 +6,6 @@ from typing import Optional
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 
-from db.database import Database
 from src.core.data_manager import DataManager
 from src.core.player import Player
 

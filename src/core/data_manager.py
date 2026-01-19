@@ -13,13 +13,19 @@ _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 class DataManager:
     """
     Handles all database interactions for the bot.
+    This is the ONLY class that should directly access the database.
+    All other components must use DataManager methods for database operations.
     """
 
     def __init__(self, db: "Database"):
         """
         Initializes the data manager, connecting to the database.
+
+        Args:
+            db: Database instance. This is stored as a private attribute (_db)
+                to prevent direct access from outside this class.
         """
-        self.db = db
+        self._db = db
 
     def initialize_database(self):
         """
@@ -28,7 +34,7 @@ class DataManager:
         schema_path = os.path.join(_PROJECT_ROOT, "db", "schema.sql")
         with open(schema_path, "r") as f:
             schema = f.read()
-        self.db.execute_script(schema)
+        self._db.execute_script(schema)
 
     def load_players(self) -> dict:
         """
@@ -36,7 +42,7 @@ class DataManager:
         """
         players = {}
         query = "SELECT id, name, score, answer_streak, active_shield FROM players"
-        player_records = self.db.execute_query(query)
+        player_records = self._db.execute_query(query)
         for record in player_records:
             player = Player(
                 id=record["id"],
@@ -57,7 +63,7 @@ class DataManager:
     def get_player(self, player_id: str) -> Optional[Player]:
         """Retrieves a single player from the database."""
         query = "SELECT id, name, score, answer_streak, active_shield FROM players WHERE id = ?"
-        result = self.db.execute_query(query, (player_id,))
+        result = self._db.execute_query(query, (player_id,))
         if result:
             record = result[0]
             return Player(
@@ -72,32 +78,32 @@ class DataManager:
     def create_player(self, player_id: str, name: str):
         """Creates a new player in the database."""
         query = "INSERT INTO players (id, name, score, answer_streak, active_shield) VALUES (?, ?, 0, 0, 0)"
-        self.db.execute_update(query, (player_id, name))
+        self._db.execute_update(query, (player_id, name))
 
     def update_player_name(self, player_id: str, name: str):
         """Updates a player's name."""
         query = "UPDATE players SET name = ? WHERE id = ?"
-        self.db.execute_update(query, (name, player_id))
+        self._db.execute_update(query, (name, player_id))
 
     def increment_streak(self, player_id: str):
         """Atomically increments a player's streak."""
         query = "UPDATE players SET answer_streak = answer_streak + 1 WHERE id = ?"
-        self.db.execute_update(query, (player_id,))
+        self._db.execute_update(query, (player_id,))
 
     def reset_streak(self, player_id: str):
         """Resets a player's streak to 0."""
         query = "UPDATE players SET answer_streak = 0 WHERE id = ?"
-        self.db.execute_update(query, (player_id,))
+        self._db.execute_update(query, (player_id,))
 
     def set_streak(self, player_id: str, streak: int):
         """Sets a player's streak to a specific value."""
         query = "UPDATE players SET answer_streak = ? WHERE id = ?"
-        self.db.execute_update(query, (streak, player_id))
+        self._db.execute_update(query, (streak, player_id))
 
     def set_shield(self, player_id: str, active: bool):
         """Sets a player's shield status."""
         query = "UPDATE players SET active_shield = ? WHERE id = ?"
-        self.db.execute_update(query, (active, player_id))
+        self._db.execute_update(query, (active, player_id))
 
     def adjust_player_score(self, player_id: str, amount: int):
         """
@@ -108,7 +114,7 @@ class DataManager:
             amount (int): The amount to adjust the score by (can be negative).
         """
         query = "UPDATE players SET score = score + ? WHERE id = ?"
-        self.db.execute_update(query, (amount, player_id))
+        self._db.execute_update(query, (amount, player_id))
 
     def log_daily_question(
         self,
@@ -126,7 +132,7 @@ class DataManager:
         """
         # First, ensure the question exists in the 'questions' table
         question_query = "SELECT id FROM questions WHERE question_hash = ?"
-        existing_question = self.db.execute_query(question_query, (str(question.id),))
+        existing_question = self._db.execute_query(question_query, (str(question.id),))
 
         if existing_question:
             question_id = existing_question[0]["id"]
@@ -136,7 +142,7 @@ class DataManager:
                 INSERT INTO questions (question_text, answer_text, category, value, source, hint_text, question_hash)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """
-            _, question_id = self.db.execute_update(
+            _, question_id = self._db.execute_update(
                 insert_query,
                 (
                     question.question,
@@ -164,7 +170,7 @@ class DataManager:
         daily_question_query = (
             "INSERT INTO daily_questions (question_id, sent_at) VALUES (?, ?)"
         )
-        _, daily_question_id = self.db.execute_update(
+        _, daily_question_id = self._db.execute_update(
             daily_question_query, (question_id, today)
         )
 
@@ -191,7 +197,7 @@ class DataManager:
 
         for player in players.values():
             try:
-                self.db.execute_update(
+                self._db.execute_update(
                     query,
                     (daily_question_id, player.id, player.score, player.answer_streak),
                 )
@@ -212,7 +218,7 @@ class DataManager:
             LEFT JOIN players p ON dps.player_id = p.id
             WHERE dps.daily_question_id = ?
         """
-        records = self.db.execute_query(query, (daily_question_id,))
+        records = self._db.execute_query(query, (daily_question_id,))
 
         snapshot = {}
         for record in records:
@@ -247,7 +253,7 @@ class DataManager:
             guess (str): The answer submitted by the player.
             is_correct (bool): Whether the guess was correct.
         """
-        self.db.execute_update(
+        self._db.execute_update(
             "INSERT OR IGNORE INTO players (id, name) VALUES (?, ?)",
             (player_id, player_name),
         )
@@ -256,7 +262,7 @@ class DataManager:
             INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct)
             VALUES (?, ?, ?, ?)
         """
-        self.db.execute_update(query, (question_id, player_id, guess, is_correct))
+        self._db.execute_update(query, (question_id, player_id, guess, is_correct))
 
     def log_messaging_event(
         self, direction, method, recipient_or_sender, content, status="success"
@@ -271,7 +277,7 @@ class DataManager:
             INSERT INTO messages (direction, method, recipient_sender, content, status)
             VALUES (?, ?, ?, ?, ?)
         """
-        self.db.execute_update(
+        self._db.execute_update(
             query, (direction, method, recipient_or_sender, content, status)
         )
 
@@ -292,7 +298,7 @@ class DataManager:
             )
             ORDER BY p.score DESC
         """
-        return self.db.execute_query(query)
+        return self._db.execute_query(query)
 
     def get_player_streaks(self) -> list[dict]:
         """
@@ -305,7 +311,7 @@ class DataManager:
             WHERE answer_streak > 0
             ORDER BY answer_streak DESC
         """
-        return self.db.execute_query(query)
+        return self._db.execute_query(query)
 
     def reset_unanswered_streaks(self, daily_question_id: int):
         """
@@ -322,7 +328,7 @@ class DataManager:
             )
             AND answer_streak > 0
         """
-        self.db.execute_update(query, (daily_question_id,))
+        self._db.execute_update(query, (daily_question_id,))
 
     def get_player_ids_with_role(self, role_name: str) -> set[int]:
         """
@@ -335,12 +341,12 @@ class DataManager:
             set[int]: A set of player IDs that have the role.
         """
         query = "SELECT player_id FROM player_roles pr JOIN roles r ON pr.role_id = r.id WHERE r.name = ?"
-        result = self.db.execute_query(query, (role_name,))
+        result = self._db.execute_query(query, (role_name,))
         return {row["player_id"] for row in result}
 
     def get_all_subscribers(self) -> set[Subscriber]:
         """Gets all subscribers from the database."""
-        rows = self.db.execute_query(
+        rows = self._db.execute_query(
             "SELECT id, display_name, is_channel FROM subscribers"
         )
         return {
@@ -350,14 +356,14 @@ class DataManager:
 
     def save_subscriber(self, subscriber: Subscriber):
         """Saves the subscriber to the database."""
-        self.db.execute_update(
+        self._db.execute_update(
             "INSERT OR REPLACE INTO subscribers (id, display_name, is_channel) VALUES (?, ?, ?)",
             (subscriber.sub_id, subscriber.display_name, subscriber.is_channel),
         )
 
     def delete_subscriber(self, subscriber: Subscriber):
         """Deletes the subscriber from the database."""
-        self.db.execute_update(
+        self._db.execute_update(
             "DELETE FROM subscribers WHERE id = ?", (subscriber.sub_id,)
         )
 
@@ -375,14 +381,14 @@ class DataManager:
             query += " WHERE g.player_id = ?"
             params = (user_id,)
 
-        return self.db.execute_query(query, params)
+        return self._db.execute_query(query, params)
 
     def get_question_by_id(self, question_id: int) -> Optional[Question]:
         """
         Retrieves a question from the database by its ID.
         """
         query = "SELECT * FROM questions WHERE id = ?"
-        result = self.db.execute_query(query, (question_id,))
+        result = self._db.execute_query(query, (question_id,))
         if not result:
             return None
 
@@ -403,7 +409,7 @@ class DataManager:
         """
         today = date.today()
         query = "SELECT id, question_id FROM daily_questions WHERE sent_at = ? ORDER BY id DESC LIMIT 1"
-        daily_question_info = self.db.execute_query(query, (today,))
+        daily_question_info = self._db.execute_query(query, (today,))
 
         if not daily_question_info:
             return None
@@ -424,7 +430,7 @@ class DataManager:
         Returns the Question object, its daily_question_id, and the date it was sent.
         """
         query = "SELECT id, question_id, sent_at FROM daily_questions ORDER BY id DESC LIMIT 1"
-        daily_question_info = self.db.execute_query(query)
+        daily_question_info = self._db.execute_query(query)
 
         if not daily_question_info:
             return None
@@ -452,7 +458,7 @@ class DataManager:
             set[str]: A set of question hashes that have been previously used.
         """
         query = "SELECT question_hash FROM questions"
-        results = self.db.execute_query(query)
+        results = self._db.execute_query(query)
         if not results:
             return set()
         return {row["question_hash"] for row in results}
@@ -465,20 +471,20 @@ class DataManager:
         # It's not transactional, but for this use case, it's acceptable.
 
         # Get role_id from role_name
-        role_id_row = self.db.execute_query(
+        role_id_row = self._db.execute_query(
             "SELECT id FROM roles WHERE name = ?", (role_name,)
         )
         if role_id_row:
             role_id = role_id_row[0]["id"]
         else:
             # If role doesn't exist, create it
-            _, role_id = self.db.execute_update(
+            _, role_id = self._db.execute_update(
                 "INSERT INTO roles (name, description) VALUES (?, ?)",
                 (role_name, f"Dynamically created role for {role_name}"),
             )
 
         if role_id:
-            self.db.execute_update(
+            self._db.execute_update(
                 "INSERT OR IGNORE INTO player_roles (player_id, role_id) VALUES (?, ?)",
                 (player_id, role_id),
             )
@@ -488,7 +494,7 @@ class DataManager:
         Deletes all records from the player_roles table.
         """
         query = "DELETE FROM player_roles"
-        self.db.execute_update(query)
+        self._db.execute_update(query)
 
     def log_powerup_usage(
         self,
@@ -499,14 +505,14 @@ class DataManager:
     ):
         """Logs a powerup usage."""
         query = "INSERT INTO powerup_usage (user_id, powerup_type, target_user_id, question_id) VALUES (?, ?, ?, ?)"
-        self.db.execute_update(
+        self._db.execute_update(
             query, (user_id, powerup_type, target_user_id, question_id)
         )
 
     def get_powerup_usages_for_question(self, question_id: int) -> list[dict]:
         """Retrieves powerup usages for a specific question."""
         query = "SELECT * FROM powerup_usage WHERE question_id = ?"
-        results = self.db.execute_query(query, (question_id,))
+        results = self._db.execute_query(query, (question_id,))
         return results
 
     # TODO: log streak adjustment as well
@@ -526,17 +532,17 @@ class DataManager:
             INSERT INTO score_adjustments (player_id, admin_id, amount, reason)
             VALUES (?, ?, ?, ?)
         """
-        self.db.execute_update(query, (player_id, admin_id, amount, reason))
+        self._db.execute_update(query, (player_id, admin_id, amount, reason))
 
     def add_alternative_answer(self, question_id: int, answer_text: str, admin_id: str):
         """Adds an alternative correct answer for a question."""
         query = "INSERT INTO alternative_answers (question_id, answer_text, added_by) VALUES (?, ?, ?)"
-        self.db.execute_update(query, (question_id, answer_text, admin_id))
+        self._db.execute_update(query, (question_id, answer_text, admin_id))
 
     def get_alternative_answers(self, question_id: int) -> list[str]:
         """Retrieves all alternative answers for a question."""
         query = "SELECT answer_text FROM alternative_answers WHERE question_id = ?"
-        results = self.db.execute_query(query, (question_id,))
+        results = self._db.execute_query(query, (question_id,))
         return [r["answer_text"] for r in results]
 
     def get_guesses_for_daily_question(self, daily_question_id: int) -> list[dict]:
@@ -544,7 +550,7 @@ class DataManager:
         query = (
             "SELECT * FROM guesses WHERE daily_question_id = ? ORDER BY guessed_at ASC"
         )
-        return self.db.execute_query(query, (daily_question_id,))
+        return self._db.execute_query(query, (daily_question_id,))
 
     def get_hint_sent_timestamp(self, daily_question_id: int) -> Optional[str]:
         """
@@ -573,7 +579,7 @@ class DataManager:
             ORDER BY m.timestamp DESC
             LIMIT 1
         """
-        result = self.db.execute_query(query, (daily_question_id,))
+        result = self._db.execute_query(query, (daily_question_id,))
         return result[0]["timestamp"] if result else None
 
     def get_first_try_solvers(self, daily_question_id: int) -> list[dict]:
@@ -594,7 +600,7 @@ class DataManager:
             GROUP BY p.id, p.name
             HAVING COUNT(g.id) = 1 AND MAX(g.is_correct) = 1
         """
-        return self.db.execute_query(query, (daily_question_id,))
+        return self._db.execute_query(query, (daily_question_id,))
 
     def get_guess_counts_per_player(self, daily_question_id: int) -> list[dict]:
         """
@@ -614,7 +620,7 @@ class DataManager:
             GROUP BY g.player_id, p.name
             ORDER BY guess_count DESC
         """
-        return self.db.execute_query(query, (daily_question_id,))
+        return self._db.execute_query(query, (daily_question_id,))
 
     def get_most_common_guesses(self, daily_question_id: int) -> list[dict]:
         """
@@ -634,7 +640,7 @@ class DataManager:
             ORDER BY count DESC
             LIMIT 5
         """
-        return self.db.execute_query(query, (daily_question_id,))
+        return self._db.execute_query(query, (daily_question_id,))
 
     def get_craziest_guess(self, daily_question_id: int) -> Optional[dict]:
         """
@@ -654,7 +660,7 @@ class DataManager:
             ORDER BY LENGTH(g.guess_text) DESC
             LIMIT 1
         """
-        result = self.db.execute_query(query, (daily_question_id,))
+        result = self._db.execute_query(query, (daily_question_id,))
         return result[0] if result else None
 
     def get_solvers_before_hint(self, daily_question_id: int) -> list[dict]:
@@ -678,7 +684,7 @@ class DataManager:
             WHERE g.daily_question_id = ? AND g.is_correct = 1 AND g.guessed_at < ?
             GROUP BY p.id, p.name
         """
-        return self.db.execute_query(query, (daily_question_id, hint_timestamp))
+        return self._db.execute_query(query, (daily_question_id, hint_timestamp))
 
     def get_solvers_after_hint(self, daily_question_id: int) -> list[dict]:
         """
@@ -709,7 +715,7 @@ class DataManager:
                 WHERE g.daily_question_id = ? AND g.guessed_at < ?
             )
         """
-        return self.db.execute_query(
+        return self._db.execute_query(
             query,
             (daily_question_id, hint_timestamp, daily_question_id, hint_timestamp),
         )
@@ -719,7 +725,7 @@ class DataManager:
         Returns the number of correct guesses for a specific daily question.
         """
         query = "SELECT COUNT(*) as count FROM guesses WHERE daily_question_id = ? AND is_correct = 1"
-        result = self.db.execute_query(query, (daily_question_id,))
+        result = self._db.execute_query(query, (daily_question_id,))
         return result[0]["count"] if result else 0
 
     def get_last_correct_guess_date(self, player_id: str) -> Optional[date]:
@@ -734,7 +740,7 @@ class DataManager:
             ORDER BY dq.sent_at DESC
             LIMIT 1
         """
-        result = self.db.execute_query(query, (player_id,))
+        result = self._db.execute_query(query, (player_id,))
         if result:
             date_str = result[0]["sent_at"]
             if isinstance(date_str, str):
@@ -747,7 +753,7 @@ class DataManager:
         Updates a specific guess to be marked as correct.
         """
         query = "UPDATE guesses SET is_correct = 1 WHERE id = ?"
-        self.db.execute_update(query, (guess_id,))
+        self._db.execute_update(query, (guess_id,))
 
     def mark_matching_guesses_as_correct(
         self, daily_question_id: str, new_answer: str, match_func
@@ -769,7 +775,7 @@ class DataManager:
             FROM guesses
             WHERE daily_question_id = ? AND is_correct = 0
         """
-        guesses = self.db.execute_query(query, (daily_question_id,))
+        guesses = self._db.execute_query(query, (daily_question_id,))
 
         # Check each guess against the new answer
         guess_ids_to_update = []
@@ -786,6 +792,6 @@ class DataManager:
             update_query = (
                 f"UPDATE guesses SET is_correct = 1 WHERE id IN ({placeholders})"
             )
-            self.db.execute_update(update_query, tuple(guess_ids_to_update))
+            self._db.execute_update(update_query, tuple(guess_ids_to_update))
 
         return len(guess_ids_to_update)
