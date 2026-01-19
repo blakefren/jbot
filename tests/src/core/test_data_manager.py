@@ -154,6 +154,79 @@ class TestDataManager(unittest.TestCase):
         self.assertEqual(guess_from_db[0]["guess_text"], "My Answer")
         self.assertEqual(guess_from_db[0]["is_correct"], 1)
 
+    def test_mark_matching_guesses_as_correct(self):
+        """Test marking previously incorrect guesses as correct based on a new answer."""
+        # Log a daily question
+        q = Question(
+            question="What is 2+2?", answer="4", category="math", clue_value=100
+        )
+        daily_q_id = self.data_manager.log_daily_question(q)
+
+        # Log several guesses (initially incorrect)
+        self.data_manager.log_player_guess("p1", "Player1", daily_q_id, "four", False)
+        self.data_manager.log_player_guess("p2", "Player2", daily_q_id, "5", False)
+        self.data_manager.log_player_guess("p3", "Player3", daily_q_id, "FOUR", False)
+        self.data_manager.log_player_guess("p4", "Player4", daily_q_id, "3", False)
+
+        # Define a simple match function (case-insensitive exact match)
+        def match_func(guess: str, answer: str) -> bool:
+            return guess.lower() == answer.lower()
+
+        # Mark guesses matching "four" as correct
+        num_updated = self.data_manager.mark_matching_guesses_as_correct(
+            daily_q_id, "four", match_func
+        )
+
+        # Should have updated 2 guesses (p1 and p3)
+        self.assertEqual(num_updated, 2)
+
+        # Verify the database state
+        all_guesses = self.db.execute_query(
+            "SELECT player_id, guess_text, is_correct FROM guesses WHERE daily_question_id = ? ORDER BY player_id",
+            (daily_q_id,),
+        )
+
+        self.assertEqual(len(all_guesses), 4)
+        self.assertEqual(all_guesses[0]["player_id"], "p1")
+        self.assertEqual(all_guesses[0]["is_correct"], 1)  # Now correct
+        self.assertEqual(all_guesses[1]["player_id"], "p2")
+        self.assertEqual(all_guesses[1]["is_correct"], 0)  # Still incorrect
+        self.assertEqual(all_guesses[2]["player_id"], "p3")
+        self.assertEqual(all_guesses[2]["is_correct"], 1)  # Now correct
+        self.assertEqual(all_guesses[3]["player_id"], "p4")
+        self.assertEqual(all_guesses[3]["is_correct"], 0)  # Still incorrect
+
+    def test_mark_matching_guesses_no_matches(self):
+        """Test that marking guesses returns 0 when no guesses match."""
+        # Log a daily question
+        q = Question(
+            question="What is 2+2?", answer="4", category="math", clue_value=100
+        )
+        daily_q_id = self.data_manager.log_daily_question(q)
+
+        # Log some incorrect guesses
+        self.data_manager.log_player_guess("p1", "Player1", daily_q_id, "5", False)
+        self.data_manager.log_player_guess("p2", "Player2", daily_q_id, "3", False)
+
+        # Define a match function
+        def match_func(guess: str, answer: str) -> bool:
+            return guess.lower() == answer.lower()
+
+        # Try to mark guesses matching "seven" as correct (no matches)
+        num_updated = self.data_manager.mark_matching_guesses_as_correct(
+            daily_q_id, "seven", match_func
+        )
+
+        # Should have updated 0 guesses
+        self.assertEqual(num_updated, 0)
+
+        # Verify all guesses are still incorrect
+        all_guesses = self.db.execute_query(
+            "SELECT is_correct FROM guesses WHERE daily_question_id = ?", (daily_q_id,)
+        )
+        for guess in all_guesses:
+            self.assertEqual(guess["is_correct"], 0)
+
     def test_log_messaging_event(self):
         self.data_manager.log_messaging_event(
             "outgoing", "discord", "12345", "Hello", "success"

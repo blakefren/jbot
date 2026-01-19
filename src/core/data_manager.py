@@ -748,3 +748,44 @@ class DataManager:
         """
         query = "UPDATE guesses SET is_correct = 1 WHERE id = ?"
         self.db.execute_update(query, (guess_id,))
+
+    def mark_matching_guesses_as_correct(
+        self, daily_question_id: str, new_answer: str, match_func
+    ) -> int:
+        """
+        Marks previously incorrect guesses as correct if they match the new answer.
+
+        Args:
+            daily_question_id: The ID of the daily question
+            new_answer: The new alternative answer to check against
+            match_func: A callable that takes (guess_text, answer_text) and returns bool
+
+        Returns:
+            int: Number of guesses marked as correct
+        """
+        # Get all incorrect guesses for this question
+        query = """
+            SELECT id, guess_text
+            FROM guesses
+            WHERE daily_question_id = ? AND is_correct = 0
+        """
+        guesses = self.db.execute_query(query, (daily_question_id,))
+
+        # Check each guess against the new answer
+        guess_ids_to_update = []
+
+        for guess in guesses:
+            guess_text = guess.get("guess_text")
+            if guess_text:
+                if match_func(guess_text, new_answer):
+                    guess_ids_to_update.append(guess["id"])
+
+        # Update all matching guesses to is_correct = 1
+        if guess_ids_to_update:
+            placeholders = ",".join("?" * len(guess_ids_to_update))
+            update_query = (
+                f"UPDATE guesses SET is_correct = 1 WHERE id IN ({placeholders})"
+            )
+            self.db.execute_update(update_query, tuple(guess_ids_to_update))
+
+        return len(guess_ids_to_update)

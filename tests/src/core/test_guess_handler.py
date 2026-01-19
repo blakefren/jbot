@@ -445,6 +445,34 @@ class TestGuessHandler(unittest.TestCase):
                     result, expected, f"Failed for guess='{guess}', answer='{answer}'"
                 )
 
+    def test_check_answer_match_static_method(self):
+        """Test the static check_answer_match method used by other classes."""
+        # Test exact match
+        self.assertTrue(GuessHandler.check_answer_match("Paris", "Paris"))
+
+        # Test case-insensitive match
+        self.assertTrue(GuessHandler.check_answer_match("PARIS", "paris"))
+
+        # Test with normalization (articles removed)
+        self.assertTrue(GuessHandler.check_answer_match("The Beatles", "Beatles"))
+
+        # Test numeric match - written numbers are converted to digits
+        self.assertTrue(GuessHandler.check_answer_match("42", "42"))
+        self.assertTrue(GuessHandler.check_answer_match("four", "4"))
+
+        # Test fuzzy matching - partial matches work for multi-word answers
+        self.assertTrue(
+            GuessHandler.check_answer_match("George Washington", "washington")
+        )
+        self.assertTrue(
+            GuessHandler.check_answer_match("washington", "George Washington")
+        )
+
+        # Test non-match
+        self.assertFalse(GuessHandler.check_answer_match("London", "Paris"))
+        self.assertFalse(GuessHandler.check_answer_match("100", "200"))
+        self.assertFalse(GuessHandler.check_answer_match("New York", "Los Angeles"))
+
 
 if __name__ == "__main__":
     unittest.main()

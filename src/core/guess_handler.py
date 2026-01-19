@@ -225,6 +225,31 @@ class GuessHandler:
         result = self._smart_token_match(norm_g, norm_a)
         return result
 
+    @staticmethod
+    def check_answer_match(guess: str, answer: str) -> bool:
+        """
+        Static method to check if a guess matches an answer.
+        Creates a temporary GuessHandler instance to use the full matching logic.
+
+        Args:
+            guess: The player's guess (will be normalized)
+            answer: The correct answer (will be normalized)
+
+        Returns:
+            bool: True if the guess matches the answer
+        """
+        # Create a minimal GuessHandler instance just for matching
+        handler = GuessHandler(
+            data_manager=None,
+            player_manager=None,
+            daily_question=Question(
+                question="temp", answer=answer, category="temp", clue_value=0
+            ),
+            daily_question_id=0,
+            managers={},
+        )
+        return handler._is_correct_guess(guess, answer)
+
     def get_player_guesses(self, player_id: int) -> list:
         """
         Returns all guesses for the current daily question for the given player.

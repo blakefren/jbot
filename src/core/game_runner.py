@@ -700,6 +700,24 @@ class GameRunner:
     def resolve_wager(self, player_id: str, correct: bool):
         pass
 
+    def _mark_newly_correct_guesses(self, daily_question_id: str, new_answer: str):
+        """
+        Marks previously incorrect guesses as correct if they match the new answer.
+
+        Args:
+            daily_question_id: The ID of the daily question
+            new_answer: The new alternative answer to check against
+        """
+        # Use DataManager to mark guesses as correct, using GuessHandler's matching logic
+        num_updated = self.data_manager.mark_matching_guesses_as_correct(
+            daily_question_id, new_answer, GuessHandler.check_answer_match
+        )
+
+        if num_updated > 0:
+            logging.info(
+                f"Marked {num_updated} previously incorrect guesses as correct"
+            )
+
     def recalculate_scores_for_new_answer(
         self, new_answer: str, admin_id: str, dry_run: bool = False
     ) -> dict:
@@ -766,6 +784,8 @@ class GameRunner:
             self.data_manager.add_alternative_answer(
                 daily_question_id, new_answer, admin_id
             )
+            # Mark guesses as correct in the database if they match the new answer
+            self._mark_newly_correct_guesses(daily_question_id, new_answer)
 
         for user_id, new_res in results_new.items():
             old_res = results_old.get(user_id, {"score_earned": 0, "streak_delta": 0})

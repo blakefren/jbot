@@ -36,6 +36,9 @@ class TestRecalculateScores(unittest.TestCase):
         # Default snapshot to None (so tests fall back to player_manager)
         self.mock_data_manager.get_daily_snapshot.return_value = None
 
+        # Mock mark_matching_guesses_as_correct to return 0 by default
+        self.mock_data_manager.mark_matching_guesses_as_correct.return_value = 0
+
     def test_recalculate_scores_success(self):
         # Setup guesses
         # Player 1: "800" (Wrong initially)
@@ -254,3 +257,50 @@ class TestRecalculateScores(unittest.TestCase):
         self.assertEqual(result["status"], "error")
         self.assertIn("No daily question found", result["message"])
         self.mock_data_manager.add_alternative_answer.assert_not_called()
+
+    def test_recalculate_marks_guesses_as_correct(self):
+        """Test that recalculate marks previously incorrect guesses as correct in DB."""
+        # Setup guesses: p1 guessed "800" (initially wrong), p2 guessed "900" (wrong)
+        guesses = [
+            {
+                "id": 1,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "800",
+                "is_correct": 0,
+                "guessed_at": "2023-01-01 10:00:00",
+            },
+            {
+                "id": 2,
+                "daily_question_id": 1,
+                "player_id": "p2",
+                "guess_text": "900",
+                "is_correct": 0,
+                "guessed_at": "2023-01-01 10:05:00",
+            },
+        ]
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = guesses
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        self.mock_data_manager.get_alternative_answers.return_value = []
+        self.mock_data_manager.get_powerup_usage_for_daily_question.return_value = []
+
+        # Mock mark_matching_guesses_as_correct to return 1 (one guess was marked)
+        self.mock_data_manager.mark_matching_guesses_as_correct.return_value = 1
+
+        # Run recalculation with "800" (dry_run=False)
+        result = self.game_runner.recalculate_scores_for_new_answer(
+            "800", "admin1", dry_run=False
+        )
+
+        # Verify the alternative answer was added
+        self.mock_data_manager.add_alternative_answer.assert_called_with(
+            1, "800", "admin1"
+        )
+
+        # Verify mark_matching_guesses_as_correct was called with correct parameters
+        self.mock_data_manager.mark_matching_guesses_as_correct.assert_called_once()
+        call_args = self.mock_data_manager.mark_matching_guesses_as_correct.call_args
+        self.assertEqual(call_args[0][0], 1)  # daily_question_id
+        self.assertEqual(call_args[0][1], "800")  # new_answer
+        # Third argument is the match function, just verify it's callable
+        self.assertTrue(callable(call_args[0][2]))
