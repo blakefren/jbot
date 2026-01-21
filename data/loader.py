@@ -28,7 +28,7 @@ def load_questions(config: ConfigReader) -> list[Question]:
     if dataset == "jeopardy":
         path = os.path.join(PROJECT_ROOT, config.get("JBOT_JEOPARDY_LOCAL_PATH"))
         score_sub = config.get("JBOT_FINAL_JEOPARDY_SCORE_SUB")
-        return read_jeopardy_questions(path, score_sub)
+        return read_jeopardy_questions(path, score_sub, allowed_clue_values=[100, 200])
     elif dataset == "knowledge_bowl":
         path = os.path.join(PROJECT_ROOT, config.get("JBOT_KNOWLEDGE_BOWL_LOCAL_PATH"))
         return read_knowledge_bowl_questions(path)

@@ -49,7 +49,9 @@ class TestLoadQuestions(unittest.TestCase):
         self.assertEqual(questions[0], expected_question)
 
         expected_path = os.path.join(self.project_root, "dummy_jeopardy.tsv")
-        mock_read_jeopardy.assert_called_once_with(expected_path, "2000")
+        mock_read_jeopardy.assert_called_once_with(
+            expected_path, "2000", allowed_clue_values=[100, 200]
+        )
 
     @patch("data.loader.read_knowledge_bowl_questions")
     def test_load_questions_knowledge_bowl(self, mock_read_kb):

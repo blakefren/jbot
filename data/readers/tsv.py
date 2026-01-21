@@ -19,7 +19,7 @@ def parse_value(value: str) -> int:
 
 
 def read_jeopardy_questions(
-    file_path: str, final_jeopardy_score: int = 0
+    file_path: str, final_jeopardy_score: int = 0, allowed_clue_values: list[int] = None
 ) -> list[Question]:
     """
     Reads a TSV file of Jeopardy! questions and returns a list of Question objects.
@@ -40,6 +40,9 @@ def read_jeopardy_questions(
                     if is_final_jeopardy
                     else parse_value(row.get("clue_value", 0))
                 )
+
+                if allowed_clue_values and clue_value not in allowed_clue_values:
+                    continue
 
                 # The dataset has 'answer' as the clue and 'question' as the response.
                 questions.append(
