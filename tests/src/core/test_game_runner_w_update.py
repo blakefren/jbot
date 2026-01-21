@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, ANY
 import os
 import sys
 
@@ -41,7 +41,7 @@ class TestGameRunnerResetQuestion(unittest.TestCase):
         self.assertTrue(result)
         self.mock_data_manager.get_used_question_hashes.assert_called_once()
         self.mock_question_selector.get_random_question.assert_called_once_with(
-            exclude_hashes={"old_hash"}
+            exclude_hashes={"old_hash"}, previous_answers=ANY
         )
         self.mock_data_manager.log_daily_question.assert_called_once_with(
             new_question, force_new=True

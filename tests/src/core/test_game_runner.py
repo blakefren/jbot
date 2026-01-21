@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock, call, ANY
 
 from data.readers.question import Question
 from src.core.game_runner import GameRunner
@@ -573,7 +573,7 @@ class TestGameRunner(unittest.TestCase):
         self.assertEqual(self.game_runner.daily_question_id, 999)
         self.mock_data_manager.get_used_question_hashes.assert_called_once()
         self.mock_question_selector.get_random_question.assert_called_once_with(
-            exclude_hashes={"hash1", "hash2"}
+            exclude_hashes={"hash1", "hash2"}, previous_answers=ANY
         )
         self.mock_data_manager.log_daily_question.assert_called_once_with(
             new_question, force_new=True

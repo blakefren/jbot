@@ -26,7 +26,9 @@ class TestGeminiManager(unittest.TestCase):
 
         response = self.gemini_manager.generate_content("Hello")
         self.assertEqual(response, "Hello there!")
-        self.model_mock.generate_content.assert_called_once_with("Hello")
+        self.model_mock.generate_content.assert_called_once_with(
+            "Hello", generation_config=None
+        )
 
     def test_generate_content_failure(self):
         self.model_mock.generate_content.side_effect = Exception("API Error")

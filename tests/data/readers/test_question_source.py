@@ -60,7 +60,7 @@ class TestGeminiQuestionSource(unittest.TestCase):
         self.assertEqual(question.question, "My Riddle")
         self.assertEqual(question.answer, "My Answer")
         self.assertEqual(question.hint, "My Hint")
-        self.assertEqual(question.category, "Riddle (medium)")
+        self.assertTrue(question.category.startswith("Riddle (medium)"))
         self.assertEqual(question.data_source, "gemini_medium")
         self.assertEqual(question.clue_value, 100)  # Default
 
