@@ -75,7 +75,11 @@ class ConfigReader:
         """
         Parses the JBOT_EXTRA_SOURCES configuration and returns a list of QuestionSource objects.
         """
-        from data.readers.question_source import GeminiQuestionSource
+        from data.readers.question_source import (
+            GeminiQuestionSource,
+            StaticQuestionSource,
+        )
+        from data.readers.tsv import read_jeopardy_questions
 
         sources_config = self.get("JBOT_EXTRA_SOURCES")
         sources = []
@@ -134,5 +138,39 @@ class ConfigReader:
                 logging.info(
                     f"Added Gemini source: {s_name} (weight={s_weight}, difficulty={difficulty}, points={default_points})"
                 )
+
+            elif s_type == "file":
+                questions = []
+                if s_name == "jeopardy":
+                    path = os.path.join(BASE_DIR, self.get("JBOT_JEOPARDY_LOCAL_PATH"))
+                    score_sub = self.get("JBOT_FINAL_JEOPARDY_SCORE_SUB")
+
+                    # Parse allowed clue values from args, default to [100] as requested
+                    allowed_values = [100]
+                    if "clue_values" in args:
+                        try:
+                            allowed_values = [
+                                int(v) for v in args["clue_values"].split("|")
+                            ]
+                        except ValueError:
+                            logging.warning(
+                                f"Invalid clue_values for source {s_name}: {args['clue_values']}"
+                            )
+
+                    questions = read_jeopardy_questions(
+                        path, score_sub, allowed_clue_values=allowed_values
+                    )
+
+                if questions:
+                    sources.append(
+                        StaticQuestionSource(
+                            s_name, s_weight, questions, default_points
+                        )
+                    )
+                    logging.info(
+                        f"Added file source: {s_name} (weight={s_weight}, questions={len(questions)})"
+                    )
+                else:
+                    logging.warning(f"No questions loaded for file source: {s_name}")
 
         return sources

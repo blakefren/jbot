@@ -162,6 +162,32 @@ class TestConfigReader(unittest.TestCase):
             config_reader.get_gemini_api_key()
         self.assertIn("GEMINI_API_KEY not found", str(context.exception))
 
+    @patch("data.readers.tsv.read_jeopardy_questions")
+    def test_parse_question_sources_file_jeopardy(self, mock_read_jeopardy):
+        config_reader = ConfigReader()
+
+        # Mock the questions returned
+        mock_read_jeopardy.return_value = ["q1", "q2"]
+
+        env = {
+            "JBOT_EXTRA_SOURCES": "file:jeopardy:25:clue_values=100|200:points=50",
+            "JBOT_JEOPARDY_LOCAL_PATH": "dummy_path.tsv",
+            "JBOT_FINAL_JEOPARDY_SCORE_SUB": "500",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            sources = config_reader.parse_question_sources()
+
+            self.assertEqual(len(sources), 1)
+            source = sources[0]
+            self.assertEqual(source.name, "jeopardy")
+            self.assertEqual(source.weight, 25.0)
+            self.assertEqual(source.default_points, 50)
+
+            # Verify read_jeopardy_questions was called with correct args
+            args, kwargs = mock_read_jeopardy.call_args
+            self.assertEqual(kwargs["allowed_clue_values"], [100, 200])
+
 
 if __name__ == "__main__":
     unittest.main()
