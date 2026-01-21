@@ -450,6 +450,26 @@ class DataManager:
 
         return question, daily_question_id, sent_at
 
+    def get_recent_answers(self, limit: int = 7) -> list[str]:
+        """
+        Retrieves a list of answers from the most recent daily questions.
+
+        Args:
+            limit: The number of recent days to look back.
+
+        Returns:
+            list[str]: A list of answer strings.
+        """
+        query = """
+        SELECT q.answer
+        FROM daily_questions dq
+        JOIN questions q ON dq.question_id = q.id
+        ORDER BY dq.sent_at DESC
+        LIMIT ?
+        """
+        results = self._db.execute_query(query, (limit,))
+        return [row["answer"] for row in results]
+
     def get_used_question_hashes(self) -> set[str]:
         """
         Retrieves all question hashes that have been used as daily questions.

@@ -20,7 +20,9 @@ class QuestionSource(ABC):
         self.default_points = default_points
 
     @abstractmethod
-    def get_question(self, exclude_hashes: set[str] = None) -> Optional[Question]:
+    def get_question(
+        self, exclude_hashes: set[str] = None, previous_answers: list[str] = None
+    ) -> Optional[Question]:
         """
         Retrieves a question from this source.
         """
@@ -42,7 +44,9 @@ class StaticQuestionSource(QuestionSource):
         super().__init__(name, weight, default_points)
         self.questions = questions
 
-    def get_question(self, exclude_hashes: set[str] = None) -> Optional[Question]:
+    def get_question(
+        self, exclude_hashes: set[str] = None, previous_answers: list[str] = None
+    ) -> Optional[Question]:
         if not self.questions:
             logging.warning(f"StaticQuestionSource '{self.name}' has no questions.")
             return None
@@ -67,6 +71,22 @@ class GeminiQuestionSource(QuestionSource):
     A source that generates questions using Gemini.
     """
 
+    CATEGORIES = [
+        "Nature",
+        "Technology",
+        "Home",
+        "Food",
+        "History",
+        "Science",
+        "Animals",
+        "Geography",
+        "Music",
+        "Tools",
+        "Space",
+        "Literature",
+        "Sports",
+    ]
+
     def __init__(
         self,
         name: str,
@@ -79,7 +99,9 @@ class GeminiQuestionSource(QuestionSource):
         self.gemini_manager = gemini_manager
         self.difficulty = difficulty
 
-    def get_question(self, exclude_hashes: set[str] = None) -> Optional[Question]:
+    def get_question(
+        self, exclude_hashes: set[str] = None, previous_answers: list[str] = None
+    ) -> Optional[Question]:
         if not self.gemini_manager:
             logging.error(f"GeminiQuestionSource '{self.name}' has no GeminiManager.")
             return None
@@ -87,16 +109,33 @@ class GeminiQuestionSource(QuestionSource):
         try:
             riddle_prompt_path = os.path.join(_PROJECT_ROOT, "prompts", "riddle.txt")
             with open(riddle_prompt_path, "r", encoding="utf-8") as f:
-                prompt = f.read()
+                prompt_template = f.read()
         except FileNotFoundError:
             logging.error("Riddle prompt file not found.")
             return None
 
-        prompt = prompt.replace(
+        # Select a random category
+        category = random.choice(self.CATEGORIES)
+
+        # Build exclusions string
+        exclusions_text = ""
+        if previous_answers:
+            exclusions_text = "Do not use any of the following answers: " + ", ".join(
+                previous_answers
+            )
+
+        prompt = prompt_template.replace(
             '[Insert Your Desired Difficulty Here, e.g., "Medium"]', self.difficulty
         )
+        prompt = prompt.replace("[Insert Category Here]", category)
+        prompt = prompt.replace("[Insert Exclusions Here]", exclusions_text)
 
-        response_text = self.gemini_manager.generate_content(prompt)
+        # Default temperature for creativity
+        generation_config = {"temperature": 1.0}
+
+        response_text = self.gemini_manager.generate_content(
+            prompt, generation_config=generation_config
+        )
 
         if not response_text:
             logging.error("Failed to get response from Gemini.")
@@ -116,7 +155,7 @@ class GeminiQuestionSource(QuestionSource):
             return Question(
                 question=riddle,
                 answer=answer,
-                category=f"Riddle ({self.difficulty.lower()})",
+                category=f"Riddle ({self.difficulty.lower()}) - {category}",
                 hint=hint,
                 data_source=f"gemini_{self.difficulty.lower()}",
                 clue_value=self.default_points if self.default_points else 100,

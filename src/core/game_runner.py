@@ -57,11 +57,15 @@ class GameRunner:
         Logs invalid questions as used.
         """
         used_hashes = self.data_manager.get_used_question_hashes()
+        # Fetch configured days of answers to avoid duplicates in AI generation
+        history_days = int(self.config.get("JBOT_RIDDLE_HISTORY_DAYS", 30))
+        recent_answers = self.data_manager.get_recent_answers(limit=history_days)
+
         retries = int(self.config.get("JBOT_QUESTION_RETRIES", 10))
 
         for _ in range(retries):
             question = self.question_selector.get_random_question(
-                exclude_hashes=used_hashes
+                exclude_hashes=used_hashes, previous_answers=recent_answers
             )
 
             if not question:

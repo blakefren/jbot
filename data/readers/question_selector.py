@@ -55,6 +55,9 @@ class QuestionSelector:
         prompt = prompt.replace(
             '[Insert Your Desired Difficulty Here, e.g., "Medium"]', difficulty
         )
+        # Defaults for direct calls
+        prompt = prompt.replace("[Insert Category Here]", "General Knowledge")
+        prompt = prompt.replace("[Insert Exclusions Here]", "")
 
         response_text = self.gemini_manager.generate_content(prompt)
 
@@ -156,12 +159,15 @@ class QuestionSelector:
 
         return True
 
-    def get_random_question(self, exclude_hashes: set[str] = None) -> Question:
+    def get_random_question(
+        self, exclude_hashes: set[str] = None, previous_answers: list[str] = None
+    ) -> Question:
         """
         Returns a random question from the configured sources.
 
         Args:
             exclude_hashes: Set of question hashes (as strings) to exclude from selection.
+            previous_answers: List of recent answers to avoid duplicating (for generative sources).
 
         Returns:
             A randomly selected Question, or None if no questions are available.
@@ -186,7 +192,9 @@ class QuestionSelector:
                     break
 
         logging.info(f"Selected question source: {source.name}")
-        question = source.get_question(exclude_hashes)
+        question = source.get_question(
+            exclude_hashes=exclude_hashes, previous_answers=previous_answers
+        )
 
         if not question:
             logging.warning(f"Source {source.name} returned no question.")

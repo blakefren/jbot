@@ -19,12 +19,18 @@ class GeminiManager:
             logging.error(f"Failed to configure Gemini: {e}")
             raise
 
-    def generate_content(self, text: str) -> str:
+    def generate_content(self, text: str, generation_config: dict = None) -> str:
         """
         Generates content using the Gemini API.
+
+        Args:
+            text: The prompt text.
+            generation_config: Optional configuration for generation (e.g., temperature).
         """
         try:
-            response = self.model.generate_content(text)
+            response = self.model.generate_content(
+                text, generation_config=generation_config
+            )
             return response.text
         except Exception as e:
             logging.error(f"An error occurred during Gemini content generation: {e}")
