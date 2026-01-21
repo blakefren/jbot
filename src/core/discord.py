@@ -336,7 +336,11 @@ class DiscordBot(commands.Bot):
                 return
 
         # Get the set of player IDs that should have the role from the database
-        db_winners = self.data_manager.get_player_ids_with_role(first_place_role_name)
+        # Convert to int because database stores as TEXT but Discord uses int IDs
+        db_winners = {
+            int(pid)
+            for pid in self.data_manager.get_player_ids_with_role(first_place_role_name)
+        }
 
         # Get the set of members who currently have the role in Discord
         discord_winners = {member.id for member in role.members}
@@ -348,12 +352,31 @@ class DiscordBot(commands.Bot):
         # Add the role to new winners
         for member_id in to_add:
             member = guild.get_member(member_id)
+            if not member:
+                try:
+                    member = await guild.fetch_member(member_id)
+                except discord.NotFound:
+                    logging.warning(f"Member {member_id} not found in guild.")
+                    continue
+                except discord.HTTPException as e:
+                    logging.warning(f"Failed to fetch member {member_id}: {e}")
+                    continue
+
             if member:
                 await member.add_roles(role, reason="JBot: Player achieved first place")
 
         # Remove the role from previous winners
         for member_id in to_remove:
             member = guild.get_member(member_id)
+            if not member:
+                try:
+                    member = await guild.fetch_member(member_id)
+                except discord.NotFound:
+                    logging.warning(f"Member {member_id} not found in guild.")
+                    continue
+                except discord.HTTPException as e:
+                    logging.warning(f"Failed to fetch member {member_id}: {e}")
+                    continue
             if member:
                 await member.remove_roles(
                     role, reason="JBot: Player no longer in first place"
