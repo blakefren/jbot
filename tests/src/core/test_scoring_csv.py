@@ -6,11 +6,24 @@ from src.core.scoring import ScoreCalculator
 class TestScoreCalculatorCSV(unittest.TestCase):
     def setUp(self):
         self.config = MagicMock()
+        self.defaults = {
+            "JBOT_BONUS_TRY_CSV": "20,10,5",
+            "JBOT_BONUS_FASTEST_CSV": "10,5,5",
+            "JBOT_BONUS_BEFORE_HINT": "10",
+            "JBOT_BONUS_STREAK_PER_DAY": "5",
+            "JBOT_BONUS_STREAK_CAP": "25",
+            "JBOT_EMOJI_FIRST_TRY": "🎯",
+            "JBOT_EMOJI_BEFORE_HINT": "🧠",
+            "JBOT_EMOJI_FASTEST": "🥇",
+            "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
+            "JBOT_EMOJI_STREAK": "🔥",
+        }
+        self.config.get.side_effect = lambda k, d=None: self.defaults.get(k)
 
     def test_extended_try_messaging(self):
         # Configure 5 tiers of try bonuses
         self.config.get.side_effect = lambda k, d=None: (
-            "20,10,5,2,1" if k == "JBOT_BONUS_TRY_CSV" else d
+            "20,10,5,2,1" if k == "JBOT_BONUS_TRY_CSV" else self.defaults.get(k)
         )
         calculator = ScoreCalculator(self.config)
 
@@ -32,7 +45,7 @@ class TestScoreCalculatorCSV(unittest.TestCase):
     def test_extended_fastest_messaging(self):
         # Configure 4 tiers of fastest bonuses
         self.config.get.side_effect = lambda k, d=None: (
-            "10,5,5,1" if k == "JBOT_BONUS_FASTEST_CSV" else d
+            "10,5,5,1" if k == "JBOT_BONUS_FASTEST_CSV" else self.defaults.get(k)
         )
         calculator = ScoreCalculator(self.config)
 
@@ -50,27 +63,27 @@ class TestScoreCalculatorCSV(unittest.TestCase):
     def test_csv_parsing_whitespace(self):
         # Test spaces in CSV
         self.config.get.side_effect = lambda k, d=None: (
-            " 20 , 10 , 5 " if k == "JBOT_BONUS_TRY_CSV" else d
+            " 20 , 10 , 5 " if k == "JBOT_BONUS_TRY_CSV" else self.defaults.get(k)
         )
         calculator = ScoreCalculator(self.config)
         self.assertEqual(calculator.bonus_try_list, [20, 10, 5])
 
     def test_csv_parsing_invalid(self):
-        # Test invalid content falls back to default
-        # Default for TRY is "20,10,5" -> [20, 10, 5]
+        # Test invalid content falls back to empty list (since no default provided)
         def side_effect(key, default=None):
             if key == "JBOT_BONUS_TRY_CSV":
                 return "20,abc,5"
-            return default  # Return the provided default for other keys
+            return self.defaults.get(key)
 
         self.config.get.side_effect = side_effect
         calculator = ScoreCalculator(self.config)
-        self.assertEqual(calculator.bonus_try_list, [20, 10, 5])
+        # Fallback in catch block is now []
+        self.assertEqual(calculator.bonus_try_list, [])
 
     def test_csv_parsing_empty(self):
         # Test empty string results in empty list
         self.config.get.side_effect = lambda k, d=None: (
-            "" if k == "JBOT_BONUS_TRY_CSV" else d
+            "" if k == "JBOT_BONUS_TRY_CSV" else self.defaults.get(k)
         )
         calculator = ScoreCalculator(self.config)
         self.assertEqual(calculator.bonus_try_list, [])
@@ -84,7 +97,7 @@ class TestScoreCalculatorCSV(unittest.TestCase):
 
     def test_stealable_amount_dynamic(self):
         # Setup calculator with defaults
-        self.config.get.side_effect = lambda k, d=None: d
+        # self.config.get.side_effect is already set in setUp
         calculator = ScoreCalculator(self.config)
 
         # Simulate bonuses dict that would be generated
@@ -102,7 +115,7 @@ class TestScoreCalculatorCSV(unittest.TestCase):
                 return "10,5,5,1"
             if key == "JBOT_EMOJI_FASTEST_CSV":
                 return "🥇,🥈,🥉,🏅"
-            return default
+            return self.defaults.get(key)
 
         self.config.get.side_effect = side_effect
         calculator = ScoreCalculator(self.config)

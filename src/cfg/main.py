@@ -19,6 +19,12 @@ def load_config():
     load_dotenv(dotenv_path=ENV_PATH)
 
 
+class MissingConfigurationError(Exception):
+    """Raised when a required configuration key is missing."""
+
+    pass
+
+
 class ConfigReader:
     """
     A class to read configuration from environment variables.
@@ -29,6 +35,36 @@ class ConfigReader:
         Loads configuration from environment variables.
         """
         load_config()
+        self.validate_config()
+
+    def validate_config(self):
+        """
+        Validates that all keys in .env.template exist in the current configuration.
+        """
+        if not os.path.exists(ENV_TEMPLATE_PATH):
+            logging.warning(
+                f"Template file not found at {ENV_TEMPLATE_PATH}, skipping validation."
+            )
+            return
+
+        missing_keys = []
+        with open(ENV_TEMPLATE_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+
+                # key=value
+                if "=" in line:
+                    key = line.split("=", 1)[0].strip()
+                    if key not in os.environ:
+                        missing_keys.append(key)
+
+        if missing_keys:
+            raise MissingConfigurationError(
+                f"Missing {len(missing_keys)} critical configuration keys: {', '.join(missing_keys)}\n"
+                f"Please update your .env file specific values match those in .env.template."
+            )
 
     def get(self, key: str, default=None):
         """
@@ -37,26 +73,36 @@ class ConfigReader:
         Args:
             key (str): The key to look for in the environment variables.
             default: The default value to return if the key is not found.
+                     DEPRECATED: Supply defaults in .env.template instead.
 
         Returns:
-            The value associated with the key, or the default value if the key is not found.
-        """
-        return os.environ.get(key, default)
+            The value associated with the key.
 
-    def get_bool(self, key: str, default: bool = False) -> bool:
+        Raises:
+            MissingConfigurationError: If the key is not found and no default is provided.
+        """
+        value = os.environ.get(key)
+
+        if value is None:
+            if default is not None:
+                return default
+            raise MissingConfigurationError(
+                f"Configuration key '{key}' is missing from environment."
+            )
+
+        return value
+
+    def get_bool(self, key: str) -> bool:
         """
         Retrieves a boolean configuration value by key.
 
         Args:
             key (str): The key to look for in the configuration.
-            default (bool): The default value if the key is not found.
 
         Returns:
             bool: The boolean value associated with the key.
         """
         value = self.get(key)
-        if value is None:
-            return default
         return value.lower() in ("true", "1", "t", "y", "yes")
 
     def get_gemini_api_key(self) -> str:
@@ -81,7 +127,11 @@ class ConfigReader:
         )
         from data.readers.tsv import read_jeopardy_questions
 
-        sources_config = self.get("JBOT_EXTRA_SOURCES")
+        try:
+            sources_config = self.get("JBOT_EXTRA_SOURCES")
+        except MissingConfigurationError:
+            return []
+
         sources = []
 
         if not sources_config:

@@ -27,6 +27,8 @@ class TestScoreCalculator(unittest.TestCase):
                 return "🧠"
             if key == "JBOT_EMOJI_FASTEST":
                 return "🥇"
+            if key == "JBOT_EMOJI_FASTEST_CSV":
+                return "🥇,🥈,🥉"
             if key == "JBOT_EMOJI_STREAK":
                 return "🔥"
 

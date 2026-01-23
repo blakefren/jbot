@@ -1,7 +1,7 @@
 import unittest
 import os
 from unittest.mock import patch, mock_open, MagicMock
-from src.cfg.main import ConfigReader, load_config
+from src.cfg.main import ConfigReader, load_config, MissingConfigurationError
 
 
 class TestConfigReader(unittest.TestCase):
@@ -29,18 +29,22 @@ class TestConfigReader(unittest.TestCase):
         mock_copy.assert_not_called()
         mock_load_dotenv.assert_called_once()
 
+    @patch("src.cfg.main.ConfigReader.validate_config")
     @patch.dict(os.environ, {"JBOT_KEY1": "value1"})
-    def test_get_existing_key(self):
+    def test_get_existing_key(self, mock_validate):
         """Test getting an existing key."""
         config_reader = ConfigReader()
         self.assertEqual(config_reader.get("JBOT_KEY1"), "value1")
 
-    def test_get_non_existing_key(self):
-        """Test getting a non-existing key returns None."""
+    @patch("src.cfg.main.ConfigReader.validate_config")
+    def test_get_non_existing_key(self, mock_validate):
+        """Test getting a non-existing key raises MissingConfigurationError."""
         config_reader = ConfigReader()
-        self.assertIsNone(config_reader.get("JBOT_NON_EXISTENT_KEY"))
+        with self.assertRaises(MissingConfigurationError):
+            config_reader.get("JBOT_NON_EXISTENT_KEY")
 
-    def test_get_non_existing_key_with_default(self):
+    @patch("src.cfg.main.ConfigReader.validate_config")
+    def test_get_non_existing_key_with_default(self, mock_validate):
         """Test getting a non-existing key with a default value."""
         config_reader = ConfigReader()
         self.assertEqual(
@@ -81,8 +85,8 @@ class TestConfigReader(unittest.TestCase):
     def test_get_bool_non_existing(self):
         """Test getting a boolean for a non-existing key."""
         config_reader = ConfigReader()
-        self.assertFalse(config_reader.get_bool("JBOT_NON_EXISTENT_KEY"))
-        self.assertTrue(config_reader.get_bool("JBOT_NON_EXISTENT_KEY", default=True))
+        with self.assertRaises(MissingConfigurationError):
+            config_reader.get_bool("JBOT_NON_EXISTENT_KEY")
 
     @patch.dict(os.environ, {"GEMINI_API_KEY": "test_api_key_12345"})
     def test_get_gemini_api_key_success(self):
@@ -91,13 +95,13 @@ class TestConfigReader(unittest.TestCase):
         self.assertEqual(config_reader.get_gemini_api_key(), "test_api_key_12345")
 
     def test_get_gemini_api_key_not_found(self):
-        """Test that ValueError is raised when GEMINI_API_KEY is not set."""
+        """Test that MissingConfigurationError is raised when GEMINI_API_KEY is not set."""
         config_reader = ConfigReader()
         # Ensure the key is not in the environment
         with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(ValueError) as context:
+            with self.assertRaises(MissingConfigurationError) as context:
                 config_reader.get_gemini_api_key()
-            self.assertIn("GEMINI_API_KEY not found", str(context.exception))
+            self.assertIn("GEMINI_API_KEY", str(context.exception))
 
     def test_parse_question_sources_empty(self):
         config_reader = ConfigReader()

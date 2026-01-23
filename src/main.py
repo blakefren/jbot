@@ -31,7 +31,7 @@ if __name__ == "__main__":
 
     config = load_configs()
     questions = load_questions(config)
-    db_path = config.get("JBOT_DB_PATH", "jbot.db")
+    db_path = config.get("JBOT_DB_PATH")
 
     # Initialize database and data manager
     # NOTE: This is the ONLY place outside DataManager that should create a Database instance.

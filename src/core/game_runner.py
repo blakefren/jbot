@@ -42,7 +42,7 @@ class GameRunner:
 
         # Feature flags
         self.features = {
-            "fight": self.config.get_bool("JBOT_ENABLE_FIGHT", False),
+            "fight": self.config.get_bool("JBOT_ENABLE_FIGHT"),
         }
 
         # Initialize PowerUpManager (always enabled)
@@ -58,10 +58,10 @@ class GameRunner:
         """
         used_hashes = self.data_manager.get_used_question_hashes()
         # Fetch configured days of answers to avoid duplicates in AI generation
-        history_days = int(self.config.get("JBOT_RIDDLE_HISTORY_DAYS", 30))
+        history_days = int(self.config.get("JBOT_RIDDLE_HISTORY_DAYS"))
         recent_answers = self.data_manager.get_recent_answers(limit=history_days)
 
-        retries = int(self.config.get("JBOT_QUESTION_RETRIES", 10))
+        retries = int(self.config.get("JBOT_QUESTION_RETRIES"))
 
         for _ in range(retries):
             question = self.question_selector.get_random_question(
@@ -356,18 +356,18 @@ class GameRunner:
             )
             first_try_solver_ids = {p["id"] for p in first_try_solvers}
 
-        emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST", "🥇")
-        emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯")
-        emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠")
-        emoji_streak = self.config.get("JBOT_EMOJI_STREAK", "🔥")
+        emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST")
+        emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY")
+        emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT")
+        emoji_streak = self.config.get("JBOT_EMOJI_STREAK")
 
         # Powerup badges
-        emoji_jinxed = self.config.get("JBOT_EMOJI_JINXED", "🥶")
-        emoji_silenced = self.config.get("JBOT_EMOJI_SILENCED", "🤐")
-        emoji_stolen_from = self.config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
-        emoji_stealing = self.config.get("JBOT_EMOJI_STEALING", "💰")
-        emoji_shield = self.config.get("JBOT_EMOJI_SHIELD", "💝")
-        emoji_shield_broken = self.config.get("JBOT_EMOJI_SHIELD_BROKEN", "💔")
+        emoji_jinxed = self.config.get("JBOT_EMOJI_JINXED")
+        emoji_silenced = self.config.get("JBOT_EMOJI_SILENCED")
+        emoji_stolen_from = self.config.get("JBOT_EMOJI_STOLEN_FROM")
+        emoji_stealing = self.config.get("JBOT_EMOJI_STEALING")
+        emoji_shield = self.config.get("JBOT_EMOJI_SHIELD")
+        emoji_shield_broken = self.config.get("JBOT_EMOJI_SHIELD_BROKEN")
 
         powerup_badges = defaultdict(list)
         if self.daily_question_id:

@@ -17,6 +17,26 @@ from data.readers.question import Question
 
 class TestGameRunnerResetQuestion(unittest.TestCase):
     def setUp(self):
+        # Patch ConfigReader
+        self.config_patcher = patch("src.core.game_runner.ConfigReader")
+        self.MockConfigReader = self.config_patcher.start()
+        self.addCleanup(self.config_patcher.stop)
+
+        # Defaults
+        self.mock_config_instance = self.MockConfigReader.return_value
+        self.defaults = {
+            "JBOT_RIDDLE_HISTORY_DAYS": "30",
+            "JBOT_QUESTION_RETRIES": "10",
+            "JBOT_ENABLE_FIGHT": "True",
+            "JBOT_EMOJI_FASTEST": "🥇",
+        }
+        self.mock_config_instance.get.side_effect = lambda k, d=None: self.defaults.get(
+            k
+        )
+        self.mock_config_instance.get_bool.side_effect = lambda k, d=False: (
+            str(self.defaults.get(k)).lower() == "true" if k in self.defaults else d
+        )
+
         self.mock_question_selector = MagicMock()
         self.mock_data_manager = MagicMock()
         self.game_runner = GameRunner(

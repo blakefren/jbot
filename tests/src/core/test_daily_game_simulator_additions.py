@@ -17,17 +17,26 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
 
         # Common config side effect
         def config_side_effect(key, default=None):
-            if key == "JBOT_BONUS_FIRST_TRY":
-                return 20
-            if key == "JBOT_BONUS_BEFORE_HINT":
-                return 10
-            if key == "JBOT_BONUS_FASTEST":
-                return 10
-            if key == "JBOT_BONUS_STREAK_PER_DAY":
-                return 5
-            if key == "JBOT_BONUS_STREAK_CAP":
-                return 25
-            return default
+            vals = {
+                "JBOT_BONUS_TRY_CSV": "20,10,5",
+                "JBOT_BONUS_FASTEST_CSV": "10,5,5",
+                "JBOT_BONUS_BEFORE_HINT": 10,
+                "JBOT_BONUS_STREAK_PER_DAY": 5,
+                "JBOT_BONUS_STREAK_CAP": 25,
+                "JBOT_EMOJI_FIRST_TRY": "🎯",
+                "JBOT_EMOJI_BEFORE_HINT": "🧠",
+                "JBOT_EMOJI_FASTEST": "🥇",
+                "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
+                "JBOT_EMOJI_STREAK": "🔥",
+                "JBOT_REINFORCE_COST": 25,
+                "JBOT_EMOJI_JINXED": "🥶",
+                "JBOT_EMOJI_SILENCED": "🤐",
+                "JBOT_EMOJI_STOLEN_FROM": "💸",
+                "JBOT_EMOJI_STEALING": "💰",
+                "JBOT_EMOJI_SHIELD": "💝",
+                "JBOT_EMOJI_SHIELD_BROKEN": "💔",
+            }
+            return vals.get(key, default)
 
         self.config.get.side_effect = config_side_effect
 
@@ -159,11 +168,6 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
             ),
         ]
 
-        # Mock config for teamup cost
-        self.config.get.side_effect = lambda k, d=None: (
-            25 if k == "JBOT_REINFORCE_COST" else d
-        )
-
         simulator = DailyGameSimulator(
             self.question,
             self.answers,
@@ -172,6 +176,7 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
             self.initial_states,
             self.config,
         )
+
         results = simulator.run()
 
         # P1:

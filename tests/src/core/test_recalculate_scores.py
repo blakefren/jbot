@@ -21,7 +21,21 @@ class TestRecalculateScores(unittest.TestCase):
 
         # Mock config
         self.game_runner.config = MagicMock()
-        self.game_runner.config.get.side_effect = lambda k, d=None: d
+        self.defaults = {
+            "JBOT_BONUS_TRY_CSV": "20,10,5",
+            "JBOT_BONUS_FASTEST_CSV": "10,5,5",
+            "JBOT_BONUS_BEFORE_HINT": "10",
+            "JBOT_BONUS_STREAK_PER_DAY": "5",
+            "JBOT_BONUS_STREAK_CAP": "25",
+            "JBOT_EMOJI_FIRST_TRY": "🎯",
+            "JBOT_EMOJI_BEFORE_HINT": "🧠",
+            "JBOT_EMOJI_FASTEST": "🥇",
+            "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
+            "JBOT_EMOJI_STREAK": "🔥",
+            "JBOT_RIDDLE_HISTORY_DAYS": "30",
+            "JBOT_QUESTION_RETRIES": "10",
+        }
+        self.game_runner.config.get.side_effect = lambda k, d=None: self.defaults.get(k)
 
         # Mock PlayerManager
         self.game_runner.player_manager = MagicMock()

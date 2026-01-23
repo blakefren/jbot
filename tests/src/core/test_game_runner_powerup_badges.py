@@ -14,7 +14,7 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
 
         # Mock config to ensure emojis are what we expect
         self.runner.config = MagicMock()
-        self.runner.config.get.side_effect = lambda key, default=None: {
+        self.defaults = {
             "JBOT_EMOJI_JINXED": "🥶",
             "JBOT_EMOJI_SILENCED": "🤐",
             "JBOT_EMOJI_STOLEN_FROM": "💸",
@@ -25,7 +25,16 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
             "JBOT_EMOJI_FASTEST": "🥇",
             "JBOT_EMOJI_FIRST_TRY": "🎯",
             "JBOT_EMOJI_BEFORE_HINT": "🧠",
-        }.get(key, default)
+            "JBOT_BONUS_TRY_CSV": "20,10,5",
+            "JBOT_BONUS_FASTEST_CSV": "10,5,5",
+            "JBOT_BONUS_BEFORE_HINT": "10",
+            "JBOT_BONUS_STREAK_PER_DAY": "5",
+            "JBOT_BONUS_STREAK_CAP": "25",
+            "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
+        }
+        self.runner.config.get.side_effect = (
+            lambda key, default=None: self.defaults.get(key)
+        )
 
         # Setup basic player scores
         self.mock_dm.get_player_scores.return_value = [

@@ -13,37 +13,34 @@ class ScoreCalculator:
         self.config = config
 
         # Cache config values
-        self.bonus_try_list = self._parse_csv_config("JBOT_BONUS_TRY_CSV", "20,10,5")
-        self.bonus_fastest_list = self._parse_csv_config(
-            "JBOT_BONUS_FASTEST_CSV", "10,5,5"
-        )
+        self.bonus_try_list = self._parse_csv_config("JBOT_BONUS_TRY_CSV")
+        self.bonus_fastest_list = self._parse_csv_config("JBOT_BONUS_FASTEST_CSV")
 
-        self.bonus_before_hint = int(self.config.get("JBOT_BONUS_BEFORE_HINT", 10))
+        self.bonus_before_hint = int(self.config.get("JBOT_BONUS_BEFORE_HINT"))
 
-        self.streak_per_day = int(self.config.get("JBOT_BONUS_STREAK_PER_DAY", 5))
-        self.streak_cap = int(self.config.get("JBOT_BONUS_STREAK_CAP", 25))
+        self.streak_per_day = int(self.config.get("JBOT_BONUS_STREAK_PER_DAY"))
+        self.streak_cap = int(self.config.get("JBOT_BONUS_STREAK_CAP"))
 
         # Emojis for display
-        self.emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯")
-        self.emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠")
-        self.emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST", "🥇")
+        self.emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY")
+        self.emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT")
+        self.emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST")
         self.emoji_fastest_list = self._parse_csv_string_config(
-            "JBOT_EMOJI_FASTEST_CSV", "🥇,🥈,🥉"
+            "JBOT_EMOJI_FASTEST_CSV"
         )
-        self.emoji_streak = self.config.get("JBOT_EMOJI_STREAK", "🔥")
+        self.emoji_streak = self.config.get("JBOT_EMOJI_STREAK")
 
-    def _parse_csv_config(self, key: str, default: str) -> list[int]:
+    def _parse_csv_config(self, key: str) -> list[int]:
         """Parses a CSV string from config into a list of integers."""
-        raw = self.config.get(key, default)
+        raw = self.config.get(key)
         try:
             return [int(x.strip()) for x in raw.split(",") if x.strip()]
         except ValueError:
-            # Fallback for bad format
-            return [int(x.strip()) for x in default.split(",") if x.strip()]
+            return []
 
-    def _parse_csv_string_config(self, key: str, default: str) -> list[str]:
+    def _parse_csv_string_config(self, key: str) -> list[str]:
         """Parses a CSV string from config into a list of strings."""
-        raw = self.config.get(key, default)
+        raw = self.config.get(key)
         return [x.strip() for x in raw.split(",") if x.strip()]
 
     def _get_ordinal(self, n: int) -> str:

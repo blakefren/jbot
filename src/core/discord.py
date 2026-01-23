@@ -35,7 +35,7 @@ def parse_time(time_str: str, default_time: datetime.time) -> datetime.time:
 
 try:
     config_reader = ConfigReader()
-    TIMEZONE_STR = config_reader.get("JBOT_TIMEZONE") or "US/Pacific"
+    TIMEZONE_STR = config_reader.get("JBOT_TIMEZONE")
     TIMEZONE = ZoneInfo(TIMEZONE_STR)
 
     MORNING_TIME_STR = config_reader.get("JBOT_MORNING_TIME")
@@ -528,7 +528,7 @@ async def discord_bot_async(
     sources = []
 
     # 1. Add the main dataset loaded by main.py as a source
-    default_weight = float(config.get("JBOT_DEFAULT_DATASET_WEIGHT", 100.0))
+    default_weight = float(config.get("JBOT_DEFAULT_DATASET_WEIGHT"))
     if questions:
         sources.append(StaticQuestionSource("main_dataset", default_weight, questions))
 

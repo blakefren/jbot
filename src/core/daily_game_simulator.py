@@ -121,7 +121,7 @@ class DailyGameSimulator:
                 partner_state.team_partner = user_id
 
                 # Teamup cost
-                cost = int(self.config.get("JBOT_REINFORCE_COST", 25))
+                cost = int(self.config.get("JBOT_REINFORCE_COST"))
                 state.score_earned -= cost
                 partner_state.score_earned -= cost
 
@@ -287,9 +287,9 @@ class DailyGameSimulator:
         badges = []
         bonuses = state.bonuses
         if "first_try" in bonuses:
-            badges.append(self.config.get("JBOT_EMOJI_FIRST_TRY", "🎯"))
+            badges.append(self.config.get("JBOT_EMOJI_FIRST_TRY"))
         if "before_hint" in bonuses:
-            badges.append(self.config.get("JBOT_EMOJI_BEFORE_HINT", "🧠"))
+            badges.append(self.config.get("JBOT_EMOJI_BEFORE_HINT"))
         if "fastest" in bonuses:
-            badges.append(self.config.get("JBOT_EMOJI_FASTEST", "🥇"))
+            badges.append(self.config.get("JBOT_EMOJI_FASTEST"))
         return badges

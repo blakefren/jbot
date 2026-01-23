@@ -57,6 +57,37 @@ class TestGameRunner(unittest.TestCase):
 
     def setUp(self):
         """Set up for the tests."""
+        # Patch ConfigReader to control config values
+        self.config_patcher = patch("src.core.game_runner.ConfigReader")
+        self.MockConfigReader = self.config_patcher.start()
+        self.addCleanup(self.config_patcher.stop)
+
+        # Setup Mock Config Instance
+        self.mock_config_instance = self.MockConfigReader.return_value
+        self.defaults = {
+            "JBOT_RIDDLE_HISTORY_DAYS": "30",
+            "JBOT_QUESTION_RETRIES": "10",
+            "JBOT_ENABLE_FIGHT": "True",
+            "JBOT_EMOJI_FASTEST": "🥇",
+            "JBOT_EMOJI_FIRST_TRY": "🎯",
+            "JBOT_EMOJI_BEFORE_HINT": "🧠",
+            "JBOT_EMOJI_STREAK": "🔥",
+            "JBOT_EMOJI_JINXED": "🥶",
+            "JBOT_EMOJI_SILENCED": "🤐",
+            "JBOT_EMOJI_STOLEN_FROM": "💸",
+            "JBOT_EMOJI_STEALING": "💰",
+            "JBOT_EMOJI_SHIELD": "💝",
+            "JBOT_EMOJI_SHIELD_BROKEN": "💔",
+            "JBOT_PLAYER_ROLE_NAME": "Players",
+            "JBOT_FIRST_PLACE_ROLE_NAME": "First Place",
+        }
+        self.mock_config_instance.get.side_effect = lambda k, d=None: self.defaults.get(
+            k
+        )
+        self.mock_config_instance.get_bool.side_effect = lambda k, d=False: (
+            str(self.defaults.get(k)).lower() == "true" if k in self.defaults else d
+        )
+
         self.mock_question_selector = MagicMock()
         self.mock_data_manager = MagicMock(spec=DataManager)
         self.mock_data_manager.get_hint_sent_timestamp.return_value = None
