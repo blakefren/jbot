@@ -19,6 +19,9 @@ class TestGuessHandler(unittest.TestCase):
         self.managers["test_manager"].can_answer.return_value = (True, "")
         self.player_manager.can_answer.return_value = (True, "")
 
+        # Default return value for get_correct_guess_count to avoid TypeError in ScoreCalculator
+        self.data_manager.get_correct_guess_count.return_value = 0
+
         self.guess_handler = GuessHandler(
             self.data_manager,
             self.player_manager,
@@ -315,6 +318,9 @@ class TestGuessHandler(unittest.TestCase):
         # Mock guess history
         self.data_manager.read_guess_history.return_value = []
 
+        # Ensure no fastest bonus for simple math check
+        self.data_manager.get_correct_guess_count.return_value = 10
+
         is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
             player_id, player_name, guess
         )
@@ -345,6 +351,9 @@ class TestGuessHandler(unittest.TestCase):
 
         # Mock guess history (empty for this NEW question)
         self.data_manager.read_guess_history.return_value = []
+
+        # Ensure no fastest bonus
+        self.data_manager.get_correct_guess_count.return_value = 10
 
         is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
             player_id, player_name, guess
@@ -393,8 +402,8 @@ class TestGuessHandler(unittest.TestCase):
             )
 
             self.assertTrue(is_correct)
-            # Base points (100) + First Try (20) + Before Hint Bonus (10) = 130
-            self.assertEqual(points, 130)
+            # Base points (100) + First Try (20) + Before Hint Bonus (10) + 2nd Fastest (5) = 135
+            self.assertEqual(points, 135)
             self.assertTrue(any("Pre-hint!" in msg for msg in bonuses))
 
     def test_validation_logic(self):

@@ -185,7 +185,7 @@ class TestDailyGameSimulator(unittest.TestCase):
         results = simulator.run()
 
         self.assertEqual(results["p3"]["score_earned"], 135)
-        self.assertEqual(results["p1"]["score_earned"], 160)
+        self.assertEqual(results["p1"]["score_earned"], 165)
 
         # P1 streak reset cost?
         # handle_powerup for steal:

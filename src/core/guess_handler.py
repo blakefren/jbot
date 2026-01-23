@@ -340,15 +340,15 @@ class GuessHandler:
             # Gather inputs for ScoreCalculator
             base_value = self.daily_q.clue_value or 100
 
-            # Check Fastest (before logging this guess)
+            # Check Rank (before logging this guess)
             existing_correct_count = self.data_manager.get_correct_guess_count(
                 self.daily_question_id
             )
-            is_fastest = existing_correct_count == 0
+            answer_rank = existing_correct_count + 1
 
-            # Check First Try (before logging this guess)
+            # Check Attempt Number (before logging this guess)
             previous_guesses = self.get_player_guesses(player_id)
-            is_first_try = len(previous_guesses) == 0
+            guesses_count = len(previous_guesses) + 1
 
             # Check Before Hint (before logging this guess)
             is_before_hint = False
@@ -376,9 +376,9 @@ class GuessHandler:
             points_earned, bonus_values, bonus_messages = (
                 self.score_calculator.calculate_points(
                     question_value=base_value,
-                    is_first_try=is_first_try,
+                    guesses_count=guesses_count,
                     is_before_hint=is_before_hint,
-                    is_fastest=is_fastest,
+                    answer_rank=answer_rank,
                     streak_length=new_streak,
                 )
             )

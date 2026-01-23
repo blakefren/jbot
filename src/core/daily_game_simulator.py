@@ -36,6 +36,7 @@ class DailyGameSimulator:
 
         # Global daily state
         self.first_correct_timestamp = None
+        self.correct_answers_count = 0
 
         # Helper for matching
         self.guess_handler = GuessHandler(None, None, self.question, None, {})
@@ -173,7 +174,7 @@ class DailyGameSimulator:
         # Calculate Points
         base_value = self.question.clue_value or 100
 
-        is_first_try = state.guesses_count == 1
+        guesses_count = state.guesses_count
 
         is_before_hint = True
         if self.hint_timestamp:
@@ -181,13 +182,10 @@ class DailyGameSimulator:
             if timestamp > self.hint_timestamp:
                 is_before_hint = False
 
-        # Check Fastest
-        is_fastest = False
-        if self.first_correct_timestamp is None:
-            self.first_correct_timestamp = timestamp
-            is_fastest = True
-        elif self.first_correct_timestamp == timestamp:
-            is_fastest = True
+        # Check Answer Rank
+        # In live game, this is based on DB count strictly.
+        self.correct_answers_count += 1
+        answer_rank = self.correct_answers_count
 
         # Streak Prep
         player = self.initial_player_states.get(user_id)
@@ -202,9 +200,9 @@ class DailyGameSimulator:
         # Calculate via shared engine
         points, bonuses, _ = self.score_calculator.calculate_points(
             question_value=base_value,
-            is_first_try=is_first_try,
+            guesses_count=guesses_count,
             is_before_hint=is_before_hint,
-            is_fastest=is_fastest,
+            answer_rank=answer_rank,
             streak_length=streak_length,
         )
 

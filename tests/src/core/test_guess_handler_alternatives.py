@@ -16,6 +16,12 @@ class TestGuessHandlerAlternatives(unittest.TestCase):
         # Mock alternative answers
         self.data_manager.get_alternative_answers.return_value = ["Alt Answer", "800"]
 
+        # Mock required data_manager methods to return valid types
+        self.data_manager.get_correct_guess_count.return_value = 0
+        self.data_manager.read_guess_history.return_value = []
+        self.data_manager.get_hint_sent_timestamp.return_value = None
+        self.data_manager.get_last_correct_guess_date.return_value = None
+
         self.guess_handler = GuessHandler(
             self.data_manager,
             self.player_manager,
