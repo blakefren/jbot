@@ -23,6 +23,10 @@ class GeminiManager:
         """
         Generates content using the Gemini API.
 
+        Note: This is a blocking call that can take 10+ seconds. In the future,
+        consider making this async using asyncio.to_thread() to prevent blocking
+        Discord's event loop during API calls.
+
         Args:
             text: The prompt text.
             generation_config: Optional configuration for generation (e.g., temperature).

@@ -113,6 +113,12 @@ class GameRunner:
         return False
 
     def set_daily_question(self):
+        """
+        Sets the daily question for today, generating a hint if needed.
+
+        Note: Hint generation can block for 10+ seconds. Future improvement:
+        make this async to prevent blocking Discord's event loop.
+        """
         logging.debug(f"GameRunner.set_daily_question.")
 
         # Check for an existing daily question ID for today

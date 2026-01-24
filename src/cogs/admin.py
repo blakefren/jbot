@@ -189,6 +189,7 @@ class Admin(commands.Cog):
 
             original_hint = self.bot.game.daily_q.hint
             try:
+                # Note: This is a blocking call that may take 10+ seconds
                 new_hint = self.bot.game.question_selector.get_hint_from_gemini(
                     self.bot.game.daily_q
                 )
