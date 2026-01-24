@@ -9,9 +9,10 @@ A daily bot for group trivia questions and competition.
     ```
     pip install -r requirements.txt
     ```
-2.  Create a `.env` file in the root directory by copying the `.env.template` file. Fill out the required fields, such as your Discord bot token and the paths to your question datasets.
-3.  Enable or disable game tracks (Fight, Power-up, Coop) in the `.env` file using the `JBOT_ENABLE_*` flags.
-4.  The database will be created automatically when you run the bot for the first time.
+2.  Create a `.env` file in the root directory by copying the `.env.template` file. Fill out the required fields, such as your Discord bot token.
+3.  Configure your question sources in `sources.toml`. This file defines which datasets to use, their weights for selection, and dataset-specific settings. See the comments in `sources.toml` for examples.
+4.  Enable or disable game tracks (Fight, Power-up, Coop) in the `.env` file using the `JBOT_ENABLE_*` flags.
+5.  The database will be created automatically when you run the bot for the first time.
 
 ## Running the Bot
 
@@ -95,7 +96,13 @@ The database schema is defined in `db/schema.sql`. When the bot is run for the f
 
 ## Datasets
 
-You'll have to download these yourself and update their paths in `.env`. Some assembly required. No guarantees on licensing, etc.
+You'll have to download these yourself and update their paths in `sources.toml`. Some assembly required. No guarantees on licensing, etc.
+
+The `sources.toml` file in the root directory controls:
+- Dataset file paths (in the `[datasets]` section)
+- Question sources and their selection weights (in `[[source]]` entries)
+- Dataset-specific settings (like Jeopardy score substitution)
+- AI-generated riddle sources via Gemini
 
 ### Jeopardy!
 

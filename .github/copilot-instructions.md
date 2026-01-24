@@ -29,7 +29,7 @@ The project uses an Event Sourcing pattern to calculate daily scores retroactive
 ### AI-Generated Content
 The project uses Google's Gemini AI for dynamic content generation:
 *   **GeminiManager**: Located in `src/core/gemini_manager.py`, handles all interactions with the Gemini API.
-*   **Question Generation**: Configured via `JBOT_EXTRA_SOURCES` in `.env`, allows creating riddles with varying difficulty.
+*   **Question Generation**: Configured in `sources.toml` via `type="gemini"` sources, allows creating riddles with varying difficulty.
 *   **Hint Generation**: Falls back to Gemini if no hint is provided with the question.
 *   **API Key**: Required in `.env` as `GEMINI_API_KEY` (not in template for security).
 *   When adding Gemini features, use the existing `GeminiManager` singleton and ensure graceful fallback if the API is unavailable.
@@ -91,16 +91,22 @@ As your partner, I will adhere to the following principles:
 *   **File Edits**: I will make changes to files directly using the available tools, clearly explaining the changes I am making.
 *   **Dependencies**: If a task requires a new dependency, I will ask for your approval before adding it to `requirements.txt`.
 *   **Ambiguity**: If a request is unclear, I will ask for clarification before proceeding.
-*   **Configuration**: Configuration is managed via `.env` files. When adding new configuration options:
-    - Always add new config keys to `.env.template` with descriptive comments
-    - Ensure the `ConfigReader` in `src/cfg/main.py` can handle them
-    - Use appropriate getter methods: `get()`, `get_bool()`, or add specialized getters
+*   **Configuration**: Configuration uses both `.env` and `sources.toml`:
+    - **`.env`**: For environment-specific settings (tokens, scheduling, feature flags)
+        - Always add new config keys to `.env.template` with descriptive comments
+        - Ensure the `ConfigReader` in `src/cfg/main.py` can handle them
+        - Use appropriate getter methods: `get()`, `get_bool()`, or add specialized getters
+    - **`sources.toml`**: For question source configuration (in root directory)
+        - All dataset paths defined in `[datasets]` section
+        - All question sources defined as `[[source]]` entries with `type="file"` or `type="gemini"`
+        - Dataset-specific settings (like `final_jeopardy_score_sub`) configured per-source
+        - At least one valid source required for bot to start
     - **Configuration Categories**:
-        - **Features**: `JBOT_ENABLE_*` flags for feature toggles
-        - **Scheduling**: `JBOT_MORNING_TIME`, `JBOT_REMINDER_TIME` for daily events
-        - **Question Selection**: `JBOT_QUESTION_DATASET`, `JBOT_EXTRA_SOURCES`, dataset weights
-        - **Scoring/Bonuses**: `JBOT_BONUS_*` for point calculations
-        - **Discord**: Bot tokens, role names
+        - **Features**: `JBOT_ENABLE_*` flags for feature toggles (in `.env`)
+        - **Scheduling**: `JBOT_MORNING_TIME`, `JBOT_REMINDER_TIME` for daily events (in `.env`)
+        - **Question Sources**: All configured in `sources.toml` - no dataset settings in `.env`
+        - **Scoring/Bonuses**: `JBOT_BONUS_*` for point calculations (in `.env`)
+        - **Discord**: Bot tokens, role names (in `.env`)
 *   **Database Management**: The database schema is defined in `db/schema.sql`. To modify the database, I will update `db/schema.sql` and run `db/update_schema.py` to apply the changes to the local `jbot.db`.
 *   **Documentation**: I will check `docs/` for any architectural plans or investigation notes before implementing major features.
 *   **Logging**: Use Python's standard `logging` module throughout (configured in `src/logging_config.py`). Log levels: INFO for normal operations, WARNING for recoverable issues, ERROR for failures. Include appropriate logging for debugging and monitoring when adding features.
