@@ -3,8 +3,28 @@ name: Game Simulation
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'src/core/daily_game_simulator.py'
+      - 'src/core/events.py'
+      - 'src/core/guess_handler.py'
+      - 'src/core/player.py'
+      - 'src/core/scoring.py'
+      - 'src/core/state.py'
+      - 'scripts/simulate_powerups.py'
+      - '.env.template'
+      - '.github/workflows/simulation.yml'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'src/core/daily_game_simulator.py'
+      - 'src/core/events.py'
+      - 'src/core/guess_handler.py'
+      - 'src/core/player.py'
+      - 'src/core/scoring.py'
+      - 'src/core/state.py'
+      - 'scripts/simulate_powerups.py'
+      - '.env.template'
+      - '.github/workflows/simulation.yml'
 
 jobs:
   simulate:
