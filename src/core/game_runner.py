@@ -36,6 +36,7 @@ class GameRunner:
         self.subscribed_contexts = self.data_manager.get_all_subscribers()
         self.daily_q = None
         self.daily_question_id = None
+        self.question_db_id = None  # Database ID from questions table
         self.managers = {}
         self.config = ConfigReader()
         self.reminder_time = None
@@ -117,7 +118,9 @@ class GameRunner:
         # Check for an existing daily question ID for today
         daily_question_data = self.data_manager.get_todays_daily_question()
         if daily_question_data:
-            self.daily_q, self.daily_question_id = daily_question_data
+            self.daily_q, self.daily_question_id, self.question_db_id = (
+                daily_question_data
+            )
             logging.info(
                 f"Daily question already set with ID: {self.daily_question_id}"
             )
@@ -161,12 +164,14 @@ class GameRunner:
                     )
 
             self.daily_question_id = self.data_manager.log_daily_question(self.daily_q)
-            if self.daily_question_id is None:
-                # If log_daily_question returns None, it means a question for today already exists.
-                # We need to get the ID of that existing question.
-                daily_question_data = self.data_manager.get_todays_daily_question()
-                if daily_question_data:
-                    self.daily_question_id = daily_question_data[1]
+
+            # Get the complete question data (handles both new and existing questions)
+            daily_question_data = self.data_manager.get_todays_daily_question()
+            if daily_question_data:
+                self.daily_q, self.daily_question_id, self.question_db_id = (
+                    daily_question_data
+                )
+
             logging.info(f"Daily question set with ID: {self.daily_question_id}")
 
     def end_daily_game(self):
@@ -181,6 +186,7 @@ class GameRunner:
 
         self.daily_q = None
         self.daily_question_id = None
+        self.question_db_id = None
 
         for manager in self.managers.values():
             if hasattr(manager, "reset_daily_state"):
@@ -252,7 +258,7 @@ class GameRunner:
         initial_players = self.data_manager.get_all_players()
 
         answers = [self.daily_q.answer] + self.data_manager.get_alternative_answers(
-            self.daily_q.id
+            self.question_db_id
         )
         hint_ts = self.data_manager.get_hint_sent_timestamp(self.daily_question_id)
 
@@ -271,8 +277,6 @@ class GameRunner:
         # Now restore state to PowerUpManager
         for player_id, state in simulator.daily_state.items():
             self.managers["powerup"].restore_daily_state(player_id, state)
-
-        logging.info("Game state restored.")
 
     def handle_guess(
         self, player_id: int, player_name: str, guess: str

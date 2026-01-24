@@ -163,7 +163,7 @@ class DataManager:
         daily_question_info = self.get_todays_daily_question()
 
         if daily_question_info and not force_new:
-            _, daily_question_id = daily_question_info
+            _, daily_question_id, _ = daily_question_info
             return daily_question_id
 
         # Log the daily question event
@@ -402,10 +402,13 @@ class DataManager:
             hint=q_data["hint_text"],
         )
 
-    def get_todays_daily_question(self) -> Optional[tuple[Question, int]]:
+    def get_todays_daily_question(self) -> Optional[tuple[Question, int, int]]:
         """
-        Retrieves today's daily question as a Question object and its ID.
+        Retrieves today's daily question as a Question object and its IDs.
         If multiple questions exist for today (e.g., from skip), returns the newest.
+
+        Returns:
+            Optional[tuple[Question, int, int]]: (Question object, daily_question_id, question_id) or None
         """
         today = date.today()
         query = "SELECT id, question_id FROM daily_questions WHERE sent_at = ? ORDER BY id DESC LIMIT 1"
@@ -418,11 +421,12 @@ class DataManager:
 
         question = self.get_question_by_id(daily_question_info["question_id"])
         daily_question_id = daily_question_info["id"]
+        question_id = daily_question_info["question_id"]
 
         if not question:
             return None
 
-        return question, daily_question_id
+        return question, daily_question_id, question_id
 
     def get_most_recent_daily_question(self) -> Optional[tuple[Question, int, date]]:
         """

@@ -49,7 +49,7 @@ class TestSkipLogic(unittest.TestCase):
         self.assertNotEqual(dq_id1, dq_id2)
 
         # Verify today's daily question is the new one
-        today_q, today_dq_id = self.data_manager.get_todays_daily_question()
+        today_q, today_dq_id, _ = self.data_manager.get_todays_daily_question()
         self.assertEqual(today_dq_id, dq_id2)
         self.assertEqual(today_q.question, "Q2")
 

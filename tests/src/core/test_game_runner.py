@@ -134,6 +134,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.get_todays_daily_question.return_value = (
             self.mock_question,
             5,
+            100,  # question_db_id
         )
 
         self.game_runner.set_daily_question()
@@ -693,7 +694,7 @@ class TestGameRunner(unittest.TestCase):
         # First call returns None (no existing question), second returns existing after log
         self.mock_data_manager.get_todays_daily_question.side_effect = [
             None,
-            (question_with_hint, 555),
+            (question_with_hint, 555, 100),  # Added question_db_id
         ]
         self.mock_data_manager.log_daily_question.return_value = None
 
