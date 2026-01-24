@@ -35,7 +35,11 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
     async def test_resend_morning_silent(self):
         """Tests resend command for morning message with silent=True."""
         await self.cog.resend.callback(
-            self.cog, self.ctx, message_type="morning", silent=True
+            self.cog,
+            self.ctx,
+            message_type="morning",
+            silent=True,
+            regenerate_hint=False,
         )
 
         self.ctx.defer.assert_called_once()
@@ -49,7 +53,11 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
     async def test_resend_morning_not_silent(self):
         """Tests resend command for morning message with silent=False."""
         await self.cog.resend.callback(
-            self.cog, self.ctx, message_type="morning", silent=False
+            self.cog,
+            self.ctx,
+            message_type="morning",
+            silent=False,
+            regenerate_hint=False,
         )
 
         self.ctx.defer.assert_called_once()
@@ -61,7 +69,11 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
     async def test_resend_reminder_silent(self):
         """Tests resend command for reminder message with silent=True."""
         await self.cog.resend.callback(
-            self.cog, self.ctx, message_type="reminder", silent=True
+            self.cog,
+            self.ctx,
+            message_type="reminder",
+            silent=True,
+            regenerate_hint=False,
         )
 
         self.ctx.defer.assert_called_once()
@@ -75,7 +87,11 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
     async def test_resend_reminder_not_silent(self):
         """Tests resend command for reminder message with silent=False."""
         await self.cog.resend.callback(
-            self.cog, self.ctx, message_type="reminder", silent=False
+            self.cog,
+            self.ctx,
+            message_type="reminder",
+            silent=False,
+            regenerate_hint=False,
         )
 
         self.ctx.defer.assert_called_once()
@@ -87,7 +103,11 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
     async def test_resend_evening_silent(self):
         """Tests resend command for evening message with silent=True."""
         await self.cog.resend.callback(
-            self.cog, self.ctx, message_type="evening", silent=True
+            self.cog,
+            self.ctx,
+            message_type="evening",
+            silent=True,
+            regenerate_hint=False,
         )
 
         self.ctx.defer.assert_called_once()
@@ -101,7 +121,11 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
     async def test_resend_evening_not_silent(self):
         """Tests resend command for evening message with silent=False."""
         await self.cog.resend.callback(
-            self.cog, self.ctx, message_type="evening", silent=False
+            self.cog,
+            self.ctx,
+            message_type="evening",
+            silent=False,
+            regenerate_hint=False,
         )
 
         self.ctx.defer.assert_called_once()
@@ -113,7 +137,11 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
     async def test_resend_invalid_message_type(self):
         """Tests resend command with an invalid message type."""
         await self.cog.resend.callback(
-            self.cog, self.ctx, message_type="invalid", silent=False
+            self.cog,
+            self.ctx,
+            message_type="invalid",
+            silent=False,
+            regenerate_hint=False,
         )
 
         self.ctx.defer.assert_called_once()
@@ -123,6 +151,124 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         self.ctx.send.assert_called_once_with(
             "Invalid message type. Use 'morning', 'reminder', or 'evening'."
         )
+
+    async def test_resend_with_regenerate_hint_success(self):
+        """Tests resend command with regenerate_hint=True."""
+        from data.readers.question import Question
+
+        # Setup daily question
+        mock_question = Question(
+            question="Test question?",
+            answer="Test answer",
+            category="Test",
+            data_source="test",
+            hint="Old hint",
+        )
+        self.bot.game.daily_q = mock_question
+        self.bot.game.daily_question_id = 1
+        self.bot.game.question_selector = MagicMock()
+        self.bot.game.question_selector.get_hint_from_gemini = MagicMock(
+            return_value="New hint"
+        )
+
+        await self.cog.resend.callback(
+            self.cog,
+            self.ctx,
+            message_type="reminder",
+            silent=True,
+            regenerate_hint=True,
+        )
+
+        self.ctx.defer.assert_called_once()
+        self.bot.game.question_selector.get_hint_from_gemini.assert_called_once_with(
+            mock_question
+        )
+        self.bot.data_manager.update_daily_question_hint.assert_called_once_with(
+            1, "New hint"
+        )
+        self.assertEqual(self.bot.game.daily_q.hint, "New hint")
+        self.bot.reminder_message_task.assert_called_once_with(silent=True)
+
+    async def test_resend_with_regenerate_hint_no_question(self):
+        """Tests resend with regenerate_hint=True when there's no active question."""
+        self.bot.game.daily_q = None
+
+        await self.cog.resend.callback(
+            self.cog,
+            self.ctx,
+            message_type="reminder",
+            silent=True,
+            regenerate_hint=True,
+        )
+
+        self.ctx.defer.assert_called_once()
+        self.ctx.send.assert_called_once_with(
+            "Cannot regenerate hint: no active question.", ephemeral=True
+        )
+        self.bot.reminder_message_task.assert_not_called()
+
+    async def test_resend_with_regenerate_hint_generation_fails(self):
+        """Tests resend when hint generation returns None."""
+        from data.readers.question import Question
+
+        mock_question = Question(
+            question="Test question?",
+            answer="Test answer",
+            category="Test",
+            data_source="test",
+            hint="Old hint",
+        )
+        self.bot.game.daily_q = mock_question
+        self.bot.game.question_selector = MagicMock()
+        self.bot.game.question_selector.get_hint_from_gemini = MagicMock(
+            return_value=None
+        )
+
+        await self.cog.resend.callback(
+            self.cog,
+            self.ctx,
+            message_type="reminder",
+            silent=True,
+            regenerate_hint=True,
+        )
+
+        self.ctx.defer.assert_called_once()
+        self.ctx.send.assert_called_once_with(
+            "❌ Hint generation returned empty result.", ephemeral=True
+        )
+        self.bot.reminder_message_task.assert_not_called()
+
+    async def test_resend_with_regenerate_hint_exception(self):
+        """Tests resend when hint generation raises an exception."""
+        from data.readers.question import Question
+
+        mock_question = Question(
+            question="Test question?",
+            answer="Test answer",
+            category="Test",
+            data_source="test",
+            hint="Old hint",
+        )
+        self.bot.game.daily_q = mock_question
+        self.bot.game.question_selector = MagicMock()
+        self.bot.game.question_selector.get_hint_from_gemini = MagicMock(
+            side_effect=Exception("API Error")
+        )
+
+        await self.cog.resend.callback(
+            self.cog,
+            self.ctx,
+            message_type="reminder",
+            silent=True,
+            regenerate_hint=True,
+        )
+
+        self.ctx.defer.assert_called_once()
+        # Check that error message contains the exception
+        call_args = self.ctx.send.call_args[0][0]
+        self.assertIn("❌ Error generating hint:", call_args)
+        self.assertIn("API Error", call_args)
+        self.bot.reminder_message_task.assert_not_called()
 
     async def test_refund_updates_player_data(self):
         """

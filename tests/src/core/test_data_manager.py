@@ -138,6 +138,41 @@ class TestDataManager(unittest.TestCase):
         daily_question_from_db = self.db.execute_query("SELECT * FROM daily_questions")
         self.assertEqual(len(daily_question_from_db), 1)
 
+    def test_update_daily_question_hint(self):
+        """Test updating the hint for a daily question."""
+        question = Question(
+            category="TESTING",
+            clue_value=100,
+            question="What is a test?",
+            answer="A trial",
+            data_source="test",
+            hint="Original hint",
+            metadata={},
+        )
+        daily_q_id = self.data_manager.log_daily_question(question)
+
+        # Update the hint
+        new_hint = "Updated hint from Gemini"
+        self.data_manager.update_daily_question_hint(daily_q_id, new_hint)
+
+        # Verify hint was updated in questions table
+        question_from_db = self.db.execute_query(
+            "SELECT hint_text FROM questions WHERE question_text = 'What is a test?'"
+        )
+        self.assertEqual(len(question_from_db), 1)
+        self.assertEqual(question_from_db[0]["hint_text"], new_hint)
+
+    def test_update_daily_question_hint_invalid_id(self):
+        """Test updating hint with invalid daily question ID."""
+        # Should not raise an error, just log it
+        self.data_manager.update_daily_question_hint(999, "Some hint")
+
+        # No questions should have been updated
+        question_from_db = self.db.execute_query(
+            "SELECT * FROM questions WHERE hint_text = 'Some hint'"
+        )
+        self.assertEqual(len(question_from_db), 0)
+
     def test_log_player_guess(self):
         # First, log a daily question to guess against
         q = Question(question="q1", answer="a1", category="cat", clue_value=100)

@@ -5,6 +5,7 @@ from data.readers.question import Question
 from src.core.player import Player
 from src.core.subscriber import Subscriber
 import os
+import logging
 
 # Project root for file paths
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -178,6 +179,29 @@ class DataManager:
         self.create_daily_snapshot(daily_question_id)
 
         return daily_question_id
+
+    def update_daily_question_hint(self, daily_question_id: int, hint: str):
+        """
+        Updates the hint text for a daily question.
+
+        Args:
+            daily_question_id (int): The daily question ID.
+            hint (str): The new hint text.
+        """
+        # Get the question_id from daily_questions
+        query = "SELECT question_id FROM daily_questions WHERE id = ?"
+        result = self._db.execute_query(query, (daily_question_id,))
+
+        if not result:
+            logging.error(f"Daily question ID {daily_question_id} not found")
+            return
+
+        question_id = result[0]["question_id"]
+
+        # Update the hint in the questions table
+        update_query = "UPDATE questions SET hint_text = ? WHERE id = ?"
+        self._db.execute_update(update_query, (hint, question_id))
+        logging.info(f"Updated hint for question {question_id}")
 
     def create_daily_snapshot(self, daily_question_id: int):
         """

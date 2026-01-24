@@ -170,10 +170,46 @@ class Admin(commands.Cog):
         ]
     )
     async def resend(
-        self, ctx: commands.Context, message_type: str, silent: bool = True
+        self,
+        ctx: commands.Context,
+        message_type: str,
+        silent: bool = True,
+        regenerate_hint: bool = False,
     ):
-        """(admin) Resend a scheduled message."""
+        """(admin) Resend a scheduled message. Optionally regenerate the hint before resending."""
         await ctx.defer()
+
+        # Regenerate hint if requested
+        if regenerate_hint:
+            if not self.bot.game.daily_q:
+                await ctx.send(
+                    "Cannot regenerate hint: no active question.", ephemeral=True
+                )
+                return
+
+            original_hint = self.bot.game.daily_q.hint
+            try:
+                new_hint = self.bot.game.question_selector.get_hint_from_gemini(
+                    self.bot.game.daily_q
+                )
+                if new_hint:
+                    self.bot.game.daily_q.hint = new_hint
+                    self.bot.data_manager.update_daily_question_hint(
+                        self.bot.game.daily_question_id, new_hint
+                    )
+                    await ctx.send(
+                        f"✅ Hint regenerated.\n**Old:** ||{original_hint}||\n**New:** ||{new_hint}||",
+                        ephemeral=True,
+                    )
+                else:
+                    await ctx.send(
+                        "❌ Hint generation returned empty result.", ephemeral=True
+                    )
+                    return
+            except Exception as e:
+                await ctx.send(f"❌ Error generating hint: {e}", ephemeral=True)
+                return
+
         if message_type.lower() == "morning":
             await self.bot.morning_message_task(silent=silent)
             if not silent:
@@ -191,7 +227,7 @@ class Admin(commands.Cog):
                 "Invalid message type. Use 'morning', 'reminder', or 'evening'."
             )
 
-        if silent:
+        if silent and not regenerate_hint:
             await ctx.send(f"Silently resent {message_type} message.", ephemeral=True)
 
     @admin.command(name="skip", description="Skips the current daily question.")
