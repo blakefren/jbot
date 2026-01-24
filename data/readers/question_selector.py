@@ -104,7 +104,7 @@ class QuestionSelector:
             logging.error("Hint prompt file not found.")
             return None
 
-        prompt = prompt.replace("[Insert your riddle here]", question.question)
+        prompt = prompt.replace("[Insert your question here]", question.question)
         prompt = prompt.replace("[Insert your answer here]", question.answer)
 
         response_text = self.gemini_manager.generate_content(prompt)
