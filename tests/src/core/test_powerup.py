@@ -364,11 +364,19 @@ class TestPowerUpManager(unittest.TestCase):
         msg1 = manager.jinx("1", "2", "q1")
         self.assertIn("jinxed", msg1)
 
+        # Verify first usage was logged
+        self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)
+        first_call = self.data_manager.log_powerup_usage.call_args_list[0]
+        self.assertEqual(first_call[0], ("1", "jinx", "2", "q1"))
+
         # Second jinx on same target should fail
         # Need a different attacker because attacker 1 is now silenced/used powerup
         with self.assertRaises(PowerUpError) as cm:
             manager.jinx("3", "2", "q1")
         self.assertIn("already been jinxed", str(cm.exception))
+
+        # Verify second usage was NOT logged (still only 1 call)
+        self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)
 
     def test_duplicate_steal(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -376,10 +384,18 @@ class TestPowerUpManager(unittest.TestCase):
         msg1 = manager.steal("1", "2", "q1")
         self.assertIn("sacrificed your streak", msg1)
 
+        # Verify first usage was logged
+        self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)
+        first_call = self.data_manager.log_powerup_usage.call_args_list[0]
+        self.assertEqual(first_call[0], ("1", "steal", "2", "q1"))
+
         # Second steal on same target should fail
         with self.assertRaises(PowerUpError) as cm:
             manager.steal("3", "2", "q1")
         self.assertIn("already being targeted for theft", str(cm.exception))
+
+        # Verify second usage was NOT logged (still only 1 call)
+        self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)
 
     def test_jinx_resolution_message_content(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)

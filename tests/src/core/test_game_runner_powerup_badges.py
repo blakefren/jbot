@@ -130,3 +130,48 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
 
         # Should NOT have shield emoji
         self.assertNotIn("💝", leaderboard)
+
+    def test_leaderboard_duplicate_steal_blocked(self):
+        """Test that when a second steal attempt is blocked, the target doesn't get duplicate badges."""
+        # Only p1's steal was successful - p2's was blocked
+        # Database should only have one steal record for target p3
+        self.mock_dm.get_powerup_usages_for_question.return_value = [
+            {"powerup_type": "steal", "user_id": "p1", "target_user_id": "p3"}
+        ]
+        # Mock that all players answered correctly today
+        self.mock_dm.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "p1",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "p2",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:01:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "p3",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:02:00",
+            },
+        ]
+
+        leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        # p3 should have stolen from emoji exactly once
+        # Count occurrences of the emoji in p3's line
+        lines = leaderboard.split("\n")
+        p3_line = next((line for line in lines if "Player3" in line), None)
+        self.assertIsNotNone(p3_line, "Player3 should be in leaderboard")
+
+        # Count the number of 💸 emojis in p3's line - should be exactly 1
+        stolen_from_count = p3_line.count("💸")
+        self.assertEqual(
+            stolen_from_count,
+            1,
+            f"Expected exactly 1 💸 badge, found {stolen_from_count}",
+        )

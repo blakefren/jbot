@@ -316,8 +316,6 @@ class PowerUpManager(BaseManager):
         if attacker_state.powerup_used_today:
             raise PowerUpError("You have already used a power-up today.")
 
-        self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
-
         target_state = self._get_daily_state(target_id)
 
         # Check for duplicate Jinx
@@ -326,6 +324,7 @@ class PowerUpManager(BaseManager):
 
         # Mark Attacker as SILENCED until the hint is sent
         attacker_state.silenced = True
+        self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
 
         # Shield Check
         if target_state.shield_active:
@@ -364,16 +363,15 @@ class PowerUpManager(BaseManager):
         if thief_state.powerup_used_today:
             raise PowerUpError("You have already used a power-up today.")
 
-        # Attacker Penalty: Reset Streak
-        self.player_manager.reset_streak(thief_id)
-        self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
-
         target_state = self._get_daily_state(target_id)
 
         # Check for duplicate Steal
         if target_state.steal_attempt_by:
             raise PowerUpError(f"<@{target_id}> is already being targeted for theft!")
 
+        # Attacker Penalty: Reset Streak (only if checks pass)
+        self.player_manager.reset_streak(thief_id)
+        self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
         thief_state.stealing_from = target_id
 
         # Shield Check
