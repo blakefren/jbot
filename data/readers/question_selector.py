@@ -10,9 +10,6 @@ from src.core.gemini_manager import GeminiManager
 # Project root for file paths
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
-# TODO: This should be handled more centrally
-TIMEZONE = ZoneInfo("US/Pacific")
-
 
 class QuestionSelector:
     """
