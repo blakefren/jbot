@@ -77,29 +77,50 @@ It offers the best balance of readability (comments, clean syntax) and maintaina
 ## Implementation Plan
 
 1.  **Create Configuration File**:
-    *   Create a default `sources.toml` in a new `config/` directory.
-    *   Migrate existing `.env` source rules AND file paths into this file.
+    *   Create `config/sources.toml` in a new `config/` directory (committed to git).
+    *   Migrate ALL existing `.env` source rules and dataset paths into this file.
+    *   Use the centralized `[datasets]` section for all dataset file paths.
+    *   No template file needed - the actual config will be version controlled.
 
 2.  **Update ConfigReader**:
     *   Modify `src/cfg/main.py`.
-    *   Deprecate `JBOT_EXTRA_SOURCES` parsing logic.
-    *   Add method `load_toml_config()` to read the entire file.
-    *   Add helper methods to retrieve dataset paths (e.g., `get_dataset_path(name)`).
+    *   Remove `JBOT_EXTRA_SOURCES` parsing logic entirely (clean break, no backward compatibility).
+    *   Add method `load_toml_config()` to read `config/sources.toml` using `tomllib`.
+    *   Add helper method `get_dataset_path(name)` to retrieve paths from the `[datasets]` section.
+    *   **Error Handling**: Crash gracefully with clear error messages if:
+        - `config/sources.toml` is missing or malformed
+        - A source references a non-existent dataset key
+        - TOML syntax is invalid
 
 3.  **Refactor Data Loader**:
-    *   Update `data/loader.py` to use `ConfigReader.get_dataset_path()` instead of hardcoded `.env` keys like `JBOT_JEOPARDY_LOCAL_PATH`.
+    *   Update `data/loader.py` to use `ConfigReader.get_dataset_path()` instead of `.env` keys like `JBOT_JEOPARDY_LOCAL_PATH`.
+    *   Remove all hardcoded dataset path lookups from `.env`.
 
 4.  **Update QuestionSelector**:
     *   Ensure the loaded TOML dictionary is correctly converted into `QuestionSource` objects.
     *   For file sources, resolve the `dataset` reference to the actual path using the `[datasets]` section.
+    *   Validate that all referenced datasets exist before initializing sources.
 
 5.  **Clean Up `.env`**:
-    *   Remove legacy `JBOT_EXTRA_SOURCES` and `*_LOCAL_PATH` variables from `.env` and `.env.template`.
+    *   Remove `JBOT_EXTRA_SOURCES` and ALL `*_LOCAL_PATH` variables from `.env` and `.env.template`.
+    *   Document the migration in comments or update README if needed.
 
-6.  **Backward Compatibility**:
-    *   (Optional) Check if `JBOT_EXTRA_SOURCES` exists in `.env` and warn the user, or support both for a transition period.
+6.  **Testing**:
+    *   Update existing tests in `tests/src/` for `src/cfg/main.py`.
+    *   Add new test cases for TOML loading, dataset path resolution, and error handling.
+    *   Test graceful crashes for malformed configs and missing dataset references.
 
-## Next Steps
-If approved, I will:
-1.  Create `sources.toml`.
-2.  Refactor `ConfigReader` to use `tomllib`.
+## Pre-Implementation Investigation
+Before implementation, we will:
+1.  Review current `.env.template` to identify all keys being migrated.
+2.  Examine existing `JBOT_EXTRA_SOURCES` parsing code in `ConfigReader`.
+3.  Analyze how `data/loader.py` currently handles dataset paths.
+4.  Review existing tests for `src/cfg/main.py` to understand coverage.
+
+## Implementation Steps
+1.  Create `config/sources.toml` with migrated configuration.
+2.  Refactor `ConfigReader` in `src/cfg/main.py` to use `tomllib`.
+3.  Update `data/loader.py` to use new dataset path resolution.
+4.  Update `QuestionSelector` for TOML-based source loading.
+5.  Clean up `.env` and `.env.template`.
+6.  Update and expand tests for configuration loading.
