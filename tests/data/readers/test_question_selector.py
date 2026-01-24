@@ -105,7 +105,7 @@ class TestQuestionSelector(unittest.TestCase):
     @patch(
         "builtins.open",
         new_callable=mock_open,
-        read_data="Riddle: [Insert your riddle here]\nAnswer: [Insert your answer here]",
+        read_data="Riddle: [Insert your question here]\nAnswer: [Insert your answer here]",
     )
     def test_get_hint_from_gemini_success(self, mock_file):
         self.mock_gemini_manager.generate_content.return_value = "Hint: It's a thing."
