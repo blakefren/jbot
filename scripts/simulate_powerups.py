@@ -5,7 +5,6 @@ import os
 import math
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import List, Optional, Dict
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -44,7 +43,7 @@ class Strategy:
     def __init__(self, name):
         self.name = name
 
-    def decide_action(self, player_id: str, game_state: "GameState") -> List[GameEvent]:
+    def decide_action(self, player_id: str, game_state: "GameState") -> list[GameEvent]:
         raise NotImplementedError
 
     def _get_guess_text(self):

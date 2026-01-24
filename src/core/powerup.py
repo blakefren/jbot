@@ -4,7 +4,6 @@ Implements power-up actions: attack, shield, and wager.
 """
 
 import logging
-from typing import Dict, Optional
 from src.cfg.main import ConfigReader
 from src.core.base_manager import BaseManager
 from src.core.data_manager import DataManager
@@ -50,7 +49,7 @@ class PowerUpManager(BaseManager):
         self.data_manager = data_manager
         self.score_calculator = ScoreCalculator(config)
         # Transient state for the day
-        self.daily_state: Dict[str, DailyPlayerState] = {}
+        self.daily_state: dict[str, DailyPlayerState] = {}
 
     def _get_daily_state(self, player_id: str) -> DailyPlayerState:
         if player_id not in self.daily_state:

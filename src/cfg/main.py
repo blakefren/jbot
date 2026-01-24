@@ -2,12 +2,7 @@ import os
 import shutil
 from dotenv import load_dotenv
 import logging
-
-# Use tomllib for Python 3.11+, fall back to tomli for older versions
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib
+import tomllib
 
 # Define the paths for the .env files
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")

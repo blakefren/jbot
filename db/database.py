@@ -1,6 +1,36 @@
 import sqlite3
 import os
 import logging
+from datetime import date, datetime
+
+
+# Register adapters/converters for Python 3.12+ compatibility
+# This replaces the deprecated default date adapter
+def adapt_date_iso(val):
+    """Adapt datetime.date to ISO 8601 date."""
+    return val.isoformat()
+
+
+def adapt_datetime_iso(val):
+    """Adapt datetime.datetime to ISO 8601 datetime."""
+    return val.isoformat()
+
+
+def convert_date(val):
+    """Convert ISO 8601 date to datetime.date object."""
+    return date.fromisoformat(val.decode())
+
+
+def convert_timestamp(val):
+    """Convert ISO 8601 datetime to datetime.datetime object."""
+    return datetime.fromisoformat(val.decode())
+
+
+# Register the adapters and converters
+sqlite3.register_adapter(date, adapt_date_iso)
+sqlite3.register_adapter(datetime, adapt_datetime_iso)
+sqlite3.register_converter("date", convert_date)
+sqlite3.register_converter("timestamp", convert_timestamp)
 
 
 class Database:

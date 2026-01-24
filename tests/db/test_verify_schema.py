@@ -3,6 +3,7 @@ import os
 import sys
 import sqlite3
 import tempfile
+import time
 from unittest.mock import patch, MagicMock
 from io import StringIO
 
@@ -67,32 +68,50 @@ class TestGetDbSchema(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
 
+        conn = None
         try:
             conn = sqlite3.connect(db_path)
             conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
             conn.commit()
             conn.close()
+            conn = None
 
             result = get_db_schema(db_path)
 
             self.assertEqual(len(result), 1)
             self.assertIn("users", result[0])
         finally:
-            os.unlink(db_path)
+            if conn is not None:
+                conn.close()
+            # Small delay to ensure Windows releases the file handle
+            time.sleep(0.1)
+            try:
+                os.unlink(db_path)
+            except (PermissionError, FileNotFoundError):
+                pass  # Ignore if file is still locked or already deleted
 
     def test_get_db_schema_empty_database(self):
         """Test get_db_schema with empty database."""
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
 
+        conn = None
         try:
             conn = sqlite3.connect(db_path)
             conn.close()
+            conn = None
 
             result = get_db_schema(db_path)
             self.assertEqual(result, [])
         finally:
-            os.unlink(db_path)
+            if conn is not None:
+                conn.close()
+            # Small delay to ensure Windows releases the file handle
+            time.sleep(0.1)
+            try:
+                os.unlink(db_path)
+            except (PermissionError, FileNotFoundError):
+                pass  # Ignore if file is still locked or already deleted
 
 
 class TestGetSqlFileSchema(unittest.TestCase):

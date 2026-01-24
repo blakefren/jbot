@@ -16,8 +16,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        # Updated to 3.11 to avoid EOL warnings and missing importlib.metadata APIs
-        python-version: '3.11'
+        python-version: '3.14'
 
     - name: Install dependencies
       run: |

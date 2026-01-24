@@ -1,4 +1,3 @@
-from typing import Optional
 from datetime import date, datetime
 from db.database import Database
 from data.readers.question import Question
@@ -61,7 +60,7 @@ class DataManager:
         """
         return self.load_players()
 
-    def get_player(self, player_id: str) -> Optional[Player]:
+    def get_player(self, player_id: str) -> Player | None:
         """Retrieves a single player from the database."""
         query = "SELECT id, name, score, answer_streak, active_shield FROM players WHERE id = ?"
         result = self._db.execute_query(query, (player_id,))

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional
 from data.readers.question import Question
 import random
 import logging
@@ -14,7 +13,7 @@ class QuestionSource(ABC):
     Abstract base class for a source of questions.
     """
 
-    def __init__(self, name: str, weight: float, default_points: Optional[int] = None):
+    def __init__(self, name: str, weight: float, default_points: int | None = None):
         self.name = name
         self.weight = weight
         self.default_points = default_points
@@ -22,7 +21,7 @@ class QuestionSource(ABC):
     @abstractmethod
     def get_question(
         self, exclude_hashes: set[str] = None, previous_answers: list[str] = None
-    ) -> Optional[Question]:
+    ) -> Question | None:
         """
         Retrieves a question from this source.
         """
@@ -39,14 +38,14 @@ class StaticQuestionSource(QuestionSource):
         name: str,
         weight: float,
         questions: list[Question],
-        default_points: Optional[int] = None,
+        default_points: int | None = None,
     ):
         super().__init__(name, weight, default_points)
         self.questions = questions
 
     def get_question(
         self, exclude_hashes: set[str] = None, previous_answers: list[str] = None
-    ) -> Optional[Question]:
+    ) -> Question | None:
         if not self.questions:
             logging.warning(f"StaticQuestionSource '{self.name}' has no questions.")
             return None

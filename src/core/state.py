@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Optional, Dict
 
 
 @dataclass
@@ -15,7 +14,7 @@ class DailyPlayerState:
     streak_delta: int = 0
     is_correct: bool = False
     guesses_count: int = 0
-    bonuses: Dict[str, int] = field(default_factory=dict)
+    bonuses: dict[str, int] = field(default_factory=dict)
 
     # Power-up: Wager
     wager: int = 0
@@ -26,15 +25,15 @@ class DailyPlayerState:
     shield_broken: bool = False
 
     # Power-up: Attack (Incoming)
-    jinxed_by: Optional[str] = None  # User ID
-    steal_attempt_by: Optional[str] = None  # User ID
+    jinxed_by: str | None = None  # User ID
+    steal_attempt_by: str | None = None  # User ID
 
     # Power-up: Attack (Outgoing)
     silenced: bool = False  # Result of jinxing
-    stealing_from: Optional[str] = None  # User ID
+    stealing_from: str | None = None  # User ID
 
     # Power-up: Coop
-    team_partner: Optional[str] = None  # User ID
+    team_partner: str | None = None  # User ID
     team_success: bool = False
 
     @property
@@ -43,12 +42,12 @@ class DailyPlayerState:
         return self.score_earned
 
     @property
-    def bonuses_today(self) -> Dict[str, int]:
+    def bonuses_today(self) -> dict[str, int]:
         """Alias for bonuses."""
         return self.bonuses
 
     @bonuses_today.setter
-    def bonuses_today(self, value: Dict[str, int]):
+    def bonuses_today(self, value: dict[str, int]):
         self.bonuses = value
 
     @property

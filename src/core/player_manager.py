@@ -1,6 +1,5 @@
 import os
 import sys
-from typing import Optional
 
 # Add the project root to the Python path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -18,7 +17,7 @@ class PlayerManager:
         """Normalize IDs to string keys to avoid int/str mismatches."""
         return str(discord_id) if discord_id is not None else ""
 
-    def get_player(self, discord_id: str) -> Optional[Player]:
+    def get_player(self, discord_id: str) -> Player | None:
         return self.data_manager.get_player(self._normalize_id(discord_id))
 
     def get_all_players(self) -> dict:
@@ -39,7 +38,7 @@ class PlayerManager:
         else:
             self.data_manager.create_player(pid, name)
 
-    def increment_streak(self, player_id: str, player_name: Optional[str] = None):
+    def increment_streak(self, player_id: str, player_name: str | None = None):
         """Increments a player's answer streak and immediately persists to DB."""
         pid = self._normalize_id(player_id)
         player = self.data_manager.get_player(pid)

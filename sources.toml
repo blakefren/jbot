@@ -43,7 +43,7 @@ category = "Are You Smarter Than a Fifth Grader"
 name = "jeopardy_easy"
 type = "file"
 dataset = "jeopardy"
-weight = 25.0
+weight = 75.0
 reader = "jeopardy"
 # clue_values: Only include questions with these point values
 clue_values = [100, 200]

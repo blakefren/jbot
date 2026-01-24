@@ -1,7 +1,6 @@
 import logging
 from collections import defaultdict
 from datetime import datetime
-from typing import Optional
 from src.core.guess_handler import GuessHandler
 from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 from src.core.player import Player
@@ -18,7 +17,7 @@ class DailyGameSimulator:
         self,
         question,
         answers: list[str],
-        hint_timestamp: Optional[str],
+        hint_timestamp: str | None,
         events: list[GameEvent],
         initial_player_states: dict[str, Player],
         config,

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Any
+from typing import Any
 
 
 @dataclass
@@ -18,5 +18,5 @@ class GuessEvent(GameEvent):
 @dataclass
 class PowerUpEvent(GameEvent):
     powerup_type: str
-    target_user_id: Optional[str] = None
+    target_user_id: str | None = None
     amount: int = 0  # For wager
