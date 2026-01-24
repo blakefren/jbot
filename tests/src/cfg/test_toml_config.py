@@ -222,6 +222,206 @@ jeopardy = "datasets/jeopardy.tsv"
 
             self.assertIn("No question sources defined", str(context.exception))
 
+    @patch("src.cfg.main.SOURCES_TOML_PATH")
+    @patch("src.cfg.main.BASE_DIR")
+    @patch("src.cfg.main.ConfigReader.validate_config")
+    @patch("data.readers.csv_reader.read_simple_questions")
+    def test_parse_question_sources_file_simple(
+        self, mock_read_simple, mock_validate, mock_base_dir, mock_toml_path
+    ):
+        """Test parsing file-based source with simple reader."""
+        # Create a TOML with a simple reader source
+        toml_path = os.path.join(self.config_dir, "simple.toml")
+        with open(toml_path, "w") as f:
+            f.write(
+                """
+[datasets]
+test_dataset = "datasets/test.csv"
+
+[[source]]
+name = "test_simple"
+type = "file"
+dataset = "test_dataset"
+weight = 50.0
+reader = "simple"
+category = "Test Category"
+points = 200
+"""
+            )
+
+        mock_toml_path.__str__ = lambda _: toml_path
+        mock_toml_path.__fspath__ = lambda _: toml_path
+
+        # Mock the reader to return questions
+        from data.readers.question import Question
+
+        mock_questions = [Question("Q1", "A1", "Test Category", 100)]
+        mock_read_simple.return_value = mock_questions
+
+        with patch("src.cfg.main.SOURCES_TOML_PATH", toml_path):
+            with patch("src.cfg.main.BASE_DIR", self.temp_dir):
+                config = ConfigReader()
+                sources = config.parse_question_sources(None)
+
+                self.assertEqual(len(sources), 1)
+                self.assertEqual(sources[0].name, "test_simple")
+                self.assertEqual(sources[0].weight, 50.0)
+                self.assertEqual(sources[0].default_points, 200)
+
+                # Verify the reader was called with correct args
+                expected_path = os.path.normpath(
+                    os.path.join(self.temp_dir, "datasets", "test.csv")
+                )
+                actual_call = mock_read_simple.call_args[0]
+                self.assertEqual(os.path.normpath(actual_call[0]), expected_path)
+                self.assertEqual(actual_call[1], "Test Category")
+
+    @patch("src.cfg.main.SOURCES_TOML_PATH")
+    @patch("src.cfg.main.BASE_DIR")
+    @patch("src.cfg.main.ConfigReader.validate_config")
+    @patch("data.readers.tsv.read_jeopardy_questions")
+    def test_parse_question_sources_file_jeopardy_with_settings(
+        self, mock_read_jeopardy, mock_validate, mock_base_dir, mock_toml_path
+    ):
+        """Test parsing Jeopardy source with dataset-specific settings."""
+        toml_path = os.path.join(self.config_dir, "jeopardy.toml")
+        with open(toml_path, "w") as f:
+            f.write(
+                """
+[datasets]
+jeopardy = "datasets/jeopardy.tsv"
+
+[[source]]
+name = "jeopardy_test"
+type = "file"
+dataset = "jeopardy"
+weight = 75.0
+reader = "jeopardy"
+clue_values = [200, 400, 600]
+final_jeopardy_score_sub = 5000
+points = 150
+"""
+            )
+
+        mock_toml_path.__str__ = lambda _: toml_path
+        mock_toml_path.__fspath__ = lambda _: toml_path
+
+        from data.readers.question import Question
+
+        mock_questions = [Question("Q1", "A1", "Jeopardy", 200)]
+        mock_read_jeopardy.return_value = mock_questions
+
+        with patch("src.cfg.main.SOURCES_TOML_PATH", toml_path):
+            with patch("src.cfg.main.BASE_DIR", self.temp_dir):
+                config = ConfigReader()
+                sources = config.parse_question_sources(None)
+
+                self.assertEqual(len(sources), 1)
+                self.assertEqual(sources[0].name, "jeopardy_test")
+
+                # Verify dataset-specific settings were passed
+                expected_path = os.path.normpath(
+                    os.path.join(self.temp_dir, "datasets", "jeopardy.tsv")
+                )
+                actual_call = mock_read_jeopardy.call_args
+                self.assertEqual(os.path.normpath(actual_call[0][0]), expected_path)
+                self.assertEqual(actual_call[0][1], 5000)  # final_jeopardy_score_sub
+                self.assertEqual(actual_call[1]["allowed_clue_values"], [200, 400, 600])
+
+    @patch("src.cfg.main.SOURCES_TOML_PATH")
+    @patch("src.cfg.main.BASE_DIR")
+    @patch("src.cfg.main.ConfigReader.validate_config")
+    @patch("data.readers.csv_reader.read_knowledge_bowl_questions")
+    @patch("data.readers.csv_reader.read_riddle_with_hints_questions")
+    def test_parse_question_sources_multiple_file_sources(
+        self, mock_riddle, mock_kb, mock_validate, mock_base_dir, mock_toml_path
+    ):
+        """Test parsing multiple file sources with different reader types."""
+        toml_path = os.path.join(self.config_dir, "multi.toml")
+        with open(toml_path, "w") as f:
+            f.write(
+                """
+[datasets]
+kb = "datasets/kb.csv"
+riddles = "datasets/riddles.csv"
+
+[[source]]
+name = "kb_source"
+type = "file"
+dataset = "kb"
+weight = 60.0
+reader = "knowledge_bowl"
+
+[[source]]
+name = "riddle_source"
+type = "file"
+dataset = "riddles"
+weight = 40.0
+reader = "riddle_with_hints"
+"""
+            )
+
+        mock_toml_path.__str__ = lambda _: toml_path
+        mock_toml_path.__fspath__ = lambda _: toml_path
+
+        from data.readers.question import Question
+
+        mock_kb.return_value = [Question("KB1", "A1", "KB", 100)]
+        mock_riddle.return_value = [Question("R1", "A1", "Riddle", 100)]
+
+        with patch("src.cfg.main.SOURCES_TOML_PATH", toml_path):
+            with patch("src.cfg.main.BASE_DIR", self.temp_dir):
+                config = ConfigReader()
+                sources = config.parse_question_sources(None)
+
+                # Should have 2 file sources
+                self.assertEqual(len(sources), 2)
+                source_names = [s.name for s in sources]
+                self.assertIn("kb_source", source_names)
+                self.assertIn("riddle_source", source_names)
+
+                # Verify both readers were called
+                self.assertTrue(mock_kb.called)
+                self.assertTrue(mock_riddle.called)
+
+    @patch("src.cfg.main.SOURCES_TOML_PATH")
+    @patch("src.cfg.main.BASE_DIR")
+    @patch("src.cfg.main.ConfigReader.validate_config")
+    def test_parse_question_sources_unknown_reader_type(
+        self, mock_validate, mock_base_dir, mock_toml_path
+    ):
+        """Test that unknown reader types are logged and skipped."""
+        toml_path = os.path.join(self.config_dir, "bad_reader.toml")
+        with open(toml_path, "w") as f:
+            f.write(
+                """
+[datasets]
+test = "datasets/test.csv"
+
+[[source]]
+name = "bad_source"
+type = "file"
+dataset = "test"
+weight = 50.0
+reader = "nonexistent_reader"
+"""
+            )
+
+        mock_toml_path.__str__ = lambda _: toml_path
+        mock_toml_path.__fspath__ = lambda _: toml_path
+
+        with patch("src.cfg.main.SOURCES_TOML_PATH", toml_path):
+            with patch("src.cfg.main.BASE_DIR", self.temp_dir):
+                config = ConfigReader()
+
+                # Should raise RuntimeError since no valid sources load
+                with self.assertRaises(RuntimeError) as context:
+                    config.parse_question_sources(None)
+
+                self.assertIn(
+                    "Failed to load any valid question sources", str(context.exception)
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
