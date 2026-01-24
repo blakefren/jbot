@@ -461,14 +461,14 @@ class DataManager:
             list[str]: A list of answer strings.
         """
         query = """
-        SELECT q.answer
+        SELECT q.answer_text
         FROM daily_questions dq
         JOIN questions q ON dq.question_id = q.id
         ORDER BY dq.sent_at DESC
         LIMIT ?
         """
         results = self._db.execute_query(query, (limit,))
-        return [row["answer"] for row in results]
+        return [row["answer_text"] for row in results]
 
     def get_used_question_hashes(self) -> set[str]:
         """
