@@ -26,33 +26,29 @@ def load_questions(config: ConfigReader) -> list[Question]:
     logging.info(f"Reading '{dataset}' questions from file...")
 
     if dataset == "jeopardy":
-        path = os.path.join(PROJECT_ROOT, config.get("JBOT_JEOPARDY_LOCAL_PATH"))
+        path = config.get_dataset_path("jeopardy")
         score_sub = config.get("JBOT_FINAL_JEOPARDY_SCORE_SUB")
         return read_jeopardy_questions(path, score_sub, allowed_clue_values=[100, 200])
     elif dataset == "knowledge_bowl":
-        path = os.path.join(PROJECT_ROOT, config.get("JBOT_KNOWLEDGE_BOWL_LOCAL_PATH"))
+        path = config.get_dataset_path("knowledge_bowl")
         return read_knowledge_bowl_questions(path)
     elif dataset == "riddles_small":
-        path = os.path.join(PROJECT_ROOT, config.get("JBOT_RIDDLE_SMALL_LOCAL_PATH"))
+        path = config.get_dataset_path("riddles_small")
         return read_riddle_questions(path)
     elif dataset == "riddles_with_hints":
-        path = os.path.join(PROJECT_ROOT, config.get("JBOT_RIDDLE_HINTS_LOCAL_PATH"))
+        path = config.get_dataset_path("riddles_with_hints")
         return read_riddle_with_hints_questions(path)
     elif dataset == "5th_grader":
-        path = os.path.join(PROJECT_ROOT, config.get("JBOT_5TH_GRADER_LOCAL_PATH"))
+        path = config.get_dataset_path("5th_grader")
         return read_simple_questions(path, "Are You Smarter Than a Fifth Grader")
     elif dataset == "general_trivia":
-        path = os.path.join(PROJECT_ROOT, config.get("JBOT_GENERAL_TRIVIA_LOCAL_PATH"))
+        path = config.get_dataset_path("general_trivia")
         return read_general_trivia_questions(path)
     elif dataset == "millionaire_easy":
-        path = os.path.join(
-            PROJECT_ROOT, config.get("JBOT_MILLIONAIRE_EASY_LOCAL_PATH")
-        )
+        path = config.get_dataset_path("millionaire_easy")
         return read_simple_questions(path, "Millionaire (Easy)")
     elif dataset == "millionaire_hard":
-        path = os.path.join(
-            PROJECT_ROOT, config.get("JBOT_MILLIONAIRE_HARD_LOCAL_PATH")
-        )
+        path = config.get_dataset_path("millionaire_hard")
         return read_simple_questions(path, "Millionaire (Hard)")
     else:
         logging.error(f"Unknown dataset: {dataset}")

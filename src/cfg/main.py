@@ -3,10 +3,17 @@ import shutil
 from dotenv import load_dotenv
 import logging
 
+# Use tomllib for Python 3.11+, fall back to tomli for older versions
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
 # Define the paths for the .env files
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 ENV_TEMPLATE_PATH = os.path.join(BASE_DIR, ".env.template")
+SOURCES_TOML_PATH = os.path.join(BASE_DIR, "config", "sources.toml")
 
 
 def load_config():
@@ -32,10 +39,11 @@ class ConfigReader:
 
     def __init__(self):
         """
-        Loads configuration from environment variables.
+        Loads configuration from environment variables and TOML sources.
         """
         load_config()
         self.validate_config()
+        self._toml_config = self._load_toml_config()
 
     def validate_config(self):
         """
@@ -117,9 +125,56 @@ class ConfigReader:
             raise ValueError("GEMINI_API_KEY not found in environment variables.")
         return key
 
+    def _load_toml_config(self) -> dict:
+        """
+        Loads the TOML configuration file.
+        Crashes gracefully with a clear error message if the file is missing or malformed.
+        """
+        if not os.path.exists(SOURCES_TOML_PATH):
+            raise FileNotFoundError(
+                f"Required configuration file not found: {SOURCES_TOML_PATH}\n"
+                f"This file is required to start the bot. Please ensure it exists."
+            )
+
+        try:
+            with open(SOURCES_TOML_PATH, "rb") as f:
+                return tomllib.load(f)
+        except tomllib.TOMLDecodeError as e:
+            raise ValueError(
+                f"Malformed TOML configuration in {SOURCES_TOML_PATH}:\n{e}\n"
+                f"Please fix the syntax errors in the configuration file."
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load TOML configuration from {SOURCES_TOML_PATH}: {e}"
+            )
+
+    def get_dataset_path(self, dataset_name: str) -> str:
+        """
+        Retrieves the file path for a dataset from the TOML configuration.
+
+        Args:
+            dataset_name: The key name of the dataset in [datasets] section.
+
+        Returns:
+            The absolute path to the dataset file.
+
+        Raises:
+            KeyError: If the dataset name is not found in the configuration.
+        """
+        datasets = self._toml_config.get("datasets", {})
+        if dataset_name not in datasets:
+            raise KeyError(
+                f"Dataset '{dataset_name}' not found in {SOURCES_TOML_PATH}.\n"
+                f"Available datasets: {', '.join(datasets.keys())}"
+            )
+
+        relative_path = datasets[dataset_name]
+        return os.path.join(BASE_DIR, relative_path)
+
     def parse_question_sources(self, gemini_manager=None):
         """
-        Parses the JBOT_EXTRA_SOURCES configuration and returns a list of QuestionSource objects.
+        Parses question sources from the TOML configuration and returns QuestionSource objects.
         """
         from data.readers.question_source import (
             GeminiQuestionSource,
@@ -127,50 +182,25 @@ class ConfigReader:
         )
         from data.readers.tsv import read_jeopardy_questions
 
-        try:
-            sources_config = self.get("JBOT_EXTRA_SOURCES")
-        except MissingConfigurationError:
-            return []
-
         sources = []
+        source_configs = self._toml_config.get("source", [])
 
-        if not sources_config:
-            return sources
+        for source_config in source_configs:
+            s_name = source_config.get("name")
+            s_type = source_config.get("type")
+            s_weight = source_config.get("weight", 1.0)
 
-        for s_str in sources_config.split(","):
-            parts = s_str.split(":")
-
-            if len(parts) < 3:
-                logging.warning(f"Invalid source config format: {s_str}")
+            if not s_name or not s_type:
+                logging.warning(
+                    f"Invalid source config, missing name or type: {source_config}"
+                )
                 continue
 
-            s_type = parts[0].strip()
-            s_name = parts[1].strip()
-
-            try:
-                s_weight = float(parts[2].strip())
-            except ValueError:
-                logging.error(f"Invalid weight for source {s_name}: {parts[2]}")
+            # Skip the default source - it's handled separately
+            if s_type == "default":
                 continue
 
-            # Parse args
-            args = {}
-            if len(parts) > 3:
-                for arg in parts[3:]:
-                    if "=" in arg:
-                        k, v = arg.split("=", 1)
-                        args[k.strip()] = v.strip()
-
-            # Extract common args
-            default_points = args.get("points")
-            if default_points:
-                try:
-                    default_points = int(default_points)
-                except ValueError:
-                    logging.warning(
-                        f"Invalid points value for source {s_name}: {default_points}"
-                    )
-                    default_points = None
+            default_points = source_config.get("points")
 
             if s_type == "gemini":
                 if not gemini_manager:
@@ -179,7 +209,7 @@ class ConfigReader:
                     )
                     continue
 
-                difficulty = args.get("difficulty", "Medium")
+                difficulty = source_config.get("difficulty", "Medium")
                 sources.append(
                     GeminiQuestionSource(
                         s_name, s_weight, gemini_manager, difficulty, default_points
@@ -190,26 +220,25 @@ class ConfigReader:
                 )
 
             elif s_type == "file":
+                dataset_name = source_config.get("dataset")
+                if not dataset_name:
+                    logging.warning(f"File source {s_name} missing 'dataset' reference")
+                    continue
+
+                try:
+                    dataset_path = self.get_dataset_path(dataset_name)
+                except KeyError as e:
+                    logging.error(f"Failed to load file source {s_name}: {e}")
+                    raise  # Crash on missing dataset reference as specified
+
                 questions = []
-                if s_name == "jeopardy":
-                    path = os.path.join(BASE_DIR, self.get("JBOT_JEOPARDY_LOCAL_PATH"))
+                if dataset_name == "jeopardy":
                     score_sub = self.get("JBOT_FINAL_JEOPARDY_SCORE_SUB")
-
-                    # Parse allowed clue values from args, default to [100] as requested
-                    allowed_values = [100]
-                    if "clue_values" in args:
-                        try:
-                            allowed_values = [
-                                int(v) for v in args["clue_values"].split("|")
-                            ]
-                        except ValueError:
-                            logging.warning(
-                                f"Invalid clue_values for source {s_name}: {args['clue_values']}"
-                            )
-
+                    allowed_values = source_config.get("clue_values", [100])
                     questions = read_jeopardy_questions(
-                        path, score_sub, allowed_clue_values=allowed_values
+                        dataset_path, score_sub, allowed_clue_values=allowed_values
                     )
+                # Add more dataset types as needed
 
                 if questions:
                     sources.append(

@@ -4,6 +4,7 @@ python-dotenv
 google-generativeai
 jellyfish  # For fuzzy string matching.
 wcwidth  # For calculating display width of unicode strings.
+tomli  # TOML parser for Python < 3.11 (tomllib is built-in for 3.11+)
 # For dashboard notebook.
 pandas
 plotly
