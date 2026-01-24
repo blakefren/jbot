@@ -852,5 +852,415 @@ class TestSnapshot(unittest.TestCase):
         self.assertEqual(current_p1.score, 110)
 
 
+class TestDataManagerIntegration(unittest.TestCase):
+    """Integration tests using real database with proper schema."""
+
+    def setUp(self):
+        """Set up a real in-memory database with the actual schema."""
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+        self.data_manager.initialize_database()
+
+    def tearDown(self):
+        """Clean up after tests."""
+        self.db.close()
+
+    def test_get_recent_answers(self):
+        """Test retrieving recent answers from daily questions."""
+        from datetime import timedelta
+
+        # Create questions with proper schema columns
+        q1 = Question("Q1?", "Answer1", "Cat", 100, "test", "Hint1")
+        q2 = Question("Q2?", "Answer2", "Cat", 200, "test", "Hint2")
+        q3 = Question("Q3?", "Answer3", "Cat", 300, "test", "Hint3")
+
+        # Log them as daily questions with different dates
+        # We need to manually insert into daily_questions to simulate different days
+        # First, add questions to questions table
+        for q in [q1, q2, q3]:
+            self.data_manager.log_daily_question(q, mark_as_used_only=True)
+
+        # Get question IDs
+        query = "SELECT id, question_hash FROM questions ORDER BY id"
+        questions = self.db.execute_query(query)
+
+        # Insert daily questions for different dates
+        today = date.today()
+        for i, q_record in enumerate(questions):
+            day_offset = -i  # Most recent first
+            sent_date = today + timedelta(days=day_offset)
+            self.db.execute_update(
+                "INSERT INTO daily_questions (question_id, sent_at) VALUES (?, ?)",
+                (q_record["id"], sent_date),
+            )
+
+        # Get recent answers
+        recent = self.data_manager.get_recent_answers(limit=2)
+        self.assertEqual(len(recent), 2)
+        # Most recent first
+        self.assertEqual(recent[0], "Answer1")  # Today
+        self.assertEqual(recent[1], "Answer2")  # Yesterday
+
+        # Get all
+        all_recent = self.data_manager.get_recent_answers(limit=10)
+        self.assertEqual(len(all_recent), 3)
+
+    def test_get_used_question_hashes(self):
+        """Test retrieving used question hashes."""
+        q1 = Question("Q1?", "Answer1", "Cat", 100, "test", "Hint1")
+        q2 = Question("Q2?", "Answer2", "Cat", 200, "test", "Hint2")
+
+        # Initially empty
+        hashes = self.data_manager.get_used_question_hashes()
+        self.assertEqual(len(hashes), 0)
+
+        # Log questions
+        self.data_manager.log_daily_question(q1)
+        self.data_manager.log_daily_question(q2)
+
+        # Check hashes are tracked
+        hashes = self.data_manager.get_used_question_hashes()
+        self.assertEqual(len(hashes), 2)
+        self.assertIn(str(q1.id), hashes)
+        self.assertIn(str(q2.id), hashes)
+
+    def test_alternative_answers(self):
+        """Test adding and retrieving alternative answers."""
+        # Create and log a question
+        q = Question("Q?", "Original", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Get the question_id from the database
+        query = "SELECT question_id FROM daily_questions WHERE id = ?"
+        result = self.db.execute_query(query, (dq_id,))
+        question_id = result[0]["question_id"]
+
+        # Initially no alternative answers
+        alts = self.data_manager.get_alternative_answers(question_id)
+        self.assertEqual(len(alts), 0)
+
+        # Add alternative answers
+        self.data_manager.add_alternative_answer(question_id, "Alt1", "admin1")
+        self.data_manager.add_alternative_answer(question_id, "Alt2", "admin1")
+
+        # Retrieve them
+        alts = self.data_manager.get_alternative_answers(question_id)
+        self.assertEqual(len(alts), 2)
+        self.assertIn("Alt1", alts)
+        self.assertIn("Alt2", alts)
+
+    def test_powerup_usage_tracking(self):
+        """Test logging and retrieving powerup usage."""
+        # Create a question
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Get question_id
+        query = "SELECT question_id FROM daily_questions WHERE id = ?"
+        result = self.db.execute_query(query, (dq_id,))
+        question_id = result[0]["question_id"]
+
+        # Create players
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+
+        # Log powerup usages
+        self.data_manager.log_powerup_usage("p1", "shield", question_id=question_id)
+        self.data_manager.log_powerup_usage(
+            "p2", "attack", target_user_id="p1", question_id=question_id
+        )
+
+        # Retrieve usage for question
+        usages = self.data_manager.get_powerup_usages_for_question(question_id)
+        self.assertEqual(len(usages), 2)
+
+        # Check details
+        shield_usage = [u for u in usages if u["powerup_type"] == "shield"][0]
+        self.assertEqual(shield_usage["user_id"], "p1")
+
+        attack_usage = [u for u in usages if u["powerup_type"] == "attack"][0]
+        self.assertEqual(attack_usage["user_id"], "p2")
+        self.assertEqual(attack_usage["target_user_id"], "p1")
+
+    def test_score_adjustment_logging(self):
+        """Test logging score adjustments."""
+        # Create players
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("admin1", "Admin1")
+
+        # Log adjustment
+        self.data_manager.log_score_adjustment("p1", "admin1", 50, "Test adjustment")
+
+        # Verify in database
+        query = "SELECT * FROM score_adjustments WHERE player_id = ?"
+        result = self.db.execute_query(query, ("p1",))
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["amount"], 50)
+        self.assertEqual(result[0]["admin_id"], "admin1")
+        self.assertEqual(result[0]["reason"], "Test adjustment")
+
+    def test_mark_matching_guesses_as_correct(self):
+        """Test marking guesses as correct when alternative answer is added."""
+        # Create question and daily question
+        q = Question("Q?", "correct", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Create players
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+        self.data_manager.create_player("p3", "Player3")
+
+        # Log guesses
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "correct", True)
+        self.data_manager.log_player_guess("p2", "Player2", dq_id, "right", False)
+        self.data_manager.log_player_guess("p3", "Player3", dq_id, "wrong", False)
+
+        # Simple match function
+        def simple_match(guess: str, answer: str) -> bool:
+            return guess.lower().strip() == answer.lower().strip()
+
+        # Mark "right" as correct
+        count = self.data_manager.mark_matching_guesses_as_correct(
+            dq_id, "right", simple_match
+        )
+        self.assertEqual(count, 1)
+
+        # Verify guess is now correct
+        query = "SELECT is_correct FROM guesses WHERE player_id = ?"
+        result = self.db.execute_query(query, ("p2",))
+        self.assertEqual(result[0]["is_correct"], 1)
+
+        # p3's guess should still be incorrect
+        result = self.db.execute_query(query, ("p3",))
+        self.assertEqual(result[0]["is_correct"], 0)
+
+    def test_get_last_correct_guess_date(self):
+        """Test retrieving the date of a player's last correct guess."""
+        # Create player
+        self.data_manager.create_player("p1", "Player1")
+
+        # No guesses yet
+        last_date = self.data_manager.get_last_correct_guess_date("p1")
+        self.assertIsNone(last_date)
+
+        # Create a question
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Make a correct guess
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "A", True)
+
+        # Check the date
+        last_date = self.data_manager.get_last_correct_guess_date("p1")
+        self.assertIsNotNone(last_date)
+        self.assertEqual(last_date, date.today())
+
+    def test_get_correct_guess_count(self):
+        """Test counting correct guesses for a daily question."""
+        # Create question
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Create players
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+        self.data_manager.create_player("p3", "Player3")
+
+        # Initially 0
+        count = self.data_manager.get_correct_guess_count(dq_id)
+        self.assertEqual(count, 0)
+
+        # Add guesses
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "A", True)
+        self.data_manager.log_player_guess("p2", "Player2", dq_id, "B", False)
+        self.data_manager.log_player_guess("p3", "Player3", dq_id, "A", True)
+
+        # Check count
+        count = self.data_manager.get_correct_guess_count(dq_id)
+        self.assertEqual(count, 2)
+
+    def test_reset_unanswered_streaks(self):
+        """Test resetting streaks for players who didn't answer correctly."""
+        # Create players with streaks
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+        self.data_manager.create_player("p3", "Player3")
+
+        self.data_manager.set_streak("p1", 5)
+        self.data_manager.set_streak("p2", 3)
+        self.data_manager.set_streak("p3", 0)
+
+        # Create question
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Only p1 answers correctly
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "A", True)
+        self.data_manager.log_player_guess("p2", "Player2", dq_id, "B", False)
+
+        # Reset unanswered streaks
+        self.data_manager.reset_unanswered_streaks(dq_id)
+
+        # Check streaks
+        p1 = self.data_manager.get_player("p1")
+        p2 = self.data_manager.get_player("p2")
+        p3 = self.data_manager.get_player("p3")
+
+        self.assertEqual(p1.answer_streak, 5)  # Unchanged (answered correctly)
+        self.assertEqual(p2.answer_streak, 0)  # Reset (didn't answer correctly)
+        self.assertEqual(p3.answer_streak, 0)  # Already 0
+
+    def test_get_guesses_for_daily_question(self):
+        """Test retrieving all guesses for a daily question."""
+        # Create question
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Create players and log guesses
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "A", True)
+        self.data_manager.log_player_guess("p2", "Player2", dq_id, "B", False)
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "C", False)
+
+        # Get all guesses
+        guesses = self.data_manager.get_guesses_for_daily_question(dq_id)
+        self.assertEqual(len(guesses), 3)
+
+        # Verify order (chronological)
+        self.assertEqual(guesses[0]["player_id"], "p1")
+        self.assertEqual(guesses[0]["guess_text"], "A")
+        self.assertEqual(guesses[0]["is_correct"], 1)
+
+    def test_get_first_try_solvers(self):
+        """Test identifying players who solved on first try."""
+        # Create question
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Create players
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+        self.data_manager.create_player("p3", "Player3")
+
+        # p1: correct on first try
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "A", True)
+
+        # p2: correct after multiple tries
+        self.data_manager.log_player_guess("p2", "Player2", dq_id, "B", False)
+        self.data_manager.log_player_guess("p2", "Player2", dq_id, "A", True)
+
+        # p3: never correct
+        self.data_manager.log_player_guess("p3", "Player3", dq_id, "B", False)
+
+        # Get first-try solvers
+        solvers = self.data_manager.get_first_try_solvers(dq_id)
+        self.assertEqual(len(solvers), 1)
+        self.assertEqual(solvers[0]["id"], "p1")
+
+    def test_get_guess_counts_per_player(self):
+        """Test counting unique guesses per player."""
+        # Create question
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Create players
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+
+        # p1 makes 3 unique guesses
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "A", False)
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "B", False)
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "C", True)
+
+        # p2 makes 1 guess
+        self.data_manager.log_player_guess("p2", "Player2", dq_id, "A", True)
+
+        # Get counts
+        counts = self.data_manager.get_guess_counts_per_player(dq_id)
+        self.assertEqual(len(counts), 2)
+
+        # Ordered by count descending
+        self.assertEqual(counts[0]["name"], "Player1")
+        self.assertEqual(counts[0]["guess_count"], 3)
+        self.assertEqual(counts[1]["name"], "Player2")
+        self.assertEqual(counts[1]["guess_count"], 1)
+
+    def test_get_most_common_guesses(self):
+        """Test finding most common incorrect guesses."""
+        # Create question
+        q = Question("Q?", "correct", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Create players
+        for i in range(5):
+            self.data_manager.create_player(f"p{i}", f"Player{i}")
+
+        # Multiple people guess "wrong1"
+        self.data_manager.log_player_guess("p0", "Player0", dq_id, "wrong1", False)
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "wrong1", False)
+        self.data_manager.log_player_guess("p2", "Player2", dq_id, "wrong1", False)
+
+        # Some guess "wrong2"
+        self.data_manager.log_player_guess("p3", "Player3", dq_id, "wrong2", False)
+        self.data_manager.log_player_guess("p4", "Player4", dq_id, "wrong2", False)
+
+        # Get common guesses
+        common = self.data_manager.get_most_common_guesses(dq_id)
+        self.assertGreaterEqual(len(common), 2)
+
+        # Most common first
+        self.assertEqual(common[0]["guess_text"], "wrong1")
+        self.assertEqual(common[0]["count"], 3)
+        self.assertEqual(common[1]["guess_text"], "wrong2")
+        self.assertEqual(common[1]["count"], 2)
+
+    def test_get_craziest_guess(self):
+        """Test finding the longest/craziest guess."""
+        # Create question
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Create players
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+
+        # Make guesses of different lengths
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "short", False)
+        self.data_manager.log_player_guess(
+            "p2", "Player2", dq_id, "this is a very long guess", False
+        )
+
+        # Get craziest
+        craziest = self.data_manager.get_craziest_guess(dq_id)
+        self.assertIsNotNone(craziest)
+        self.assertEqual(craziest["player_name"], "Player2")
+        self.assertEqual(craziest["guess_text"], "this is a very long guess")
+
+    def test_mark_guess_as_correct(self):
+        """Test manually marking a specific guess as correct."""
+        # Create question
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # Create player and make incorrect guess
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "B", False)
+
+        # Get the guess ID
+        query = "SELECT id FROM guesses WHERE player_id = ?"
+        result = self.db.execute_query(query, ("p1",))
+        guess_id = result[0]["id"]
+
+        # Mark as correct
+        self.data_manager.mark_guess_as_correct(guess_id)
+
+        # Verify
+        query = "SELECT is_correct FROM guesses WHERE id = ?"
+        result = self.db.execute_query(query, (guess_id,))
+        self.assertEqual(result[0]["is_correct"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

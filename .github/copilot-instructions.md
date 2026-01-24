@@ -120,12 +120,32 @@ As your partner, I will adhere to the following principles:
 
 The project uses Python's `unittest` module as the primary testing framework.
 
+### General Testing Guidelines
+
 1.  **Run Tests via Script**: I will use the `run_tests.bat` script to execute the test suite.
 2.  **Build Upon Existing Tests**: I will work with the existing `unittest` framework, adding new tests for new features and expanding coverage for existing ones.
 3.  **Unit Tests**: I will prioritize creating unit tests for core business logic, such as game mode rules, scoring, and question handling.
 4.  **Coverage**: We should aim for a reasonable level of test coverage.
-5.  **Integration Tests**: As the project grows, I will suggest adding integration tests for interactions between different components (e.g., the bot and the database).
-6.  **CI/CD**: The `.github/workflows/python-tests.yml` file runs tests using `unittest`. I will ensure any changes I make pass these CI checks.
+5.  **CI/CD**: The `.github/workflows/python-tests.yml` file runs tests using `unittest`. I will ensure any changes I make pass these CI checks.
+
+### Database Testing Best Practices
+
+**CRITICAL**: For database-related functionality, prefer integration tests over mocks.
+
+*   **Integration Tests for DataManager**: When testing DataManager methods, use real in-memory databases (`:memory:`) with the actual schema from `db/schema.sql`
+*   **Why Mocks Fail**: Mocks don't execute actual SQL queries, so column name errors, syntax errors, and schema mismatches go undetected
+    - Example: `MagicMock(return_value=[{"answer": "test"}])` will pass even if the column is actually `answer_text`
+*   **When to Use Mocks**: Reserve mocking for external dependencies (Discord API, Gemini API), not the database
+*   **Test Pattern**:
+    ```python
+    class TestDataManagerIntegration(unittest.TestCase):
+        def setUp(self):
+            self.db = Database(":memory:")
+            self.data_manager = DataManager(self.db)
+            self.data_manager.initialize_database()  # Loads real schema
+    ```
+*   **Schema Alignment**: Integration tests ensure SQL queries use correct column names from `db/schema.sql`
+*   **Test Coverage**: All DataManager methods that execute SQL should have integration test coverage
 
 ## Player-Centric Development
 
