@@ -16,8 +16,7 @@ class TestTomlConfiguration(unittest.TestCase):
 
         self.sources_toml = os.path.join(self.config_dir, "sources.toml")
         with open(self.sources_toml, "w") as f:
-            f.write(
-                """
+            f.write("""
 [datasets]
 jeopardy = "datasets/jeopardy.tsv"
 knowledge_bowl = "datasets/kb.csv"
@@ -47,8 +46,7 @@ reader = "jeopardy"
 clue_values = [100, 200]
 final_jeopardy_score_sub = 10000
 points = 100
-"""
-            )
+""")
 
     def tearDown(self):
         """Clean up temporary files."""
@@ -204,12 +202,10 @@ points = 100
         # Create a TOML with no sources
         empty_toml = os.path.join(self.config_dir, "empty.toml")
         with open(empty_toml, "w") as f:
-            f.write(
-                """
+            f.write("""
 [datasets]
 jeopardy = "datasets/jeopardy.tsv"
-"""
-            )
+""")
 
         mock_toml_path.__str__ = lambda _: empty_toml
         mock_toml_path.__fspath__ = lambda _: empty_toml
@@ -233,8 +229,7 @@ jeopardy = "datasets/jeopardy.tsv"
         # Create a TOML with a simple reader source
         toml_path = os.path.join(self.config_dir, "simple.toml")
         with open(toml_path, "w") as f:
-            f.write(
-                """
+            f.write("""
 [datasets]
 test_dataset = "datasets/test.csv"
 
@@ -246,8 +241,7 @@ weight = 50.0
 reader = "simple"
 category = "Test Category"
 points = 200
-"""
-            )
+""")
 
         mock_toml_path.__str__ = lambda _: toml_path
         mock_toml_path.__fspath__ = lambda _: toml_path
@@ -286,8 +280,7 @@ points = 200
         """Test parsing Jeopardy source with dataset-specific settings."""
         toml_path = os.path.join(self.config_dir, "jeopardy.toml")
         with open(toml_path, "w") as f:
-            f.write(
-                """
+            f.write("""
 [datasets]
 jeopardy = "datasets/jeopardy.tsv"
 
@@ -300,8 +293,7 @@ reader = "jeopardy"
 clue_values = [200, 400, 600]
 final_jeopardy_score_sub = 5000
 points = 150
-"""
-            )
+""")
 
         mock_toml_path.__str__ = lambda _: toml_path
         mock_toml_path.__fspath__ = lambda _: toml_path
@@ -339,8 +331,7 @@ points = 150
         """Test parsing multiple file sources with different reader types."""
         toml_path = os.path.join(self.config_dir, "multi.toml")
         with open(toml_path, "w") as f:
-            f.write(
-                """
+            f.write("""
 [datasets]
 kb = "datasets/kb.csv"
 riddles = "datasets/riddles.csv"
@@ -358,8 +349,7 @@ type = "file"
 dataset = "riddles"
 weight = 40.0
 reader = "riddle_with_hints"
-"""
-            )
+""")
 
         mock_toml_path.__str__ = lambda _: toml_path
         mock_toml_path.__fspath__ = lambda _: toml_path
@@ -393,8 +383,7 @@ reader = "riddle_with_hints"
         """Test that unknown reader types are logged and skipped."""
         toml_path = os.path.join(self.config_dir, "bad_reader.toml")
         with open(toml_path, "w") as f:
-            f.write(
-                """
+            f.write("""
 [datasets]
 test = "datasets/test.csv"
 
@@ -404,8 +393,7 @@ type = "file"
 dataset = "test"
 weight = 50.0
 reader = "nonexistent_reader"
-"""
-            )
+""")
 
         mock_toml_path.__str__ = lambda _: toml_path
         mock_toml_path.__fspath__ = lambda _: toml_path
