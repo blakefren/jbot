@@ -1,8 +1,9 @@
 """
-Manager for interacting with the Gemini API using the google-generativeai library.
+Manager for interacting with the Gemini API using the google-genai library.
 """
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import logging
 
 
@@ -12,8 +13,7 @@ class GeminiManager:
             raise ValueError("Gemini API key is required.")
         try:
             self.api_key = api_key
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel("gemini-2.5-pro")
+            self.client = genai.Client(api_key=self.api_key)
             logging.info("GeminiManager initialized successfully.")
         except Exception as e:
             logging.error(f"Failed to configure Gemini: {e}")
@@ -32,8 +32,13 @@ class GeminiManager:
             generation_config: Optional configuration for generation (e.g., temperature).
         """
         try:
-            response = self.model.generate_content(
-                text, generation_config=generation_config
+            # Convert generation_config dict to GenerateContentConfig if provided
+            config = None
+            if generation_config:
+                config = types.GenerateContentConfig(**generation_config)
+
+            response = self.client.models.generate_content(
+                model="gemini-2.5-pro", contents=text, config=config
             )
             return response.text
         except Exception as e:
