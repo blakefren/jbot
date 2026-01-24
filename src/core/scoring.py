@@ -92,7 +92,7 @@ class ScoreCalculator:
                     bonuses["first_try"] = bonus
                     messages.append(f"{self.emoji_first_try} First try! (+{bonus})")
                 else:
-                    messages.append(f"Try #{guesses_count}! (+{bonus})")
+                    messages.append(f"{self.emoji_first_try} Try #{guesses_count}! (+{bonus})")
 
         # 2. Before Hint Bonus
         if is_before_hint:
