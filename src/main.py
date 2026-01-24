@@ -5,8 +5,6 @@ import logging
 from src.logging_config import setup_logging
 from src.core.data_manager import DataManager
 from src.core.player_manager import PlayerManager
-from data.readers.question import Question
-from data.readers.tsv import get_random_question
 import os
 import sys
 
@@ -19,8 +17,6 @@ def load_configs() -> ConfigReader:
     return config
 
 
-from data.loader import load_questions
-
 # --- Main execution block ---
 if __name__ == "__main__":
     # Setup
@@ -30,7 +26,6 @@ if __name__ == "__main__":
     sys.path.insert(0, project_root)
 
     config = load_configs()
-    questions = load_questions(config)
     db_path = config.get("JBOT_DB_PATH")
 
     # Initialize database and data manager
@@ -40,16 +35,9 @@ if __name__ == "__main__":
     data_manager = DataManager(db)
     player_manager = PlayerManager(data_manager)
 
-    # Print a single random question for verification
-    if questions:
-        logging.info("--- Random Question ---")
-        random_q = get_random_question(questions)
-        logging.info(random_q)
-        logging.info("-----------------------")
-
     # Start the game bot based on the messenger type
     messenger = config.get("JBOT_MESSENGER")
     if messenger == "discord":
-        run_discord_bot(config, questions, data_manager, player_manager)
+        run_discord_bot(config, data_manager, player_manager)
     else:
         logging.error(f"Messenger '{messenger}' is not supported.")

@@ -21,11 +21,15 @@ class TestTomlConfiguration(unittest.TestCase):
 [datasets]
 jeopardy = "datasets/jeopardy.tsv"
 knowledge_bowl = "datasets/kb.csv"
+5th_grader = "datasets/5th_grader.csv"
 
 [[source]]
-name = "default"
-type = "default"
+name = "5th_grader"
+type = "file"
+dataset = "5th_grader"
 weight = 100.0
+reader = "simple"
+category = "5th Grader"
 
 [[source]]
 name = "riddle_medium"
@@ -39,7 +43,9 @@ name = "jeopardy_easy"
 type = "file"
 dataset = "jeopardy"
 weight = 25.0
+reader = "jeopardy"
 clue_values = [100, 200]
+final_jeopardy_score_sub = 10000
 points = 100
 """
             )
@@ -68,7 +74,9 @@ points = 100
             self.assertIn("datasets", toml_data)
             self.assertEqual(toml_data["datasets"]["jeopardy"], "datasets/jeopardy.tsv")
             self.assertIn("source", toml_data)
-            self.assertEqual(len(toml_data["source"]), 3)
+            self.assertEqual(
+                len(toml_data["source"]), 3
+            )  # 5th_grader, riddle_medium, jeopardy_easy
 
     @patch("src.cfg.main.SOURCES_TOML_PATH", "/nonexistent/sources.toml")
     @patch("src.cfg.main.ConfigReader.validate_config")
@@ -141,7 +149,6 @@ points = 100
     @patch("src.cfg.main.SOURCES_TOML_PATH")
     @patch("src.cfg.main.BASE_DIR")
     @patch("src.cfg.main.ConfigReader.validate_config")
-    @patch.dict(os.environ, {"JBOT_FINAL_JEOPARDY_SCORE_SUB": "10000"})
     def test_parse_question_sources_gemini(
         self, mock_validate, mock_base_dir, mock_toml_path
     ):
@@ -155,9 +162,9 @@ points = 100
             config = ConfigReader()
             sources = config.parse_question_sources(mock_gemini)
 
-            # Should have 2 sources (default is skipped, riddle_medium + jeopardy_easy)
-            # But jeopardy_easy will fail to load since we don't have actual file
-            # So we'll only get riddle_medium
+            # Should have 1 source (riddle_medium)
+            # File sources will fail to load since we don't have actual files
+            # But this is OK - they just get skipped with warnings
             gemini_sources = [s for s in sources if hasattr(s, "difficulty")]
             self.assertEqual(len(gemini_sources), 1)
             self.assertEqual(gemini_sources[0].name, "riddle_medium")
@@ -171,17 +178,49 @@ points = 100
     def test_parse_question_sources_no_gemini_manager(
         self, mock_validate, mock_base_dir, mock_toml_path
     ):
-        """Test that Gemini sources are skipped when no manager is provided."""
+        """Test that parse_question_sources raises error when no valid sources load."""
         mock_toml_path.__str__ = lambda _: self.sources_toml
         mock_toml_path.__fspath__ = lambda _: self.sources_toml
 
         with patch("src.cfg.main.SOURCES_TOML_PATH", self.sources_toml):
             config = ConfigReader()
-            sources = config.parse_question_sources(None)  # No gemini_manager
 
-            # Should have 0 Gemini sources
-            gemini_sources = [s for s in sources if hasattr(s, "difficulty")]
-            self.assertEqual(len(gemini_sources), 0)
+            # No gemini_manager and no actual files means no sources will load
+            # Should raise RuntimeError
+            with self.assertRaises(RuntimeError) as context:
+                config.parse_question_sources(None)
+
+            self.assertIn(
+                "Failed to load any valid question sources", str(context.exception)
+            )
+
+    @patch("src.cfg.main.SOURCES_TOML_PATH")
+    @patch("src.cfg.main.BASE_DIR")
+    @patch("src.cfg.main.ConfigReader.validate_config")
+    def test_parse_question_sources_empty_config(
+        self, mock_validate, mock_base_dir, mock_toml_path
+    ):
+        """Test that parse_question_sources raises error when no sources are defined."""
+        # Create a TOML with no sources
+        empty_toml = os.path.join(self.config_dir, "empty.toml")
+        with open(empty_toml, "w") as f:
+            f.write(
+                """
+[datasets]
+jeopardy = "datasets/jeopardy.tsv"
+"""
+            )
+
+        mock_toml_path.__str__ = lambda _: empty_toml
+        mock_toml_path.__fspath__ = lambda _: empty_toml
+
+        with patch("src.cfg.main.SOURCES_TOML_PATH", empty_toml):
+            config = ConfigReader()
+
+            with self.assertRaises(RuntimeError) as context:
+                config.parse_question_sources(None)
+
+            self.assertIn("No question sources defined", str(context.exception))
 
 
 if __name__ == "__main__":

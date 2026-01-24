@@ -13,7 +13,7 @@ except ModuleNotFoundError:
 BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 ENV_PATH = os.path.join(BASE_DIR, ".env")
 ENV_TEMPLATE_PATH = os.path.join(BASE_DIR, ".env.template")
-SOURCES_TOML_PATH = os.path.join(BASE_DIR, "config", "sources.toml")
+SOURCES_TOML_PATH = os.path.join(BASE_DIR, "sources.toml")
 
 
 def load_config():
@@ -175,15 +175,29 @@ class ConfigReader:
     def parse_question_sources(self, gemini_manager=None):
         """
         Parses question sources from the TOML configuration and returns QuestionSource objects.
+        Raises RuntimeError if no valid sources are found.
         """
         from data.readers.question_source import (
             GeminiQuestionSource,
             StaticQuestionSource,
         )
         from data.readers.tsv import read_jeopardy_questions
+        from data.readers.csv_reader import (
+            read_riddle_questions,
+            read_riddle_with_hints_questions,
+            read_knowledge_bowl_questions,
+            read_simple_questions,
+            read_general_trivia_questions,
+        )
 
         sources = []
         source_configs = self._toml_config.get("source", [])
+
+        if not source_configs:
+            raise RuntimeError(
+                f"No question sources defined in {SOURCES_TOML_PATH}.\n"
+                f"At least one [[source]] must be configured for the bot to start."
+            )
 
         for source_config in source_configs:
             s_name = source_config.get("name")
@@ -194,10 +208,6 @@ class ConfigReader:
                 logging.warning(
                     f"Invalid source config, missing name or type: {source_config}"
                 )
-                continue
-
-            # Skip the default source - it's handled separately
-            if s_type == "default":
                 continue
 
             default_points = source_config.get("points")
@@ -231,14 +241,32 @@ class ConfigReader:
                     logging.error(f"Failed to load file source {s_name}: {e}")
                     raise  # Crash on missing dataset reference as specified
 
+                reader_type = source_config.get("reader", "")
                 questions = []
-                if dataset_name == "jeopardy":
-                    score_sub = self.get("JBOT_FINAL_JEOPARDY_SCORE_SUB")
+
+                # Load questions based on reader type
+                if reader_type == "jeopardy":
+                    score_sub = source_config.get("final_jeopardy_score_sub", 10000)
                     allowed_values = source_config.get("clue_values", [100])
                     questions = read_jeopardy_questions(
                         dataset_path, score_sub, allowed_clue_values=allowed_values
                     )
-                # Add more dataset types as needed
+                elif reader_type == "knowledge_bowl":
+                    questions = read_knowledge_bowl_questions(dataset_path)
+                elif reader_type == "riddle":
+                    questions = read_riddle_questions(dataset_path)
+                elif reader_type == "riddle_with_hints":
+                    questions = read_riddle_with_hints_questions(dataset_path)
+                elif reader_type == "simple":
+                    category = source_config.get("category", dataset_name)
+                    questions = read_simple_questions(dataset_path, category)
+                elif reader_type == "general_trivia":
+                    questions = read_general_trivia_questions(dataset_path)
+                else:
+                    logging.error(
+                        f"File source {s_name} has unknown reader type: {reader_type}"
+                    )
+                    continue
 
                 if questions:
                     sources.append(
@@ -251,5 +279,11 @@ class ConfigReader:
                     )
                 else:
                     logging.warning(f"No questions loaded for file source: {s_name}")
+
+        if not sources:
+            raise RuntimeError(
+                f"Failed to load any valid question sources from {SOURCES_TOML_PATH}.\n"
+                f"Check your configuration and ensure at least one source is properly configured."
+            )
 
         return sources

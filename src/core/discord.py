@@ -508,13 +508,11 @@ class DiscordBot(commands.Bot):
 
 async def discord_bot_async(
     config: ConfigReader,
-    questions: list[Question],
     data_manager: "DataManager",
     player_manager: "PlayerManager",
 ):
     """Main function to initialize and run the bot."""
     from src.core.gemini_manager import GeminiManager
-    from data.readers.question_source import StaticQuestionSource, GeminiQuestionSource
 
     gemini_manager = None
     try:
@@ -524,16 +522,8 @@ async def discord_bot_async(
     except ValueError as e:
         logging.warning(f"Could not initialize GeminiManager: {e}")
 
-    # Build sources
-    sources = []
-
-    # 1. Add the main dataset loaded by main.py as a source
-    default_weight = float(config.get("JBOT_DEFAULT_DATASET_WEIGHT"))
-    if questions:
-        sources.append(StaticQuestionSource("main_dataset", default_weight, questions))
-
-    # 2. Parse additional sources from config
-    sources.extend(config.parse_question_sources(gemini_manager))
+    # Load all sources from TOML configuration
+    sources = config.parse_question_sources(gemini_manager)
 
     question_selector = QuestionSelector(
         sources=sources,
@@ -548,11 +538,10 @@ async def discord_bot_async(
 
 def run_discord_bot(
     config: ConfigReader,
-    questions: list[Question],
     data_manager: "DataManager",
     player_manager: "PlayerManager",
 ):
     try:
-        asyncio.run(discord_bot_async(config, questions, data_manager, player_manager))
+        asyncio.run(discord_bot_async(config, data_manager, player_manager))
     except KeyboardInterrupt:
         logging.info("Bot shutdown requested by user.")
