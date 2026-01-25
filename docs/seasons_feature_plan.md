@@ -18,12 +18,12 @@ Implement a monthly seasons system to create recurring competitive cycles while 
    - Config option: `JBOT_SEASON_MODE=calendar|rolling` for future flexibility
 
 1b. **Player Table Schema Strategy**: Explicit separation of Season vs. Lifetime
-   - **Crucial Change**: Do NOT repurpose existing `score` column to avoid semantic confusion/bugs.
+   - **Crucial Change**: Keep existing `score` column as lifetime tracker (no rename for safety).
    - **New Structure**:
-     - `players.lifetime_score`: The all-time accumulated total.
-     - `players.season_score`: Cache of current season total (reset monthly).
+     - `players.score`: **Unchanged** - continues as all-time accumulated total.
+     - `players.season_score`: **New column** - cache of current season total (reset monthly).
      - `players.answer_streak`: **Current Season Correct Streak** (resets monthly).
-   - **Rationale**: User confirmed `answer_streak` is performance-based (correct answers), not a login habit. Resetting strictly at season start is acceptable and keeps the playing field fair.
+   - **Rationale**: Avoiding column rename eliminates migration risk. The `score` column name is slightly less explicit but safer for a major feature release.
 
 2. **Point Reset**: Season points start at 0
    - Season points start at 0
@@ -154,10 +154,8 @@ CREATE TABLE season_daily_scores (
 
 #### `players` - Migration to Season/Lifetime Split
 ```sql
--- 1. Rename existing 'score' to 'lifetime_score' (or create new and copy)
--- Ideally, we keep 'score' as-is for backward compat IF we want, but better to be explicit.
--- DECISION: Rename/Migrate 'score' -> 'lifetime_score'.
-ALTER TABLE players RENAME COLUMN score TO lifetime_score;
+-- 1. Keep existing 'score' as lifetime score (NO RENAME for safety)
+-- DECISION: players.score remains unchanged, represents lifetime total
 
 -- 2. Add columns for Current Season Cache
 ALTER TABLE players ADD COLUMN season_score INTEGER DEFAULT 0;
@@ -174,15 +172,16 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
 1. **Backup**: Backup database before running `update_schema.py`.
 2. **Analysis**: Run `scripts/backfill_seasons.py` (dry run) first to verify logic.
 3. **Migration Steps**:
-   - `UPDATE players SET lifetime_score = score` (if new column).
-   - `UPDATE players SET season_score = 0` (clean start for first season).
-   - `UPDATE players SET answer_streak = 0`
+   - `players.score` remains unchanged (already lifetime total).
+   - New columns auto-initialize to 0 via DEFAULT constraints.
+   - `UPDATE players SET answer_streak = 0` (reset for season 1).
+   - Existing `update_schema.py` can handle this (only adding columns, no renames).
 ### Phase 1: Database & Core Infrastructure
 
 1. **Schema Updates** (`db/schema.sql`)
-   - Add new tables
-   - **CRITICAL**: Migration script must handle column renaming/splitting carefully.
-   - Update `db/update_schema.py` to handle migration
+   - Add new tables: `seasons`, `season_scores`, `season_challenges`, `season_daily_scores`
+   - Add new columns to `players` table (no column renames)
+   - Existing `db/update_schema.py` can handle migration (only adding, not renaming)
 
 2. **DataManager Extensions** (`src/core/data_manager.py`)
    - `get_current_season()` → Season object or None
@@ -190,10 +189,10 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
    - `end_season(season_id)` → finalize rankings, award trophies
    - `get_season_scores(season_id, limit)` → list of scores
    - `get_player_season_score(player_id, season_id)` → score data
-   - `get_player_all_time_stats(player_id)` → lifetime data
-   - `get_player_trophies(player_id)` → list of past trophies
+   - `get_player_all_time_stats(player_id)` → lifetime data (uses `players.score`)
+   - `get_player_trophies(player_id)` → list of past trophies with counts
    - `update_season_score(player_id, season_id, **kwargs)`
-   - `update_lifetime_stats(player_id, **kwargs)`
+   - `update_lifetime_stats(player_id, **kwargs)` → updates `players.score` and lifetime_* columns
 
 3. **Configuration** (`.env` / `src/cfg/main.py`)
    ```
@@ -228,7 +227,7 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
    - Record scores to both `season_daily_scores` and `daily_scores`
    - Update `season_scores` (authoritative for season)
    - Update `players.season_score` (cache)
-   - Update `players.lifetime_score` (accumulative)
+   - Update `players.score` (accumulative lifetime total)
    - **Streak Logic**:
      - Increment `players.answer_streak` (Resets on season start).
      - Update `players.lifetime_best_streak` if exceeded.
@@ -241,8 +240,8 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
 9. **Enhance Game Cog** (`src/cogs/game.py`)
    - `/game leaderboard [all_time:bool=False]` - Enhanced to show season by default
      - Header: "🏆 January 2026 Season - Day 19/31 - Challenge: ⚡ Speed Demon"
-     - Trophy emojis for current season top 3 only: "🥇 Alice (1,234 pts)"
-     - No historical trophy count (keeps leaderboard focused on current season)
+     - Trophy emojis for current season leaders + historical count: "🥇 Alice (1,234 pts) 🏆×3"
+     - Historical trophy count provides context and bragging rights
    - `/game stats [player] [all_time:bool=False]` - Enhanced to show:
      - Season stats by default (or all-time if flag set)
      - Trophy history at bottom: "Trophies: 🥇×2 🥈×1 🥉×3"
@@ -273,10 +272,10 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
 ### Phase 6: Display & Polish
 
 13. **Trophy Display**
-    - Add trophy emoji to leaderboard for current season top 3 only
-    - Format: `🥇 PlayerName (1,234 pts)` (current leaders only)
-    - Historical trophies shown only in `/game stats @player`
-    - Keeps leaderboard focused on current competition
+    - Add trophy emoji to leaderboard for current season top 3
+    - Format: `🥇 PlayerName (1,234 pts) 🏆×3` (medal + historical count)
+    - Trophy count shows total wins across all seasons
+    - Provides context and recognition for consistent performers
 
 14. **Transition Announcements**
     - Bot announces season end in channel
@@ -361,8 +360,8 @@ JBOT_SEASON_REMINDER_DAYS=3             # Days before end to remind about season
 1. **Leaderboard Changes**:
    - Header shows: "🏆 January 2026 Season - Day 19/31 - Challenge: ⚡ Speed Demon"
    - Default display is season stats
-   - Trophy emojis for current season top 3: "🥇 Alice (1,234 pts)"
-   - Clean focus on current competition (no historical trophy clutter)
+   - Trophy emojis for current season top 3 + historical count: "🥇 Alice (1,234 pts) 🏆×3"
+   - Historical trophy count provides recognition for consistent performers
    - Command: `/game leaderboard all_time:True` for lifetime stats
 
 2. **Stats Command Enhanced**:
@@ -425,10 +424,13 @@ Get ready for the February 2026 season! 🎯
 2. **Challenge selection**: Auto-select from pool of 4-6, random each month, no repeats from previous month
 3. **Historical seasons**: Build backfill tool (`scripts/backfill_seasons.py`) to analyze and optionally populate historical data
 4. **Tie-breaking**: No tie-breaking needed. Multiple players can share trophy positions (e.g., two 🥇 winners)
-5. **Display format**: Current season top 3 shown on leaderboard with medals (🥇🥈🥉); historical trophy count only in `/game stats` to avoid clutter
+5. **Display format**: Current season top 3 shown on leaderboard with medals (🥇🥈🥉) + historical trophy count (🏆×3)
 6. **Season duration**: Calendar months (Jan 1-31, Feb 1-28, etc.) for intuitive naming; variable length acceptable
-7. **Existing columns**: Migrate `players.score` to `lifetime_score` and add new `season_score`. Use `answer_streak` for season streak (resets monthly).
+7. **Schema safety**: Keep `players.score` as lifetime (no rename). Add `players.season_score` for current season. Use `answer_streak` for season streak (resets monthly).
 8. **Command consolidation**: Zero new commands - enhance existing `/game leaderboard` and `/game stats` with `all_time` parameter
+9. **Season bootstrap**: Check/create seasons during morning routine, not on bot startup
+10. **Testing**: Mock time injection for testing season transitions without waiting for calendar boundaries
+11. **Rollout strategy**: Implement with `JBOT_ENABLE_SEASONS=false`, test thoroughly, enable for February 1st launch
 
 ## Next Steps
 
