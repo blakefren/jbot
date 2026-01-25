@@ -11,6 +11,7 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
         self.bot.game = MagicMock()
         self.bot.player_manager = MagicMock()
         self.bot.morning_message_task = MagicMock()
+        self.bot.reminder_message_task = MagicMock()
         self.bot.evening_message_task = MagicMock()
         self.bot.send_message = AsyncMock()
 
@@ -27,11 +28,15 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_status_next_question(self):
         self.bot.morning_message_task.is_running.return_value = True
+        self.bot.reminder_message_task.is_running.return_value = True
         self.bot.evening_message_task.is_running.return_value = True
 
-        # Morning is sooner than evening (next day vs today)
+        # Morning is sooner than reminder and evening (next day vs today)
         self.bot.morning_message_task.next_iteration = datetime(
             2025, 1, 1, 8, 0, tzinfo=timezone.utc
+        )
+        self.bot.reminder_message_task.next_iteration = datetime(
+            2025, 1, 1, 14, 0, tzinfo=timezone.utc
         )
         self.bot.evening_message_task.next_iteration = datetime(
             2025, 1, 1, 20, 0, tzinfo=timezone.utc
@@ -50,11 +55,15 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
     async def test_status_answer_reveal(self):
         """Test status when it's time for answer reveal (evening < morning)."""
         self.bot.morning_message_task.is_running.return_value = True
+        self.bot.reminder_message_task.is_running.return_value = True
         self.bot.evening_message_task.is_running.return_value = True
 
-        # Evening is sooner than morning
+        # Evening is sooner than morning and reminder
         self.bot.morning_message_task.next_iteration = datetime(
             2025, 1, 2, 8, 0, tzinfo=timezone.utc
+        )
+        self.bot.reminder_message_task.next_iteration = datetime(
+            2025, 1, 2, 14, 0, tzinfo=timezone.utc
         )
         self.bot.evening_message_task.next_iteration = datetime(
             2025, 1, 1, 20, 0, tzinfo=timezone.utc
@@ -73,6 +82,7 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
     async def test_status_with_active_question(self):
         """Test status showing the active question."""
         self.bot.morning_message_task.is_running.return_value = True
+        self.bot.reminder_message_task.is_running.return_value = True
         self.bot.evening_message_task.is_running.return_value = True
 
         # Morning < Evening (Next question phase, but we want to show today's question if it exists)
@@ -83,6 +93,9 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
 
         self.bot.morning_message_task.next_iteration = datetime(
             2025, 1, 2, 8, 0, tzinfo=timezone.utc
+        )
+        self.bot.reminder_message_task.next_iteration = datetime(
+            2025, 1, 2, 14, 0, tzinfo=timezone.utc
         )
         self.bot.evening_message_task.next_iteration = datetime(
             2025, 1, 1, 20, 0, tzinfo=timezone.utc
@@ -101,9 +114,13 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
     async def test_status_with_player_stats(self):
         """Test status showing player stats."""
         self.bot.morning_message_task.is_running.return_value = True
+        self.bot.reminder_message_task.is_running.return_value = True
         self.bot.evening_message_task.is_running.return_value = True
         self.bot.morning_message_task.next_iteration = datetime(
             2025, 1, 1, 8, 0, tzinfo=timezone.utc
+        )
+        self.bot.reminder_message_task.next_iteration = datetime(
+            2025, 1, 1, 14, 0, tzinfo=timezone.utc
         )
         self.bot.evening_message_task.next_iteration = datetime(
             2025, 1, 1, 20, 0, tzinfo=timezone.utc
@@ -124,9 +141,13 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
     async def test_status_player_not_found(self):
         """Test status when player is not found."""
         self.bot.morning_message_task.is_running.return_value = True
+        self.bot.reminder_message_task.is_running.return_value = True
         self.bot.evening_message_task.is_running.return_value = True
         self.bot.morning_message_task.next_iteration = datetime(
             2025, 1, 1, 8, 0, tzinfo=timezone.utc
+        )
+        self.bot.reminder_message_task.next_iteration = datetime(
+            2025, 1, 1, 14, 0, tzinfo=timezone.utc
         )
         self.bot.evening_message_task.next_iteration = datetime(
             2025, 1, 1, 20, 0, tzinfo=timezone.utc
@@ -139,6 +160,32 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
         self.bot.send_message.assert_awaited_once()
         args, kwargs = self.bot.send_message.await_args
         self.assertNotIn("**Your Score:**", args[0])
+
+    async def test_status_reminder_next(self):
+        """Test status when reminder is the next event."""
+        self.bot.morning_message_task.is_running.return_value = True
+        self.bot.reminder_message_task.is_running.return_value = True
+        self.bot.evening_message_task.is_running.return_value = True
+
+        # Reminder is sooner than evening (morning already happened)
+        self.bot.morning_message_task.next_iteration = datetime(
+            2025, 1, 2, 8, 0, tzinfo=timezone.utc
+        )
+        self.bot.reminder_message_task.next_iteration = datetime(
+            2025, 1, 1, 14, 0, tzinfo=timezone.utc
+        )
+        self.bot.evening_message_task.next_iteration = datetime(
+            2025, 1, 1, 20, 0, tzinfo=timezone.utc
+        )
+
+        # No active question to avoid the format_question path
+        self.bot.game.daily_q = None
+
+        await self.cog.status.callback(self.cog, self.ctx)
+
+        self.bot.send_message.assert_awaited_once()
+        args, kwargs = self.bot.send_message.await_args
+        self.assertIn("Reminder", args[0])
 
     async def test_leaderboard(self):
         self.bot.game.get_scores_leaderboard.return_value = "Leaderboard"

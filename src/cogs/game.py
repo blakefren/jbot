@@ -17,23 +17,30 @@ class Game(commands.Cog):
     async def status(self, ctx: commands.Context):
         """Next event time & current question."""
         morning_task = self.bot.morning_message_task
+        reminder_task = self.bot.reminder_message_task
         evening_task = self.bot.evening_message_task
 
-        if not morning_task.is_running() or not evening_task.is_running():
+        if (
+            not morning_task.is_running()
+            or not reminder_task.is_running()
+            or not evening_task.is_running()
+        ):
             await self.bot.send_message(
                 "Tasks are not running.", interaction=ctx.interaction, ephemeral=True
             )
             return
 
         morning_time_next = morning_task.next_iteration
+        reminder_time_next = reminder_task.next_iteration
         evening_time_next = evening_task.next_iteration
 
-        if morning_time_next < evening_time_next:
-            event_name = "Next question"
-            next_datetime = morning_time_next
-        else:
-            event_name = "Answer reveal"
-            next_datetime = evening_time_next
+        # Determine the next event by finding the earliest time
+        events = [
+            ("Next question", morning_time_next),
+            ("Reminder", reminder_time_next),
+            ("Answer reveal", evening_time_next),
+        ]
+        event_name, next_datetime = min(events, key=lambda x: x[1])
 
         response_content = (
             f"{event_name} in <t:{int(next_datetime.timestamp())}:R> "
