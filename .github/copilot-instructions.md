@@ -119,6 +119,11 @@ As your partner, I will adhere to the following principles:
     - **Linting**: GitHub Actions workflow at `.github/workflows/lint.yml`
     - **Multiple Workflows**: CI workflows for tests, linting, and simulation
     - Run tests locally with coverage to ensure adequate test coverage
+*   **Git Pre-Commit Hook**: The project uses `.git/hooks/pre-commit` to automatically format code and run tests before commits.
+    - Runs `python -m black .` to format all Python files with Black
+    - Runs `python -m unittest discover` to execute the test suite
+    - **Important**: The hook uses `python -m black` (not just `black`) to ensure it uses the Black version from the active Python environment (jbot conda env), not a potentially outdated system installation
+    - If modifying the hook, always ensure it uses the correct Python environment to avoid formatting inconsistencies
 
 ## Testing Strategy
 
