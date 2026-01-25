@@ -87,10 +87,11 @@ As your partner, I will adhere to the following principles:
 
 ## Operating Procedures
 
-*   **Code Style**: I will match the existing code style and conventions in the project.
+*   **Code Style**: I will match the existing code style and conventions in the project. Use Black for code formatting.
 *   **File Edits**: I will make changes to files directly using the available tools, clearly explaining the changes I am making.
 *   **Dependencies**: If a task requires a new dependency, I will ask for your approval before adding it to `requirements.txt`.
 *   **Ambiguity**: If a request is unclear, I will ask for clarification before proceeding.
+*   **Entry Point**: The bot is started via `python run.py` which adds the `src` directory to the Python path before running `src/main.py`.
 *   **Configuration**: Configuration uses both `.env` and `sources.toml`:
     - **`.env`**: For environment-specific settings (tokens, scheduling, feature flags)
         - Always add new config keys to `.env.template` with descriptive comments
@@ -107,7 +108,10 @@ As your partner, I will adhere to the following principles:
         - **Question Sources**: All configured in `sources.toml` - no dataset settings in `.env`
         - **Scoring/Bonuses**: `JBOT_BONUS_*` for point calculations (in `.env`)
         - **Discord**: Bot tokens, role names (in `.env`)
-*   **Database Management**: The database schema is defined in `db/schema.sql`. To modify the database, I will update `db/schema.sql` and run `db/update_schema.py` to apply the changes to the local `jbot.db`.
+*   **Database Management**: The database schema is defined in `db/schema.sql`. To modify the database, I will update `db/schema.sql` and run `python db/update_schema.py` to apply the changes to the local `jbot.db`. The update script performs intelligent diffing and migration of schema changes.
+    - **Migration Safety**: `update_schema.py` compares current database against `schema.sql`, applies changes incrementally
+    - **Verification**: After migration, run `python db/verify_schema.py` to ensure schema matches expectations
+    - **Production Database**: The actual `jbot.db` is in the root directory (not in `db/`), gitignored for safety
 *   **Documentation**: I will check `docs/` for any architectural plans or investigation notes before implementing major features.
 *   **Logging**: Use Python's standard `logging` module throughout (configured in `src/logging_config.py`). Log levels: INFO for normal operations, WARNING for recoverable issues, ERROR for failures. Include appropriate logging for debugging and monitoring when adding features.
 *   **Code Quality Tools**:
@@ -122,11 +126,16 @@ The project uses Python's `unittest` module as the primary testing framework.
 
 ### General Testing Guidelines
 
-1.  **Run Tests via Script**: I will use the `run_tests.bat` script to execute the test suite.
+1.  **Run Tests via Script**: I will use the `scripts/run_tests.bat` script to execute the test suite (or `python -m unittest discover -s . -p "test_*.py"`).
 2.  **Build Upon Existing Tests**: I will work with the existing `unittest` framework, adding new tests for new features and expanding coverage for existing ones.
 3.  **Unit Tests**: I will prioritize creating unit tests for core business logic, such as game mode rules, scoring, and question handling.
 4.  **Coverage**: We should aim for a reasonable level of test coverage.
 5.  **CI/CD**: The `.github/workflows/python-tests.yml` file runs tests using `unittest`. I will ensure any changes I make pass these CI checks.
+6.  **Test Organization**: Tests mirror the `src/` structure in `tests/` directory:
+    - `tests/src/core/` for core manager tests
+    - `tests/src/cogs/` for Discord cog tests
+    - `tests/db/` for database tests
+    - `tests/data/` for data reader tests
 
 ### Database Testing Best Practices
 
