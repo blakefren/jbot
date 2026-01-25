@@ -595,39 +595,48 @@ class GameRunner:
         if not self.daily_q:
             return "No question to remind about."
 
-        # Get players who have guessed
-        all_guesses = self.data_manager.read_guess_history()
-        daily_guesses = [
-            g
-            for g in all_guesses
-            if g.get("daily_question_id") == self.daily_question_id
-        ]
-        player_ids_who_guessed = {g.get("player_id") for g in daily_guesses}
+        try:
+            # Get players who have guessed
+            all_guesses = self.data_manager.read_guess_history()
+            daily_guesses = [
+                g
+                for g in all_guesses
+                if g.get("daily_question_id") == self.daily_question_id
+            ]
+            player_ids_who_guessed = {g.get("player_id") for g in daily_guesses}
 
-        # Get all players
-        all_players = self.player_manager.get_all_players()
-        player_ids_all = set(k for k in all_players.keys())
+            # Get all players
+            all_players = self.player_manager.get_all_players()
+            player_ids_all = set(k for k in all_players.keys())
 
-        # Find players who haven't guessed
-        player_ids_not_guessed = player_ids_all - player_ids_who_guessed
+            # Find players who haven't guessed
+            player_ids_not_guessed = player_ids_all - player_ids_who_guessed
 
-        # Create the @mentions string
-        mentions = ""
-        if tag_unanswered and player_ids_not_guessed:
-            mentions = " ".join(
-                [f"<@{player_id}>" for player_id in player_ids_not_guessed]
+            # Create the @mentions string
+            mentions = ""
+            if tag_unanswered and player_ids_not_guessed:
+                mentions = " ".join(
+                    [f"<@{player_id}>" for player_id in player_ids_not_guessed]
+                )
+
+            hint_part = ""
+            if self.daily_q.hint:
+                hint_part = f"\nHint: ||**{self.daily_q.hint}**||"
+
+            flavor_message = (
+                "Friendly reminder to get your guesses in!\n"
+                f"Question: **{self.daily_q.question}**"
+                f"{hint_part}"
             )
+            message = f"{flavor_message}\n{mentions}"
 
-        hint_part = ""
-        if self.daily_q.hint:
-            hint_part = f"\nHint: ||**{self.daily_q.hint}**||"
+            # Log message length for debugging
+            logging.debug(f"Generated reminder message: {len(message)} chars")
 
-        flavor_message = (
-            "Friendly reminder to get your guesses in!\n"
-            f"Question: **{self.daily_q.question}**"
-            f"{hint_part}"
-        )
-        return f"{flavor_message}\n{mentions}"
+            return message
+        except Exception as e:
+            logging.error(f"Error generating reminder message content: {e}")
+            return f"Friendly reminder to get your guesses in!\nQuestion: {self.daily_q.question}"
 
     def get_evening_message_content(self, guild=None) -> str:
         """Generates the evening message with the answer and a summary of player guesses, using server nicknames if possible."""

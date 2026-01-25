@@ -256,11 +256,18 @@ class DiscordBot(commands.Bot):
                 content_getter = lambda: self.game.get_reminder_message_content(
                     self.config.get_bool("JBOT_TAG_UNANSWERED_PLAYERS")
                 )
+                logging.debug(
+                    f"Reminder message content ({len(content_getter())} chars): {content_getter()[:200]}..."
+                )
+
                 await self._send_daily_message_to_all_subscribers(
                     content_getter, "reminder_message"
                 )
+                logging.info("Reminder message sent successfully")
             except Exception as e:
                 self._log_task_error(e, "reminder_message_task")
+        else:
+            logging.info("Reminder message task running in silent mode, skipping send.")
 
     @tasks.loop(time=EVENING_TIME)
     async def evening_message_task(self, silent: bool = False):
