@@ -39,7 +39,11 @@ class TestDataManager(unittest.TestCase):
         self.db.execute_update = MagicMock()
         self.data_manager.create_player("1", "Alice")
         self.db.execute_update.assert_called_once_with(
-            "INSERT INTO players (id, name, score, answer_streak, active_shield) VALUES (?, ?, 0, 0, 0)",
+            """
+            INSERT INTO players (id, name, score, season_score, answer_streak, active_shield,
+                                lifetime_questions, lifetime_correct, lifetime_first_answers, lifetime_best_streak)
+            VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0)
+        """,
             ("1", "Alice"),
         )
 

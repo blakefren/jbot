@@ -41,15 +41,24 @@ class DataManager:
         Reads the players table and returns a dictionary of Player objects keyed by discord_id.
         """
         players = {}
-        query = "SELECT id, name, score, answer_streak, active_shield FROM players"
+        query = """
+            SELECT id, name, score, season_score, answer_streak, active_shield,
+                   lifetime_questions, lifetime_correct, lifetime_first_answers, lifetime_best_streak
+            FROM players
+        """
         player_records = self._db.execute_query(query)
         for record in player_records:
             player = Player(
                 id=record["id"],
                 name=record["name"],
-                score=record["score"],
-                answer_streak=record["answer_streak"],
-                active_shield=bool(record["active_shield"]),
+                score=record.get("score", 0),
+                season_score=record.get("season_score", 0),
+                answer_streak=record.get("answer_streak", 0),
+                active_shield=bool(record.get("active_shield", False)),
+                lifetime_questions=record.get("lifetime_questions", 0),
+                lifetime_correct=record.get("lifetime_correct", 0),
+                lifetime_first_answers=record.get("lifetime_first_answers", 0),
+                lifetime_best_streak=record.get("lifetime_best_streak", 0),
             )
             players[player.id] = player
         return players
@@ -62,22 +71,36 @@ class DataManager:
 
     def get_player(self, player_id: str) -> Player | None:
         """Retrieves a single player from the database."""
-        query = "SELECT id, name, score, answer_streak, active_shield FROM players WHERE id = ?"
+        query = """
+            SELECT id, name, score, season_score, answer_streak, active_shield,
+                   lifetime_questions, lifetime_correct, lifetime_first_answers, lifetime_best_streak
+            FROM players
+            WHERE id = ?
+        """
         result = self._db.execute_query(query, (player_id,))
         if result:
             record = result[0]
             return Player(
                 id=record["id"],
                 name=record["name"],
-                score=record["score"],
-                answer_streak=record["answer_streak"],
-                active_shield=bool(record["active_shield"]),
+                score=record.get("score", 0),
+                season_score=record.get("season_score", 0),
+                answer_streak=record.get("answer_streak", 0),
+                active_shield=bool(record.get("active_shield", False)),
+                lifetime_questions=record.get("lifetime_questions", 0),
+                lifetime_correct=record.get("lifetime_correct", 0),
+                lifetime_first_answers=record.get("lifetime_first_answers", 0),
+                lifetime_best_streak=record.get("lifetime_best_streak", 0),
             )
         return None
 
     def create_player(self, player_id: str, name: str):
         """Creates a new player in the database."""
-        query = "INSERT INTO players (id, name, score, answer_streak, active_shield) VALUES (?, ?, 0, 0, 0)"
+        query = """
+            INSERT INTO players (id, name, score, season_score, answer_streak, active_shield,
+                                lifetime_questions, lifetime_correct, lifetime_first_answers, lifetime_best_streak)
+            VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0)
+        """
         self._db.execute_update(query, (player_id, name))
 
     def update_player_name(self, player_id: str, name: str):
@@ -842,3 +865,286 @@ class DataManager:
             self._db.execute_update(update_query, tuple(guess_ids_to_update))
 
         return len(guess_ids_to_update)
+
+    # ==================== SEASONS FEATURE METHODS ====================
+
+    def get_current_season(self):
+        """Get the current active season, if any."""
+        from src.core.season import Season
+
+        query = "SELECT * FROM seasons WHERE is_active = 1 LIMIT 1"
+        result = self._db.execute_query(query)
+        if result:
+            return Season.from_db_row(result[0])
+        return None
+
+    def create_season(self, season_name: str, start_date: str, end_date: str) -> int:
+        """
+        Create a new season.
+
+        Args:
+            season_name: Display name (e.g., "January 2026")
+            start_date: ISO8601 date string (e.g., "2026-01-01")
+            end_date: ISO8601 date string (e.g., "2026-01-31")
+
+        Returns:
+            season_id of the newly created season
+        """
+        # Deactivate any currently active seasons
+        self._db.execute_update("UPDATE seasons SET is_active = 0 WHERE is_active = 1")
+
+        query = """
+            INSERT INTO seasons (season_name, start_date, end_date, is_active)
+            VALUES (?, ?, ?, 1)
+        """
+        cursor = self._db.execute_update(query, (season_name, start_date, end_date))
+        return cursor.lastrowid
+
+    def get_season_by_id(self, season_id: int):
+        """Get a specific season by ID."""
+        from src.core.season import Season
+
+        query = "SELECT * FROM seasons WHERE season_id = ?"
+        result = self._db.execute_query(query, (season_id,))
+        if result:
+            return Season.from_db_row(result[0])
+        return None
+
+    def get_all_seasons(self, order_by: str = "start_date DESC"):
+        """Get all seasons, ordered by specified column."""
+        from src.core.season import Season
+
+        query = f"SELECT * FROM seasons ORDER BY {order_by}"
+        result = self._db.execute_query(query)
+        return [Season.from_db_row(row) for row in result]
+
+    def end_season(self, season_id: int):
+        """Mark a season as inactive (ended)."""
+        query = "UPDATE seasons SET is_active = 0 WHERE season_id = ?"
+        self._db.execute_update(query, (season_id,))
+
+    def get_season_scores(self, season_id: int, limit: int = 10):
+        """
+        Get player scores for a season, ordered by points descending.
+
+        Returns:
+            List of SeasonScore objects
+        """
+        from src.core.season import SeasonScore
+
+        query = """
+            SELECT * FROM season_scores
+            WHERE season_id = ?
+            ORDER BY points DESC
+            LIMIT ?
+        """
+        result = self._db.execute_query(query, (season_id, limit))
+        return [SeasonScore.from_db_row(row) for row in result]
+
+    def get_player_season_score(self, player_id: str, season_id: int):
+        """Get a specific player's season score."""
+        from src.core.season import SeasonScore
+
+        query = """
+            SELECT * FROM season_scores
+            WHERE player_id = ? AND season_id = ?
+        """
+        result = self._db.execute_query(query, (player_id, season_id))
+        if result:
+            return SeasonScore.from_db_row(result[0])
+        return None
+
+    def initialize_player_season_score(self, player_id: str, season_id: int):
+        """Create a season_scores record for a player if it doesn't exist."""
+        existing = self.get_player_season_score(player_id, season_id)
+        if not existing:
+            query = """
+                INSERT INTO season_scores (player_id, season_id)
+                VALUES (?, ?)
+            """
+            self._db.execute_update(query, (player_id, season_id))
+
+    def update_season_score(self, player_id: str, season_id: int, **kwargs):
+        """
+        Update a player's season score with the provided field values.
+
+        Example:
+            update_season_score(player_id, season_id, points=150, correct_answers=3)
+        """
+        if not kwargs:
+            return
+
+        # Ensure record exists
+        self.initialize_player_season_score(player_id, season_id)
+
+        # Build UPDATE statement dynamically
+        set_clauses = ", ".join(f"{key} = ?" for key in kwargs.keys())
+        values = list(kwargs.values()) + [player_id, season_id]
+
+        query = f"""
+            UPDATE season_scores
+            SET {set_clauses}
+            WHERE player_id = ? AND season_id = ?
+        """
+        self._db.execute_update(query, tuple(values))
+
+    def increment_season_stat(
+        self, player_id: str, season_id: int, stat_name: str, amount: int = 1
+    ):
+        """Atomically increment a season stat."""
+        self.initialize_player_season_score(player_id, season_id)
+
+        query = f"""
+            UPDATE season_scores
+            SET {stat_name} = {stat_name} + ?
+            WHERE player_id = ? AND season_id = ?
+        """
+        self._db.execute_update(query, (amount, player_id, season_id))
+
+    def get_player_trophies(self, player_id: str):
+        """
+        Get all trophies won by a player across all seasons.
+
+        Returns:
+            List of dicts with season_name, trophy, and season_id
+        """
+        query = """
+            SELECT s.season_name, ss.trophy, s.season_id
+            FROM season_scores ss
+            JOIN seasons s ON ss.season_id = s.season_id
+            WHERE ss.player_id = ? AND ss.trophy IS NOT NULL
+            ORDER BY s.start_date DESC
+        """
+        return self._db.execute_query(query, (player_id,))
+
+    def get_trophy_counts(self, player_id: str) -> dict:
+        """
+        Get counts of each trophy type for a player.
+
+        Returns:
+            Dict like {"gold": 2, "silver": 1, "bronze": 3}
+        """
+        trophies = self.get_player_trophies(player_id)
+        counts = {"gold": 0, "silver": 0, "bronze": 0}
+
+        for trophy_record in trophies:
+            trophy_type = trophy_record["trophy"]
+            if trophy_type in counts:
+                counts[trophy_type] += 1
+
+        return counts
+
+    def finalize_season_rankings(self, season_id: int):
+        """
+        Calculate and store final rankings for a season.
+        Awards trophies to top performers.
+        Handles ties: players with same score get same rank and trophy.
+        """
+        scores = self.get_season_scores(season_id, limit=1000)  # Get all
+
+        # Determine rankings (with tie handling)
+        prev_score = None
+        current_rank = 1
+
+        for i, season_score in enumerate(scores):
+            # Handle ties - same score = same rank
+            if prev_score is not None and season_score.points < prev_score:
+                current_rank = i + 1
+
+            # Assign rank
+            season_score.final_rank = current_rank
+
+            # Award trophies to top 3 ranks (multiple players can share)
+            if current_rank == 1:
+                season_score.trophy = "gold"
+            elif current_rank == 2:
+                season_score.trophy = "silver"
+            elif current_rank == 3:
+                season_score.trophy = "bronze"
+
+            # Update database
+            self.update_season_score(
+                season_score.player_id,
+                season_id,
+                final_rank=season_score.final_rank,
+                trophy=season_score.trophy,
+            )
+
+            prev_score = season_score.points
+
+    def get_season_challenge(self, season_id: int):
+        """Get the challenge for a specific season."""
+        from src.core.season import SeasonChallenge
+
+        query = "SELECT * FROM season_challenges WHERE season_id = ?"
+        result = self._db.execute_query(query, (season_id,))
+        if result:
+            return SeasonChallenge.from_db_row(result[0])
+        return None
+
+    def create_season_challenge(
+        self,
+        season_id: int,
+        challenge_name: str,
+        description: str,
+        badge_emoji: str,
+        completion_criteria: dict,
+    ) -> int:
+        """Create a challenge for a season."""
+        import json
+
+        query = """
+            INSERT INTO season_challenges
+            (season_id, challenge_name, description, badge_emoji, completion_criteria)
+            VALUES (?, ?, ?, ?, ?)
+        """
+        cursor = self._db.execute_update(
+            query,
+            (
+                season_id,
+                challenge_name,
+                description,
+                badge_emoji,
+                json.dumps(completion_criteria),
+            ),
+        )
+        return cursor.lastrowid
+
+    def update_lifetime_stats(self, player_id: str, **kwargs):
+        """
+        Update lifetime stats for a player (score, lifetime_questions, etc.).
+
+        Example:
+            update_lifetime_stats(player_id, score=500, lifetime_questions=10)
+        """
+        if not kwargs:
+            return
+
+        # Build UPDATE statement dynamically
+        set_clauses = ", ".join(f"{key} = ?" for key in kwargs.keys())
+        values = list(kwargs.values()) + [player_id]
+
+        query = f"""
+            UPDATE players
+            SET {set_clauses}
+            WHERE id = ?
+        """
+        self._db.execute_update(query, tuple(values))
+
+    def increment_lifetime_stat(self, player_id: str, stat_name: str, amount: int = 1):
+        """Atomically increment a lifetime stat."""
+        query = f"""
+            UPDATE players
+            SET {stat_name} = {stat_name} + ?
+            WHERE id = ?
+        """
+        self._db.execute_update(query, (amount, player_id))
+
+    def reset_all_player_season_scores(self):
+        """
+        Reset all players' season_score and answer_streak to 0.
+        Called at the start of a new season.
+        """
+        self._db.execute_update(
+            "UPDATE players SET season_score = 0, answer_streak = 0"
+        )
