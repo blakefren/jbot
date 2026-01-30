@@ -1,8 +1,8 @@
 # Jeopardy Question Selection Bug Investigation
 
 **Date**: January 29, 2026
-**Status**: In Progress
-**Priority**: High (statistically impossible occurrence)
+**Status**: Monitoring (Weight increased to force selection)
+**Priority**: Medium (Likely statistical anomaly, testing to confirm)
 
 ## Problem Statement
 
@@ -194,6 +194,47 @@ This suggests the issue is NOT in the core algorithm but in:
 - Fix works (0 failed selections in testing)
 - But doesn't address root cause (Jeopardy never being selected in first place)
 - **Status**: Reverted pending root cause identification
+
+## Jan 29, 2026: Log Analysis & Probability Check
+
+### Investigation of `tmp.txt` Logs (Jan 24 - 29)
+The user provided detailed logs spanning 5 days. We analyzed the question selection events:
+
+*   **Observed Selections (5 days)**:
+    1.  `riddle_medium` (Jan 25)
+    2.  `5th_grader` (Jan 26)
+    3.  `riddle_medium` (Jan 27)
+    4.  `riddle_medium` (Jan 28)
+    5.  `5th_grader` (Jan 29)
+*   **Jeopardy Selections**: 0
+*   **Riddle Selections**: 3
+
+### Probability Analysis
+Given the configuration:
+*   **Jeopardy Weight**: 75.0 (Chance: ~36.6%)
+*   **Riddle Medium Weight**: 20.0 (Chance: ~9.8%)
+*   **Total Weight**: 205.0
+
+**Calculations**:
+*   Probability of **0 Jeopardy selections** in 5 days: $(1 - 0.366)^5 \approx 10.3\%$
+*   Probability of **0 Jeopardy selections** in 7 days (including user report): $(1 - 0.366)^7 \approx 4.2\%$
+*   Probability of **3 Riddle selections** in 5 days (Binomial): $\approx 0.8\%$
+
+**Conclusion from Data**:
+The lack of Jeopardy selections is **statistically unlikely (~4-10%) but NOT impossible**. The previous calculation of "1 in 859 trillion" was based on an assumption of 136 days of zero selections, but it appears the configuration might have been different or the logs observed were only recent. The log explicitly shows **Zero "Selected question source: jeopardy_easy" entries**, confirming it wasn't selected and then discarded (which would produce a log entry and potential rejection log).
+
+### Discarded "Validation" Hypothesis
+We briefly hypothesized that `validate_question` (using Gemini) might be rejecting Jeopardy questions due to their "Answer is a Question" format.
+*   **Evidence Against**: The logs show `jeopardy_easy` was *never selected* by the RNG step. Validation only runs *after* selection. Therefore, validation cannot be the cause of non-selection in these logs.
+
+### Action Taken
+To confirm the pipeline functions correctly and to "break the streak" of bad RNG:
+1.  **Modified `sources.toml`**: Increased `jeopardy_easy` weight from `75.0` to **`1000.0`**.
+    *   New Selection Chance: ~91%
+2.  **Next Step**: Restart bot and observe tomorrow's selection.
+    *   If Jeopardy IS selected -> The system works, previous lack of selection was bad luck/statistical anomaly.
+    *   If Jeopardy IS NOT selected -> There is a critical, hidden bug preventing its selection even with overwhelming weight.
+3.  **Plan**: Revert weight to `75.0` after confirmed successful selection.
 
 ## Next Steps
 
