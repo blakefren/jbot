@@ -52,6 +52,12 @@ try:
         EVENING_TIME_STR, datetime.time(hour=20, minute=0)
     ).replace(tzinfo=TIMEZONE)
 
+    # Calculate preparation time (10 minutes before morning message)
+    # ensuring we handle day boundaries correctly
+    _today_morning = datetime.datetime.combine(datetime.date.today(), MORNING_TIME)
+    _prep_dt = _today_morning - datetime.timedelta(minutes=10)
+    PREP_TIME = _prep_dt.time().replace(tzinfo=TIMEZONE)
+
 except Exception as e:
     logging.error(
         f"Error reading time configuration, defaulting to hardcoded times. Error: {e}"
@@ -60,6 +66,7 @@ except Exception as e:
     MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
     REMINDER_TIME = datetime.time(hour=19, minute=30, tzinfo=TIMEZONE)
     EVENING_TIME = datetime.time(hour=20, minute=0, tzinfo=TIMEZONE)
+    PREP_TIME = datetime.time(hour=7, minute=50, tzinfo=TIMEZONE)
 
 
 class DiscordBot(commands.Bot):
@@ -143,6 +150,11 @@ class DiscordBot(commands.Bot):
         else:
             logging.info("Bot reconnected.")
         # Start the tasks
+        if not self.prepare_daily_question_task.is_running():
+            self.prepare_daily_question_task.start()
+            logging.info(
+                f"Preparation task started. Next iteration: {self.prepare_daily_question_task.next_iteration}"
+            )
         if not self.morning_message_task.is_running():
             self.morning_message_task.start()
             logging.info(
@@ -217,6 +229,22 @@ class DiscordBot(commands.Bot):
             return
 
         await self.process_commands(message)
+
+    @tasks.loop(time=PREP_TIME)
+    async def prepare_daily_question_task(self):
+        """
+        Prepares the daily question in advance to ensure the morning message happens on time.
+        This handles the potentially slow operations (LLM generation, validation) before the deadline.
+        """
+        logging.info(
+            f"Preparation task running at {datetime.datetime.now(TIMEZONE)}..."
+        )
+        try:
+            # idempotent call - will set the question if not already set
+            self.game.set_daily_question()
+            logging.info("Daily question prepared successfully.")
+        except Exception as e:
+            self._log_task_error(e, "prepare_daily_question_task")
 
     @tasks.loop(time=MORNING_TIME)
     async def morning_message_task(self, silent: bool = False):

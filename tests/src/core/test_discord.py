@@ -11,11 +11,36 @@ project_root = os.path.abspath(
 )
 sys.path.insert(0, project_root)
 
-from src.core.discord import DiscordBot, MORNING_TIME, REMINDER_TIME, EVENING_TIME
+from src.core.discord import (
+    DiscordBot,
+    MORNING_TIME,
+    REMINDER_TIME,
+    EVENING_TIME,
+    PREP_TIME,
+)
 from src.core.subscriber import Subscriber
 
 
 class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
+    def test_time_configuration(self):
+        """Verify that PREP_TIME is 10 minutes before MORNING_TIME."""
+        import datetime
+
+        # We need to act carefully with times because they might be date-aware or naive depending on setup
+        # But here they should both come from the same config logic
+
+        # Combine with a dummy date to do arithmetic
+        dummy_date = datetime.date(2023, 1, 1)
+        morning_dt = datetime.datetime.combine(dummy_date, MORNING_TIME)
+        prep_dt = datetime.datetime.combine(dummy_date, PREP_TIME)
+
+        # Adjust for crossing midnight backwards if necessary (e.g. morning 00:05, prep 23:55)
+        if prep_dt > morning_dt:
+             prep_dt -= datetime.timedelta(days=1)
+
+        diff = morning_dt - prep_dt
+        self.assertEqual(diff.total_seconds(), 600, "PREP_TIME should be 10 minutes before MORNING_TIME")
+
     def setUp(self):
         # Create a mock for the bot instance
         self.bot = MagicMock(spec=DiscordBot)
@@ -29,11 +54,25 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         self.bot.apply_discord_roles = AsyncMock()
 
         # Get coroutines from the tasks
+        self.prep_task_coro = DiscordBot.prepare_daily_question_task.coro
         self.morning_task_coro = DiscordBot.morning_message_task.coro
         self.reminder_task_coro = DiscordBot.reminder_message_task.coro
         self.evening_task_coro = DiscordBot.evening_message_task.coro
 
     # --- Morning Task Tests ---
+
+    async def test_prepare_daily_question_task_success(self):
+        """Verify the prep task runs successfully."""
+        await self.prep_task_coro(self.bot)
+        self.bot.game.set_daily_question.assert_called_once()
+        self.bot._log_task_error.assert_not_called()
+
+    async def test_prepare_daily_question_task_failure(self):
+        """Verify the prep task handles exceptions."""
+        self.bot.game.set_daily_question.side_effect = Exception("Prep error")
+        await self.prep_task_coro(self.bot)
+        self.bot.game.set_daily_question.assert_called_once()
+        self.bot._log_task_error.assert_called_once()
 
     async def test_morning_message_task_success(self):
         """Verify the morning task runs successfully."""
