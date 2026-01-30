@@ -36,10 +36,14 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
 
         # Adjust for crossing midnight backwards if necessary (e.g. morning 00:05, prep 23:55)
         if prep_dt > morning_dt:
-             prep_dt -= datetime.timedelta(days=1)
+            prep_dt -= datetime.timedelta(days=1)
 
         diff = morning_dt - prep_dt
-        self.assertEqual(diff.total_seconds(), 600, "PREP_TIME should be 10 minutes before MORNING_TIME")
+        self.assertEqual(
+            diff.total_seconds(),
+            600,
+            "PREP_TIME should be 10 minutes before MORNING_TIME",
+        )
 
     def setUp(self):
         # Create a mock for the bot instance
