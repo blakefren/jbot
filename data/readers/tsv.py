@@ -90,11 +90,13 @@ def read_jeopardy_questions(
                         "daily_double": row.get("daily_double_value", 0),
                         "original_clue_value": row.get("clue_value", "N/A"),
                     }
+                    original_category = row.get("category", "N/A")
+                    formatted_category = f"Jeopardy! (hard) | {original_category}"
                     filtered_questions.append(
                         Question(
                             question=row.get("answer", "N/A"),
                             answer=row.get("question", "N/A"),
-                            category=row.get("category", "N/A"),
+                            category=formatted_category,
                             clue_value=final_jeopardy_score,
                             data_source="Jeopardy!",
                             metadata=metadata,
@@ -127,11 +129,13 @@ def read_jeopardy_questions(
                     "original_clue_value": row.get("clue_value", "N/A"),
                     "position": position,
                 }
+                original_category = row.get("category", "N/A")
+                formatted_category = f"Jeopardy! ({difficulty}) | {original_category}"
                 filtered_questions.append(
                     Question(
                         question=row.get("answer", "N/A"),
                         answer=row.get("question", "N/A"),
-                        category=row.get("category", "N/A"),
+                        category=formatted_category,
                         clue_value=normalized_points,
                         data_source="Jeopardy!",
                         metadata=metadata,
