@@ -241,10 +241,12 @@ class ConfigReader:
 
                 # Load questions based on reader type
                 if reader_type == "jeopardy":
-                    score_sub = source_config.get("final_jeopardy_score_sub", 10000)
-                    allowed_values = source_config.get("clue_values", [100])
+                    difficulty = source_config.get("difficulty", "easy")
+                    final_jeopardy_score = default_points if default_points else 300
                     questions = read_jeopardy_questions(
-                        dataset_path, score_sub, allowed_clue_values=allowed_values
+                        dataset_path,
+                        difficulty=difficulty,
+                        final_jeopardy_score=final_jeopardy_score,
                     )
                 elif reader_type == "knowledge_bowl":
                     questions = read_knowledge_bowl_questions(dataset_path)

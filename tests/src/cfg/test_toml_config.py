@@ -277,7 +277,7 @@ points = 200
     def test_parse_question_sources_file_jeopardy_with_settings(
         self, mock_read_jeopardy, mock_validate, mock_base_dir, mock_toml_path
     ):
-        """Test parsing Jeopardy source with dataset-specific settings."""
+        """Test parsing Jeopardy source with difficulty-based settings."""
         toml_path = os.path.join(self.config_dir, "jeopardy.toml")
         with open(toml_path, "w") as f:
             f.write("""
@@ -290,8 +290,7 @@ type = "file"
 dataset = "jeopardy"
 weight = 75.0
 reader = "jeopardy"
-clue_values = [200, 400, 600]
-final_jeopardy_score_sub = 5000
+difficulty = "medium"
 points = 150
 """)
 
@@ -311,14 +310,14 @@ points = 150
                 self.assertEqual(len(sources), 1)
                 self.assertEqual(sources[0].name, "jeopardy_test")
 
-                # Verify dataset-specific settings were passed
+                # Verify difficulty-based settings were passed
                 expected_path = os.path.normpath(
                     os.path.join(self.temp_dir, "datasets", "jeopardy.tsv")
                 )
                 actual_call = mock_read_jeopardy.call_args
                 self.assertEqual(os.path.normpath(actual_call[0][0]), expected_path)
-                self.assertEqual(actual_call[0][1], 5000)  # final_jeopardy_score_sub
-                self.assertEqual(actual_call[1]["allowed_clue_values"], [200, 400, 600])
+                self.assertEqual(actual_call[1]["difficulty"], "medium")
+                self.assertEqual(actual_call[1]["final_jeopardy_score"], 150)
 
     @patch("src.cfg.main.SOURCES_TOML_PATH")
     @patch("src.cfg.main.BASE_DIR")
