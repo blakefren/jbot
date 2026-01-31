@@ -64,7 +64,7 @@ points = 200
 name = "jeopardy_hard"
 type = "file"
 dataset = "jeopardy"
-weight = 50.0
+weight = 20.0
 reader = "jeopardy"
 difficulty = "hard"
 points = 300
@@ -116,7 +116,7 @@ points = 300
 [[source]]
 name = "riddle_medium"
 type = "gemini"
-weight = 20.0
+weight = 50.0
 difficulty = "Medium"
 points = 100
 
@@ -124,6 +124,6 @@ points = 100
 [[source]]
 name = "riddle_hard"
 type = "gemini"
-weight = 10.0
+weight = 20.0
 difficulty = "Hard"
 points = 200
