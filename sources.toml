@@ -11,10 +11,7 @@
 [datasets]
 jeopardy = "datasets/combined_season1-41.tsv"
 knowledge_bowl = "datasets/knowledge_bowl.csv"
-riddles_small = "datasets/riddles_small.csv"
-riddles_with_hints = "datasets/riddles_with_hints.csv"
 "5th_grader" = "datasets/5th_grader.csv"
-general_trivia = "datasets/general_trivia.csv"
 millionaire_easy = "datasets/millionaire_easy.csv"
 millionaire_hard = "datasets/millionaire_hard.csv"
 

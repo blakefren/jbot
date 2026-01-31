@@ -178,11 +178,8 @@ class ConfigReader:
         )
         from data.readers.tsv import read_jeopardy_questions
         from data.readers.csv_reader import (
-            read_riddle_questions,
-            read_riddle_with_hints_questions,
             read_knowledge_bowl_questions,
             read_simple_questions,
-            read_general_trivia_questions,
         )
 
         sources = []
@@ -250,15 +247,9 @@ class ConfigReader:
                     )
                 elif reader_type == "knowledge_bowl":
                     questions = read_knowledge_bowl_questions(dataset_path)
-                elif reader_type == "riddle":
-                    questions = read_riddle_questions(dataset_path)
-                elif reader_type == "riddle_with_hints":
-                    questions = read_riddle_with_hints_questions(dataset_path)
                 elif reader_type == "simple":
                     category = source_config.get("category", dataset_name)
                     questions = read_simple_questions(dataset_path, category)
-                elif reader_type == "general_trivia":
-                    questions = read_general_trivia_questions(dataset_path)
                 else:
                     logging.error(
                         f"File source {s_name} has unknown reader type: {reader_type}"
