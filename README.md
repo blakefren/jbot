@@ -5,7 +5,8 @@ A daily bot for group trivia questions and competition.
 
 ## Setup
 
-1.  Install the required Python packages:
+1.  Ensure you are running **Python 3.14** or later.
+2.  Install the required Python packages:
     ```
     pip install -r requirements.txt
     ```

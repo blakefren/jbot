@@ -11,7 +11,7 @@ This document outlines my operating parameters and guidelines for assisting you 
 This project, `jbot`, is a daily bot designed for group trivia questions and friendly competition. The core functionality involves sending a daily trivia question to a group, with the answer revealed later in the day. Players can submit their guesses and interact with the bot based on the active game mode.
 
 **Tech Stack:**
-*   **Language**: Python 3.11+
+*   **Language**: Python 3.14+
 *   **Bot Framework**: `discord.py`
 *   **Database**: SQLite (raw SQL, no ORM)
 *   **Testing**: `unittest` (primary), `pytest` (installed)
