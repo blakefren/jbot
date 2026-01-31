@@ -347,27 +347,27 @@ class TestJeopardyDifficultyFiltering(unittest.TestCase):
             questions = read_jeopardy_questions("any.tsv", difficulty="easy")
             self.assertEqual(questions, [])
 
-    def test_category_formatting_includes_difficulty(self):
-        """Test that categories are formatted as 'Jeopardy! (difficulty) | CATEGORY'."""
+    def test_category_formatting_includes_jeopardy_prefix(self):
+        """Test that categories are formatted as 'Jeopardy! | CATEGORY'."""
         with patch("builtins.open", mock_open(read_data=self.mock_data)):
             # Test easy difficulty
             easy_questions = read_jeopardy_questions("dummy.tsv", difficulty="easy")
             for q in easy_questions:
                 self.assertTrue(
-                    q.category.startswith("Jeopardy! (easy) | "),
-                    f"Category should start with 'Jeopardy! (easy) | ', got: {q.category}",
+                    q.category.startswith("Jeopardy! | "),
+                    f"Category should start with 'Jeopardy! | ', got: {q.category}",
                 )
 
             # Verify specific category format
             q1 = next(q for q in easy_questions if q.question == "Q1-Pos1")
-            self.assertEqual(q1.category, "Jeopardy! (easy) | HISTORY")
+            self.assertEqual(q1.category, "Jeopardy! | HISTORY")
 
             # Test medium difficulty
             medium_questions = read_jeopardy_questions("dummy.tsv", difficulty="medium")
             for q in medium_questions:
                 self.assertTrue(
-                    q.category.startswith("Jeopardy! (medium) | "),
-                    f"Category should start with 'Jeopardy! (medium) | ', got: {q.category}",
+                    q.category.startswith("Jeopardy! | "),
+                    f"Category should start with 'Jeopardy! | ', got: {q.category}",
                 )
 
             # Test hard difficulty (regular questions)
@@ -375,21 +375,21 @@ class TestJeopardyDifficultyFiltering(unittest.TestCase):
             regular_hard = [q for q in hard_questions if "Final" not in q.question]
             for q in regular_hard:
                 self.assertTrue(
-                    q.category.startswith("Jeopardy! (hard) | "),
-                    f"Category should start with 'Jeopardy! (hard) | ', got: {q.category}",
+                    q.category.startswith("Jeopardy! | "),
+                    f"Category should start with 'Jeopardy! | ', got: {q.category}",
                 )
 
             # Test Final Jeopardy formatting
             final_jeopardy = [q for q in hard_questions if "Final" in q.question]
             for q in final_jeopardy:
                 self.assertTrue(
-                    q.category.startswith("Jeopardy! (hard) | "),
-                    f"Final Jeopardy category should start with 'Jeopardy! (hard) | ', got: {q.category}",
+                    q.category.startswith("Jeopardy! | "),
+                    f"Final Jeopardy category should start with 'Jeopardy! | ', got: {q.category}",
                 )
 
             # Verify specific Final Jeopardy category
             fj1 = next(q for q in final_jeopardy if q.question == "Final-Q1")
-            self.assertEqual(fj1.category, "Jeopardy! (hard) | FINAL CATEGORY 1")
+            self.assertEqual(fj1.category, "Jeopardy! | FINAL CATEGORY 1")
 
 
 if __name__ == "__main__":

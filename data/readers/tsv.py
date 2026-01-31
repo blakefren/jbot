@@ -91,7 +91,7 @@ def read_jeopardy_questions(
                         "original_clue_value": row.get("clue_value", "N/A"),
                     }
                     original_category = row.get("category", "N/A")
-                    formatted_category = f"Jeopardy! (hard) | {original_category}"
+                    formatted_category = f"Jeopardy! | {original_category}"
                     filtered_questions.append(
                         Question(
                             question=row.get("answer", "N/A"),
@@ -130,7 +130,7 @@ def read_jeopardy_questions(
                     "position": position,
                 }
                 original_category = row.get("category", "N/A")
-                formatted_category = f"Jeopardy! ({difficulty}) | {original_category}"
+                formatted_category = f"Jeopardy! | {original_category}"
                 filtered_questions.append(
                     Question(
                         question=row.get("answer", "N/A"),
