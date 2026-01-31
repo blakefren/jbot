@@ -2,6 +2,7 @@ discord
 pytest
 python-dotenv
 google-genai
+tzdata # Fallback for zoneinfo
 jellyfish  # For fuzzy string matching.
 wcwidth  # For calculating display width of unicode strings.
 # For dashboard notebook.

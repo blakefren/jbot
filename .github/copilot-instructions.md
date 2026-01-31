@@ -91,7 +91,9 @@ As your partner, I will adhere to the following principles:
 *   **File Edits**: I will make changes to files directly using the available tools, clearly explaining the changes I am making.
 *   **Dependencies**: If a task requires a new dependency, I will ask for your approval before adding it to `requirements.txt`.
 *   **Ambiguity**: If a request is unclear, I will ask for clarification before proceeding.
-*   **Entry Point**: The bot is started via `python run.py` which adds the `src` directory to the Python path before running `src/main.py`.
+*   **Entry Point**: The bot is started via `python run.py`.
+    - Local: Run `python run.py` directly (adds `src` to path).
+    - Docker: Run `docker compose up -d` (uses `compose.yaml` to mount `.env` and `jbot.db`).
 *   **Configuration**: Configuration uses both `.env` and `sources.toml`:
     - **`.env`**: For environment-specific settings (tokens, scheduling, feature flags)
         - Always add new config keys to `.env.template` with descriptive comments

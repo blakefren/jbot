@@ -23,6 +23,21 @@ Once the setup is complete, you can run the bot with the following command:
 python run.py
 ```
 
+## Running with Docker (Recommended)
+
+You can also run the bot using Docker, which simplifies dependency management.
+
+1.  **Build and Start**:
+    ```bash
+    docker compose up -d
+    ```
+    This command will build the image and start the container in the background. It automatically loads your `.env` file and persists the `jbot.db` database.
+
+2.  **Manage**:
+    *   **Stop**: `docker compose stop`
+    *   **View Logs**: `docker compose logs -f`
+    *   **Rebuild**: `docker compose up -d --build` (Run this after changing code or requirements)
+
 ## Daily format
 
 Every day, one trivia question is messaged to the group in the morning, and the answer

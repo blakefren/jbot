@@ -1,0 +1,10 @@
+services:
+  jbot:
+    image: jbot
+    build: .
+    container_name: jbot-container
+    env_file:
+      - .env
+    volumes:
+      - ./jbot.db:/app/jbot.db
+    restart: unless-stopped
