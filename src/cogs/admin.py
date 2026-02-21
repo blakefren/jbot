@@ -158,7 +158,8 @@ class Admin(commands.Cog):
 
         # If apply=True, also send a public announcement
         if apply:
-            public_msg = f"Scores updated for {result['updated_players']} players. (+{result['total_refunded']} pts total)"
+            # Send the detailed breakdown publicly (msg does not contain the answer text)
+            public_msg = f"**Score Adjustment:**\n{msg}"
             await ctx.channel.send(public_msg)
 
     @admin.command(name="resend", description="Resend a scheduled message.")
