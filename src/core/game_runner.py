@@ -561,12 +561,12 @@ class GameRunner:
         )
 
     def format_question(self, question: Question) -> str:
-        """Internal helper method to format a trivia question."""
-        return (
-            f"**--- Question! ---**\n"
-            f"Category: **{question.category}**\n"
-            f"Value: **${question.clue_value}**\n"
-            f"Question: **{question.question}**\n"
+        """Helper method to format a trivia question using standard format."""
+        return self._format_full_message(
+            "**--- Question! ---**",
+            question,
+            show_hint=False,
+            show_answer=False,
         )
 
     def format_answer(self, question: Question) -> str:
@@ -583,6 +583,35 @@ class GameRunner:
                 base_msg += f"(Also accepted: {alts_str})\n"
 
         return base_msg
+
+    def _format_full_message(
+        self,
+        header: str,
+        question: Question,
+        show_hint: bool = False,
+        show_answer: bool = False,
+        extra_content: str = "",
+    ) -> str:
+        """
+        Unified helper to format game messages consistently.
+        """
+        msg = f"{header}\n\n"
+
+        # Standard Question Block
+        msg += f"Category: **{question.category}**\n"
+        msg += f"Value: **${question.clue_value}**\n"
+        msg += f"Question: **{question.question}**\n"
+
+        if show_hint and question.hint:
+            msg += f"\nHint: ||**{question.hint}**||\n"
+
+        if show_answer:
+            msg += f"\n{self.format_answer(question)}"
+
+        if extra_content:
+            msg += f"\n{extra_content}"
+
+        return msg
 
     def get_morning_message_content(self) -> str:
         """Generates the text for the morning question announcement."""
@@ -604,46 +633,33 @@ class GameRunner:
                 if g.get("daily_question_id") == self.daily_question_id
             ]
             player_ids_who_guessed = {g.get("player_id") for g in daily_guesses}
-
-            # Get all players
             all_players = self.player_manager.get_all_players()
             player_ids_all = set(k for k in all_players.keys())
-
-            # Find players who haven't guessed
             player_ids_not_guessed = player_ids_all - player_ids_who_guessed
 
-            # Create the @mentions string
             mentions = ""
             if tag_unanswered and player_ids_not_guessed:
                 mentions = " ".join(
                     [f"<@{player_id}>" for player_id in player_ids_not_guessed]
                 )
 
-            hint_part = ""
-            if self.daily_q.hint:
-                hint_part = f"\nHint: ||**{self.daily_q.hint}**||"
-
-            flavor_message = (
-                "Friendly reminder to get your guesses in!\n"
-                f"Question: **{self.daily_q.question}**"
-                f"{hint_part}"
+            return self._format_full_message(
+                "Friendly reminder to get your guesses in!",
+                self.daily_q,
+                show_hint=True,
+                show_answer=False,
+                extra_content=mentions,
             )
-            message = f"{flavor_message}\n{mentions}"
 
-            # Log message length for debugging
-            logging.debug(f"Generated reminder message: {len(message)} chars")
-
-            return message
         except Exception as e:
             logging.error(f"Error generating reminder message content: {e}")
             return f"Friendly reminder to get your guesses in!\nQuestion: {self.daily_q.question}"
 
     def get_evening_message_content(self, guild=None) -> str:
-        """Generates the evening message with the answer and a summary of player guesses, using server nicknames if possible."""
+        """Generates the evening message with answer and summary."""
         if not self.daily_q:
             return "No question to answer for today."
 
-        # Get all guesses for the daily question
         all_guesses = self.data_manager.read_guess_history()
         daily_guesses = [
             g
@@ -662,9 +678,7 @@ class GameRunner:
             for player_id, guesses in player_guesses_map.items():
                 # Deduplicate guesses for each player, keeping track of correctness
                 unique_guesses = {g["guess_text"]: g["is_correct"] for g in guesses}
-
                 formatted_guesses = []
-                # Sort by guess text
                 for guess_text, is_correct in sorted(unique_guesses.items()):
                     if is_correct:
                         formatted_guesses.append(f"**{guess_text}**")
@@ -687,19 +701,18 @@ class GameRunner:
 
                 player_display_list.append((player_name, ", ".join(formatted_guesses)))
 
-            # Sort by player name
             player_display_list.sort()
-
             player_answers += "--Player answers--\n"
             for player_name, formatted_guesses_str in player_display_list:
                 player_answers += f"**{player_name}**: {formatted_guesses_str}\n"
 
-        flavor_message = (
-            "Good evening players!\n" f"Here is the answer to today's question:"
+        return self._format_full_message(
+            "Good evening players!\nHere is the answer to today's question:",
+            self.daily_q,
+            show_hint=True,
+            show_answer=True,
+            extra_content=player_answers,
         )
-        question_part = f"**{self.daily_q.question}**"
-        answer_part = self.format_answer(self.daily_q)
-        return f"{flavor_message}\n{question_part}\n{answer_part}\n{player_answers}"
 
     # TODO: Implement powerup logic from powerup manager
     def reinforce(self, player1_id: str, player2_id: str):
