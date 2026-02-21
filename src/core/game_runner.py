@@ -267,6 +267,12 @@ class GameRunner:
             self.question_db_id
         )
         hint_ts = self.data_manager.get_hint_sent_timestamp(self.daily_question_id)
+        if isinstance(hint_ts, str):
+            try:
+                hint_ts = datetime.fromisoformat(hint_ts)
+            except ValueError:
+                logging.warning(f"Failed to parse hint timestamp: {hint_ts}")
+                hint_ts = None
 
         simulator = DailyGameSimulator(
             self.daily_q,

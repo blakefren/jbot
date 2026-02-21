@@ -5,6 +5,7 @@ from src.core.player import Player
 from src.core.subscriber import Subscriber
 import os
 import logging
+import pytz
 
 # Project root for file paths
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -17,15 +18,27 @@ class DataManager:
     All other components must use DataManager methods for database operations.
     """
 
-    def __init__(self, db: "Database"):
+    def __init__(self, db: "Database", timezone: str = "US/Pacific"):
         """
         Initializes the data manager, connecting to the database.
 
         Args:
             db: Database instance. This is stored as a private attribute (_db)
                 to prevent direct access from outside this class.
+            timezone: The timezone to use for date/time operations.
         """
         self._db = db
+        try:
+            self.timezone = pytz.timezone(timezone)
+        except pytz.UnknownTimeZoneError:
+            logging.warning(
+                f"Unknown timezone '{timezone}', falling back to US/Pacific."
+            )
+            self.timezone = pytz.timezone("US/Pacific")
+
+    def _get_today(self) -> date:
+        """Returns the current date in the configured timezone."""
+        return datetime.now(self.timezone).date()
 
     def initialize_database(self):
         """
@@ -433,7 +446,7 @@ class DataManager:
         Returns:
             Optional[tuple[Question, int, int]]: (Question object, daily_question_id, question_id) or None
         """
-        today = date.today()
+        today = self._get_today()
         query = "SELECT id, question_id FROM daily_questions WHERE sent_at = ? ORDER BY id DESC LIMIT 1"
         daily_question_info = self._db.execute_query(query, (today,))
 

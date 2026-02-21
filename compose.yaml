@@ -6,5 +6,5 @@ services:
     env_file:
       - .env
     volumes:
-      - ./jbot.db:/app/jbot.db
+      - ./db/jbot.db:/app/db/jbot.db
     restart: unless-stopped
