@@ -113,7 +113,7 @@ def read_jeopardy_questions(
 
             if difficulty == "easy" and position in (1, 2):
                 include_question = True
-                normalized_points = 100
+                normalized_points = 200
             elif difficulty == "medium" and position in (3, 4):
                 include_question = True
                 normalized_points = 200
