@@ -14,6 +14,13 @@ def setup_logging(log_file_path: str = None):
     # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(log_formatter)
+    # Ensure console handles unicode characters safely
+    if hasattr(console_handler.stream, "reconfigure"):
+        try:
+            console_handler.stream.reconfigure(encoding="utf-8")
+        except AttributeError:
+            # Standard streams like sys.stdout might not support reconfiguration
+            pass
 
     # File handler
     if log_file_path is None:
@@ -29,17 +36,13 @@ def setup_logging(log_file_path: str = None):
     )
     file_handler.setFormatter(log_formatter)
 
-    # TODO: replace the root logger with module-specific loggers
-    #       This will prevent extra log messages from other libraries
-    #       https://stackoverflow.com/questions/35325042
-    # TODO: make configurable by admin cmd
-    # Get the root logger
-    root_logger = logging.getLogger()
+    # Get the jbot logger
+    logger = logging.getLogger("jbot")
+    logger.setLevel(logging.INFO)
 
     # Remove all existing handlers to avoid duplicating them
-    if root_logger.hasHandlers():
-        root_logger.handlers.clear()
+    if logger.hasHandlers():
+        logger.handlers.clear()
 
-    logging.basicConfig(
-        level=logging.INFO, handlers=[console_handler, file_handler], encoding="utf-8"
-    )
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
