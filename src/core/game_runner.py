@@ -770,7 +770,7 @@ class GameRunner:
         # Use active question if available, otherwise fall back to most recent
         daily_q = self.daily_q
         daily_question_id = self.daily_question_id
-        question_date = date.today()
+        question_date = self.data_manager.get_today()
 
         if not daily_q or not daily_question_id:
             # Try to get the most recent daily question
@@ -817,7 +817,7 @@ class GameRunner:
         details = []
 
         # Check if correcting an old question
-        days_old = (date.today() - question_date).days
+        days_old = (self.data_manager.get_today() - question_date).days
         age_warning = ""
         if days_old > 0:
             age_warning = f" (Warning: This question is {days_old} day(s) old)"

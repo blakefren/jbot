@@ -12,6 +12,7 @@ class TestRecalculateScores(unittest.TestCase):
         self.game_runner = GameRunner(
             self.mock_question_selector, self.mock_data_manager
         )
+        self.mock_data_manager.get_today.return_value = date.today()
 
         # Setup daily question
         self.game_runner.daily_q = Question(

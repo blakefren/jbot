@@ -364,7 +364,7 @@ class GuessHandler:
             last_correct_date = self.data_manager.get_last_correct_guess_date(
                 str(player_id)
             )
-            today = date.today()
+            today = self.data_manager.get_today()
 
             if last_correct_date == today:
                 # Already answered correctly today (e.g. skipped question)

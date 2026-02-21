@@ -304,10 +304,8 @@ class PowerUpManager(BaseManager):
             raise PowerUpError("Invalid player(s).")
 
         # Validation: Attacker must not have answered yet
-        from datetime import date
-
         last_correct = self.data_manager.get_last_correct_guess_date(attacker_id)
-        if last_correct == date.today():
+        if last_correct == self.data_manager.get_today():
             raise PowerUpError(
                 "You have already answered correctly today. You cannot use Jinx."
             )
@@ -351,10 +349,8 @@ class PowerUpManager(BaseManager):
             raise PowerUpError("Invalid player(s).")
 
         # Validation: Attacker must not have answered yet.
-        from datetime import date
-
         last_correct = self.data_manager.get_last_correct_guess_date(thief_id)
-        if last_correct == date.today():
+        if last_correct == self.data_manager.get_today():
             raise PowerUpError(
                 "You have already answered correctly today. You cannot use Steal."
             )
@@ -394,10 +390,8 @@ class PowerUpManager(BaseManager):
             raise PowerUpError("Invalid player.")
 
         # Validation: User DMs !shield before answering.
-        from datetime import date
-
         last_correct = self.data_manager.get_last_correct_guess_date(player_id)
-        if last_correct == date.today():
+        if last_correct == self.data_manager.get_today():
             raise PowerUpError(
                 "You have already answered correctly today. You cannot use Shield."
             )

@@ -36,7 +36,7 @@ class DataManager:
             )
             self.timezone = pytz.timezone("US/Pacific")
 
-    def _get_today(self) -> date:
+    def get_today(self) -> date:
         """Returns the current date in the configured timezone."""
         return datetime.now(self.timezone).date()
 
@@ -172,7 +172,7 @@ class DataManager:
             return None
 
         # Check if a daily question has already been logged for today
-        today = date.today()
+        today = self.get_today()
         daily_question_info = self.get_todays_daily_question()
 
         if daily_question_info and not force_new:
@@ -446,7 +446,7 @@ class DataManager:
         Returns:
             Optional[tuple[Question, int, int]]: (Question object, daily_question_id, question_id) or None
         """
-        today = self._get_today()
+        today = self.get_today()
         query = "SELECT id, question_id FROM daily_questions WHERE sent_at = ? ORDER BY id DESC LIMIT 1"
         daily_question_info = self._db.execute_query(query, (today,))
 

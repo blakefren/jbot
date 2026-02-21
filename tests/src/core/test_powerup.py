@@ -22,6 +22,7 @@ class TestPowerUpManager(unittest.TestCase):
         self.data_manager.get_last_correct_guess_date.return_value = (
             date.today() - timedelta(days=1)
         )
+        self.data_manager.get_today.return_value = date.today()
 
         # Mock update_score to actually update the player object for testing assertions
         def update_score(pid, amount):

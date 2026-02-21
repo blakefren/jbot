@@ -1,4 +1,5 @@
 import unittest
+from datetime import date
 from unittest.mock import MagicMock, patch
 from src.core.guess_handler import GuessHandler, AlreadyAnsweredCorrectlyError
 from data.readers.question import Question
@@ -21,6 +22,7 @@ class TestGuessHandler(unittest.TestCase):
 
         # Default return value for get_correct_guess_count to avoid TypeError in ScoreCalculator
         self.data_manager.get_correct_guess_count.return_value = 0
+        self.data_manager.get_today.return_value = date.today()
 
         self.guess_handler = GuessHandler(
             self.data_manager,
