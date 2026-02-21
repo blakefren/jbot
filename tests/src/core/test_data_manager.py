@@ -1088,7 +1088,8 @@ class TestDataManagerIntegration(unittest.TestCase):
         # Check the date
         last_date = self.data_manager.get_last_correct_guess_date("p1")
         self.assertIsNotNone(last_date)
-        self.assertEqual(last_date, date.today())
+        # Use DataManager's timezone-aware date instead of system date
+        self.assertEqual(last_date, self.data_manager.get_today())
 
     def test_get_correct_guess_count(self):
         """Test counting correct guesses for a daily question."""
