@@ -575,7 +575,6 @@ class DataManager:
         results = self._db.execute_query(query, (question_id,))
         return results
 
-    # TODO: log streak adjustment as well
     def log_score_adjustment(
         self, player_id: str, admin_id: str, amount: int, reason: str
     ):

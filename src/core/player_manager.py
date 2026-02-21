@@ -67,25 +67,6 @@ class PlayerManager:
         """Deactivates a player's shield and persists."""
         self.data_manager.set_shield(self._normalize_id(player_id), False)
 
-    # TODO: Implement powerup logic from powerup manager
-    def reinforce(self, player1_id: str, player2_id: str):
-        pass
-
-    def resolve_reinforce(self, player_id: str, correct: bool):
-        pass
-
-    def steal(self, thief_id: str, target_id: str):
-        pass
-
-    def disrupt(self, attacker_id: str, target_id: str):
-        pass
-
-    def use_shield(self, player_id: str):
-        pass
-
-    def place_wager(self, player_id: str, amount: int):
-        pass
-
     def resolve_wager(self, player_id: str, correct: bool):
         pass
 

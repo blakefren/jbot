@@ -13,7 +13,6 @@ from src.core.scoring import ScoreCalculator
 
 config = ConfigReader()
 
-# TODO: Add these emojis to leaderboard badges later
 EMOJI_JINXED = config.get("JBOT_EMOJI_JINXED", "🥶")
 EMOJI_SILENCED = config.get("JBOT_EMOJI_SILENCED", "🤐")
 EMOJI_STOLEN_FROM = config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
