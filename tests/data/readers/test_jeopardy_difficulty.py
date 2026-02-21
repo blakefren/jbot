@@ -86,8 +86,8 @@ class TestJeopardyDifficultyFiltering(unittest.TestCase):
             for q in questions:
                 self.assertEqual(
                     q.clue_value,
-                    100,
-                    f"Easy question should have clue_value=100, got {q.clue_value} for {q.question}",
+                    200,
+                    f"Easy question should have clue_value=200, got {q.clue_value} for {q.question}",
                 )
 
             # Verify we got positions 1 and 2
@@ -298,7 +298,7 @@ class TestJeopardyDifficultyFiltering(unittest.TestCase):
 
             # Should all have easy difficulty points
             for q in questions:
-                self.assertEqual(q.clue_value, 100)
+                self.assertEqual(q.clue_value, 200)
 
     def test_case_insensitive_difficulty(self):
         """Test that difficulty parameter is case-insensitive."""

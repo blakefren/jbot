@@ -41,7 +41,7 @@ class TestTsv(unittest.TestCase):
                 "dummy_path.tsv", difficulty="easy"
             )
             self.assertEqual(len(easy_questions), 4)  # 2 categories × 2 positions
-            self.assertTrue(all(q.clue_value == 100 for q in easy_questions))
+            self.assertTrue(all(q.clue_value == 200 for q in easy_questions))
 
             # Test medium difficulty (positions 3-4)
             medium_questions = read_jeopardy_questions(
