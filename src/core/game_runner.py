@@ -707,7 +707,7 @@ class GameRunner:
 
                 player_display_list.append((player_name, ", ".join(formatted_guesses)))
 
-            player_display_list.sort()
+            player_display_list.sort(key=lambda x: x[0].lower())
             player_answers += "--Player answers--\n"
             for player_name, formatted_guesses_str in player_display_list:
                 player_answers += f"**{player_name}**: {formatted_guesses_str}\n"
