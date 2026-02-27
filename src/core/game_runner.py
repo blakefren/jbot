@@ -609,10 +609,10 @@ class GameRunner:
         msg += f"Question: **{question.question}**\n"
 
         if show_hint and question.hint:
-            msg += f"\nHint: ||**{question.hint}**||\n"
+            msg += f"Hint: ||**{question.hint}**||\n"
 
         if show_answer:
-            msg += f"\n{self.format_answer(question)}"
+            msg += self.format_answer(question)
 
         if extra_content:
             msg += f"\n{extra_content}"
