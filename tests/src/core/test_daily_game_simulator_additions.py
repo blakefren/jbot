@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from unittest.mock import MagicMock
 from src.core.daily_game_simulator import DailyGameSimulator
 from src.core.events import GuessEvent, PowerUpEvent
@@ -192,3 +193,101 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
         self.assertTrue(simulator.daily_state["p2"].team_success)
         self.assertEqual(simulator.daily_state["p1"].team_partner, "p2")
         self.assertEqual(simulator.daily_state["p2"].team_partner, "p1")
+
+    def test_sort_with_mixed_datetime_and_str_timestamps(self):
+        """Regression: sorting events with mixed datetime/str timestamps must not raise TypeError."""
+        events = [
+            GuessEvent(
+                timestamp=datetime(2023, 1, 1, 10, 5, 0),  # datetime object
+                user_id="p2",
+                guess_text="4",
+            ),
+            PowerUpEvent(
+                timestamp="2023-01-01 09:00:00",  # str
+                user_id="p1",
+                powerup_type="shield",
+                target_user_id=None,
+            ),
+            GuessEvent(
+                timestamp=datetime(2023, 1, 1, 10, 0, 0),  # datetime object
+                user_id="p1",
+                guess_text="4",
+            ),
+        ]
+
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+        )
+        # Should not raise TypeError when sorting mixed timestamp types
+        results = simulator.run()
+        self.assertIn("p1", results)
+        self.assertIn("p2", results)
+
+    def test_hint_comparison_with_datetime_event_timestamp(self):
+        """Regression: comparing a datetime event timestamp against a str hint_timestamp must not raise TypeError."""
+        # Guess before hint (datetime ts < str hint_timestamp)
+        events_before = [
+            GuessEvent(
+                timestamp=datetime(2023, 1, 1, 10, 0, 0),
+                user_id="p1",
+                guess_text="4",
+            ),
+        ]
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            "2023-01-01 12:00:00",  # str hint_timestamp
+            events_before,
+            self.initial_states,
+            self.config,
+        )
+        results = simulator.run(apply_end_of_day=False)
+        # Before-hint bonus should apply
+        self.assertIn("🧠", results["p1"]["badges"])
+
+        # Guess after hint (datetime ts > str hint_timestamp)
+        events_after = [
+            GuessEvent(
+                timestamp=datetime(2023, 1, 1, 14, 0, 0),
+                user_id="p1",
+                guess_text="4",
+            ),
+        ]
+        simulator2 = DailyGameSimulator(
+            self.question,
+            self.answers,
+            "2023-01-01 12:00:00",  # str hint_timestamp
+            events_after,
+            self.initial_states,
+            self.config,
+        )
+        results2 = simulator2.run(apply_end_of_day=False)
+        # Before-hint bonus should NOT apply
+        self.assertNotIn("🧠", results2["p1"]["badges"])
+
+    def test_hint_timestamp_as_datetime_object(self):
+        """hint_timestamp provided as a datetime object should work without TypeError."""
+        events = [
+            GuessEvent(
+                timestamp="2023-01-01 10:00:00",
+                user_id="p1",
+                guess_text="4",
+            ),
+        ]
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            datetime(2023, 1, 1, 12, 0, 0),  # datetime object, not str
+            events,
+            self.initial_states,
+            self.config,
+        )
+        # Should not raise TypeError
+        results = simulator.run(apply_end_of_day=False)
+        # Guess is before the datetime hint_timestamp, so before-hint bonus applies
+        self.assertIn("🧠", results["p1"]["badges"])

@@ -24,7 +24,11 @@ class DailyGameSimulator:
     ):
         self.question = question
         self.answers = answers  # List of valid answer strings (standard + corrections)
-        self.hint_timestamp = hint_timestamp
+        # Normalize hint_timestamp to datetime for consistent comparison
+        if isinstance(hint_timestamp, str):
+            self.hint_timestamp = datetime.fromisoformat(hint_timestamp)
+        else:
+            self.hint_timestamp = hint_timestamp  # datetime or None
         self.events = events  # List of GameEvent objects
         self.initial_player_states = initial_player_states
         self.config = config
@@ -47,14 +51,17 @@ class DailyGameSimulator:
             apply_end_of_day (bool): Whether to apply end-of-day logic (decay, resets).
                                      Set to False for midday state restoration.
         """
-        # Sort events strictly by timestamp
-        self.events.sort(
-            key=lambda x: (
-                x.timestamp
-                if isinstance(x.timestamp, (str, datetime))
-                else str(x.timestamp)
-            )
-        )
+
+        # Sort events strictly by timestamp, normalizing to datetime for comparison
+        def _ts_key(event):
+            ts = event.timestamp
+            if isinstance(ts, datetime):
+                return ts
+            if isinstance(ts, str):
+                return datetime.fromisoformat(ts)
+            return datetime.fromisoformat(str(ts))
+
+        self.events.sort(key=_ts_key)
 
         for event in self.events:
             if isinstance(event, PowerUpEvent):
@@ -177,8 +184,13 @@ class DailyGameSimulator:
 
         is_before_hint = True
         if self.hint_timestamp:
-            # Assuming timestamp is datetime or comparable string
-            if timestamp > self.hint_timestamp:
+            # Normalize event timestamp to datetime for comparison
+            ts_dt = (
+                datetime.fromisoformat(timestamp)
+                if isinstance(timestamp, str)
+                else timestamp
+            )
+            if ts_dt > self.hint_timestamp:
                 is_before_hint = False
 
         # Check Answer Rank
