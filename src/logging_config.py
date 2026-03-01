@@ -24,9 +24,7 @@ def setup_logging(log_file_path: str = None):
 
     # File handler
     if log_file_path is None:
-        project_root = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..")
-        )
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         log_file = os.path.join(project_root, "jbot.log")
     else:
         log_file = log_file_path
@@ -36,13 +34,19 @@ def setup_logging(log_file_path: str = None):
     )
     file_handler.setFormatter(log_formatter)
 
-    # Get the jbot logger
-    logger = logging.getLogger("jbot")
-    logger.setLevel(logging.INFO)
+    # Configure the root logger so all logging.info() / logging.warning() etc.
+    # calls throughout the codebase are captured, regardless of which logger
+    # module they originate from.
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
 
     # Remove all existing handlers to avoid duplicating them
-    if logger.hasHandlers():
-        logger.handlers.clear()
+    if root_logger.hasHandlers():
+        root_logger.handlers.clear()
 
-    logger.addHandler(console_handler)
-    logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+
+    # The named "jbot" logger inherits handlers from root via propagation.
+    # Explicitly set its level so child loggers (jbot.*) are not filtered.
+    logging.getLogger("jbot").setLevel(logging.INFO)

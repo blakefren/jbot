@@ -36,9 +36,9 @@ class TestLoggingConfig(unittest.TestCase):
         setup_logging(log_file_path=self.test_log_file)
 
         file_handler_found = False
-        # We check the "jbot" logger because setup_logging configures that specific logger.
-        logger = logging.getLogger("jbot")
-        for handler in logger.handlers:
+        # Handlers are attached to the root logger so all logging.info() calls are captured.
+        root_logger = logging.getLogger()
+        for handler in root_logger.handlers:
             if isinstance(handler, logging.handlers.RotatingFileHandler):
                 file_handler_found = True
                 self.assertEqual(
@@ -47,7 +47,7 @@ class TestLoggingConfig(unittest.TestCase):
 
         self.assertTrue(
             file_handler_found,
-            "No RotatingFileHandler found in jbot logger's handlers.",
+            "No RotatingFileHandler found in root logger's handlers.",
         )
 
     def test_logging_with_emoji(self):
