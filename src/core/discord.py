@@ -240,8 +240,8 @@ class DiscordBot(commands.Bot):
             f"Preparation task running at {datetime.datetime.now(TIMEZONE)}..."
         )
         try:
-            # idempotent call - will set the question if not already set
-            self.game.set_daily_question()
+            # Run in a thread pool to avoid blocking the event loop during Gemini API calls
+            await asyncio.to_thread(self.game.set_daily_question)
             logging.info("Daily question prepared successfully.")
         except Exception as e:
             self._log_task_error(e, "prepare_daily_question_task")
@@ -253,7 +253,7 @@ class DiscordBot(commands.Bot):
             f"Morning message task running at {datetime.datetime.now(TIMEZONE)}..."
         )
         try:
-            self.game.set_daily_question()
+            await asyncio.to_thread(self.game.set_daily_question)
         except Exception as e:
             self._log_task_error(e, "morning_message_task - set_daily_question")
             # If we can't set a question, there's no point in sending a message.
