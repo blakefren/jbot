@@ -409,10 +409,12 @@ class GameRunner:
                         elif not show_daily_bonuses:
                             powerup_badges[target_id].append(emoji_jinxed)
                 elif p_type == "steal":
-                    # Only show stealing emoji if attacker answered correctly today
+                    # Show stealing emoji if the target answered correctly today
+                    # (i.e. the steal actually fired). The attacker doesn't need to
+                    # have answered correctly - they steal when the target answers.
                     if (
                         show_daily_bonuses
-                        and user_id in players_answered_correctly_today
+                        and target_id in players_answered_correctly_today
                     ):
                         powerup_badges[user_id].append(emoji_stealing)
                     elif not show_daily_bonuses:

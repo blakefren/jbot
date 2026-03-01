@@ -109,6 +109,35 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
         # p2 should have stolen from emoji
         self.assertIn("💸", leaderboard)
 
+    def test_leaderboard_steal_badge_attacker_did_not_answer(self):
+        """Steal badge should appear for attacker even if they never answered that day."""
+        # p1 stole from p2, but p1 never guessed
+        self.mock_dm.get_powerup_usages_for_question.return_value = [
+            {"powerup_type": "steal", "user_id": "p1", "target_user_id": "p2"}
+        ]
+        # Only p2 answered correctly today; p1 did not answer at all
+        self.mock_dm.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "p2",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:05:00",
+            },
+        ]
+
+        leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        # p1 should still have the stealing emoji
+        lines = leaderboard.split("\n")
+        p1_line = next((line for line in lines if "Player1" in line), None)
+        self.assertIsNotNone(p1_line, "Player1 should be in leaderboard")
+        self.assertIn("💰", p1_line, "Attacker should show stealing badge even without answering")
+
+        # p2 should have stolen_from emoji
+        p2_line = next((line for line in lines if "Player2" in line), None)
+        self.assertIsNotNone(p2_line, "Player2 should be in leaderboard")
+        self.assertIn("💸", p2_line)
+
     def test_leaderboard_shield_badge(self):
         # p1 used shield
         self.mock_dm.get_powerup_usages_for_question.return_value = [
