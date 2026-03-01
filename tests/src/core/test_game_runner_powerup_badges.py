@@ -131,7 +131,9 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
         lines = leaderboard.split("\n")
         p1_line = next((line for line in lines if "Player1" in line), None)
         self.assertIsNotNone(p1_line, "Player1 should be in leaderboard")
-        self.assertIn("💰", p1_line, "Attacker should show stealing badge even without answering")
+        self.assertIn(
+            "💰", p1_line, "Attacker should show stealing badge even without answering"
+        )
 
         # p2 should have stolen_from emoji
         p2_line = next((line for line in lines if "Player2" in line), None)
