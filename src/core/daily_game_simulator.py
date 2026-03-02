@@ -81,18 +81,19 @@ class DailyGameSimulator:
 
         state = self.daily_state[user_id]
 
-        if ptype == "shield":
-            state.shield_active = True
+        if ptype == "rest":
+            state.is_resting = True
+            # Immediately resolve pending attacks as whiffs (same as live game)
+            if state.jinxed_by:
+                state.jinxed_by = None
+            if state.steal_attempt_by:
+                state.steal_attempt_by = None
 
         elif ptype == "jinx":
             if target_id:
                 target_state = self.daily_state[target_id]
-                if target_state.shield_active:
-                    target_state.shield_used = True
-                    # Jinx blocked
-                else:
-                    target_state.jinxed_by = user_id
-                    state.silenced = True  # Attacker is silenced
+                target_state.jinxed_by = user_id
+                state.silenced = True  # Attacker is silenced
 
         elif ptype == "steal":
             if target_id:
@@ -104,11 +105,7 @@ class DailyGameSimulator:
 
                 state.stealing_from = target_id
 
-                if target_state.shield_active:
-                    target_state.shield_used = True
-                    # Steal blocked
-                else:
-                    target_state.steal_attempt_by = user_id
+                target_state.steal_attempt_by = user_id
 
         elif ptype == "wager":
             try:
@@ -131,6 +128,13 @@ class DailyGameSimulator:
                 state.score_earned -= cost
                 partner_state.score_earned -= cost
 
+        else:
+            logging.warning(
+                "DailyGameSimulator: unrecognised powerup type %r for user %s — skipping.",
+                ptype,
+                user_id,
+            )
+
     def handle_guess(self, event: GuessEvent):
         user_id = event.user_id
         guess_text = event.guess_text
@@ -140,8 +144,8 @@ class DailyGameSimulator:
         state.guesses_count += 1
 
         # Check correctness
-        if state.is_correct:
-            return  # Already answered correctly
+        if state.is_correct or state.is_resting:
+            return  # Already answered or resting
         is_correct = False
         for ans in self.answers:
             if self.guess_handler._is_correct_guess(guess_text, ans):
@@ -251,9 +255,9 @@ class DailyGameSimulator:
                     self.daily_state[user_id].streak_delta = -player.answer_streak
 
         for user_id, state in self.daily_state.items():
-            # Shield Decay
-            if state.shield_active and not state.shield_used:
-                state.score_earned -= 10
+            # Resting players: streak is frozen (streak_delta stays 0)
+            if state.is_resting:
+                continue
 
             # Steal Resolution
             steal_attempt_by = state.steal_attempt_by

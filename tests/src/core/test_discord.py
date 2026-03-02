@@ -145,12 +145,11 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
 
     @patch("src.core.discord.RolesGameMode")
     async def test_evening_message_task_success(self, mock_roles_game_mode_cls):
-        """Verify the evening task runs all steps successfully, including shield check."""
+        """Verify the evening task runs all steps successfully."""
         mock_roles_instance = mock_roles_game_mode_cls.return_value
 
-        # Mock PowerUpManager
-        mock_powerup_manager = MagicMock()
-        mock_powerup_manager.check_shield_usage.return_value = ["Shield shattered!"]
+        # Mock PowerUpManager (no check_shield_usage any more)
+        mock_powerup_manager = MagicMock(spec=[])
         self.bot.game.managers = {"powerup": mock_powerup_manager}
 
         # Mock get_evening_message_content
@@ -164,21 +163,15 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         mock_roles_instance.run.assert_called_once()
         self.bot.apply_discord_roles.assert_awaited()
 
-        # Verify shield check was called
-        mock_powerup_manager.check_shield_usage.assert_called_once()
-
         # Verify message sending
         self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
 
-        # Verify the content passed to the sender includes the shield message
-        # The first arg to _send_daily_message_to_all_subscribers is the content_getter function
+        # Verify the content passed to the sender includes the evening message
         call_args = self.bot._send_daily_message_to_all_subscribers.call_args
         content_getter = call_args[0][0]
 
-        # Execute the getter to check the result
         content = content_getter()
         self.assertIn("Evening Message", content)
-        self.assertIn("Shield shattered!", content)
 
         self.bot._log_task_error.assert_not_called()
 

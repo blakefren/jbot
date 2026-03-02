@@ -76,8 +76,7 @@ class TestGameRunner(unittest.TestCase):
             "JBOT_EMOJI_SILENCED": "🤐",
             "JBOT_EMOJI_STOLEN_FROM": "💸",
             "JBOT_EMOJI_STEALING": "💰",
-            "JBOT_EMOJI_SHIELD": "💝",
-            "JBOT_EMOJI_SHIELD_BROKEN": "💔",
+            "JBOT_EMOJI_REST": "😴",
             "JBOT_PLAYER_ROLE_NAME": "Players",
             "JBOT_FIRST_PLACE_ROLE_NAME": "First Place",
         }
@@ -245,6 +244,8 @@ class TestGameRunner(unittest.TestCase):
         mock_manager.reset_daily_state.assert_called_once()
         # Verify streaks were reset for unanswered players
         self.mock_data_manager.reset_unanswered_streaks.assert_called_once_with(123)
+        # Verify stale rest multipliers were expired
+        self.mock_data_manager.clear_stale_rest_multipliers.assert_called_once_with(123)
 
     def test_get_evening_message_content(self):
         """Test generating the evening message content with deduplicated, sorted, and bolded guesses."""

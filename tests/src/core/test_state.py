@@ -8,7 +8,7 @@ class TestDailyPlayerState(unittest.TestCase):
         state = DailyPlayerState()
         self.assertEqual(state.score_earned, 0)
         self.assertEqual(state.wager, 0)
-        self.assertFalse(state.shield_active)
+        self.assertFalse(state.is_resting)
         self.assertFalse(state.powerup_used_today)
         self.assertEqual(state.bonuses, {})
 
@@ -32,9 +32,9 @@ class TestDailyPlayerState(unittest.TestCase):
         state.wager = 10
         self.assertTrue(state.powerup_used_today)
 
-    def test_powerup_used_today_shield(self):
+    def test_powerup_used_today_resting(self):
         state = DailyPlayerState()
-        state.shield_active = True
+        state.is_resting = True
         self.assertTrue(state.powerup_used_today)
 
     def test_powerup_used_today_silenced(self):

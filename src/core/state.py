@@ -19,10 +19,8 @@ class DailyPlayerState:
     # Power-up: Wager
     wager: int = 0
 
-    # Power-up: Defense
-    shield_active: bool = False
-    shield_used: bool = False
-    shield_broken: bool = False
+    # Power-up: Defense / Rest
+    is_resting: bool = False
 
     # Power-up: Attack (Incoming)
     jinxed_by: str | None = None  # User ID
@@ -57,7 +55,7 @@ class DailyPlayerState:
         """
         return (
             self.wager > 0
-            or self.shield_active
+            or self.is_resting
             or self.silenced
             or self.team_partner is not None
             or self.stealing_from is not None

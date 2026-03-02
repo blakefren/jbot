@@ -42,10 +42,10 @@ class Power(commands.Cog):
                 )
 
     @power.command(
-        name="shield",
-        description="Reflect attacks, but lose points if you aren't attacked.",
+        name="rest",
+        description="Skip today, freeze your streak, and earn a 1.2x bonus tomorrow.",
     )
-    async def shield(self, ctx: commands.Context):
+    async def rest(self, ctx: commands.Context):
         if not self.bot.game.features.get("fight"):
             await self.bot.send_message(
                 "Fight track is not enabled.",
@@ -54,16 +54,32 @@ class Power(commands.Cog):
             )
             return
 
+        if not self.bot.game.daily_q:
+            await self.bot.send_message(
+                "There is no active question right now.",
+                interaction=ctx.interaction,
+                ephemeral=True,
+            )
+            return
+
         manager = self._get_manager()
         if manager:
             try:
-                result = manager.use_shield(
-                    str(ctx.author.id), self.bot.game.daily_question_id
+                public_msg, private_msg = manager.rest(
+                    str(ctx.author.id),
+                    self.bot.game.daily_question_id,
+                    self.bot.game.daily_q.answer,
                 )
-                await self.bot.send_message(
-                    result, interaction=ctx.interaction, ephemeral=True
-                )
-            except PowerUpError as e:
+                # Send public announcement to the channel
+                await self.bot.send_message(public_msg, interaction=ctx.interaction)
+                # Send private answer disclosure (ephemeral for slash, DM for text)
+                if ctx.interaction:
+                    await self.bot.send_message(
+                        private_msg, interaction=ctx.interaction, ephemeral=True
+                    )
+                else:
+                    await ctx.author.send(private_msg)
+            except Exception as e:
                 await self.bot.send_message(
                     str(e), interaction=ctx.interaction, ephemeral=True
                 )

@@ -10,30 +10,38 @@ class TestPlayer(unittest.TestCase):
         self.assertEqual(player.name, "Alice")
         self.assertEqual(player.score, 0)
         self.assertEqual(player.answer_streak, 0)
-        self.assertFalse(player.active_shield)
+        self.assertEqual(player.pending_rest_multiplier, 0.0)
 
     def test_player_creation_with_all_values(self):
         """Test creating a Player with all values specified."""
         player = Player(
-            id="456", name="Bob", score=100, answer_streak=5, active_shield=True
+            id="456",
+            name="Bob",
+            score=100,
+            answer_streak=5,
+            pending_rest_multiplier=1.2,
         )
         self.assertEqual(player.id, "456")
         self.assertEqual(player.name, "Bob")
         self.assertEqual(player.score, 100)
         self.assertEqual(player.answer_streak, 5)
-        self.assertTrue(player.active_shield)
+        self.assertEqual(player.pending_rest_multiplier, 1.2)
 
     def test_to_dict(self):
         """Test converting a Player to a dictionary."""
         player = Player(
-            id="123", name="Alice", score=50, answer_streak=3, active_shield=True
+            id="123",
+            name="Alice",
+            score=50,
+            answer_streak=3,
+            pending_rest_multiplier=1.2,
         )
         data = player.to_dict()
         self.assertEqual(data["id"], "123")
         self.assertEqual(data["name"], "Alice")
         self.assertEqual(data["score"], 50)
         self.assertEqual(data["answer_streak"], 3)
-        self.assertTrue(data["active_shield"])
+        self.assertEqual(data["pending_rest_multiplier"], 1.2)
 
     def test_from_dict(self):
         """Test creating a Player from a dictionary."""
@@ -42,14 +50,14 @@ class TestPlayer(unittest.TestCase):
             "name": "Charlie",
             "score": 200,
             "answer_streak": 10,
-            "active_shield": True,
+            "pending_rest_multiplier": 1.2,
         }
         player = Player.from_dict(data)
         self.assertEqual(player.id, "789")
         self.assertEqual(player.name, "Charlie")
         self.assertEqual(player.score, 200)
         self.assertEqual(player.answer_streak, 10)
-        self.assertTrue(player.active_shield)
+        self.assertEqual(player.pending_rest_multiplier, 1.2)
 
     def test_from_dict_with_defaults(self):
         """Test creating a Player from a dict with missing optional fields."""
@@ -59,12 +67,12 @@ class TestPlayer(unittest.TestCase):
         self.assertEqual(player.name, "Dave")
         self.assertEqual(player.score, 0)
         self.assertEqual(player.answer_streak, 0)
-        self.assertFalse(player.active_shield)
+        self.assertEqual(player.pending_rest_multiplier, 0.0)
 
     def test_from_dict_roundtrip(self):
         """Test that to_dict and from_dict are inverses."""
         original = Player(
-            id="111", name="Eve", score=75, answer_streak=2, active_shield=False
+            id="111", name="Eve", score=75, answer_streak=2, pending_rest_multiplier=0.0
         )
         data = original.to_dict()
         reconstructed = Player.from_dict(data)
@@ -72,7 +80,9 @@ class TestPlayer(unittest.TestCase):
         self.assertEqual(original.name, reconstructed.name)
         self.assertEqual(original.score, reconstructed.score)
         self.assertEqual(original.answer_streak, reconstructed.answer_streak)
-        self.assertEqual(original.active_shield, reconstructed.active_shield)
+        self.assertEqual(
+            original.pending_rest_multiplier, reconstructed.pending_rest_multiplier
+        )
 
 
 if __name__ == "__main__":

@@ -54,7 +54,7 @@ class DataManager:
         Reads the players table and returns a dictionary of Player objects keyed by discord_id.
         """
         players = {}
-        query = "SELECT id, name, score, answer_streak, active_shield FROM players"
+        query = "SELECT id, name, score, answer_streak, pending_rest_multiplier FROM players"
         player_records = self._db.execute_query(query)
         for record in player_records:
             player = Player(
@@ -62,7 +62,7 @@ class DataManager:
                 name=record["name"],
                 score=record["score"],
                 answer_streak=record["answer_streak"],
-                active_shield=bool(record["active_shield"]),
+                pending_rest_multiplier=float(record["pending_rest_multiplier"] or 0.0),
             )
             players[player.id] = player
         return players
@@ -75,7 +75,7 @@ class DataManager:
 
     def get_player(self, player_id: str) -> Player | None:
         """Retrieves a single player from the database."""
-        query = "SELECT id, name, score, answer_streak, active_shield FROM players WHERE id = ?"
+        query = "SELECT id, name, score, answer_streak, pending_rest_multiplier FROM players WHERE id = ?"
         result = self._db.execute_query(query, (player_id,))
         if result:
             record = result[0]
@@ -84,13 +84,15 @@ class DataManager:
                 name=record["name"],
                 score=record["score"],
                 answer_streak=record["answer_streak"],
-                active_shield=bool(record["active_shield"]),
+                pending_rest_multiplier=float(record["pending_rest_multiplier"] or 0.0),
             )
         return None
 
     def create_player(self, player_id: str, name: str):
         """Creates a new player in the database."""
-        query = "INSERT INTO players (id, name, score, answer_streak, active_shield) VALUES (?, ?, 0, 0, 0)"
+        query = (
+            "INSERT INTO players (id, name, score, answer_streak) VALUES (?, ?, 0, 0)"
+        )
         self._db.execute_update(query, (player_id, name))
 
     def update_player_name(self, player_id: str, name: str):
@@ -113,10 +115,42 @@ class DataManager:
         query = "UPDATE players SET answer_streak = ? WHERE id = ?"
         self._db.execute_update(query, (streak, player_id))
 
-    def set_shield(self, player_id: str, active: bool):
-        """Sets a player's shield status."""
-        query = "UPDATE players SET active_shield = ? WHERE id = ?"
-        self._db.execute_update(query, (active, player_id))
+    def get_pending_multiplier(self, player_id: str) -> float:
+        """Returns the pending rest multiplier for a player (0.0 if none)."""
+        query = "SELECT pending_rest_multiplier FROM players WHERE id = ?"
+        result = self._db.execute_query(query, (player_id,))
+        if result:
+            return float(result[0]["pending_rest_multiplier"] or 0.0)
+        return 0.0
+
+    def set_pending_multiplier(self, player_id: str, multiplier: float):
+        """Sets the pending rest multiplier for a player."""
+        query = "UPDATE players SET pending_rest_multiplier = ? WHERE id = ?"
+        self._db.execute_update(query, (multiplier, player_id))
+
+    def clear_pending_multiplier(self, player_id: str):
+        """Clears the pending rest multiplier for a player (sets to 0.0)."""
+        query = "UPDATE players SET pending_rest_multiplier = 0.0 WHERE id = ?"
+        self._db.execute_update(query, (player_id,))
+
+    def clear_stale_rest_multipliers(self, daily_question_id: int):
+        """
+        Clears pending rest multipliers for players who did NOT rest today.
+        Called at end of day so bonuses don't carry beyond the next question.
+        Players who rested today keep their freshly-set multiplier.
+        """
+        rested_rows = self._db.execute_query(
+            "SELECT user_id FROM powerup_usage WHERE question_id = ? AND powerup_type = 'rest'",
+            (daily_question_id,),
+        )
+        rested_today = {row["user_id"] for row in rested_rows} if rested_rows else set()
+
+        stale_rows = self._db.execute_query(
+            "SELECT id FROM players WHERE pending_rest_multiplier > 0"
+        )
+        for row in stale_rows or []:
+            if row["id"] not in rested_today:
+                self.clear_pending_multiplier(row["id"])
 
     def adjust_player_score(self, player_id: str, amount: int):
         """
@@ -266,7 +300,6 @@ class DataManager:
                 name=name,
                 score=record["score"],
                 answer_streak=record["answer_streak"],
-                active_shield=False,
             )
 
         return snapshot

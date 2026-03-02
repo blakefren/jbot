@@ -189,6 +189,8 @@ class GameRunner:
         # Reset streaks for players who didn't answer correctly
         if self.daily_question_id:
             self.player_manager.reset_unanswered_streaks(self.daily_question_id)
+            # Expire rest multipliers that weren't consumed today
+            self.data_manager.clear_stale_rest_multipliers(self.daily_question_id)
 
         self.daily_q = None
         self.daily_question_id = None
@@ -382,8 +384,7 @@ class GameRunner:
         emoji_silenced = self.config.get("JBOT_EMOJI_SILENCED")
         emoji_stolen_from = self.config.get("JBOT_EMOJI_STOLEN_FROM")
         emoji_stealing = self.config.get("JBOT_EMOJI_STEALING")
-        emoji_shield = self.config.get("JBOT_EMOJI_SHIELD")
-        emoji_shield_broken = self.config.get("JBOT_EMOJI_SHIELD_BROKEN")
+        emoji_rest = self.config.get("JBOT_EMOJI_REST")
 
         powerup_badges = defaultdict(list)
         if self.daily_question_id:
@@ -429,14 +430,8 @@ class GameRunner:
                             powerup_badges[target_id].append(emoji_stolen_from)
                         elif not show_daily_bonuses:
                             powerup_badges[target_id].append(emoji_stolen_from)
-                elif p_type == "shield":
-                    # Check if shield is broken via powerup manager state
-                    shield_emoji = emoji_shield
-                    if "powerup" in self.managers:
-                        state = self.managers["powerup"]._get_daily_state(user_id)
-                        if state.shield_broken:
-                            shield_emoji = emoji_shield_broken
-                    powerup_badges[user_id].append(shield_emoji)
+                elif p_type == "rest":
+                    powerup_badges[user_id].append(emoji_rest)
 
         # Create a list of player data
         all_player_data = []

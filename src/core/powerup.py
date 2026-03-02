@@ -17,10 +17,9 @@ EMOJI_JINXED = config.get("JBOT_EMOJI_JINXED", "🥶")
 EMOJI_SILENCED = config.get("JBOT_EMOJI_SILENCED", "🤐")
 EMOJI_STOLEN_FROM = config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
 EMOJI_STEALING = config.get("JBOT_EMOJI_STEALING", "💰")
-EMOJI_SHIELD = config.get("JBOT_EMOJI_SHIELD", "💝")
-EMOJI_SHIELD_BROKEN = config.get("JBOT_EMOJI_SHIELD_BROKEN", "💔")
-EMOJI_SHIELD_REFLECT = config.get("JBOT_EMOJI_SHIELD_REFLECT", "💀")
+EMOJI_REST = config.get("JBOT_EMOJI_REST", "😴")
 EMOJI_STREAK = config.get("JBOT_EMOJI_STREAK", "🔥")
+REST_MULTIPLIER = float(config.get("JBOT_REST_MULTIPLIER", "1.2"))
 
 
 class PowerUpError(Exception):
@@ -81,6 +80,8 @@ class PowerUpManager(BaseManager):
         Returns (bool, reason).
         """
         state = self._get_daily_state(player_id)
+        if state.is_resting:
+            return False, "You are resting today. You cannot submit any guesses."
         if not state.silenced or hint_sent:
             return True, ""
         return (
@@ -111,6 +112,20 @@ class PowerUpManager(BaseManager):
             state.bonuses = bonus_values
 
         messages = []
+
+        # Apply pending rest multiplier (from yesterday's rest) on correct answers
+        if is_correct and points_earned > 0:
+            pending_mult = self.data_manager.get_pending_multiplier(pid)
+            if pending_mult > 1.0:
+                bonus_amount = round(points_earned * (pending_mult - 1.0))
+                if bonus_amount > 0:
+                    self.player_manager.update_score(pid, bonus_amount)
+                    if points_tracker:
+                        points_tracker["earned"] += bonus_amount
+                    messages.append(
+                        f"{EMOJI_REST} Rest bonus! ×{pending_mult} on today's score (+{bonus_amount} pts)!"
+                    )
+                self.data_manager.clear_pending_multiplier(pid)
 
         msg = self.resolve_wager(pid, is_correct, points_tracker)
         if msg:
@@ -323,14 +338,8 @@ class PowerUpManager(BaseManager):
         attacker_state.silenced = True
         self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
 
-        # Shield Check
-        if target_state.shield_active:
-            target_state.shield_used = True
-            # Notify: Shield blocked Jinx
-            return f"{EMOJI_SHIELD_REFLECT} <@{target_id}>'s Shield blocked <@{attacker_id}>'s Jinx!"
-        else:
-            target_state.jinxed_by = attacker_id
-            return f"{EMOJI_SILENCED} <@{attacker_id}> jinxed <@{target_id}>! <@{attacker_id}> is silenced, <@{target_id}>'s streak is frozen."
+        target_state.jinxed_by = attacker_id
+        return f"{EMOJI_SILENCED} <@{attacker_id}> jinxed <@{target_id}>! <@{attacker_id}> is silenced, <@{target_id}>'s streak is frozen."
 
     def steal(self, thief_id: str, target_id: str, question_id: int = None) -> str:
         """
@@ -369,17 +378,23 @@ class PowerUpManager(BaseManager):
         self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
         thief_state.stealing_from = target_id
 
-        # Shield Check
-        if target_state.shield_active:
-            target_state.shield_used = True
-            return f"{EMOJI_SHIELD_REFLECT} You tried to rob <@{target_id}>, but hit their shield!"
-        else:
-            target_state.steal_attempt_by = thief_id
-            return f"{EMOJI_STEALING} You sacrificed your streak to rob <@{target_id}>! If you answer correctly, you'll steal their speed bonuses."
+        target_state.steal_attempt_by = thief_id
+        return f"{EMOJI_STEALING} You sacrificed your streak to rob <@{target_id}>! If you answer correctly, you'll steal their speed bonuses."
 
-    def use_shield(self, player_id: str, question_id: int = None) -> str:
+    def rest(
+        self, player_id: str, question_id: int, question_answer: str
+    ) -> tuple[str, str]:
         """
-        Activate a shield for the player.
+        Activate rest for a player. They opt out of today's scoring in exchange for
+        a frozen streak and a 1.2x multiplier on tomorrow's earned score.
+
+        Args:
+            player_id: The player resting.
+            question_id: Today's active daily question ID.
+            question_answer: The correct answer (disclosed privately).
+
+        Returns:
+            (public_msg, private_msg) — caller sends both.
         """
         if question_id is None:
             raise PowerUpError("There is no active question right now.")
@@ -388,36 +403,59 @@ class PowerUpManager(BaseManager):
         if not player:
             raise PowerUpError("Invalid player.")
 
-        # Validation: User DMs !shield before answering.
+        # Must not have already answered correctly today
         last_correct = self.data_manager.get_last_correct_guess_date(player_id)
         if last_correct == self.data_manager.get_today():
             raise PowerUpError(
-                "You have already answered correctly today. You cannot use Shield."
+                "You have already answered correctly today. You cannot rest."
             )
 
         state = self._get_daily_state(player_id)
+        if state.is_resting:
+            raise PowerUpError("You are already resting today.")
         if state.powerup_used_today:
             raise PowerUpError("You have already used a power-up today.")
 
-        state.shield_active = True
-        self.data_manager.log_powerup_usage(player_id, "shield", None, question_id)
-        return f"{EMOJI_SHIELD} Shield up! You are safe from Jinx and Steal."
+        # Mark as resting — blocks further guesses
+        state.is_resting = True
+        self.data_manager.log_powerup_usage(player_id, "rest", None, question_id)
 
-    def check_shield_usage(self) -> list[str]:
-        """
-        End of Day check.
-        If shield unused, deduct 10 points.
-        Returns list of notification messages.
-        """
-        messages = []
-        for player_id, state in self.daily_state.items():
-            if state.shield_active and not state.shield_used:
-                state.shield_broken = True
-                self.player_manager.update_score(player_id, -10)
-                messages.append(
-                    f"{EMOJI_SHIELD_BROKEN} <@{player_id}>'s shield shattered from disuse (-10 pts)."
-                )
-        return messages
+        # Store rest multiplier for tomorrow
+        self.data_manager.set_pending_multiplier(player_id, REST_MULTIPLIER)
+
+        # Immediately resolve any pending attacks as whiffs
+        whiff_parts = []
+
+        if state.jinxed_by:
+            attacker_id = state.jinxed_by
+            state.jinxed_by = None
+            whiff_parts.append(
+                f"{EMOJI_JINXED} <@{attacker_id}>'s Jinx had no effect — <@{player_id}> is resting!"
+            )
+
+        if state.steal_attempt_by:
+            attacker_id = state.steal_attempt_by
+            state.steal_attempt_by = None
+            whiff_parts.append(
+                f"{EMOJI_STEALING} <@{attacker_id}>'s steal whiffed — "
+                f"<@{player_id}> has nothing to steal while resting "
+                f"(but the streak reset still stands)!"
+            )
+
+        public_parts = [
+            f"{EMOJI_REST} <@{player_id}> is resting today. "
+            f"Streak frozen. ×{REST_MULTIPLIER} bonus applies to tomorrow's score."
+        ]
+        public_parts.extend(whiff_parts)
+        public_msg = "\n".join(public_parts)
+
+        private_msg = (
+            f"{EMOJI_REST} You're resting today. The answer was: **{question_answer}**\n"
+            "Your streak is frozen (not reset). "
+            f"You'll earn a **×{REST_MULTIPLIER} multiplier** on your base + bonuses the next day you answer correctly."
+        )
+
+        return public_msg, private_msg
 
     def place_wager(self, player_id: str, amount: int, question_id: int = None) -> str:
         """

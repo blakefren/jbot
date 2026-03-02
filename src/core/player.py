@@ -12,7 +12,7 @@ class Player:
     name: str
     score: int = 0
     answer_streak: int = 0
-    active_shield: bool = False
+    pending_rest_multiplier: float = 0.0
 
     def to_dict(self) -> dict:
         """Dictionary representation for database operations."""
@@ -21,7 +21,7 @@ class Player:
             "name": self.name,
             "score": self.score,
             "answer_streak": self.answer_streak,
-            "active_shield": self.active_shield,
+            "pending_rest_multiplier": self.pending_rest_multiplier,
         }
 
     @classmethod
@@ -31,5 +31,5 @@ class Player:
             name=data["name"],
             score=int(data.get("score", 0)),
             answer_streak=int(data.get("answer_streak", 0)),
-            active_shield=bool(data.get("active_shield", False)),
+            pending_rest_multiplier=float(data.get("pending_rest_multiplier", 0.0)),
         )

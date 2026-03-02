@@ -34,8 +34,7 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
                 "JBOT_EMOJI_SILENCED": "🤐",
                 "JBOT_EMOJI_STOLEN_FROM": "💸",
                 "JBOT_EMOJI_STEALING": "💰",
-                "JBOT_EMOJI_SHIELD": "💝",
-                "JBOT_EMOJI_SHIELD_BROKEN": "💔",
+                "JBOT_EMOJI_REST": "😴",
             }
             return vals.get(key, default)
 
@@ -49,13 +48,13 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
 
     def test_run_midday(self):
         """Test that run(apply_end_of_day=False) skips decay and resets."""
-        # P1 uses shield but doesn"t use it (should decay if end of day)
+        # P1 uses rest (streak should be frozen, not reset)
         # P3 doesn"t answer (should reset streak if end of day)
         events = [
             PowerUpEvent(
                 timestamp="2023-01-01 09:00:00",
                 user_id="p1",
-                powerup_type="shield",
+                powerup_type="rest",
                 target_user_id=None,
             ),
         ]
@@ -72,11 +71,11 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
         # Run WITHOUT end of day logic
         results = simulator.run(apply_end_of_day=False)
 
-        # P1: Shield active, no decay (-10)
+        # P1: Resting, 0 points, streak unchanged
         self.assertEqual(results["p1"]["score_earned"], 0)
-        self.assertTrue(simulator.daily_state["p1"].shield_active)
+        self.assertTrue(simulator.daily_state["p1"].is_resting)
 
-        # P3: No answer, no streak reset (and thus not in results because apply_end_of_day=False)
+        # P3: No answer, not in results when apply_end_of_day=False
         self.assertNotIn("p3", results)
 
     def test_wager_win(self):
@@ -205,7 +204,7 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
             PowerUpEvent(
                 timestamp="2023-01-01 09:00:00",  # str
                 user_id="p1",
-                powerup_type="shield",
+                powerup_type="rest",
                 target_user_id=None,
             ),
             GuessEvent(

@@ -315,26 +315,17 @@ class DiscordBot(commands.Bot):
         except Exception as e:
             self._log_task_error(e, "evening_message_task - update_roles")
 
-        # 2. Check shield usage (Fight Track)
-        shield_messages = []
-        if "powerup" in self.game.managers:
-            try:
-                shield_messages = self.game.managers["powerup"].check_shield_usage()
-            except Exception as e:
-                self._log_task_error(e, "evening_message_task - check_shield_usage")
+        # 2. (Shield check removed — rest mechanic has no end-of-day penalty)
 
         # 3. Send evening message
         if not silent:
             try:
 
-                def content_getter_with_shield(**kwargs):
-                    content = self.game.get_evening_message_content(**kwargs)
-                    if shield_messages:
-                        content += "\n\n" + "\n".join(shield_messages)
-                    return content
+                def content_getter(**kwargs):
+                    return self.game.get_evening_message_content(**kwargs)
 
                 await self._send_daily_message_to_all_subscribers(
-                    content_getter_with_shield,
+                    content_getter,
                     "evening_message",
                     send_leaderboard=True,
                     requires_guild=True,

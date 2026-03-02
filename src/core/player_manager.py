@@ -59,14 +59,6 @@ class PlayerManager:
         """Sets a player's answer streak to a specific value and persists."""
         self.data_manager.set_streak(self._normalize_id(player_id), streak)
 
-    def activate_shield(self, player_id: str):
-        """Activates a player's shield and persists."""
-        self.data_manager.set_shield(self._normalize_id(player_id), True)
-
-    def deactivate_shield(self, player_id: str):
-        """Deactivates a player's shield and persists."""
-        self.data_manager.set_shield(self._normalize_id(player_id), False)
-
     def resolve_wager(self, player_id: str, correct: bool):
         pass
 

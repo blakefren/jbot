@@ -24,7 +24,6 @@ class TestPowerUpManagerAdditions(unittest.TestCase):
         simulated_state = DailyPlayerState(
             wager=50,
             jinxed_by="p2",
-            shield_active=True,
             score_earned=100,
             bonuses={"first_try": 20},
         )
@@ -35,12 +34,12 @@ class TestPowerUpManagerAdditions(unittest.TestCase):
 
         self.assertEqual(state.wager, 50)
         self.assertEqual(state.jinxed_by, "p2")
-        self.assertTrue(state.shield_active)
+        self.assertFalse(state.is_resting)
         self.assertEqual(state.score_earned, 100)
         self.assertEqual(state.bonuses, {"first_try": 20})
 
         # Check powerup_used_today logic
-        # Shield active -> True
+        # Wager > 0 -> True
         self.assertTrue(state.powerup_used_today)
 
     def test_restore_daily_state_powerup_used_logic(self):

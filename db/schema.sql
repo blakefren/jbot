@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS "players" (
     name TEXT,
     score INTEGER DEFAULT 0,
     answer_streak INTEGER DEFAULT 0,
-    active_shield BOOLEAN DEFAULT FALSE,
+    pending_rest_multiplier REAL DEFAULT 0.0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

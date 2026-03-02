@@ -47,28 +47,34 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
             "Success", interaction=self.ctx.interaction
         )
 
-    async def test_shield_disabled(self):
+    async def test_rest_disabled(self):
         self.bot.game.features = {"fight": False}
-        await self.cog.shield.callback(self.cog, self.ctx)
+        await self.cog.rest.callback(self.cog, self.ctx)
         self.bot.send_message.assert_awaited_once_with(
             "Fight track is not enabled.",
             interaction=self.ctx.interaction,
             ephemeral=True,
         )
 
-    async def test_shield_enabled(self):
+    async def test_rest_enabled(self):
         self.bot.game.features = {"fight": True}
+        self.bot.game.daily_q = MagicMock()
+        self.bot.game.daily_q.answer = "Test Answer"
         mock_manager = MagicMock()
-        mock_manager.use_shield.return_value = "Shield activated"
+        mock_manager.rest.return_value = ("public msg", "private msg")
         self.bot.game.managers.get.return_value = mock_manager
 
-        await self.cog.shield.callback(self.cog, self.ctx)
+        await self.cog.rest.callback(self.cog, self.ctx)
 
-        mock_manager.use_shield.assert_called_once_with(
-            "123", self.bot.game.daily_question_id
+        mock_manager.rest.assert_called_once_with(
+            "123", self.bot.game.daily_question_id, "Test Answer"
         )
-        self.bot.send_message.assert_awaited_once_with(
-            "Shield activated", interaction=self.ctx.interaction, ephemeral=True
+        self.assertEqual(self.bot.send_message.await_count, 2)
+        self.bot.send_message.assert_any_await(
+            "public msg", interaction=self.ctx.interaction
+        )
+        self.bot.send_message.assert_any_await(
+            "private msg", interaction=self.ctx.interaction, ephemeral=True
         )
 
     async def test_steal_disabled(self):

@@ -19,7 +19,7 @@ class TestDataManager(unittest.TestCase):
                     "name": "Alice",
                     "score": 42,
                     "answer_streak": 3,
-                    "active_shield": 1,
+                    "pending_rest_multiplier": 0.0,
                 }
             ]
         )
@@ -27,7 +27,7 @@ class TestDataManager(unittest.TestCase):
         self.assertIsNotNone(player)
         self.assertEqual(player.name, "Alice")
         self.assertEqual(player.score, 42)
-        self.assertTrue(player.active_shield)
+        self.assertEqual(player.pending_rest_multiplier, 0.0)
 
         # Test not found
         self.db.execute_query = MagicMock(return_value=[])
@@ -39,7 +39,7 @@ class TestDataManager(unittest.TestCase):
         self.db.execute_update = MagicMock()
         self.data_manager.create_player("1", "Alice")
         self.db.execute_update.assert_called_once_with(
-            "INSERT INTO players (id, name, score, answer_streak, active_shield) VALUES (?, ?, 0, 0, 0)",
+            "INSERT INTO players (id, name, score, answer_streak) VALUES (?, ?, 0, 0)",
             ("1", "Alice"),
         )
 
@@ -67,12 +67,12 @@ class TestDataManager(unittest.TestCase):
             "UPDATE players SET answer_streak = 0 WHERE id = ?", ("1",)
         )
 
-    def test_set_shield(self):
-        """Test setting a player's shield status."""
+    def test_set_pending_multiplier(self):
+        """Test setting a player's pending rest multiplier."""
         self.db.execute_update = MagicMock()
-        self.data_manager.set_shield("1", True)
+        self.data_manager.set_pending_multiplier("1", 1.2)
         self.db.execute_update.assert_called_once_with(
-            "UPDATE players SET active_shield = ? WHERE id = ?", (True, "1")
+            "UPDATE players SET pending_rest_multiplier = ? WHERE id = ?", (1.2, "1")
         )
 
     def test_load_players(self):
@@ -84,22 +84,22 @@ class TestDataManager(unittest.TestCase):
                 "name": "Alice",
                 "score": 42,
                 "answer_streak": 3,
-                "active_shield": 1,
+                "pending_rest_multiplier": 1.2,
             },
             {
                 "id": "2",
                 "name": "Bob",
                 "score": 0,
                 "answer_streak": 0,
-                "active_shield": 0,
+                "pending_rest_multiplier": 0.0,
             },
         ]
         players = self.data_manager.load_players()
         self.assertEqual(players["1"].name, "Alice")
         self.assertEqual(players["1"].score, 42)
         self.assertEqual(players["1"].answer_streak, 3)
-        self.assertTrue(players["1"].active_shield)
-        self.assertFalse(players["2"].active_shield)
+        self.assertEqual(players["1"].pending_rest_multiplier, 1.2)
+        self.assertEqual(players["2"].pending_rest_multiplier, 0.0)
 
         # Test empty DB
         self.db.execute_query = lambda query: []
@@ -407,7 +407,7 @@ class TestDataManager(unittest.TestCase):
                     "name": "Alice",
                     "score": 10,
                     "answer_streak": 2,
-                    "active_shield": 1,
+                    "pending_rest_multiplier": 0.0,
                 }
             ]
         )
@@ -1296,6 +1296,29 @@ class TestDataManagerIntegration(unittest.TestCase):
         query = "SELECT is_correct FROM guesses WHERE id = ?"
         result = self.db.execute_query(query, (guess_id,))
         self.assertEqual(result[0]["is_correct"], 1)
+
+    def test_clear_stale_rest_multipliers(self):
+        """Stale multipliers (no rest today) are cleared; today's rest multiplier is preserved."""
+        from data.readers.question import Question
+
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        self.data_manager.create_player("p1", "Player1")  # stale multiplier
+        self.data_manager.create_player("p2", "Player2")  # rested today
+        self.data_manager.create_player("p3", "Player3")  # no multiplier
+
+        # p1 has a leftover multiplier from a prior day (no powerup_usage row for this question)
+        self.data_manager.set_pending_multiplier("p1", 1.2)
+        # p2 rested today
+        self.data_manager.set_pending_multiplier("p2", 1.2)
+        self.data_manager.log_powerup_usage("p2", "rest", None, dq_id)
+
+        self.data_manager.clear_stale_rest_multipliers(dq_id)
+
+        self.assertEqual(self.data_manager.get_pending_multiplier("p1"), 0.0)
+        self.assertEqual(self.data_manager.get_pending_multiplier("p2"), 1.2)
+        self.assertEqual(self.data_manager.get_pending_multiplier("p3"), 0.0)
 
 
 if __name__ == "__main__":

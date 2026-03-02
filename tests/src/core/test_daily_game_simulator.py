@@ -33,8 +33,7 @@ class TestDailyGameSimulator(unittest.TestCase):
                 "JBOT_EMOJI_SILENCED": "🤐",
                 "JBOT_EMOJI_STOLEN_FROM": "💸",
                 "JBOT_EMOJI_STEALING": "💰",
-                "JBOT_EMOJI_SHIELD": "💝",
-                "JBOT_EMOJI_SHIELD_BROKEN": "💔",
+                "JBOT_EMOJI_REST": "😴",
             }
             return vals.get(key, default)
 
@@ -93,12 +92,13 @@ class TestDailyGameSimulator(unittest.TestCase):
         self.assertEqual(results["p3"]["streak_delta"], -5)
         self.assertEqual(results["p3"]["final_streak"], 0)
 
-    def test_shield_usage(self):
+    def test_rest_mechanic(self):
+        """A resting player earns 0 points and has their streak frozen."""
         events = [
             PowerUpEvent(
                 timestamp="2023-01-01 09:00:00",
                 user_id="p1",
-                powerup_type="shield",
+                powerup_type="rest",
                 target_user_id=None,
             ),
         ]
@@ -113,7 +113,10 @@ class TestDailyGameSimulator(unittest.TestCase):
         )
         results = simulator.run()
 
-        self.assertEqual(results["p1"]["score_earned"], -10)
+        # Player rested: 0 points, streak unchanged (delta = 0)
+        self.assertEqual(results["p1"]["score_earned"], 0)
+        self.assertEqual(results["p1"]["streak_delta"], 0)
+        self.assertEqual(results["p1"]["final_streak"], 2)  # unchanged
 
     def test_jinx_success(self):
         # Re-run with P3 as target

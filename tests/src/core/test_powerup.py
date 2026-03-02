@@ -31,25 +31,86 @@ class TestPowerUpManager(unittest.TestCase):
 
         self.player_manager.update_score.side_effect = update_score
 
-        # Mock activate/deactivate shield
-        def activate_shield(pid):
-            if pid in self.players:
-                self.players[pid].active_shield = True
-
-        self.player_manager.activate_shield.side_effect = activate_shield
-
-        def deactivate_shield(pid):
-            if pid in self.players:
-                self.players[pid].active_shield = False
-
-        self.player_manager.deactivate_shield.side_effect = deactivate_shield
-
         # Mock reset_streak
         def reset_streak(pid):
             if pid in self.players:
                 self.players[pid].answer_streak = 0
 
         self.player_manager.reset_streak.side_effect = reset_streak
+
+        # Mock get_pending_multiplier to return 0.0 by default (no rest bonus)
+        self.data_manager.get_pending_multiplier.return_value = 0.0
+
+    def test_rest_basic(self):
+        """Test that rest marks the player as resting and sets pending multiplier."""
+        self.data_manager.get_pending_multiplier = MagicMock(return_value=0.0)
+        self.data_manager.set_pending_multiplier = MagicMock()
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        public_msg, private_msg = manager.rest("1", "q1", "Correct Answer")
+        self.assertIn("resting", public_msg)
+        self.assertIn("Correct Answer", private_msg)
+        self.assertTrue(manager._get_daily_state("1").is_resting)
+        self.data_manager.set_pending_multiplier.assert_called_once_with("1", 1.2)
+
+    def test_rest_already_answered(self):
+        """Test that resting after a correct answer is blocked."""
+        self.data_manager.get_last_correct_guess_date.return_value = (
+            self.data_manager.get_today.return_value
+        )
+        self.data_manager.get_today.return_value = date.today()
+        self.data_manager.get_last_correct_guess_date.return_value = date.today()
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.rest("1", "q1", "Correct Answer")
+        self.assertIn("already answered correctly", str(cm.exception))
+
+    def test_rest_blocks_guesses(self):
+        """Test that a resting player cannot submit guesses."""
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager._get_daily_state("1").is_resting = True
+        can_answer, reason = manager.can_answer("1")
+        self.assertFalse(can_answer)
+        self.assertIn("resting", reason)
+
+    def test_rest_resolves_steal_whiff(self):
+        """Test that an existing steal attempt is cleared when the target rests."""
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        # Simulate P1 having stolen from P2
+        manager._get_daily_state("2").steal_attempt_by = "1"
+        public_msg, _ = manager.rest("2", "q1", "Ans")
+        self.assertIn("whiffed", public_msg)
+        # steal_attempt_by should be cleared
+        self.assertIsNone(manager._get_daily_state("2").steal_attempt_by)
+
+    def test_rest_resolves_jinx_whiff(self):
+        """Test that a jinx is cleared when the target rests."""
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager._get_daily_state("2").jinxed_by = "1"
+        public_msg, _ = manager.rest("2", "q1", "Ans")
+        self.assertIn("no effect", public_msg)
+        self.assertIsNone(manager._get_daily_state("2").jinxed_by)
+
+    def test_rest_powerup_lockout(self):
+        """Test that resting blocks other power-ups."""
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager.rest("1", "q1", "Ans")
+        with self.assertRaises(PowerUpError) as cm:
+            manager.jinx("1", "2", "q1")
+        self.assertIn("already used a power-up today", str(cm.exception))
+
+    def test_rest_next_day_multiplier(self):
+        """Test that the 1.2x rest multiplier is applied on the next correct answer."""
+        self.data_manager.get_pending_multiplier = MagicMock(return_value=1.2)
+        self.data_manager.clear_pending_multiplier = MagicMock()
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        points_tracker = {"earned": 100}
+        msgs = manager.on_guess(
+            1, "P1", "ans", True, points_earned=100, points_tracker=points_tracker
+        )
+        # 1.2x means +20 on 100 pts
+        self.assertTrue(any("Rest bonus" in m for m in msgs))
+        self.assertEqual(self.players["1"].score, 120)  # 100 base + 20 bonus
+        self.data_manager.clear_pending_multiplier.assert_called_once_with("1")
 
     def test_jinx_basic(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -59,33 +120,6 @@ class TestPowerUpManager(unittest.TestCase):
         self.assertEqual(self.players["1"].score, 100)
         self.assertEqual(manager._get_daily_state("2").jinxed_by, "1")
         self.assertTrue(manager._get_daily_state("1").silenced)
-
-    def test_jinx_with_shield(self):
-        # Shield is now tracked in daily_state, not player object directly for this manager logic
-        # But use_shield sets it in daily_state
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.use_shield("2", "q1")
-
-        msg = manager.jinx("1", "2", "q1")
-        self.assertIn("blocked", msg)
-        self.assertTrue(manager._get_daily_state("2").shield_used)
-        # jinx_status is no longer used, we check if jinxed_by is NOT set
-        self.assertIsNone(manager._get_daily_state("2").jinxed_by)
-
-    def test_use_shield_basic(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.use_shield("1", "q1")
-        self.assertIn("Shield up", msg)
-        self.assertTrue(manager._get_daily_state("1").shield_active)
-        # No upfront cost
-        self.assertEqual(self.players["1"].score, 100)
-
-    def test_use_shield_already_active(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.use_shield("1", "q1")
-        with self.assertRaises(PowerUpError) as cm:
-            manager.use_shield("1", "q1")
-        self.assertIn("already used a power-up today", str(cm.exception))
 
     def test_steal_success(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -254,20 +288,6 @@ class TestPowerUpManager(unittest.TestCase):
             manager.place_wager("999", 10, "q1")
         self.assertIn("Invalid player", str(cm.exception))
 
-    def test_shield_shatter_penalty(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        # Player 1 activates shield
-        manager.use_shield("1", "q1")
-        self.assertTrue(manager._get_daily_state("1").shield_active)
-        self.assertFalse(manager._get_daily_state("1").shield_used)
-
-        # End of day check - Shield unused
-        messages = manager.check_shield_usage()
-
-        # Verify penalty
-        self.assertEqual(self.players["1"].score, 90)  # 100 - 10
-        self.assertTrue(any("shattered" in m for m in messages))
-
     def test_steal_first_try_bonus(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
 
@@ -311,18 +331,13 @@ class TestPowerUpManager(unittest.TestCase):
         """Test that using one powerup blocks others."""
         manager = PowerUpManager(self.player_manager, self.data_manager)
 
-        # Use Shield
-        manager.use_shield("1", "q1")
-
-        # Try Jinx
-        with self.assertRaises(PowerUpError) as cm:
-            manager.jinx("1", "2", "q1")
-        self.assertIn("already used a power-up today", str(cm.exception))
+        # Use Jinx
+        manager.jinx("1", "2", "q1")
 
         # Try Steal
-        with self.assertRaises(PowerUpError) as cm2:
+        with self.assertRaises(PowerUpError) as cm:
             manager.steal("1", "3", "q1")
-        self.assertIn("already used a power-up today", str(cm2.exception))
+        self.assertIn("already used a power-up today", str(cm.exception))
 
     def test_reset_daily_state(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -349,9 +364,9 @@ class TestPowerUpManager(unittest.TestCase):
             manager.steal("1", "2", None)
         self.assertEqual(str(cm2.exception), "There is no active question right now.")
 
-        # Test Shield
+        # Test Rest
         with self.assertRaises(PowerUpError) as cm3:
-            manager.use_shield("1", None)
+            manager.rest("1", None, "Ans")
         self.assertEqual(str(cm3.exception), "There is no active question right now.")
 
         # Test Wager
