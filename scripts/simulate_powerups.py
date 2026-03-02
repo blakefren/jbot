@@ -24,6 +24,14 @@ LATE_ANSWER_DELAY_HOURS = 6
 POWERUP_FAIL_RATE = 0.2  # Chance that powerup is used after target answers
 PROACTIVE_MISS_RATE = 0.05  # Chance that proactive shield is forgotten
 
+# --- Difficulty ---
+# Each day's question is drawn from one of three tiers.
+DIFFICULTY_WEIGHTS = {"Low": 0.35, "Medium": 0.40, "High": 0.25}
+DIFFICULTY_VALUES = {"Low": 100, "Medium": 200, "High": 300}
+# Additive modifier applied to a player's base guess accuracy per difficulty tier.
+# Hard questions are harder to answer correctly; easy questions give a small boost.
+DIFFICULTY_ACC_MODIFIER = {"Low": 0.05, "Medium": 0.0, "High": -0.20}
+
 # --- Real Config ---
 from src.cfg.main import ConfigReader
 
@@ -35,6 +43,7 @@ class MockQuestion:
 
 
 config = ConfigReader()
+REST_MULTIPLIER = float(config.get("JBOT_REST_MULTIPLIER", "1.2"))
 
 # --- Strategies ---
 
@@ -103,25 +112,37 @@ class ProceduralStrategy(Strategy):
         self.speed = speed  # Fast, Average, Slow
         self.correctness = correctness  # High, Usually, Sometimes
         self.aggression = aggression  # Aggressive, Frequent, Rarely
-        self.core_strategy = core_strategy  # Troll, Turtle, Thief, Random, Passive
+        self.core_strategy = core_strategy  # Troll, Rester, Thief, Random, Passive
 
     def decide_action(self, player_id: str, game_state: "GameState") -> List[GameEvent]:
         events = []
         base_time = game_state.base_time
+        difficulty = game_state.difficulty
 
         # 1. Powerup Logic
-        use_powerup = False
+        # Base probability of using a powerup, scaled per-strategy by difficulty.
+        # Rester: much more likely on Hard (risky to guess), less on Easy (free points).
+        # Troll/Thief: slightly more active on Hard (bigger bonuses and streaks at risk).
+        # Random: unaffected by difficulty.
         if self.core_strategy != "Passive":
             chance_map = {"Aggressive": 0.95, "Frequent": 0.50, "Rarely": 0.10}
-            if random.random() < chance_map.get(self.aggression, 0.0):
-                use_powerup = True
+            base_chance = chance_map.get(self.aggression, 0.0)
+            diff_scale = {
+                "Rester": {"Low": 0.50, "Medium": 1.00, "High": 1.60},
+                "Troll": {"Low": 0.70, "Medium": 1.00, "High": 1.30},
+                "Thief": {"Low": 0.80, "Medium": 1.00, "High": 1.30},
+            }.get(self.core_strategy, {"Low": 1.0, "Medium": 1.0, "High": 1.0})
+            adjusted_chance = min(1.0, base_chance * diff_scale[difficulty])
+            use_powerup = random.random() < adjusted_chance
+        else:
+            use_powerup = False
 
         if use_powerup:
             p_type = None
             target = None
 
-            if self.core_strategy == "Turtle":
-                p_type = "shield"
+            if self.core_strategy == "Rester":
+                p_type = "rest"
             elif self.core_strategy == "Troll":
                 p_type = "jinx"
                 target = self._pick_target_weighted(
@@ -135,7 +156,7 @@ class ProceduralStrategy(Strategy):
             elif self.core_strategy == "Random":
                 r = random.random()
                 if r < 0.33:
-                    p_type = "shield"
+                    p_type = "rest"
                 elif r < 0.66:
                     p_type = "jinx"
                     target = self._pick_target_weighted(
@@ -158,6 +179,9 @@ class ProceduralStrategy(Strategy):
                         target_user_id=target,
                     )
                 )
+                # Resting players skip guessing for the day
+                if p_type == "rest":
+                    return events
 
         # 2. Guess Logic
         events.append(self._create_guess(player_id, game_state))
@@ -165,6 +189,7 @@ class ProceduralStrategy(Strategy):
 
     def _create_guess(self, player_id, game_state):
         base_time = game_state.base_time
+        difficulty = game_state.difficulty
 
         # Speed
         if self.speed == "Fast":
@@ -178,40 +203,49 @@ class ProceduralStrategy(Strategy):
 
         timestamp = base_time + delta
 
-        # Accuracy
-        # High=0.98, Usually=0.90, Sometimes=0.60
+        # Accuracy: player's innate skill ± difficulty modifier
         acc_map = {"Perfect": 1.0, "High": 0.98, "Usually": 0.90, "Sometimes": 0.60}
-        acc = acc_map.get(self.correctness, 0.90)
+        acc = min(
+            1.0,
+            acc_map.get(self.correctness, 0.90) + DIFFICULTY_ACC_MODIFIER[difficulty],
+        )
         text = "answer" if random.random() < acc else "wrong"
         return GuessEvent(timestamp=timestamp, user_id=player_id, guess_text=text)
 
 
 class AdaptiveStrategy(ProceduralStrategy):
     """
-    Adapts based on state/stats:
-    - Shield if on streak (>4) or near lead (>95% max score)
-    - Steal if streak is low (<2)
-    - Jinx more if low accuracy/stats
-    - Passive if high stats
+    Adapts based on player state, standings, and today's question difficulty:
+    - Hard day: rest more eagerly (protect streak, skip risky question)
+    - Hard day + low streak: jinx top players rather than steal (bonuses unreliable)
+    - Easy/Medium + big streak or near lead: rest to bank multiplier
+    - Easy/Medium + low streak: steal to catch up
+    - Default: jinx to disrupt opponents
+    Overall aggressiveness is dampened on Hard days and boosted on Easy days.
     """
 
     def decide_action(self, player_id: str, game_state: "GameState") -> List[GameEvent]:
         events = []
         base_time = game_state.base_time
+        difficulty = game_state.difficulty
 
         # Self Analysis
         me = game_state.players[player_id]
 
-        # 1. Determine Aggression based on Stats
-        # High/Fast -> Low Aggression (0.05)
-        # Low/Slow -> High Aggression (0.75)
+        # 1. Determine base aggression from player traits, then scale by difficulty.
+        # Hard questions dampen aggression (rest is better). Easy questions raise it.
         base_aggression = 0.3  # Default
         if self.correctness in ["High", "Perfect"] and self.speed == "Fast":
             base_aggression = 0.05
         elif self.correctness == "Sometimes" or self.speed == "Slow":
             base_aggression = 0.75
 
-        if random.random() > base_aggression:
+        diff_aggression_scale = {"Low": 1.30, "Medium": 1.00, "High": 0.65}
+        effective_aggression = min(
+            0.95, base_aggression * diff_aggression_scale[difficulty]
+        )
+
+        if random.random() > effective_aggression:
             # Passive this turn
             return [self._create_guess(player_id, game_state)]
 
@@ -224,17 +258,26 @@ class AdaptiveStrategy(ProceduralStrategy):
         max_score = max(sorted_scores) if sorted_scores else 0
         near_lead = me.score >= max_score * 0.95
 
-        # Priority 1: Shield if strictly winning or on streak (>4)
-        if (me.answer_streak >= 4) or near_lead:
-            powerup_type = "shield"
+        # Priority 1: Rest — lower streak threshold on Hard (question is risky to attempt).
+        # On Hard, rest if streak >= 2; otherwise the standard threshold applies.
+        streak_rest_threshold = 2 if difficulty == "High" else 4
+        if (me.answer_streak >= streak_rest_threshold) or near_lead:
+            powerup_type = "rest"
 
-        # Priority 2: Steal if doing poorly (low streak)
-        # Steal is good for points catchup
+        # Priority 2: Steal or Jinx depending on difficulty.
+        # On Hard days, bonuses are unreliable (fewer players succeed), so jinx
+        # top-streak players instead of gambling on a steal.
         elif me.answer_streak < 2:
-            powerup_type = "steal"
-            target = self._pick_target_weighted(
-                player_id, game_state, lambda p: p.score
-            )
+            if difficulty == "High":
+                powerup_type = "jinx"
+                target = self._pick_target_weighted(
+                    player_id, game_state, lambda p: p.answer_streak
+                )
+            else:
+                powerup_type = "steal"
+                target = self._pick_target_weighted(
+                    player_id, game_state, lambda p: p.score
+                )
 
         # Priority 3: Jinx (Default aggressive move)
         else:
@@ -244,14 +287,16 @@ class AdaptiveStrategy(ProceduralStrategy):
             )
 
         if powerup_type:
-            if powerup_type == "shield":
+            if powerup_type == "rest":
                 events.append(
                     PowerUpEvent(
                         timestamp=self._create_powerup_time(base_time),
                         user_id=player_id,
-                        powerup_type="shield",
+                        powerup_type="rest",
                     )
                 )
+                # Resting players skip guessing for the day
+                return events
             elif target:
                 events.append(
                     PowerUpEvent(
@@ -268,9 +313,17 @@ class AdaptiveStrategy(ProceduralStrategy):
 
 # --- Game State Wrapper ---
 class GameState:
-    def __init__(self, players: Dict[str, Player], base_time: datetime.datetime):
+    def __init__(
+        self,
+        players: Dict[str, Player],
+        base_time: datetime.datetime,
+        difficulty: str = "Medium",
+    ):
         self.players = players
         self.base_time = base_time
+        self.difficulty = (
+            difficulty  # "Low", "Medium", or "High" — visible to all strategies
+        )
 
 
 # --- Simulation Engine ---
@@ -336,7 +389,7 @@ def run_simulation(return_data=False, seed=None):
     speeds = ["Fast", "Average", "Slow"]
     corrects = ["High", "Usually", "Sometimes"]
     aggressions = ["Aggressive", "Frequent", "Rarely"]
-    cores = ["Troll", "Turtle", "Thief", "Random", "Passive"]
+    cores = ["Troll", "Rester", "Thief", "Random", "Passive"]
 
     for i in range(1500):  # Increased from 500 to 1500 players
         pid = f"player_{i+1}"
@@ -359,10 +412,10 @@ def run_simulation(return_data=False, seed=None):
 
         players[pid] = Player(id=pid, name=p_name)
         player_strategies[pid] = ProceduralStrategy(core, s, c, a, core)
+
     # 2. Daily Loop
-
     current_date = datetime.date(2024, 1, 1)
-
+    daily_records = []  # Per-day observations for difficulty analysis
     for day in range(SIMULATION_DAYS):
         # New Day Setup
         base_time = datetime.datetime.combine(
@@ -370,8 +423,16 @@ def run_simulation(return_data=False, seed=None):
         )  # Noon
         hint_time = base_time + datetime.timedelta(hours=4)
 
+        # Draw today's difficulty (visible to all players when they decide their action)
+        difficulty = random.choices(
+            list(DIFFICULTY_WEIGHTS.keys()),
+            weights=list(DIFFICULTY_WEIGHTS.values()),
+            k=1,
+        )[0]
+        clue_value = DIFFICULTY_VALUES[difficulty]
+
         day_events = []
-        game_state = GameState(players, base_time)
+        game_state = GameState(players, base_time, difficulty=difficulty)
 
         # Players Decide Actions
         for pid, strat in player_strategies.items():
@@ -383,7 +444,7 @@ def run_simulation(return_data=False, seed=None):
 
         # Run Simulator
         simulator = DailyGameSimulator(
-            question=MockQuestion("What is the answer?"),
+            question=MockQuestion("What is the answer?", clue_value=clue_value),
             answers=question_answers,
             hint_timestamp=hint_time,
             events=day_events,
@@ -393,12 +454,48 @@ def run_simulation(return_data=False, seed=None):
 
         daily_results = simulator.run(apply_end_of_day=True)
 
+        # Determine which players rested today
+        resting_pids = {
+            event.user_id
+            for event in day_events
+            if isinstance(event, PowerUpEvent) and event.powerup_type == "rest"
+        }
+
         # Update Persistent State
         for pid, result in daily_results.items():
             p = players[pid]
+
+            # Apply (or expire) pending rest multiplier for non-resting players
+            if p.pending_rest_multiplier > 1.0 and pid not in resting_pids:
+                if result["score_earned"] > 0:
+                    bonus = round(
+                        result["score_earned"] * (p.pending_rest_multiplier - 1.0)
+                    )
+                    result["final_score"] += bonus
+                p.pending_rest_multiplier = 0.0  # Consumed or expired
+
             p.score = result["final_score"]
             p.answer_streak = result["final_streak"]
-            p.active_shield = False  # Reset daily
+
+        # Grant next-day multiplier to players who rested today
+        for pid in resting_pids:
+            if pid in players:
+                players[pid].pending_rest_multiplier = REST_MULTIPLIER
+
+        # Record per-day stats for difficulty analysis (sampled every 3rd day)
+        if day % 3 == 0:
+            for pid, result in daily_results.items():
+                strat = player_strategies[pid]
+                core = getattr(strat, "core_strategy", strat.name)
+                daily_records.append(
+                    {
+                        "difficulty": difficulty,
+                        "core_strategy": core,
+                        "score_earned": result["score_earned"],
+                        "rested": pid in resting_pids,
+                        "correct": result["streak_delta"] > 0,
+                    }
+                )
 
         if VERBOSE:
             print(f"Day {day+1} complete.")
@@ -406,7 +503,7 @@ def run_simulation(return_data=False, seed=None):
         current_date += datetime.timedelta(days=1)
 
     if return_data:
-        return players, player_strategies
+        return players, player_strategies, daily_records
 
     # 3. Report
     print("\n--- Final Results (Top 10 Players) ---")
