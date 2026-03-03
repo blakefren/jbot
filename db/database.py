@@ -60,7 +60,7 @@ class Database:
         Establishes a connection to the SQLite database.
         """
         try:
-            self.conn = sqlite3.connect(self.db_path)
+            self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self.conn.row_factory = sqlite3.Row  # Access columns by name
             logging.info(f"Successfully connected to the database at '{self.db_path}'.")
         except sqlite3.Error as e:
