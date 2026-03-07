@@ -385,7 +385,8 @@ class DataManager:
     def reset_unanswered_streaks(self, daily_question_id: int):
         """
         Resets the answer streak to 0 for all players who did not have a correct guess
-        for the specified daily question.
+        for the specified daily question. Players who used the 'rest' power-up are
+        excluded so their streak is preserved.
         """
         query = """
             UPDATE players
@@ -395,9 +396,14 @@ class DataManager:
                 FROM guesses
                 WHERE daily_question_id = ? AND is_correct = 1
             )
+            AND id NOT IN (
+                SELECT user_id
+                FROM powerup_usage
+                WHERE question_id = ? AND powerup_type = 'rest'
+            )
             AND answer_streak > 0
         """
-        self._db.execute_update(query, (daily_question_id,))
+        self._db.execute_update(query, (daily_question_id, daily_question_id))
 
     def get_player_ids_with_role(self, role_name: str) -> set[int]:
         """

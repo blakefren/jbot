@@ -1146,6 +1146,28 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.assertEqual(p2.answer_streak, 0)  # Reset (didn't answer correctly)
         self.assertEqual(p3.answer_streak, 0)  # Already 0
 
+    def test_reset_unanswered_streaks_excludes_resting_players(self):
+        """Test that players who used the 'rest' power-up keep their streak."""
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+
+        self.data_manager.set_streak("p1", 5)
+        self.data_manager.set_streak("p2", 3)
+
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # p2 uses rest — neither player answers correctly
+        self.data_manager.log_powerup_usage("p2", "rest", None, dq_id)
+
+        self.data_manager.reset_unanswered_streaks(dq_id)
+
+        p1 = self.data_manager.get_player("p1")
+        p2 = self.data_manager.get_player("p2")
+
+        self.assertEqual(p1.answer_streak, 0)  # Reset (didn't answer or rest)
+        self.assertEqual(p2.answer_streak, 3)  # Preserved (resting)
+
     def test_get_guesses_for_daily_question(self):
         """Test retrieving all guesses for a daily question."""
         # Create question
