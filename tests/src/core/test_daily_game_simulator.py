@@ -176,15 +176,17 @@ class TestDailyGameSimulator(unittest.TestCase):
         # P3 Bonuses: First Try (20), Before Hint (10), Fastest (10), Streak (25).
         # Total P3 Score: 100 + 20 + 10 + 10 + 25 = 165.
 
-        # P1 answers second.
-        # P1 Bonuses: First Try (20), Before Hint (10), Streak (0 - reset by steal).
-        # Total P1 Score: 100 + 20 + 10 + 0 = 130.
+        # P1 answers second (1st try for P1, 2nd fastest overall).
+        # P1 effective streak after -2 cost: max(0, 2-2) = 0 → streak_length=1 (<2, no streak bonus)
+        # P1 Bonuses: Try 1 (20), Fastest 2 (5), Before Hint (10).
+        # Total P1 Score: 100 + 20 + 5 + 10 = 135.
 
         # Steal Logic:
         # P1 steals from P3.
-        # Stealable bonuses: "first_try" (20), "fastest" (10). Total 30.
-        # P3 loses 30 -> 135.
-        # P1 gains 30 -> 160.
+        # Stealable bonuses (all except streak; aliases skipped when canonical present):
+        # try_1 (20) + fastest_1 (10) + before_hint (10) = 40.
+        # P3 loses 40 -> 125.
+        # P1 gains 40 -> 175.
 
         simulator = DailyGameSimulator(
             self.question,
@@ -196,8 +198,8 @@ class TestDailyGameSimulator(unittest.TestCase):
         )
         results = simulator.run()
 
-        self.assertEqual(results["p3"]["score_earned"], 135)
-        self.assertEqual(results["p1"]["score_earned"], 165)
+        self.assertEqual(results["p3"]["score_earned"], 125)
+        self.assertEqual(results["p1"]["score_earned"], 175)
 
         # P1 streak reset cost?
         # handle_powerup for steal:

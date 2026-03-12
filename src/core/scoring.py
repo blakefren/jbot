@@ -144,31 +144,18 @@ class ScoreCalculator:
         Standardizes 'Steal' logic across Live and Sim.
 
         Rules:
-        - Fastest bonus is stealable.
-        - First Try bonus is stealable.
+        - All bonuses are stealable except streak.
+        - Alias keys (first_try, fastest) are only skipped when their canonical
+          equivalents (try_1, fastest_1) are also present, to avoid double-counting.
         """
+        NON_STEALABLE = {"streak"}
         stealable = 0
-
-        # Check explicit fastest keys
         for key, val in bonuses.items():
-            if key.startswith("fastest_"):
-                stealable += val
-
-        # Fallback/Legacy: If 'fastest' is present but 'fastest_1' is not (shouldn't happen with new logic but for safety)
-        if "fastest" in bonuses and "fastest_1" not in bonuses:
-            stealable += bonuses["fastest"]
-
-        # Check explicit try keys
-        for key, val in bonuses.items():
-            if key.startswith("try_"):
-                stealable += val
-
-        # Fallback/Legacy
-        if "first_try" in bonuses and "try_1" not in bonuses:
-            stealable += bonuses["first_try"]
-
-        # Handle 'first_place' key alias if it exists from legacy data
-        if "first_place" in bonuses:
-            stealable += bonuses["first_place"]
-
+            if any(key == ns or key.startswith(ns + "_") for ns in NON_STEALABLE):
+                continue
+            if key == "first_try" and "try_1" in bonuses:
+                continue
+            if key == "fastest" and "fastest_1" in bonuses:
+                continue
+            stealable += val
         return stealable

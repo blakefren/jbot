@@ -98,10 +98,11 @@ class DailyGameSimulator:
         elif ptype == "steal":
             if target_id:
                 target_state = self.daily_state[target_id]
-                # Attacker resets streak immediately
+                # Attacker loses JBOT_STEAL_STREAK_COST streak days (minimum 0)
+                steal_streak_cost = int(self.config.get("JBOT_STEAL_STREAK_COST", "2"))
                 player = self.initial_player_states.get(user_id)
                 initial_streak = player.answer_streak if player else 0
-                state.streak_delta = -initial_streak
+                state.streak_delta = -min(steal_streak_cost, initial_streak)
 
                 state.stealing_from = target_id
 
@@ -206,9 +207,10 @@ class DailyGameSimulator:
         player = self.initial_player_states.get(user_id)
         initial_streak = player.answer_streak if player else 0
 
-        # If player used steal, their streak was reset to 0 for this calculation
+        # If player used steal, their streak was reduced by JBOT_STEAL_STREAK_COST for this calculation
         if state.stealing_from:
-            initial_streak = 0
+            steal_streak_cost = int(self.config.get("JBOT_STEAL_STREAK_COST", "2"))
+            initial_streak = max(0, initial_streak - steal_streak_cost)
 
         streak_length = initial_streak + 1
 

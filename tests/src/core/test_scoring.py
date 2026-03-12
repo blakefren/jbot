@@ -172,8 +172,9 @@ class TestScoreCalculator(unittest.TestCase):
             "before_hint": 10,
         }
         stealable = self.calculator.get_stealable_amount(bonuses)
-        # Stealable: Try 1 + Fastest 1 = 30. Pre-hint not stealable.
-        self.assertEqual(stealable, 30)
+        # All bonuses stealable except streak; alias keys (first_try, fastest) excluded
+        # to avoid double-counting: try_1 (20) + fastest_1 (10) + before_hint (10) = 40
+        self.assertEqual(stealable, 40)
 
     def test_stealable_legacy(self):
         bonuses = {"first_place": 10}

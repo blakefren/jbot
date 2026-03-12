@@ -21,6 +21,7 @@ EMOJI_REST = config.get("JBOT_EMOJI_REST", "😴")
 EMOJI_REST_WAKEUP = config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
 EMOJI_STREAK = config.get("JBOT_EMOJI_STREAK", "🔥")
 REST_MULTIPLIER = float(config.get("JBOT_REST_MULTIPLIER", "1.2"))
+STEAL_STREAK_COST = int(config.get("JBOT_STEAL_STREAK_COST", "2"))
 
 
 class PowerUpError(Exception):
@@ -344,7 +345,7 @@ class PowerUpManager(BaseManager):
         self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
 
         target_state.jinxed_by = attacker_id
-        return f"{EMOJI_SILENCED} <@{attacker_id}> jinxed <@{target_id}>! <@{attacker_id}> is silenced, <@{target_id}>'s streak is frozen."
+        return f"{EMOJI_SILENCED} Your jinx is set! {target.name} won't know until it takes effect. You can't answer until the hint is revealed!"
 
     def steal(self, thief_id: str, target_id: str, question_id: int = None) -> str:
         """
@@ -378,13 +379,15 @@ class PowerUpManager(BaseManager):
         if target_state.steal_attempt_by:
             raise PowerUpError(f"<@{target_id}> is already being targeted for theft!")
 
-        # Attacker Penalty: Reset Streak (only if checks pass)
-        self.player_manager.reset_streak(thief_id)
+        # Attacker Penalty: Reduce streak by STEAL_STREAK_COST (minimum 0)
+        thief = self.player_manager.get_player(thief_id)
+        new_streak = max(0, (thief.answer_streak if thief else 0) - STEAL_STREAK_COST)
+        self.player_manager.set_streak(thief_id, new_streak)
         self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
         thief_state.stealing_from = target_id
 
         target_state.steal_attempt_by = thief_id
-        return f"{EMOJI_STEALING} You sacrificed your streak to rob <@{target_id}>! If you answer correctly, you'll steal their speed bonuses."
+        return f"{EMOJI_STEALING} You sacrificed {STEAL_STREAK_COST} streak days to rob <@{target_id}>! If they answer correctly, you'll steal their bonuses."
 
     def rest(
         self, player_id: str, question_id: int, question_answer: str

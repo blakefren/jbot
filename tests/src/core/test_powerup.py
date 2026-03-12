@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock
-from src.core.powerup import PowerUpManager, PowerUpError
+from src.core.powerup import PowerUpManager, PowerUpError, STEAL_STREAK_COST
 from src.core.player import Player
 
 
@@ -37,6 +37,13 @@ class TestPowerUpManager(unittest.TestCase):
                 self.players[pid].answer_streak = 0
 
         self.player_manager.reset_streak.side_effect = reset_streak
+
+        # Mock set_streak
+        def set_streak(pid, value):
+            if pid in self.players:
+                self.players[pid].answer_streak = value
+
+        self.player_manager.set_streak.side_effect = set_streak
 
         # Mock get_pending_multiplier to return 0.0 by default (no rest bonus)
         self.data_manager.get_pending_multiplier.return_value = 0.0
@@ -115,7 +122,7 @@ class TestPowerUpManager(unittest.TestCase):
     def test_jinx_basic(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.jinx("1", "2", "q1")
-        self.assertIn("jinxed", msg)
+        self.assertIn("jinx is set", msg)
         # No cost for jinx
         self.assertEqual(self.players["1"].score, 100)
         self.assertEqual(manager._get_daily_state("2").jinxed_by, "1")
@@ -126,8 +133,10 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Attacker steals
         msg = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed your streak", msg)
-        self.assertEqual(self.players["1"].answer_streak, 0)
+        self.assertIn(f"sacrificed {STEAL_STREAK_COST} streak days", msg)
+        self.assertEqual(
+            self.players["1"].answer_streak, max(0, 3 - STEAL_STREAK_COST)
+        )  # 3 - cost
 
         # Target answers correctly and earns bonuses
         # We simulate on_guess for the TARGET ("2")
@@ -148,7 +157,7 @@ class TestPowerUpManager(unittest.TestCase):
     def test_steal_no_points(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed your streak", msg)
+        self.assertIn(f"sacrificed {STEAL_STREAK_COST} streak days", msg)
 
         # Attacker answers correctly but target has no bonuses
         msgs = manager.on_guess(1, "P1", "ans", True)
@@ -300,7 +309,7 @@ class TestPowerUpManager(unittest.TestCase):
             2, "P2", "ans", True, points_earned=120, bonus_values={"first_try": 20}
         )
 
-        # Verify steal
+        # Verify steal — only canonical try_1 is present (not first_try alias), so full 20 is stealable
         self.assertTrue(any("stole 20 pts" in m for m in msgs))
         self.assertEqual(self.players["1"].score, 120)  # 100 + 20
         self.assertEqual(self.players["2"].score, 80)  # 100 - 20
@@ -309,7 +318,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First use
         msg = manager.jinx("1", "2", "q1")
-        self.assertIn("jinxed", msg)
+        self.assertIn("jinx is set", msg)
 
         # Second use
         with self.assertRaises(PowerUpError) as cm:
@@ -320,7 +329,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First use
         msg = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed your streak", msg)
+        self.assertIn(f"sacrificed {STEAL_STREAK_COST} streak days", msg)
 
         # Second use
         with self.assertRaises(PowerUpError) as cm:
@@ -378,7 +387,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First jinx should succeed
         msg1 = manager.jinx("1", "2", "q1")
-        self.assertIn("jinxed", msg1)
+        self.assertIn("jinx is set", msg1)
 
         # Verify first usage was logged
         self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)
@@ -398,7 +407,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First steal should succeed
         msg1 = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed your streak", msg1)
+        self.assertIn(f"sacrificed {STEAL_STREAK_COST} streak days", msg1)
 
         # Verify first usage was logged
         self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)

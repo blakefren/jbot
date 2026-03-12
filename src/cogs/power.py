@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from src.core.powerup import PowerUpError
+from src.core.powerup import PowerUpError, STEAL_STREAK_COST
 
 
 class Power(commands.Cog):
@@ -35,7 +35,9 @@ class Power(commands.Cog):
                 result = manager.jinx(
                     str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
                 )
-                await self.bot.send_message(result, interaction=ctx.interaction)
+                await self.bot.send_message(
+                    result, interaction=ctx.interaction, ephemeral=True
+                )
             except PowerUpError as e:
                 await self.bot.send_message(
                     str(e), interaction=ctx.interaction, ephemeral=True
@@ -43,7 +45,7 @@ class Power(commands.Cog):
 
     @power.command(
         name="rest",
-        description="Skip today, freeze your streak, and earn a 1.2x bonus tomorrow.",
+        description="Skip today, keep your streak, earn a point bonus tomorrow.",
     )
     async def rest(self, ctx: commands.Context):
         if not self.bot.game.features.get("fight"):
@@ -85,7 +87,8 @@ class Power(commands.Cog):
                 )
 
     @power.command(
-        name="steal", description="Steal fastest/first bonuses, but break your streak."
+        name="steal",
+        description=f"Steal bonuses from a target, but lose {STEAL_STREAK_COST} streak days.",
     )
     async def steal(self, ctx: commands.Context, target: discord.Member):
         if not self.bot.game.features.get("fight"):

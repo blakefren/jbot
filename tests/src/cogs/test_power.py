@@ -44,7 +44,7 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
             "123", "456", self.bot.game.daily_question_id
         )
         self.bot.send_message.assert_awaited_once_with(
-            "Success", interaction=self.ctx.interaction
+            "Success", interaction=self.ctx.interaction, ephemeral=True
         )
 
     async def test_rest_disabled(self):
