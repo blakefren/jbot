@@ -14,7 +14,7 @@ from src.core.player import Player
 from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 
 # --- Configuration ---
-SIMULATION_DAYS = 730  # Increased to 2 years for much tighter CIs
+SIMULATION_DAYS = 365  # 1 year for tighter CIs
 PLAYERS_PER_CATEGORY = 10  # Number of players per category
 VERBOSE = False
 GUESS_ACCURACY = 0.90
@@ -44,6 +44,14 @@ class MockQuestion:
 
 config = ConfigReader()
 REST_MULTIPLIER = float(config.get("JBOT_REST_MULTIPLIER", "1.2"))
+
+# Streak day at which the bonus is fully capped (no more marginal value from streak).
+# Above this, rest/steal is preferred over protecting a streak that's already maxed out.
+STREAK_CAP_DAYS = int(config.get("JBOT_BONUS_STREAK_CAP")) // int(
+    config.get("JBOT_BONUS_STREAK_PER_DAY")
+)
+# Steal streak penalty.
+STEAL_STREAK_COST = int(config.get("JBOT_STEAL_STREAK_COST"))
 
 # --- Strategies ---
 
@@ -215,97 +223,74 @@ class ProceduralStrategy(Strategy):
 
 class AdaptiveStrategy(ProceduralStrategy):
     """
-    Adapts based on player state, standings, and today's question difficulty:
-    - Hard day: rest more eagerly (protect streak, skip risky question)
-    - Hard day + low streak: jinx top players rather than steal (bonuses unreliable)
-    - Easy/Medium + big streak or near lead: rest to bank multiplier
-    - Easy/Medium + low streak: steal to catch up
-    - Default: jinx to disrupt opponents
-    Overall aggressiveness is dampened on Hard days and boosted on Easy days.
+    Represents near-optimal powerup usage. Fires with probability from self.aggression
+    (Aggressive=95%, Frequent=50%, Rarely=10%) — no difficulty or trait scaling.
+
+    When a powerup fires, choice is driven by break-even logic:
+
+    Rest  — Hard day AND streak >= 2.
+            The 30% miss risk on Hard makes streak protection valuable; with no streak
+            there's nothing to protect and rest is a pure score forfeit.
+
+    Steal — streak <= STEAL_STREAK_COST (streak would drop to 0 anyway, so the
+            penalty is already fully priced in) OR streak >= STREAK_CAP_DAYS (capped
+            streak loses nothing extra). Target the richest player.
+
+    Jinx  — default: streak is in the mid-building range where it's worth protecting.
+            Target the player with the highest streak (most bonus to deny).
     """
 
     def decide_action(self, player_id: str, game_state: "GameState") -> List[GameEvent]:
         events = []
         base_time = game_state.base_time
         difficulty = game_state.difficulty
-
-        # Self Analysis
         me = game_state.players[player_id]
 
-        # 1. Determine base aggression from player traits, then scale by difficulty.
-        # Hard questions dampen aggression (rest is better). Easy questions raise it.
-        base_aggression = 0.3  # Default
-        if self.correctness in ["High", "Perfect"] and self.speed == "Fast":
-            base_aggression = 0.05
-        elif self.correctness == "Sometimes" or self.speed == "Slow":
-            base_aggression = 0.75
-
-        diff_aggression_scale = {"Low": 1.30, "Medium": 1.00, "High": 0.65}
-        effective_aggression = min(
-            0.95, base_aggression * diff_aggression_scale[difficulty]
-        )
-
-        if random.random() > effective_aggression:
-            # Passive this turn
+        chance_map = {"Aggressive": 0.95, "Frequent": 0.50, "Rarely": 0.10}
+        if random.random() > chance_map.get(self.aggression, 0.50):
             return [self._create_guess(player_id, game_state)]
 
-        # 2. Adaptive Choice
         powerup_type = None
         target = None
 
-        # Determine Context
-        sorted_scores = [p.score for p in game_state.players.values()]
-        max_score = max(sorted_scores) if sorted_scores else 0
-        near_lead = me.score >= max_score * 0.95
-
-        # Priority 1: Rest — lower streak threshold on Hard (question is risky to attempt).
-        # On Hard, rest if streak >= 2; otherwise the standard threshold applies.
-        streak_rest_threshold = 2 if difficulty == "High" else 4
-        if (me.answer_streak >= streak_rest_threshold) or near_lead:
+        if difficulty == "High" and me.answer_streak >= 2:
+            # Rest: Hard day has 30% miss risk; protect a streak already worth keeping.
             powerup_type = "rest"
-
-        # Priority 2: Steal or Jinx depending on difficulty.
-        # On Hard days, bonuses are unreliable (fewer players succeed), so jinx
-        # top-streak players instead of gambling on a steal.
-        elif me.answer_streak < 2:
-            if difficulty == "High":
-                powerup_type = "jinx"
-                target = self._pick_target_weighted(
-                    player_id, game_state, lambda p: p.answer_streak
-                )
-            else:
-                powerup_type = "steal"
-                target = self._pick_target_weighted(
-                    player_id, game_state, lambda p: p.score
-                )
-
-        # Priority 3: Jinx (Default aggressive move)
+        elif (
+            me.answer_streak <= STEAL_STREAK_COST or me.answer_streak >= STREAK_CAP_DAYS
+        ):
+            # Steal: penalty drops streak to 0 regardless (≤ cost), or streak is capped
+            # and losing a few days still leaves bonus territory (≥ cap).
+            powerup_type = "steal"
+            target = self._pick_target_weighted(
+                player_id, game_state, lambda p: p.score
+            )
         else:
+            # Jinx: streak is mid-build (worth protecting); deny the top opponent's bonus.
             powerup_type = "jinx"
             target = self._pick_target_weighted(
                 player_id, game_state, lambda p: p.answer_streak
             )
 
-        if powerup_type:
-            if powerup_type == "rest":
-                events.append(
-                    PowerUpEvent(
-                        timestamp=self._create_powerup_time(base_time),
-                        user_id=player_id,
-                        powerup_type="rest",
-                    )
+        if powerup_type == "rest":
+            events.append(
+                PowerUpEvent(
+                    timestamp=self._create_powerup_time(base_time),
+                    user_id=player_id,
+                    powerup_type="rest",
                 )
-                # Resting players skip guessing for the day
-                return events
-            elif target:
-                events.append(
-                    PowerUpEvent(
-                        timestamp=self._create_powerup_time(base_time),
-                        user_id=player_id,
-                        powerup_type=powerup_type,
-                        target_user_id=target,
-                    )
+            )
+            return events  # Resting players skip guessing for the day
+
+        if target:
+            events.append(
+                PowerUpEvent(
+                    timestamp=self._create_powerup_time(base_time),
+                    user_id=player_id,
+                    powerup_type=powerup_type,
+                    target_user_id=target,
                 )
+            )
 
         events.append(self._create_guess(player_id, game_state))
         return events
@@ -329,13 +314,14 @@ class GameState:
 # --- Simulation Engine ---
 
 
-def run_simulation(return_data=False, seed=None):
+def run_simulation(return_data=False, seed=None, on_day_complete=None):
     """
     Run the powerup simulation.
 
     Args:
         return_data: If True, returns (players, player_strategies) dict
         seed: Random seed for reproducibility. If None, uses system randomness.
+        on_day_complete: Optional callable invoked after each day completes.
     """
     if seed is not None:
         random.seed(seed)
@@ -499,6 +485,9 @@ def run_simulation(return_data=False, seed=None):
 
         if VERBOSE:
             print(f"Day {day+1} complete.")
+
+        if on_day_complete is not None:
+            on_day_complete()
 
         current_date += datetime.timedelta(days=1)
 
