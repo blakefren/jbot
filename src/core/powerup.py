@@ -18,6 +18,7 @@ EMOJI_SILENCED = config.get("JBOT_EMOJI_SILENCED", "🤐")
 EMOJI_STOLEN_FROM = config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
 EMOJI_STEALING = config.get("JBOT_EMOJI_STEALING", "💰")
 EMOJI_REST = config.get("JBOT_EMOJI_REST", "😴")
+EMOJI_REST_WAKEUP = config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
 EMOJI_STREAK = config.get("JBOT_EMOJI_STREAK", "🔥")
 REST_MULTIPLIER = float(config.get("JBOT_REST_MULTIPLIER", "1.2"))
 
@@ -99,6 +100,7 @@ class PowerUpManager(BaseManager):
         bonus_values: dict = None,
         bonus_messages: list[str] = None,
         points_tracker: dict = None,
+        question_id: int = None,
     ) -> list[str]:
         if bonus_values is None:
             bonus_values = {}
@@ -123,7 +125,10 @@ class PowerUpManager(BaseManager):
                     if points_tracker:
                         points_tracker["earned"] += bonus_amount
                     messages.append(
-                        f"{EMOJI_REST} Rest bonus! ×{pending_mult} on today's score (+{bonus_amount} pts)!"
+                        f"{EMOJI_REST_WAKEUP} Rest bonus! ×{pending_mult} on today's score (+{bonus_amount} pts)!"
+                    )
+                    self.data_manager.log_powerup_usage(
+                        pid, "rest_wakeup", None, question_id
                     )
                 self.data_manager.clear_pending_multiplier(pid)
 

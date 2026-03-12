@@ -378,6 +378,7 @@ class GameRunner:
         emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY")
         emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT")
         emoji_streak = self.config.get("JBOT_EMOJI_STREAK")
+        emoji_streak_frozen = self.config.get("JBOT_EMOJI_STREAK_FROZEN")
 
         # Powerup badges
         emoji_jinxed = self.config.get("JBOT_EMOJI_JINXED")
@@ -385,8 +386,11 @@ class GameRunner:
         emoji_stolen_from = self.config.get("JBOT_EMOJI_STOLEN_FROM")
         emoji_stealing = self.config.get("JBOT_EMOJI_STEALING")
         emoji_rest = self.config.get("JBOT_EMOJI_REST")
+        emoji_rest_wakeup = self.config.get("JBOT_EMOJI_REST_WAKEUP")
 
         powerup_badges = defaultdict(list)
+        resting_player_ids = set()
+        wakeup_player_ids = set()
         if self.daily_question_id:
             powerups = self.data_manager.get_powerup_usages_for_question(
                 self.daily_question_id
@@ -395,6 +399,11 @@ class GameRunner:
                 p_type = p["powerup_type"]
                 user_id = p["user_id"]
                 target_id = p["target_user_id"]
+
+                if p_type == "rest":
+                    resting_player_ids.add(user_id)
+                elif p_type == "rest_wakeup":
+                    wakeup_player_ids.add(user_id)
 
                 if p_type == "jinx":
                     # Always show silenced emoji (attacker is silenced regardless)
@@ -459,6 +468,8 @@ class GameRunner:
                 if show_daily_bonuses:
                     if player_id in players_answered_correctly_today:
                         badges.append(f"{streak}{emoji_streak}")
+                    elif player_id in resting_player_ids:
+                        badges.append(f"{streak}{emoji_streak_frozen}")
                 else:
                     badges.append(f"{streak}{emoji_streak}")
 
@@ -469,6 +480,8 @@ class GameRunner:
                     badges.append(emoji_before_hint)
                 if player_id == fastest_guesser_id:
                     badges.append(emoji_fastest)
+                if player_id in wakeup_player_ids:
+                    badges.append(emoji_rest_wakeup)
 
                 # Add powerup badges
                 if player_id in powerup_badges:

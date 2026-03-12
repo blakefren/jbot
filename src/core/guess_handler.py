@@ -411,6 +411,7 @@ class GuessHandler:
                         bonus_values,
                         bonus_messages,
                         points_tracker,
+                        question_id=self.daily_question_id,
                     )
                     if msgs and isinstance(msgs, list):
                         bonus_messages.extend(msgs)
