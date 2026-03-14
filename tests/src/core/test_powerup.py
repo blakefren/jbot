@@ -505,3 +505,36 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Verify message contains points stolen
         self.assertTrue(any("stole 30 pts" in m for m in msgs))
+
+    def test_steal_includes_rest_bonus(self):
+        """Rest bonus earned on answer day must be included in stealable amount."""
+        # P2 rested yesterday, so has a pending 1.2x multiplier
+        self.data_manager.get_pending_multiplier.side_effect = lambda pid: (
+            1.2 if pid == "2" else 0.0
+        )
+
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        # P1 steals from P2
+        manager.steal("1", "2", "q1")
+
+        # P2 answers correctly: base 100 pts + before_hint bonus 10 pts = 110 pts
+        # Rest multiplier on 110: round(110 * 0.2) = 22 pts rest bonus
+        # Stealable = before_hint (10) + rest (22) = 32 pts
+        msgs = manager.on_guess(
+            2,
+            "P2",
+            "ans",
+            True,
+            points_earned=110,
+            bonus_values={"before_hint": 10},
+            question_id="q1",
+        )
+
+        self.assertTrue(
+            any("stole 32 pts" in m for m in msgs),
+            f"Expected steal of 32 pts (10 before_hint + 22 rest). Messages: {msgs}",
+        )
+        self.assertEqual(self.players["1"].score, 132)  # 100 + 32 stolen
+        # P2 starts at 100; +22 rest bonus applied, -32 stolen (base 110 not added here,
+        # that's GuessHandler's responsibility, not PowerUpManager's)
+        self.assertEqual(self.players["2"].score, 90)  # 100 + 22 rest - 32 stolen

@@ -125,6 +125,7 @@ class PowerUpManager(BaseManager):
                     self.player_manager.update_score(pid, bonus_amount)
                     if points_tracker:
                         points_tracker["earned"] += bonus_amount
+                    state.bonuses["rest"] = bonus_amount
                     messages.append(
                         f"{EMOJI_REST_WAKEUP} Rest bonus! ×{pending_mult} on today's score (+{bonus_amount} pts)!"
                     )
