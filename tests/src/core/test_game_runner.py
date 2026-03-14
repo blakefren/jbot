@@ -69,6 +69,8 @@ class TestGameRunner(unittest.TestCase):
             "JBOT_QUESTION_RETRIES": "10",
             "JBOT_ENABLE_FIGHT": "True",
             "JBOT_EMOJI_FASTEST": "🥇",
+            "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
+            "JBOT_BONUS_FASTEST_CSV": "10,5,1",
             "JBOT_EMOJI_FIRST_TRY": "🎯",
             "JBOT_EMOJI_BEFORE_HINT": "🧠",
             "JBOT_EMOJI_STREAK": "🔥",
@@ -824,6 +826,78 @@ class TestGameRunner(unittest.TestCase):
         alice_line = next((line for line in lines if "Alice" in line), None)
         self.assertIsNotNone(alice_line)
         self.assertNotIn("🥇", alice_line)
+        # Alice is 2nd fastest and should now get 🥈
+        self.assertIn("🥈", alice_line)
+
+    def test_get_scores_leaderboard_second_and_third_fastest(self):
+        """Test that 2nd and 3rd fastest guessers get their respective rank badges."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 100},
+            {"id": "2", "name": "Bob", "score": 100},
+            {"id": "3", "name": "Charlie", "score": 100},
+            {"id": "4", "name": "Dave", "score": 100},
+        ]
+        self.mock_data_manager.get_player_streaks.return_value = []
+        self.game_runner.daily_question_id = 123
+
+        self.mock_data_manager.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "2",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "1",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:05:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "3",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:10:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "4",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:15:00",
+            },
+        ]
+        self.mock_data_manager.get_first_try_solvers.return_value = []
+
+        leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
+        lines = leaderboard.split("\n")
+
+        def get_line(name):
+            return next((l for l in lines if name in l), None)
+
+        bob_line = get_line("Bob")
+        alice_line = get_line("Alice")
+        charlie_line = get_line("Charlie")
+        dave_line = get_line("Dave")
+
+        # Bob is 1st fastest → 🥇
+        self.assertIsNotNone(bob_line)
+        self.assertIn("🥇", bob_line)
+
+        # Alice is 2nd fastest → 🥈
+        self.assertIsNotNone(alice_line)
+        self.assertIn("🥈", alice_line)
+        self.assertNotIn("🥇", alice_line)
+
+        # Charlie is 3rd fastest → 🥉
+        self.assertIsNotNone(charlie_line)
+        self.assertIn("🥉", charlie_line)
+        self.assertNotIn("🥇", charlie_line)
+
+        # Dave is 4th — no fastest badge
+        self.assertIsNotNone(dave_line)
+        self.assertNotIn("🥇", dave_line)
+        self.assertNotIn("🥈", dave_line)
+        self.assertNotIn("🥉", dave_line)
 
     def test_get_scores_leaderboard_first_try_bonus(self):
         """Test that the first try bonus emoji is shown."""

@@ -334,7 +334,7 @@ class GameRunner:
         }
 
         # Get daily bonuses if requested
-        fastest_guesser_id = None
+        fastest_guessers: dict[int, str] = {}  # rank (1-based) -> player_id
         first_try_solver_ids = set()
         before_hint_solver_ids = set()
         players_answered_correctly_today = set()
@@ -353,8 +353,17 @@ class GameRunner:
             # Sort by guessed_at to determine order
             daily_correct_guesses.sort(key=lambda x: x.get("guessed_at"))
 
-            if daily_correct_guesses:
-                fastest_guesser_id = daily_correct_guesses[0]["player_id"]
+            # Track all ranked fastest guessers (up to as many ranks as configured)
+            fastest_csv_raw = self.config.get("JBOT_BONUS_FASTEST_CSV", "")
+            num_fastest_ranks = (
+                len([x for x in fastest_csv_raw.split(",") if x.strip()])
+                if fastest_csv_raw
+                else 1
+            )
+            for rank, guess in enumerate(
+                daily_correct_guesses[:num_fastest_ranks], start=1
+            ):
+                fastest_guessers[rank] = guess["player_id"]
 
             # Check for before hint solvers
             hint_timestamp_str = self.data_manager.get_hint_sent_timestamp(
@@ -375,6 +384,12 @@ class GameRunner:
             first_try_solver_ids = {p["id"] for p in first_try_solvers}
 
         emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST")
+        emoji_fastest_csv_raw = self.config.get("JBOT_EMOJI_FASTEST_CSV", "")
+        emoji_fastest_list = (
+            [e.strip() for e in emoji_fastest_csv_raw.split(",") if e.strip()]
+            if emoji_fastest_csv_raw
+            else []
+        )
         emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY")
         emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT")
         emoji_streak = self.config.get("JBOT_EMOJI_STREAK")
@@ -478,8 +493,13 @@ class GameRunner:
                     badges.append(emoji_first_try)
                 if player_id in before_hint_solver_ids:
                     badges.append(emoji_before_hint)
-                if player_id == fastest_guesser_id:
-                    badges.append(emoji_fastest)
+                for rank, gid in fastest_guessers.items():
+                    if player_id == gid:
+                        if 0 < rank <= len(emoji_fastest_list):
+                            badges.append(emoji_fastest_list[rank - 1])
+                        else:
+                            badges.append(emoji_fastest)
+                        break
                 if player_id in wakeup_player_ids:
                     badges.append(emoji_rest_wakeup)
 
