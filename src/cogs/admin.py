@@ -79,7 +79,6 @@ class Admin(commands.Cog):
                 member.id,
                 member.display_name,
                 is_channel=False,
-                db_conn=self.bot.data_manager.db,
             )
             target_name = member.display_name
         else:  # channel
@@ -87,7 +86,6 @@ class Admin(commands.Cog):
                 channel.id,
                 channel.name,
                 is_channel=True,
-                db_conn=self.bot.data_manager.db,
             )
             target_name = channel.name
 

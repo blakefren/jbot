@@ -47,17 +47,16 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
             "Success", interaction=self.ctx.interaction, ephemeral=True
         )
 
-    async def test_rest_disabled(self):
-        self.bot.game.features = {"fight": False}
+    async def test_rest_no_active_question(self):
+        self.bot.game.daily_q = None
         await self.cog.rest.callback(self.cog, self.ctx)
         self.bot.send_message.assert_awaited_once_with(
-            "Fight track is not enabled.",
+            "There is no active question right now.",
             interaction=self.ctx.interaction,
             ephemeral=True,
         )
 
     async def test_rest_enabled(self):
-        self.bot.game.features = {"fight": True}
         self.bot.game.daily_q = MagicMock()
         self.bot.game.daily_q.answer = "Test Answer"
         mock_manager = MagicMock()

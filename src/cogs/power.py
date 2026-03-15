@@ -48,14 +48,6 @@ class Power(commands.Cog):
         description="Skip today, keep your streak, earn a point bonus tomorrow.",
     )
     async def rest(self, ctx: commands.Context):
-        if not self.bot.game.features.get("fight"):
-            await self.bot.send_message(
-                "Fight track is not enabled.",
-                interaction=ctx.interaction,
-                ephemeral=True,
-            )
-            return
-
         if not self.bot.game.daily_q:
             await self.bot.send_message(
                 "There is no active question right now.",

@@ -174,7 +174,7 @@ class DiscordBot(commands.Bot):
         now = datetime.datetime.now(TIMEZONE)
         if MORNING_TIME < now.time() < EVENING_TIME and self.game.daily_q is None:
             logging.info(f"Bot started after morning message time.")
-            self.game.set_daily_question()
+            await asyncio.to_thread(self.game.set_daily_question)
             if not self.game.daily_q:
                 logging.warning("No question found for today.")
             else:
