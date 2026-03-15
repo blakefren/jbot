@@ -488,9 +488,8 @@ class DiscordBot(commands.Bot):
         success_status="sent",
     ):
         """Sends a message to a Discord user, channel, or context. Supports ephemeral for interaction responses."""
-        assert (
-            target_id >= 0 or ctx is not None or interaction is not None
-        ), "Either target_id, ctx, or interaction must be provided."
+        if target_id < 0 and ctx is None and interaction is None:
+            raise ValueError("Either target_id, ctx, or interaction must be provided.")
         try:
             if interaction is not None:
                 # If responding to an interaction, support ephemeral
