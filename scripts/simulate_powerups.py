@@ -488,11 +488,21 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None):
 
         daily_results = simulator.run(apply_end_of_day=True)
 
-        # Determine which players rested today
+        # Determine which players used each powerup type today
         resting_pids = {
             event.user_id
             for event in day_events
             if isinstance(event, PowerUpEvent) and event.powerup_type == "rest"
+        }
+        jinx_pids = {
+            event.user_id
+            for event in day_events
+            if isinstance(event, PowerUpEvent) and event.powerup_type == "jinx"
+        }
+        steal_pids = {
+            event.user_id
+            for event in day_events
+            if isinstance(event, PowerUpEvent) and event.powerup_type == "steal"
         }
 
         # Update Persistent State
@@ -531,6 +541,12 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None):
                         "score_earned": result["score_earned"],
                         "rested": pid in resting_pids,
                         "correct": result["streak_delta"] > 0,
+                        "powerup_type": (
+                            "rest" if pid in resting_pids
+                            else "jinx" if pid in jinx_pids
+                            else "steal" if pid in steal_pids
+                            else None
+                        ),
                     }
                 )
 
