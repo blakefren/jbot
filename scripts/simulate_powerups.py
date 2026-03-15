@@ -542,10 +542,13 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None):
                         "rested": pid in resting_pids,
                         "correct": result["streak_delta"] > 0,
                         "powerup_type": (
-                            "rest" if pid in resting_pids
-                            else "jinx" if pid in jinx_pids
-                            else "steal" if pid in steal_pids
-                            else None
+                            "rest"
+                            if pid in resting_pids
+                            else (
+                                "jinx"
+                                if pid in jinx_pids
+                                else "steal" if pid in steal_pids else None
+                            )
                         ),
                     }
                 )
