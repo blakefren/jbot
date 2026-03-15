@@ -273,9 +273,7 @@ class DataManager:
                 )
             except Exception as e:
                 # Log error but continue for other players
-                # In a real scenario, we might want to be more aggressive, but we don't have a logger here easily accessible
-                # actually logging is imported in other files, let's check imports
-                print(f"Failed to snapshot player {player.id}: {e}")
+                logging.error(f"Failed to snapshot player {player.id}: {e}")
 
     def get_daily_snapshot(self, daily_question_id: int) -> dict[str, Player]:
         """
