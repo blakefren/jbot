@@ -176,10 +176,11 @@ class PowerUpManager(BaseManager):
         if player and player.answer_streak > 0:
             self.player_manager.set_streak(player_id, player.answer_streak - 1)
 
-        # Grant Base points only. Award 0 Streak Points.
+        # Strip streak bonus from target and transfer it to the attacker.
         streak_bonus = bonus_values.get("streak", 0)
         if streak_bonus > 0:
             self.player_manager.update_score(player_id, -streak_bonus)
+            self.player_manager.update_score(attacker_id, streak_bonus)
             if points_tracker:
                 points_tracker["earned"] -= streak_bonus
 
@@ -190,7 +191,7 @@ class PowerUpManager(BaseManager):
                         bonus_messages.pop(i)
                         break
 
-            return f"{EMOJI_JINXED} <@{player_id}> answered correctly, but <@{attacker_id}>'s Jinx froze their streak bonus of {streak_bonus} points!"
+            return f"{EMOJI_JINXED} <@{attacker_id}> swiped <@{player_id}>'s streak bonus of {streak_bonus} pts via Jinx!"
 
         return f"{EMOJI_JINXED} <@{player_id}> answered correctly, but <@{attacker_id}>'s Jinx froze their streak!"
 

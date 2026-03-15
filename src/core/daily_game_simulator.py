@@ -223,11 +223,14 @@ class DailyGameSimulator:
             streak_length=streak_length,
         )
 
-        # Apply Jinx/Silence Logic (Remove Streak Bonus)
+        # Apply Jinx/Silence Logic (Remove Streak Bonus, Transfer to Attacker)
         if state.jinxed_by or state.silenced:
             if "streak" in bonuses:
                 streak_val = bonuses.pop("streak")
                 points -= streak_val
+                if state.jinxed_by:
+                    attacker_state = self.daily_state[state.jinxed_by]
+                    attacker_state.score_earned += streak_val
 
         state.score_earned += points
         state.bonuses = bonuses

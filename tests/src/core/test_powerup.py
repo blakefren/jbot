@@ -432,8 +432,12 @@ class TestPowerUpManager(unittest.TestCase):
             2, "P2", "ans", True, points_earned=100, bonus_values={"streak": 50}
         )
 
-        # Verify message contains points lost
-        self.assertTrue(any("froze their streak bonus" in m for m in msgs))
+        # Verify message reflects the transfer
+        self.assertTrue(any("swiped" in m and "streak bonus" in m for m in msgs))
+        # Verify attacker (P1) gained the streak bonus
+        self.assertEqual(self.players["1"].score, 150)  # 100 base + 50 stolen streak
+        # Verify target (P2) lost the streak bonus
+        self.assertEqual(self.players["2"].score, 50)  # 100 base - 50 stolen streak
 
     def test_jinx_freezes_streak(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -462,14 +466,19 @@ class TestPowerUpManager(unittest.TestCase):
         # Verify streak was decremented back to 5
         self.player_manager.set_streak.assert_called_with("2", 5)
 
-        # Verify points deducted
-        self.assertTrue(any("froze their streak bonus" in m for m in msgs))
+        # Verify message reflects the transfer
+        self.assertTrue(any("swiped" in m and "streak bonus" in m for m in msgs))
 
         # Verify streak message removed
         self.assertEqual(len(bonus_messages), 0)
 
-        # Verify points tracker updated
+        # Verify points tracker updated (target net)
         self.assertEqual(points_tracker["earned"], 100)
+
+        # Verify attacker (P1) gained the stolen streak bonus
+        self.assertEqual(self.players["1"].score, 125)  # 100 base + 25 stolen streak
+        # Verify target (P2) had the streak bonus deducted
+        self.assertEqual(self.players["2"].score, 75)  # 100 base - 25 stolen streak
 
     def test_jinx_freezes_streak_no_bonus(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
