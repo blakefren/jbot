@@ -226,19 +226,34 @@ class AdaptiveStrategy(ProceduralStrategy):
     Represents near-optimal powerup usage. Fires with probability from self.aggression
     (Aggressive=95%, Frequent=50%, Rarely=10%) — no difficulty or trait scaling.
 
-    When a powerup fires, choice is driven by break-even logic:
+    Streak is treated as a secondary currency earned through consistent play.
+    The steal cost (STEAL_STREAK_COST days) is only "free" once own streak exceeds
+    STREAK_CAP_DAYS + STEAL_STREAK_COST — meaning even after paying the cost the
+    streak stays fully capped, so no bonus points are sacrificed.
 
-    Rest  — Hard day AND streak >= 2.
-            The 30% miss risk on Hard makes streak protection valuable; with no streak
-            there's nothing to protect and rest is a pure score forfeit.
+    Decision tree:
 
-    Steal — streak <= STEAL_STREAK_COST (streak would drop to 0 anyway, so the
-            penalty is already fully priced in) OR streak >= STREAK_CAP_DAYS (capped
-            streak loses nothing extra). Target the richest player.
+    1. Rest  — Hard day AND own_streak >= 3 AND correctness is "Sometimes"
+               (expected miss risk on Hard outweighs points for low-accuracy players).
+               High/Usually-accuracy players skip rest entirely; the expected value
+               of guessing always wins.
 
-    Jinx  — default: streak is in the mid-building range where it's worth protecting.
-            Target the player with the highest streak (most bonus to deny).
+    2. Steal — own_streak >= STREAK_CAP_DAYS + STEAL_STREAK_COST (= 8 with defaults).
+               Streak is fully capped *after* paying the cost, so stealing is free.
+               Target the richest player.
+
+    3. Jinx  — own_streak < steal_threshold AND best target streak >= 3.
+               No streak currency spent (only silence = ~10 pt opportunity cost).
+               Net-positive transfer as long as target streak >= 3 (+5 pts minimum).
+               Target the highest-streak player.
+
+    4. Default — guess only; preserve and build streak toward the steal threshold.
     """
+
+    # Steal is free once own streak stays capped even after paying the cost.
+    STEAL_THRESHOLD = STREAK_CAP_DAYS + STEAL_STREAK_COST
+    # Jinx is net-positive when target transfers at least one increment above silence cost.
+    JINX_MIN_TARGET_STREAK = 3
 
     def decide_action(self, player_id: str, game_state: "GameState") -> List[GameEvent]:
         events = []
@@ -253,24 +268,49 @@ class AdaptiveStrategy(ProceduralStrategy):
         powerup_type = None
         target = None
 
-        if difficulty == "High" and me.answer_streak >= 2:
-            # Rest: Hard day has 30% miss risk; protect a streak already worth keeping.
+        # Best target streak (excluding benchmarks) for jinx threshold check.
+        others = [
+            p
+            for p in game_state.players.values()
+            if p.id != player_id and not p.id.startswith("benchmark")
+        ]
+        best_target_streak = max((p.answer_streak for p in others), default=0)
+
+        # 1. Rest: only for low-accuracy players on hard days with a streak to protect.
+        acc_map = {"Perfect": 1.0, "High": 0.98, "Usually": 0.90, "Sometimes": 0.60}
+        my_accuracy = acc_map.get(self.correctness, 0.90) + DIFFICULTY_ACC_MODIFIER.get(
+            difficulty, 0.0
+        )
+        if difficulty == "High" and me.answer_streak >= 3 and my_accuracy < 0.75:
             powerup_type = "rest"
-        elif (
-            me.answer_streak <= STEAL_STREAK_COST or me.answer_streak >= STREAK_CAP_DAYS
-        ):
-            # Steal: penalty drops streak to 0 regardless (≤ cost), or streak is capped
-            # and losing a few days still leaves bonus territory (≥ cap).
+
+        # 2. Steal: own streak is above the free-spend threshold.
+        elif me.answer_streak >= self.STEAL_THRESHOLD:
             powerup_type = "steal"
-            target = self._pick_target_weighted(
-                player_id, game_state, lambda p: p.score
-            )
-        else:
-            # Jinx: streak is mid-build (worth protecting); deny the top opponent's bonus.
+
+            # Prioritise players waking up from rest — their pending multiplier makes
+            # their bonus pool much larger (rest bonus itself is stealable).
+            # Weight = pending_rest_multiplier bonus on expected score if waker,
+            # else fall back to raw score as a proxy for likely bonuses.
+            def steal_weight(p):
+                if p.pending_rest_multiplier > 1.0:
+                    # Waker: their score_earned tomorrow gets a ×1.2 bonus on top,
+                    # all of which is stealable. Heavily prefer these targets.
+                    return p.score * p.pending_rest_multiplier * 3
+                return p.score
+
+            target = self._pick_target_weighted(player_id, game_state, steal_weight)
+
+        # 3. Jinx: below steal threshold, but a worthwhile target exists.
+        elif best_target_streak >= self.JINX_MIN_TARGET_STREAK:
             powerup_type = "jinx"
             target = self._pick_target_weighted(
                 player_id, game_state, lambda p: p.answer_streak
             )
+
+        # 4. Default: no action — build streak toward steal threshold.
+        else:
+            return [self._create_guess(player_id, game_state)]
 
         if powerup_type == "rest":
             events.append(
@@ -303,12 +343,16 @@ class GameState:
         players: Dict[str, Player],
         base_time: datetime.datetime,
         difficulty: str = "Medium",
+        resting_today: set = None,
     ):
         self.players = players
         self.base_time = base_time
         self.difficulty = (
             difficulty  # "Low", "Medium", or "High" — visible to all strategies
         )
+        # IDs of players who chose to rest *today* — visible to all strategies so
+        # they can target wakers on tomorrow's steal decision.
+        self.resting_today: set = resting_today or set()
 
 
 # --- Simulation Engine ---
@@ -402,6 +446,7 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None):
     # 2. Daily Loop
     current_date = datetime.date(2024, 1, 1)
     daily_records = []  # Per-day observations for difficulty analysis
+    prev_resting_pids: set = set()  # Players who rested yesterday (waking up today)
     for day in range(SIMULATION_DAYS):
         # New Day Setup
         base_time = datetime.datetime.combine(
@@ -418,7 +463,10 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None):
         clue_value = DIFFICULTY_VALUES[difficulty]
 
         day_events = []
-        game_state = GameState(players, base_time, difficulty=difficulty)
+        # Pass yesterday's resting players so strategies can target wakers.
+        game_state = GameState(
+            players, base_time, difficulty=difficulty, resting_today=prev_resting_pids
+        )
 
         # Players Decide Actions
         for pid, strat in player_strategies.items():
@@ -467,6 +515,9 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None):
         for pid in resting_pids:
             if pid in players:
                 players[pid].pending_rest_multiplier = REST_MULTIPLIER
+
+        # Carry resting set forward so tomorrow's strategies can target wakers.
+        prev_resting_pids = resting_pids
 
         # Record per-day stats for difficulty analysis (sampled every 3rd day)
         if day % 3 == 0:
@@ -609,4 +660,4 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None):
 
 
 if __name__ == "__main__":
-    run_simulation()
+    run_simulation(seed=42)
