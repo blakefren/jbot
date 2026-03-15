@@ -23,7 +23,7 @@ This project, `jbot`, is a daily bot designed for group trivia questions and fri
 ### Event Sourcing / Replay Engine
 The project uses an Event Sourcing pattern to calculate daily scores retroactively for corrections. In practice, scores are calculated in real time.
 *   **DailyGameSimulator**: Located in `src/core/daily_game_simulator.py`, this class replays all events (guesses, power-ups) for a specific day to determine the final state and scores.
-*   **Retroactive Corrections**: When an answer is corrected (e.g., via `/admin correct`), the simulator replays the day's events with the new answer to recalculate scores and streaks accurately.
+*   **Retroactive Corrections**: When an answer is corrected (e.g., via `/admin add_answer`), the simulator replays the day's events with the new answer to recalculate scores and streaks accurately.
 *   **Events**: Defined in `src/core/events.py`, these dataclasses (`GuessEvent`, `PowerUpEvent`) represent the immutable history of actions.
 
 ### AI-Generated Content
@@ -31,14 +31,14 @@ The project uses Google's Gemini AI for dynamic content generation:
 *   **GeminiManager**: Located in `src/core/gemini_manager.py`, handles all interactions with the Gemini API.
 *   **Question Generation**: Configured in `sources.toml` via `type="gemini"` sources, allows creating riddles with varying difficulty.
 *   **Hint Generation**: Falls back to Gemini if no hint is provided with the question.
-*   **API Key**: Required in `.env` as `GEMINI_API_KEY` (not in template for security).
-*   When adding Gemini features, use the existing `GeminiManager` singleton and ensure graceful fallback if the API is unavailable.
+*   **API Key**: Required in `.env` as `GEMINI_API_KEY`. Also present in `.env.template` as `GEMINI_API_KEY=todo` so `ConfigReader` validation catches it if missing.
+*   When adding Gemini features, use the `GeminiManager` instance passed via constructor and ensure graceful fallback if the API is unavailable (`generate_content` returns `None` on failure).
 
 ### Feature Tracks
 The bot's features are organized into distinct "tracks":
-*   **Fight Track**: Player-vs-player interactions like attacking and defending (controlled by `JBOT_ENABLE_FIGHT`).
-*   **Power-up Track**: Mechanics that reward consistent play, such as answer streaks and bonuses (always enabled).
-*   **Coop Track**: [Future] Collaborative features like forming teams (not yet implemented).
+*   **Fight Track**: Player-vs-player interactions like jinx and steal (controlled by `JBOT_ENABLE_FIGHT`). Commands: `/power jinx`, `/power steal`.
+*   **Power-up Track**: Mechanics that reward consistent play — streaks, bonuses, and rest. Always enabled. The `/power rest` command belongs here and should **not** be gated behind `JBOT_ENABLE_FIGHT`.
+*   **Coop Track**: [Future] Collaborative features. Not yet implemented.
 
 ### Database Access Pattern
 The project follows a strict "DataManager-Only" pattern:
@@ -49,8 +49,13 @@ The project follows a strict "DataManager-Only" pattern:
 
 ### Scoring System
 *   **ScoreCalculator**: Located in `src/core/scoring.py`, centralizes all scoring calculations
-*   Bonuses: First try, before hint, fastest answer, and answer streaks
-*   Configuration via `.env` (e.g., `JBOT_BONUS_FIRST_TRY`, `JBOT_BONUS_STREAK_PER_DAY`)
+*   Bonuses: Tiered try bonus, before-hint bonus, tiered fastest-answer bonus, and streak bonus
+*   Configuration via `.env`:
+    - `JBOT_BONUS_TRY_CSV` — comma-separated tiered points for 1st/2nd/3rd try (e.g. `"20,10,5"`)
+    - `JBOT_BONUS_FASTEST_CSV` — comma-separated tiered points for 1st/2nd/3rd fastest correct answer
+    - `JBOT_BONUS_BEFORE_HINT` — flat bonus for answering before the hint
+    - `JBOT_BONUS_STREAK_PER_DAY` — points added per streak day
+    - `JBOT_BONUS_STREAK_CAP` — maximum streak bonus
 *   Used by both live game (`GuessHandler`) and event replay (`DailyGameSimulator`) to ensure consistency
 *   When modifying scoring, update `ScoreCalculator` to maintain consistency across the system
 
@@ -66,11 +71,13 @@ The project follows a strict "DataManager-Only" pattern:
 ### Core Managers
 *   **GameRunner**: Orchestrates the daily game flow, question delivery, and answer reveals
 *   **GuessHandler**: Processes player guesses and calculates scores in real-time
-*   **PowerUpManager**: Manages power-up mechanics and streak tracking
+*   **PowerUpManager**: Manages power-up mechanics (jinx, steal, rest) and streak tracking
 *   **PlayerManager**: Business logic for player operations
 *   **DataManager**: Exclusive database access layer
-*   **GeminiManager**: AI content generation
-*   Managers follow dependency injection patterns - passed through constructors
+*   **GeminiManager**: AI content generation (regular class instance, not a singleton)
+*   **RolesGameMode** (`src/core/roles.py`): Assigns DB roles based on score standings; called by `DiscordBot.apply_discord_roles()` in the evening task
+*   **DailyPlayerState** (`src/core/state.py`): In-memory dataclass holding all transient per-player state for the current question round (score earned, guesses, bonuses, jinx/steal/rest flags). Single source of truth during a round.
+*   Managers should use dependency injection via constructors. **Note:** some existing modules (`powerup.py`, `guess_handler.py`, `trivia.py`) still instantiate `ConfigReader` at module level — this is a known issue tracked in the code review doc.
 
 ## My Persona
 
@@ -105,10 +112,13 @@ As your partner, I will adhere to the following principles:
         - Dataset-specific settings (like `final_jeopardy_score_sub`) configured per-source
         - At least one valid source required for bot to start
     - **Configuration Categories**:
-        - **Features**: `JBOT_ENABLE_*` flags for feature toggles (in `.env`)
-        - **Scheduling**: `JBOT_MORNING_TIME`, `JBOT_REMINDER_TIME` for daily events (in `.env`)
+        - **Features**: `JBOT_ENABLE_*` flags for feature toggles (in `.env`). Currently: `JBOT_ENABLE_FIGHT`
+        - **Scheduling**: `JBOT_MORNING_TIME`, `JBOT_REMINDER_TIME`, `JBOT_EVENING_TIME` (in `.env`)
         - **Question Sources**: All configured in `sources.toml` - no dataset settings in `.env`
-        - **Scoring/Bonuses**: `JBOT_BONUS_*` for point calculations (in `.env`)
+        - **Scoring/Bonuses**: `JBOT_BONUS_TRY_CSV`, `JBOT_BONUS_FASTEST_CSV`, `JBOT_BONUS_BEFORE_HINT`, `JBOT_BONUS_STREAK_PER_DAY`, `JBOT_BONUS_STREAK_CAP` (in `.env`)
+        - **Power-ups**: `JBOT_REST_MULTIPLIER`, `JBOT_STEAL_STREAK_COST` (in `.env`)
+        - **Behavior**: `JBOT_TAG_UNANSWERED_PLAYERS` — whether to @-mention players who haven't answered in the reminder message
+        - **Emojis**: `JBOT_EMOJI_*` keys for all in-game emoji (fastest, streak, before-hint, jinxed, silenced, rest, etc.)
         - **Discord**: Bot tokens, role names (in `.env`)
 *   **Database Management**: The database schema is defined in `db/schema.sql`. To modify the database, I will update `db/schema.sql` and run `python db/update_schema.py` to apply the changes to the local `jbot.db`. The update script performs intelligent diffing and migration of schema changes.
     - **Migration Safety**: `update_schema.py` compares current database against `schema.sql`, applies changes incrementally
