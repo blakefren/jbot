@@ -164,89 +164,6 @@ class TestPowerUpManager(unittest.TestCase):
         # Should be no steal message
         self.assertFalse(any("stole" in m for m in msgs))
 
-    def test_wager_points_basic(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.place_wager("1", 10, "q1")
-        self.assertIn("wagered 10 pts", msg)
-        self.assertEqual(self.players["1"].score, 90)
-        self.assertEqual(manager._get_daily_state("1").wager, 10)
-
-    def test_wager_points_max_wager(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.place_wager("1", 100, "q1")
-        self.assertIn("wagered 25 pts", msg)  # 100//4 = 25
-        self.assertEqual(self.players["1"].score, 75)
-        self.assertEqual(manager._get_daily_state("1").wager, 25)
-
-    def test_wager_points_invalid(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        with self.assertRaises(PowerUpError) as cm:
-            manager.place_wager("1", 0, "q1")
-        self.assertIn("Invalid wager amount", str(cm.exception))
-        with self.assertRaises(PowerUpError) as cm2:
-            manager.place_wager("1", 200, "q1")
-        self.assertIn("Invalid wager amount", str(cm2.exception))
-
-    def test_resolve_wager_win(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.place_wager("1", 20, "q1")
-        msg = manager.resolve_wager("1", True)
-        self.assertIn("won their wager", msg)
-        self.assertEqual(manager._get_daily_state("1").wager, 0)
-
-    def test_resolve_wager_lose(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.place_wager("1", 20, "q1")
-        msg = manager.resolve_wager("1", False)
-        self.assertIn("lost wager", msg)
-        self.assertEqual(manager._get_daily_state("1").wager, 0)
-
-    def test_can_answer_hint_sent(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager._get_daily_state("1").silenced = True
-
-        # Case 1: Hint NOT sent -> Should be False
-        can_answer, reason = manager.can_answer("1", hint_sent=False)
-        self.assertFalse(can_answer)
-        self.assertIn("Jinxed", reason)
-
-        # Case 2: Hint SENT -> Should be True
-        can_answer, reason = manager.can_answer("1", hint_sent=True)
-        self.assertTrue(can_answer)
-
-    def test_teamup_success(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.teamup("1", "2", "q1")
-        self.assertEqual(self.players["1"].score, 75)
-        self.assertEqual(manager._get_daily_state("1").team_partner, "2")
-
-    def test_teamup_already_teamed(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.teamup("1", "2", "q1")
-        with self.assertRaises(PowerUpError) as cm:
-            manager.teamup("1", "3", "q1")
-        self.assertIn("already teamed up", str(cm.exception))
-
-    def test_teamup_not_enough_points(self):
-        self.players["1"].score = 10
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        with self.assertRaises(PowerUpError) as cm:
-            manager.teamup("1", "2", "q1")
-        self.assertIn("need at least", str(cm.exception))
-
-    def test_teamup_invalid_player(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        with self.assertRaises(PowerUpError) as cm:
-            manager.teamup("1", "999", "q1")
-        self.assertIn("Invalid player", str(cm.exception))
-
-    def test_resolve_teamup(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.teamup("1", "2", "q1")
-        manager.resolve_teamup("1", True)
-        self.assertTrue(manager._get_daily_state("1").team_success)
-        self.assertTrue(manager._get_daily_state("2").team_success)
-
     def test_steal_invalid_player(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         with self.assertRaises(PowerUpError) as cm:
@@ -255,15 +172,14 @@ class TestPowerUpManager(unittest.TestCase):
 
     def test_on_guess_correct(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.place_wager("1", 20, "q1")
-        manager.on_guess("1", "P1", "guess", True)
-        self.assertEqual(manager._get_daily_state("1").wager, 0)
+        msgs = manager.on_guess("1", "P1", "guess", True, points_earned=100)
+        self.assertIsInstance(msgs, list)
 
     def test_on_guess_incorrect(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.place_wager("1", 20, "q1")
-        manager.on_guess("1", "P1", "guess", False)
-        self.assertEqual(manager._get_daily_state("1").wager, 0)
+        msgs = manager.on_guess("1", "P1", "guess", False)
+        self.assertIsInstance(msgs, list)
+        self.assertEqual(len(msgs), 0)
 
     def test_jinx_invalid_attacker(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -273,7 +189,7 @@ class TestPowerUpManager(unittest.TestCase):
 
     def test_can_answer_hint_sent(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        # Set silenced to True
+
         manager._get_daily_state("1").silenced = True
 
         # Case 1: Hint NOT sent -> Should be False
@@ -289,12 +205,6 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         with self.assertRaises(PowerUpError) as cm:
             manager.jinx("1", "999", "q1")
-        self.assertIn("Invalid player", str(cm.exception))
-
-    def test_place_wager_invalid_player(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        with self.assertRaises(PowerUpError) as cm:
-            manager.place_wager("999", 10, "q1")
         self.assertIn("Invalid player", str(cm.exception))
 
     def test_steal_first_try_bonus(self):
@@ -377,11 +287,6 @@ class TestPowerUpManager(unittest.TestCase):
         with self.assertRaises(PowerUpError) as cm3:
             manager.rest("1", None, "Ans")
         self.assertEqual(str(cm3.exception), "There is no active question right now.")
-
-        # Test Wager
-        with self.assertRaises(PowerUpError) as cm4:
-            manager.place_wager("1", 10, None)
-        self.assertEqual(str(cm4.exception), "There is no active question right now.")
 
     def test_duplicate_jinx(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)

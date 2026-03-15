@@ -7,7 +7,6 @@ class TestDailyPlayerState(unittest.TestCase):
         """Test that the state initializes with default values."""
         state = DailyPlayerState()
         self.assertEqual(state.score_earned, 0)
-        self.assertEqual(state.wager, 0)
         self.assertFalse(state.is_resting)
         self.assertFalse(state.powerup_used_today)
         self.assertEqual(state.bonuses, {})
@@ -25,13 +24,6 @@ class TestDailyPlayerState(unittest.TestCase):
         state.bonuses_today = {"fastest": 5}
         self.assertEqual(state.bonuses, {"fastest": 5})
 
-    def test_powerup_used_today_wager(self):
-        state = DailyPlayerState()
-        self.assertFalse(state.powerup_used_today)
-
-        state.wager = 10
-        self.assertTrue(state.powerup_used_today)
-
     def test_powerup_used_today_resting(self):
         state = DailyPlayerState()
         state.is_resting = True
@@ -47,11 +39,6 @@ class TestDailyPlayerState(unittest.TestCase):
         state = DailyPlayerState()
         # stealing_from set means this player USED a steal on someone else
         state.stealing_from = "p2"
-        self.assertTrue(state.powerup_used_today)
-
-    def test_powerup_used_today_teamup(self):
-        state = DailyPlayerState()
-        state.team_partner = "p2"
         self.assertTrue(state.powerup_used_today)
 
     def test_powerup_used_today_passive_effects(self):

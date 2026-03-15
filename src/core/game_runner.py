@@ -236,18 +236,8 @@ class GameRunner:
                 except ValueError:
                     pass
 
-            amount = 0
             target = p["target_user_id"]
-            if p["powerup_type"] == "wager":
-                try:
-                    amount = int(target)
-                    target = None
-                except (ValueError, TypeError):
-                    pass
-
-            events.append(
-                PowerUpEvent(ts, p["user_id"], p["powerup_type"], target, amount)
-            )
+            events.append(PowerUpEvent(ts, p["user_id"], p["powerup_type"], target))
 
         return events
 
@@ -749,9 +739,6 @@ class GameRunner:
             show_answer=True,
             extra_content=player_answers,
         )
-
-    def resolve_wager(self, player_id: str, correct: bool):
-        pass
 
     def _mark_newly_correct_guesses(self, daily_question_id: str, new_answer: str):
         """

@@ -16,9 +16,6 @@ class DailyPlayerState:
     guesses_count: int = 0
     bonuses: dict[str, int] = field(default_factory=dict)
 
-    # Power-up: Wager
-    wager: int = 0
-
     # Power-up: Defense / Rest
     is_resting: bool = False
 
@@ -29,10 +26,6 @@ class DailyPlayerState:
     # Power-up: Attack (Outgoing)
     silenced: bool = False  # Result of jinxing
     stealing_from: str | None = None  # User ID
-
-    # Power-up: Coop
-    team_partner: str | None = None  # User ID
-    team_success: bool = False
 
     @property
     def earned_today(self) -> int:
@@ -53,10 +46,4 @@ class DailyPlayerState:
         """
         Determines if a powerup was used today based on state flags.
         """
-        return (
-            self.wager > 0
-            or self.is_resting
-            or self.silenced
-            or self.team_partner is not None
-            or self.stealing_from is not None
-        )
+        return self.is_resting or self.silenced or self.stealing_from is not None

@@ -19,4 +19,3 @@ class GuessEvent(GameEvent):
 class PowerUpEvent(GameEvent):
     powerup_type: str
     target_user_id: str | None = None
-    amount: int = 0  # For wager

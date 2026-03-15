@@ -108,27 +108,6 @@ class DailyGameSimulator:
 
                 target_state.steal_attempt_by = user_id
 
-        elif ptype == "wager":
-            try:
-                amount = int(event.amount)
-            except (ValueError, TypeError):
-                amount = 0
-            state.wager = amount
-            # Wager is deducted immediately in real-time.
-            state.score_earned -= amount
-
-        elif ptype == "teamup":
-            if target_id:
-                state.team_partner = target_id
-                # Also set partner's partner
-                partner_state = self.daily_state[target_id]
-                partner_state.team_partner = user_id
-
-                # Teamup cost
-                cost = int(self.config.get("JBOT_REINFORCE_COST"))
-                state.score_earned -= cost
-                partner_state.score_earned -= cost
-
         else:
             logging.warning(
                 "DailyGameSimulator: unrecognised powerup type %r for user %s — skipping.",
@@ -153,34 +132,9 @@ class DailyGameSimulator:
                 is_correct = True
                 break
         if not is_correct:
-            # Resolve Wager (Loss)
-            if state.wager > 0:
-                state.wager = 0
             return
 
         state.is_correct = True
-
-        # Resolve Wager (Win)
-        wager = state.wager
-        if wager > 0:
-            # Calculate winnings
-            player = self.initial_player_states.get(user_id)
-            initial_score = player.score if player else 0
-            # Current score before this guess (including wager deduction)
-            current_score = initial_score + state.score_earned
-
-            # Match PowerUpManager logic: winnings = int(wager * (100 / (score + 100)))
-            # We add back the wager amount plus the winnings
-            winnings = int(wager * (100 / (current_score + 100)))
-
-            state.score_earned += winnings + wager
-            state.wager = 0  # Consumed
-
-        # Resolve Teamup
-        partner_id = state.team_partner
-        if partner_id:
-            state.team_success = True
-            self.daily_state[partner_id].team_success = True
 
         # Calculate Points
         base_value = self.question.clue_value or 100

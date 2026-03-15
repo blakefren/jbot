@@ -80,8 +80,8 @@ class TestGameRunnerRestore(unittest.TestCase):
             {
                 "used_at": "2023-01-01 09:00:00",
                 "user_id": "p2",
-                "powerup_type": "wager",
-                "target_user_id": "50",
+                "powerup_type": "steal",
+                "target_user_id": "p1",
             }
         ]
 
@@ -95,9 +95,9 @@ class TestGameRunnerRestore(unittest.TestCase):
         self.assertEqual(guess_event.guess_text, "A")
         self.assertIsInstance(guess_event.timestamp, datetime)
 
-        # Check PowerUp Event (Wager)
+        # Check PowerUp Event (Steal)
         powerup_event = next(e for e in events if isinstance(e, PowerUpEvent))
         self.assertEqual(powerup_event.user_id, "p2")
-        self.assertEqual(powerup_event.powerup_type, "wager")
-        self.assertEqual(powerup_event.amount, 50)  # Parsed from target_user_id
+        self.assertEqual(powerup_event.powerup_type, "steal")
+        self.assertEqual(powerup_event.target_user_id, "p1")
         self.assertIsInstance(powerup_event.timestamp, datetime)

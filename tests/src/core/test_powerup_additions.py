@@ -22,7 +22,6 @@ class TestPowerUpManagerAdditions(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
 
         simulated_state = DailyPlayerState(
-            wager=50,
             jinxed_by="p2",
             score_earned=100,
             bonuses={"first_try": 20},
@@ -32,15 +31,10 @@ class TestPowerUpManagerAdditions(unittest.TestCase):
 
         state = manager._get_daily_state("p1")
 
-        self.assertEqual(state.wager, 50)
         self.assertEqual(state.jinxed_by, "p2")
         self.assertFalse(state.is_resting)
         self.assertEqual(state.score_earned, 100)
         self.assertEqual(state.bonuses, {"first_try": 20})
-
-        # Check powerup_used_today logic
-        # Wager > 0 -> True
-        self.assertTrue(state.powerup_used_today)
 
     def test_restore_daily_state_powerup_used_logic(self):
         """Test powerup_used_today logic in restore."""
@@ -51,17 +45,12 @@ class TestPowerUpManagerAdditions(unittest.TestCase):
         manager.restore_daily_state("p1", state1)
         self.assertFalse(manager._get_daily_state("p1").powerup_used_today)
 
-        # Case 2: Wager > 0
-        state2 = DailyPlayerState(wager=10)
+        # Case 2: Silenced (Jinx attacker)
+        state2 = DailyPlayerState(silenced=True)
         manager.restore_daily_state("p2", state2)
         self.assertTrue(manager._get_daily_state("p2").powerup_used_today)
 
-        # Case 3: Silenced (Jinx attacker)
-        state3 = DailyPlayerState(silenced=True)
+        # Case 3: Stealing from
+        state3 = DailyPlayerState(stealing_from="p1")
         manager.restore_daily_state("p3", state3)
         self.assertTrue(manager._get_daily_state("p3").powerup_used_today)
-
-        # Case 4: Stealing from
-        state4 = DailyPlayerState(stealing_from="p1")
-        manager.restore_daily_state("p4", state4)
-        self.assertTrue(manager._get_daily_state("p4").powerup_used_today)

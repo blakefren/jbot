@@ -70,9 +70,6 @@ This track adds direct player-vs-player interactions.
 This track introduces mechanics that reward consistent play or provide other advantages.
 
 *   **Answer Streaks**: Players build up a "streak" for each consecutive correct answer. This can be used for scoring bonuses or as a target for other players' attacks.
-*   **Wager** (Planned): Players can wager a portion of their points on whether their answer is correct.
-    *   **Command**: `/power wager <amount>`
-    *   **Details**: Bets are capped at 25% of a player's current score (minimum 1 point).
 *   **Answering First**: The first player to answer the daily question correctly receives a point bonus.
 *   **Answering Before the Hint**: Players who answer correctly before the daily hint is revealed receive a point bonus.
 *   **Weekly Boss Fight** (Planned): A challenging weekly question with a large point reward.
@@ -81,9 +78,6 @@ This track introduces mechanics that reward consistent play or provide other adv
 
 This track focuses on collaborative features.
 
-*   **Teamup** (Planned): Two players can form a temporary alliance for the day. If either player answers correctly, both receive full points.
-    *   **Command**: `/power teamup <player_id>`
-    *   **Cost**: 25 points for each player.
 *   **Reveal Answer Letters** (Planned): Players can vote to reveal letters in the answer. Each vote costs points, and the cost increases with each revealed letter.
     *   **Command**: `/power reveal`
 *   **Red vs. Blue Teams** (Planned): Players are divided into two teams (either by choice or randomly). The team with the most correct responses at the end of the day gets bonus points.

@@ -59,9 +59,6 @@ class PlayerManager:
         """Sets a player's answer streak to a specific value and persists."""
         self.data_manager.set_streak(self._normalize_id(player_id), streak)
 
-    def resolve_wager(self, player_id: str, correct: bool):
-        pass
-
     # TODO: Implement player creation and refund logic from admin cog
     def get_or_create_player(self, player_id: str, player_name: str) -> Player:
         pid = self._normalize_id(player_id)
