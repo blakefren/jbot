@@ -108,6 +108,11 @@ class DailyGameSimulator:
 
                 target_state.steal_attempt_by = user_id
 
+        elif ptype == "rest_wakeup":
+            # Bonus from a previous day's rest was already applied live to the DB.
+            # No simulator state change needed.
+            pass
+
         else:
             logging.warning(
                 "DailyGameSimulator: unrecognised powerup type %r for user %s — skipping.",
