@@ -19,7 +19,7 @@ class Power(commands.Cog):
 
     @power.command(
         name="jinx",
-        description="Prevents streak bonus, but you can't answer until the hint.",
+        description="Steal a target's streak bonus — but you can't answer until the hint.",
     )
     async def jinx(self, ctx: commands.Context, target: discord.Member):
         if not self.bot.game.features.get("fight"):
