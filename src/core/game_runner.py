@@ -862,6 +862,9 @@ class GameRunner:
                     if user_id in initial_states
                     else user_id
                 )
+                old_bonus_keys = set(old_res.get("bonuses", {}).keys())
+                new_bonus_keys = set(new_res.get("bonuses", {}).keys())
+                newly_gained_keys = new_bonus_keys - old_bonus_keys
                 details.append(
                     {
                         "name": player_name,
@@ -869,7 +872,7 @@ class GameRunner:
                         + old_res["score_earned"],
                         "score_after": new_res["final_score"],
                         "diff": score_diff,
-                        "badges": new_res["badges"],
+                        "badges": scorer_new._get_badges(newly_gained_keys),
                     }
                 )
 

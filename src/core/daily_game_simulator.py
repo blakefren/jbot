@@ -253,17 +253,22 @@ class DailyGameSimulator:
                 "final_streak": final_streak,
                 "streak_delta": state.streak_delta,
                 "bonuses": state.bonuses,
-                "badges": self._get_badges(state),
+                "badges": self._get_badges(state.bonuses),
             }
         return results
 
-    def _get_badges(self, state):
-        badges = []
-        bonuses = state.bonuses
-        if "first_try" in bonuses:
-            badges.append(self.config.get("JBOT_EMOJI_FIRST_TRY"))
-        if "before_hint" in bonuses:
-            badges.append(self.config.get("JBOT_EMOJI_BEFORE_HINT"))
-        if "fastest" in bonuses:
-            badges.append(self.config.get("JBOT_EMOJI_FASTEST"))
-        return badges
+    # Maps bonus keys (from ScoreCalculator) to their display emoji config keys.
+    # Add new bonus types here as they are introduced in scoring.py.
+    _BONUS_EMOJI_MAP = [
+        ("first_try", "JBOT_EMOJI_FIRST_TRY"),
+        ("before_hint", "JBOT_EMOJI_BEFORE_HINT"),
+        ("fastest", "JBOT_EMOJI_FASTEST"),
+        ("streak", "JBOT_EMOJI_STREAK"),
+    ]
+
+    def _get_badges(self, bonus_keys):
+        return [
+            self.config.get(emoji_key)
+            for bonus_key, emoji_key in self._BONUS_EMOJI_MAP
+            if bonus_key in bonus_keys
+        ]
