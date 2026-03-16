@@ -9,9 +9,6 @@ from src.core.scoring import ScoreCalculator
 
 from src.cfg.main import ConfigReader
 
-config = ConfigReader()
-
-
 CRUCIAL_MODIFIERS = {"north", "south", "east", "west", "new", "no"}
 
 

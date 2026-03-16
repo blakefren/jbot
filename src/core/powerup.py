@@ -11,18 +11,6 @@ from src.core.player_manager import PlayerManager
 from src.core.state import DailyPlayerState
 from src.core.scoring import ScoreCalculator
 
-config = ConfigReader()
-
-EMOJI_JINXED = config.get("JBOT_EMOJI_JINXED", "🥶")
-EMOJI_SILENCED = config.get("JBOT_EMOJI_SILENCED", "🤐")
-EMOJI_STOLEN_FROM = config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
-EMOJI_STEALING = config.get("JBOT_EMOJI_STEALING", "💰")
-EMOJI_REST = config.get("JBOT_EMOJI_REST", "😴")
-EMOJI_REST_WAKEUP = config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
-EMOJI_STREAK = config.get("JBOT_EMOJI_STREAK", "🔥")
-REST_MULTIPLIER = float(config.get("JBOT_REST_MULTIPLIER", "1.2"))
-STEAL_STREAK_COST = int(config.get("JBOT_STEAL_STREAK_COST", "2"))
-
 
 class PowerUpError(Exception):
     """Exception raised for errors in power-up usage."""
@@ -37,16 +25,33 @@ class PowerUpManager(BaseManager):
     Manages power-up actions for jbot trivia game, including jinx, steal, and rest.
     """
 
-    def __init__(self, player_manager: PlayerManager, data_manager: DataManager):
+    def __init__(
+        self,
+        player_manager: PlayerManager,
+        data_manager: DataManager,
+        config: ConfigReader = None,
+    ):
         """
         Initialize the PowerUpManager.
         Args:
             player_manager (PlayerManager): The player manager instance.
             data_manager (DataManager): The data manager instance.
+            config (ConfigReader): Optional config instance; creates one if not provided.
         """
         self.player_manager = player_manager
         self.data_manager = data_manager
-        self.score_calculator = ScoreCalculator(config)
+        _config = config or ConfigReader()
+        self.score_calculator = ScoreCalculator(_config)
+        # Config-driven constants
+        self.emoji_jinxed = _config.get("JBOT_EMOJI_JINXED", "🥶")
+        self.emoji_silenced = _config.get("JBOT_EMOJI_SILENCED", "🤐")
+        self.emoji_stolen_from = _config.get("JBOT_EMOJI_STOLEN_FROM", "💸")
+        self.emoji_stealing = _config.get("JBOT_EMOJI_STEALING", "💰")
+        self.emoji_rest = _config.get("JBOT_EMOJI_REST", "😴")
+        self.emoji_rest_wakeup = _config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
+        self.emoji_streak = _config.get("JBOT_EMOJI_STREAK", "🔥")
+        self.rest_multiplier = float(_config.get("JBOT_REST_MULTIPLIER", "1.2"))
+        self.steal_streak_cost = int(_config.get("JBOT_STEAL_STREAK_COST", "2"))
         # Transient state for the day
         self.daily_state: dict[str, DailyPlayerState] = {}
 
@@ -126,7 +131,7 @@ class PowerUpManager(BaseManager):
                         points_tracker["earned"] += bonus_amount
                     state.bonuses["rest"] = bonus_amount
                     messages.append(
-                        f"{EMOJI_REST_WAKEUP} Rest bonus! ×{pending_mult} on today's score (+{bonus_amount} pts)!"
+                        f"{self.emoji_rest_wakeup} Rest bonus! ×{pending_mult} on today's score (+{bonus_amount} pts)!"
                     )
                     self.data_manager.log_powerup_usage(
                         pid, "rest_wakeup", None, question_id
@@ -178,13 +183,13 @@ class PowerUpManager(BaseManager):
             # Remove streak message if present
             if bonus_messages is not None:
                 for i, msg in enumerate(bonus_messages):
-                    if EMOJI_STREAK in msg:
+                    if self.emoji_streak in msg:
                         bonus_messages.pop(i)
                         break
 
-            return f"{EMOJI_JINXED} <@{attacker_id}> swiped <@{player_id}>'s streak bonus of {streak_bonus} pts via Jinx!"
+            return f"{self.emoji_jinxed} <@{attacker_id}> swiped <@{player_id}>'s streak bonus of {streak_bonus} pts via Jinx!"
 
-        return f"{EMOJI_JINXED} <@{player_id}> answered correctly, but <@{attacker_id}>'s Jinx froze their streak!"
+        return f"{self.emoji_jinxed} <@{player_id}> answered correctly, but <@{attacker_id}>'s Jinx froze their streak!"
 
     def resolve_steal(
         self, target_id: str, correct: bool, points_tracker: dict = None
@@ -206,7 +211,7 @@ class PowerUpManager(BaseManager):
             # Clear the steal attempt even if nothing stolen?
             # Logic suggests yes, the attempt is used up.
             target_state.steal_attempt_by = None
-            return f"{EMOJI_STEALING} <@{attacker_id}> tried to steal from <@{target_id}>, but there was nothing to steal!"
+            return f"{self.emoji_stealing} <@{attacker_id}> tried to steal from <@{target_id}>, but there was nothing to steal!"
 
         self.player_manager.update_score(target_id, -stealable_amount)
         self.player_manager.update_score(attacker_id, stealable_amount)
@@ -216,7 +221,7 @@ class PowerUpManager(BaseManager):
         # Clear the steal attempt
         target_state.steal_attempt_by = None
 
-        return f"{EMOJI_STEALING} <@{attacker_id}> stole {stealable_amount} pts from <@{target_id}>!"
+        return f"{self.emoji_stealing} <@{attacker_id}> stole {stealable_amount} pts from <@{target_id}>!"
 
     def jinx(self, attacker_id: str, target_id: str, question_id: int = None) -> str:
         """
@@ -255,7 +260,7 @@ class PowerUpManager(BaseManager):
         self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
 
         target_state.jinxed_by = attacker_id
-        return f"{EMOJI_SILENCED} Your jinx is set! {target.name} won't know until it takes effect. You can't answer until the hint is revealed!"
+        return f"{self.emoji_silenced} Your jinx is set! {target.name} won't know until it takes effect. You can't answer until the hint is revealed!"
 
     def steal(self, thief_id: str, target_id: str, question_id: int = None) -> str:
         """
@@ -291,13 +296,15 @@ class PowerUpManager(BaseManager):
 
         # Attacker Penalty: Reduce streak by STEAL_STREAK_COST (minimum 0)
         thief = self.player_manager.get_player(thief_id)
-        new_streak = max(0, (thief.answer_streak if thief else 0) - STEAL_STREAK_COST)
+        new_streak = max(
+            0, (thief.answer_streak if thief else 0) - self.steal_streak_cost
+        )
         self.player_manager.set_streak(thief_id, new_streak)
         self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
         thief_state.stealing_from = target_id
 
         target_state.steal_attempt_by = thief_id
-        return f"{EMOJI_STEALING} You sacrificed {STEAL_STREAK_COST} streak days to rob <@{target_id}>! If they answer correctly, you'll steal their bonuses."
+        return f"{self.emoji_stealing} You sacrificed {self.steal_streak_cost} streak days to rob <@{target_id}>! If they answer correctly, you'll steal their bonuses."
 
     def rest(
         self, player_id: str, question_id: int, question_answer: str
@@ -339,7 +346,7 @@ class PowerUpManager(BaseManager):
         self.data_manager.log_powerup_usage(player_id, "rest", None, question_id)
 
         # Store rest multiplier for tomorrow
-        self.data_manager.set_pending_multiplier(player_id, REST_MULTIPLIER)
+        self.data_manager.set_pending_multiplier(player_id, self.rest_multiplier)
 
         # Immediately resolve any pending attacks as whiffs
         whiff_parts = []
@@ -348,29 +355,29 @@ class PowerUpManager(BaseManager):
             attacker_id = state.jinxed_by
             state.jinxed_by = None
             whiff_parts.append(
-                f"{EMOJI_JINXED} <@{attacker_id}>'s Jinx had no effect — <@{player_id}> is resting!"
+                f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx had no effect — <@{player_id}> is resting!"
             )
 
         if state.steal_attempt_by:
             attacker_id = state.steal_attempt_by
             state.steal_attempt_by = None
             whiff_parts.append(
-                f"{EMOJI_STEALING} <@{attacker_id}>'s steal whiffed — "
+                f"{self.emoji_stealing} <@{attacker_id}>'s steal whiffed — "
                 f"<@{player_id}> has nothing to steal while resting "
                 f"(but the streak reset still stands)!"
             )
 
         public_parts = [
-            f"{EMOJI_REST} <@{player_id}> is resting today. "
-            f"Streak frozen. ×{REST_MULTIPLIER} bonus applies to tomorrow's score."
+            f"{self.emoji_rest} <@{player_id}> is resting today. "
+            f"Streak frozen. ×{self.rest_multiplier} bonus applies to tomorrow's score."
         ]
         public_parts.extend(whiff_parts)
         public_msg = "\n".join(public_parts)
 
         private_msg = (
-            f"{EMOJI_REST} You're resting today. The answer was: **{question_answer}**\n"
+            f"{self.emoji_rest} You're resting today. The answer was: **{question_answer}**\n"
             "Your streak is frozen (not reset). "
-            f"You'll earn a **×{REST_MULTIPLIER} multiplier** on your base + bonuses the next day you answer correctly."
+            f"You'll earn a **×{self.rest_multiplier} multiplier** on your base + bonuses the next day you answer correctly."
         )
 
         return public_msg, private_msg

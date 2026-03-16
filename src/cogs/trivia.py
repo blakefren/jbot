@@ -4,8 +4,6 @@ from src.cfg.main import ConfigReader
 
 from src.core.guess_handler import AlreadyAnsweredCorrectlyError, JinxedError
 
-config = ConfigReader()
-
 
 class Trivia(commands.Cog):
     def __init__(self, bot):
@@ -34,8 +32,8 @@ class Trivia(commands.Cog):
             await ctx.interaction.followup.send("You already solved today.")
             return
         except JinxedError as e:
-            EMOJI_SILENCED = config.get("JBOT_EMOJI_SILENCED", "🤐")
-            await ctx.interaction.followup.send(f"{EMOJI_SILENCED} {e.message}")
+            emoji_silenced = ConfigReader().get("JBOT_EMOJI_SILENCED", "🤐")
+            await ctx.interaction.followup.send(f"{emoji_silenced} {e.message}")
             return
         except Exception as e:
             logging.error(f"Error handling guess: {e}")

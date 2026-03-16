@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
-from src.core.powerup import PowerUpError, STEAL_STREAK_COST
+from src.core.powerup import PowerUpError
+from src.cfg.main import ConfigReader
 
 
 class Power(commands.Cog):
@@ -80,7 +81,7 @@ class Power(commands.Cog):
 
     @power.command(
         name="steal",
-        description=f"Steal bonuses from a target, but lose {STEAL_STREAK_COST} streak days.",
+        description=f"Steal bonuses from a target, but lose {ConfigReader().get('JBOT_STEAL_STREAK_COST', 3)} streak days.",
     )
     async def steal(self, ctx: commands.Context, target: discord.Member):
         if not self.bot.game.features.get("fight"):
