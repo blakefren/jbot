@@ -344,7 +344,7 @@ class TestPowerUpManager(unittest.TestCase):
         # Verify target (P2) lost the streak bonus
         self.assertEqual(self.players["2"].score, 50)  # 100 base - 50 stolen streak
 
-    def test_jinx_freezes_streak(self):
+    def test_jinx_steals_streak_bonus(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.jinx("1", "2", "q1")
 
@@ -368,8 +368,8 @@ class TestPowerUpManager(unittest.TestCase):
             points_tracker=points_tracker,
         )
 
-        # Verify streak was decremented back to 5
-        self.player_manager.set_streak.assert_called_with("2", 5)
+        # Streak should NOT be frozen — set_streak should not be called
+        self.player_manager.set_streak.assert_not_called()
 
         # Verify message reflects the transfer
         self.assertTrue(any("swiped" in m and "streak bonus" in m for m in msgs))
@@ -385,7 +385,7 @@ class TestPowerUpManager(unittest.TestCase):
         # Verify target (P2) had the streak bonus deducted
         self.assertEqual(self.players["2"].score, 75)  # 100 base - 25 stolen streak
 
-    def test_jinx_freezes_streak_no_bonus(self):
+    def test_jinx_no_streak_bonus_no_effect(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.jinx("1", "3", "q1")  # P3 has 0 streak
 
@@ -397,11 +397,11 @@ class TestPowerUpManager(unittest.TestCase):
             3, "P3", "ans", True, points_earned=100, bonus_values={}
         )
 
-        # Verify streak was decremented back to 0
-        self.player_manager.set_streak.assert_called_with("3", 0)
+        # Streak should NOT be frozen — set_streak should not be called
+        self.player_manager.set_streak.assert_not_called()
 
-        # Verify message
-        self.assertTrue(any("froze their streak" in m for m in msgs))
+        # Verify message reflects that there was nothing to steal
+        self.assertTrue(any("no streak bonus to steal" in m for m in msgs))
 
     def test_steal_resolution_message_content(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
