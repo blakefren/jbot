@@ -84,22 +84,6 @@ class Game(commands.Cog):
             history_text, interaction=ctx.interaction, ephemeral=True
         )
 
-    @game.command(name="rules", description="Show active game rules.")
-    async def rules(self, ctx: commands.Context):
-        """Show active game rules."""
-        features = self.bot.game.features
-        rules_text = "**Active Game Rules:**\n"
-
-        if features.get("fight"):
-            rules_text += "- **Fight Track**: PvP enabled! Use `/power jinx` to silence players and `/power steal` to steal points. Protect yourself with `/power shield`!\n"
-
-        if not any(features.values()):
-            rules_text += "Standard trivia rules apply. Answer daily questions to earn points and streaks!"
-
-        await self.bot.send_message(
-            rules_text, interaction=ctx.interaction, ephemeral=True
-        )
-
 
 async def setup(bot):
     await bot.add_cog(Game(bot))
