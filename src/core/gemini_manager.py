@@ -8,11 +8,12 @@ import logging
 
 
 class GeminiManager:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-pro"):
         if not api_key:
             raise ValueError("Gemini API key is required.")
         try:
             self.api_key = api_key
+            self.model = model
             self.client = genai.Client(api_key=self.api_key)
             logging.info("GeminiManager initialized successfully.")
         except Exception as e:
@@ -37,7 +38,7 @@ class GeminiManager:
                 config = types.GenerateContentConfig(**generation_config)
 
             response = self.client.models.generate_content(
-                model="gemini-2.5-pro", contents=text, config=config
+                model=self.model, contents=text, config=config
             )
             return response.text
         except Exception as e:

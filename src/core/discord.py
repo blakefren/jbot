@@ -543,7 +543,10 @@ async def discord_bot_async(
     try:
         gemini_api_key = config.get_gemini_api_key()
         if gemini_api_key:
-            gemini_manager = GeminiManager(api_key=gemini_api_key)
+            gemini_manager = GeminiManager(
+                api_key=gemini_api_key,
+                model=config.get("GEMINI_MODEL", "gemini-2.5-pro"),
+            )
     except ValueError as e:
         logging.warning(f"Could not initialize GeminiManager: {e}")
 
