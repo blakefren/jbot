@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict
 from datetime import datetime
-from src.core.guess_handler import GuessHandler
+from src.core.answer_checker import AnswerChecker
 from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 from src.core.player import Player
 from src.core.state import DailyPlayerState
@@ -41,8 +41,8 @@ class DailyGameSimulator:
         self.first_correct_timestamp = None
         self.correct_answers_count = 0
 
-        # Helper for matching
-        self.guess_handler = GuessHandler(None, None, self.question, None, {})
+        # Helper for answer matching
+        self.checker = AnswerChecker()
 
     def run(self, apply_end_of_day: bool = True) -> dict:
         """
@@ -128,7 +128,7 @@ class DailyGameSimulator:
             return  # Already answered or resting
         is_correct = False
         for ans in self.answers:
-            if self.guess_handler._is_correct_guess(guess_text, ans):
+            if self.checker.is_correct(guess_text, ans):
                 is_correct = True
                 break
         if not is_correct:

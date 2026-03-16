@@ -1,15 +1,10 @@
-import re
 import logging
-import jellyfish
 from datetime import date, timedelta, datetime
 from src.core.data_manager import DataManager
 from data.readers.question import Question
 from src.core.scoring import ScoreCalculator
-
-
+from src.core.answer_checker import AnswerChecker
 from src.cfg.main import ConfigReader
-
-CRUCIAL_MODIFIERS = {"north", "south", "east", "west", "new", "no"}
 
 
 class AlreadyAnsweredCorrectlyError(Exception):
@@ -50,6 +45,7 @@ class GuessHandler:
         self.reminder_time = reminder_time
         self.config = ConfigReader()
         self.score_calculator = ScoreCalculator(self.config)
+        self._checker = AnswerChecker()
 
         if self.data_manager:
             self.alternative_answers = self.data_manager.get_alternative_answers(
@@ -57,195 +53,6 @@ class GuessHandler:
             )
         else:
             self.alternative_answers = []
-
-    def _normalize(self, text: str) -> str:
-        """
-        Applies a series of cleaning and normalization rules to a string.
-        """
-        if not text:
-            return ""
-
-        text = text.lower().strip()
-
-        # Convert written numbers to digits
-        replacements = {
-            r"\bone\b": "1",
-            r"\btwo\b": "2",
-            r"\bthree\b": "3",
-            r"\bfour\b": "4",
-            r"\bfive\b": "5",
-            r"\bsix\b": "6",
-            r"\bseven\b": "7",
-            r"\beight\b": "8",
-            r"\bnine\b": "9",
-            r"\bten\b": "10",
-        }
-        for word, num in replacements.items():
-            text = re.sub(word, num, text)
-
-        # Remove common stop words
-        stop_words = [
-            "a",
-            "an",
-            "the",
-            "and",
-            "or",
-            "of",
-            "to",
-            "in",
-            "on",
-            "at",
-            "by",
-            "for",
-            "with",
-        ]
-        pattern = r"\b(" + "|".join(stop_words) + r")\b"
-        text = re.sub(pattern, "", text)
-
-        # Remove all non-alphanumeric characters
-        text = re.sub(r"[^\w\s]", "", text)
-
-        # Replace multiple spaces with a single space
-        text = re.sub(r"\s+", " ", text).strip()
-
-        return text
-
-    def _get_adaptive_limit(self, text: str) -> int:
-        """
-        Returns the allowed edit distance based on string length.
-        """
-        length = len(text)
-        if length < 3:
-            return 0  # Exact match only
-        elif length <= 5:
-            return 1  # Strict for short words
-        else:
-            return 2  # Standard tolerance
-
-    def _is_token_match(self, token1: str, token2: str) -> bool:
-        """
-        Returns True if tokens match by Edit Distance (Typos) OR Jaro-Winkler (Root/Suffix).
-        """
-        # 1. Check Edit Distance (Adaptive Limit)
-        limit = self._get_adaptive_limit(token2)
-        dist = jellyfish.damerau_levenshtein_distance(token1, token2)
-
-        if dist <= limit:
-            return True
-
-        # 2. Check Jaro-Winkler (Stemming/Suffix check)
-        # 0.90 is a safe, high threshold that requires a strong prefix match.
-        score = jellyfish.jaro_winkler_similarity(token1, token2)
-        if score >= 0.90:
-            return True
-
-        return False
-
-    def _smart_token_match(self, guess: str, answer: str) -> bool:
-        """
-        Checks if tokens match using Damerau-Levenshtein and adaptive thresholds.
-        """
-        tokens_g = guess.split()
-        tokens_a = answer.split()
-
-        if not tokens_g or not tokens_a:
-            return False
-
-        # Recall: Percentage of Answer words found in Guess
-        matches_a = 0
-        matched_answer_tokens = set()
-        for ta in tokens_a:
-            # Find closest token in guess
-            if any(self._is_token_match(tg, ta) for tg in tokens_g):
-                matches_a += 1
-                matched_answer_tokens.add(ta)
-
-        # --- NEW: CRUCIAL MODIFIER GUARD ---
-        # Find which words in the answer were NOT found in the guess
-        missing_tokens = set(tokens_a) - matched_answer_tokens
-
-        # Check if we dropped something important
-        if not missing_tokens.isdisjoint(CRUCIAL_MODIFIERS):
-            return False
-
-        recall = matches_a / len(tokens_a)
-
-        # Precision: Percentage of Guess words found in Answer
-        matches_g = 0
-        for tg in tokens_g:
-            matched = False
-            for ta in tokens_a:
-                if self._is_token_match(tg, ta):
-                    matched = True
-                    break
-            if matched:
-                matches_g += 1
-
-        precision = matches_g / len(tokens_g)
-
-        # Subset Match (Venn Diagram): Precision == 1.0 AND Recall >= 0.5.
-        if precision == 1.0 and recall >= 0.5:
-            return True
-
-        # Superset Match (Over-answering): Recall == 1.0 AND len(answer) > 3.
-        if recall == 1.0 and len(answer) > 3:
-            return True
-
-        return False
-
-    def _is_correct_guess(self, guess: str, answer: str) -> bool:
-        """
-        Checks a guess against an answer using normalization, fuzzy matching, and token logic.
-        """
-        norm_g = self._normalize(guess)
-        norm_a = self._normalize(answer)
-
-        # Reject empty guesses
-        if not norm_g:
-            return False
-
-        # Step A: Exact Match
-        if norm_g == norm_a:
-            return True
-
-        # Numeric Exception
-        if norm_a.isdigit():
-            return norm_g == norm_a
-
-        # Step B: The Single-Word Branch
-        answer_words = norm_a.split()
-        if len(answer_words) == 1:
-            if self._is_token_match(norm_g, norm_a):
-                return True
-
-        # Step C: Smart Token Match
-        result = self._smart_token_match(norm_g, norm_a)
-        return result
-
-    @staticmethod
-    def check_answer_match(guess: str, answer: str) -> bool:
-        """
-        Static method to check if a guess matches an answer.
-        Creates a temporary GuessHandler instance to use the full matching logic.
-
-        Args:
-            guess: The player's guess (will be normalized)
-            answer: The correct answer (will be normalized)
-
-        Returns:
-            bool: True if the guess matches the answer
-        """
-        # Create a minimal GuessHandler instance just for matching
-        handler = GuessHandler(
-            data_manager=None,
-            player_manager=None,
-            daily_question=Question(
-                question="temp", answer=answer, category="temp", clue_value=0
-            ),
-            daily_question_id=0,
-            managers={},
-        )
-        return handler._is_correct_guess(guess, answer)
 
     def get_player_guesses(self, player_id: int) -> list:
         """
@@ -319,13 +126,13 @@ class GuessHandler:
 
         g = guess.strip().lower()
         a = str(self.daily_q.answer).strip().lower()
-        is_correct = self._is_correct_guess(g, a)
+        is_correct = self._checker.is_correct(g, a)
 
         # Check alternative answers if primary answer is incorrect
         if not is_correct:
             for alt_answer in self.alternative_answers:
                 alt_a = str(alt_answer).strip().lower()
-                if self._is_correct_guess(g, alt_a):
+                if self._checker.is_correct(g, alt_a):
                     is_correct = True
                     break
 

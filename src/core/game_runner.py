@@ -17,6 +17,7 @@ from src.core.guess_handler import GuessHandler
 from src.cfg.main import ConfigReader
 from src.core.daily_game_simulator import DailyGameSimulator
 from src.core.events import GuessEvent, PowerUpEvent
+from src.core.answer_checker import AnswerChecker
 
 
 class GameRunner:
@@ -751,7 +752,7 @@ class GameRunner:
         """
         # Use DataManager to mark guesses as correct, using GuessHandler's matching logic
         num_updated = self.data_manager.mark_matching_guesses_as_correct(
-            daily_question_id, new_answer, GuessHandler.check_answer_match
+            daily_question_id, new_answer, AnswerChecker().is_correct
         )
 
         if num_updated > 0:

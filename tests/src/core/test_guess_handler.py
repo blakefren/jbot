@@ -147,48 +147,6 @@ class TestGuessHandler(unittest.TestCase):
 
         self.assertFalse(self.guess_handler.has_answered_correctly_today(player_id))
 
-    def test_advanced_guess_checking(self):
-        """Test the advanced guess checking logic with normalization and fuzzy matching."""
-        # (guess, answer, expected_result)
-        test_cases = [
-            # Basic matches
-            ("clock", "clock", True),  # Exact
-            ("A Clock", "clock", True),  # Normalization (case, article)
-            ("the clock", "clock", True),  # Stop word removal
-            ("clock.", "clock", True),  # Punctuation
-            # "Hack" attempts
-            ("c", "clock", False),  # Too short
-            (".", "clock", False),  # Normalized to empty
-            ("o", "clock", False),  # Too short
-            # Spell correction (fuzzy matching)
-            ("clokc", "clock", True),  # Fuzzy (dist 2)
-            ("clocc", "clock", True),  # Fuzzy (dist 1)
-            ("clockk", "clock", True),  # Fuzzy (dist 1)
-            ("klock", "clock", True),  # Fuzzy (dist 1)
-            ("spnige", "sponge", True),  # Fuzzy (dist 2)
-            ("splnge", "sponge", True),  # Fuzzy (dist 2)
-            # Number/Word matching
-            ("one", "1", True),  # Normalization
-            ("1", "one", True),  # Normalization
-            ("7", "seven", True),  # Normalization
-            # Multi-word answers
-            ("The Great Gatsby", "great gatsby", True),
-            ("great gatsby", "The Great Gatsby", True),
-            ("great gatsy", "The Great Gatsby", True),  # Fuzzy
-        ]
-
-        for guess, answer, expected in test_cases:
-            with self.subTest(f"Guess: '{guess}', Answer: '{answer}'"):
-                # Direct test of the internal method
-                self.assertEqual(
-                    self.guess_handler._is_correct_guess(guess, answer), expected
-                )
-
-    def test_normalize_empty_text(self):
-        """Test that _normalize returns empty string for empty or None input."""
-        self.assertEqual(self.guess_handler._normalize(""), "")
-        self.assertEqual(self.guess_handler._normalize(None), "")
-
     def test_get_player_guesses_no_daily_question_id(self):
         """Test get_player_guesses returns empty list when no daily_question_id."""
         handler = GuessHandler(
@@ -407,82 +365,6 @@ class TestGuessHandler(unittest.TestCase):
             # Base points (100) + First Try (20) + Before Hint Bonus (10) + 2nd Fastest (5) = 135
             self.assertEqual(points, 135)
             self.assertTrue(any("Pre-hint!" in msg for msg in bonuses))
-
-    def test_validation_logic(self):
-        """Test the strict hierarchy of answer validation logic."""
-        # (guess, answer, expected_result)
-        cases = [
-            # Step A: Exact Match & Normalization
-            ("1", "1", True),
-            ("one", "1", True),
-            ("ONE", "1", True),
-            ("  one  ", "1", True),
-            # Step B: Standard Fuzzy Match (Typos)
-            ("clokc", "clock", True),
-            ("clock", "clokc", True),
-            ("kitten", "sitting", False),  # Distance > 2
-            # Step B Exception: Numeric Answers
-            ("150", "650", False),  # Distance 1, but numeric answer
-            ("10", "100", False),  # Distance 1, but numeric answer
-            # Step B Safety Check: Multi-word semantic differences
-            ("North America", "South America", False),  # Dist 2, but "North" != "South"
-            (
-                "New Yrok",
-                "New York",
-                True,
-            ),  # Dist 2 (Lev), but "Yrok" is typo (DamLev 1)
-            # Step C: Smart Token Match
-            # Subset Match (Venn Diagram): Precision == 1.0 AND Recall >= 0.5
-            ("Mountain Time", "Mountain Daylight Time", True),  # P=1.0, R=2/3=0.66
-            ("Central Daylight Time", "Mountain Daylight Time", False),  # P=2/3, R=2/3
-            # Superset Match (Over-answering): Recall == 1.0 AND len(answer) > 3
-            ("Central Standard Time", "Central", True),  # R=1.0, AnsLen > 3
-            ("Civil War", "War", False),  # R=1.0, but AnsLen=3 (not > 3)
-            # Stop words
-            ("The Beatles", "Beatles", True),
-            ("A Tale of Two Cities", "Tale Two Cities", True),
-            ("Virginia", "West Virginia", False),
-            ("Dr.", "Dr. No", False),
-            ("York", "New York", False),
-            ("carnivore", "carnivorous", True),
-            ("React", "Reaction", True),
-            ("tape", "a stapler", False),
-        ]
-
-        for guess, answer, expected in cases:
-            with self.subTest(guess=guess, answer=answer):
-                result = self.guess_handler._is_correct_guess(guess, answer)
-                self.assertEqual(
-                    result, expected, f"Failed for guess='{guess}', answer='{answer}'"
-                )
-
-    def test_check_answer_match_static_method(self):
-        """Test the static check_answer_match method used by other classes."""
-        # Test exact match
-        self.assertTrue(GuessHandler.check_answer_match("Paris", "Paris"))
-
-        # Test case-insensitive match
-        self.assertTrue(GuessHandler.check_answer_match("PARIS", "paris"))
-
-        # Test with normalization (articles removed)
-        self.assertTrue(GuessHandler.check_answer_match("The Beatles", "Beatles"))
-
-        # Test numeric match - written numbers are converted to digits
-        self.assertTrue(GuessHandler.check_answer_match("42", "42"))
-        self.assertTrue(GuessHandler.check_answer_match("four", "4"))
-
-        # Test fuzzy matching - partial matches work for multi-word answers
-        self.assertTrue(
-            GuessHandler.check_answer_match("George Washington", "washington")
-        )
-        self.assertTrue(
-            GuessHandler.check_answer_match("washington", "George Washington")
-        )
-
-        # Test non-match
-        self.assertFalse(GuessHandler.check_answer_match("London", "Paris"))
-        self.assertFalse(GuessHandler.check_answer_match("100", "200"))
-        self.assertFalse(GuessHandler.check_answer_match("New York", "Los Angeles"))
 
 
 if __name__ == "__main__":
