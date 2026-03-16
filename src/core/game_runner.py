@@ -580,13 +580,19 @@ class GameRunner:
 
         player = self.player_manager.get_player(str(player_id))
         score = player.score if player else 0
+        streak = player.answer_streak if player else 0
+        pending_mult = player.pending_rest_multiplier if player else 0.0
 
-        return (
-            f"-- Your stats, {player_name} --\n"
-            f"Total guesses: {total_guesses}\n"
-            f"Correct rate:  {correct_rate:.2f}%\n"
-            f"Score:         {score}"
-        )
+        lines = [
+            f"-- Your stats, {player_name} --",
+            f"Score:         {score}",
+            f"Streak:        {streak} day(s)",
+            f"Correct:       {correct_guesses}/{total_guesses} ({correct_rate:.1f}%)",
+        ]
+        if pending_mult and pending_mult > 1.0:
+            lines.append(f"Rest bonus:    ×{pending_mult} applies tomorrow")
+
+        return "\n".join(lines)
 
     def format_question(self, question: Question) -> str:
         """Helper method to format a trivia question using standard format."""

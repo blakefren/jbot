@@ -495,9 +495,9 @@ class TestGameRunner(unittest.TestCase):
 
         history = self.game_runner.get_player_history(123, "Alice")
         self.assertIn("-- Your stats, Alice --", history)
-        self.assertIn("Total guesses: 4", history)
-        self.assertIn("Correct rate:  75.00%", history)
         self.assertIn("Score:         300", history)
+        self.assertIn("Streak:        0 day(s)", history)
+        self.assertIn("Correct:       3/4 (75.0%)", history)
 
     def test_get_scores_leaderboard_alphabetical_tie(self):
         """Test that players with the same score are sorted alphabetically."""
