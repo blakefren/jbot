@@ -29,10 +29,11 @@ class GameRunner:
         self,
         question_selector: QuestionSelector,
         data_manager: DataManager,
+        player_manager: PlayerManager = None,
     ):
         self.question_selector = question_selector
         self.data_manager = data_manager
-        self.player_manager = PlayerManager(self.data_manager)
+        self.player_manager = player_manager or PlayerManager(self.data_manager)
         self.subscribed_contexts = self.data_manager.get_all_subscribers()
         self.daily_q = None
         self.daily_question_id = None

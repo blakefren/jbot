@@ -554,7 +554,7 @@ async def discord_bot_async(
         sources=sources,
         gemini_manager=gemini_manager,
     )
-    game = GameRunner(question_selector, data_manager)
+    game = GameRunner(question_selector, data_manager, player_manager)
     game.reminder_time = REMINDER_TIME
 
     bot = DiscordBot(config.get("JBOT_DISCORD_BOT_TOKEN"), game, config, player_manager)
