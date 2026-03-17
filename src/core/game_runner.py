@@ -43,16 +43,11 @@ class GameRunner:
         self.config = ConfigReader()
         self.reminder_time = None
 
-        # Feature flags
-        self.features = {
-            "fight": self.config.get_bool("JBOT_ENABLE_FIGHT"),
-        }
-
         # Initialize PowerUpManager (always enabled)
         self.managers["powerup"] = PowerUpManager(
             self.player_manager, self.data_manager
         )
-        logging.info(f"PowerUpManager enabled. Features: {self.features}")
+        logging.info("PowerUpManager enabled.")
 
     def _get_valid_question(self) -> Question:
         """

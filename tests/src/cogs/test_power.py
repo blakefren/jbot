@@ -21,18 +21,7 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
         self.target_member.id = 456
         self.target_member.display_name = "Target"
 
-    async def test_jinx_disabled(self):
-        self.bot.game.features = {"fight": False}
-        await self.cog.jinx.callback(self.cog, self.ctx, target=self.target_member)
-        self.bot.send_message.assert_awaited_once_with(
-            "Fight track is not enabled.",
-            interaction=self.ctx.interaction,
-            ephemeral=True,
-        )
-
     async def test_jinx_enabled(self):
-        self.bot.game.features = {"fight": True}
-
         # Mock the manager
         mock_manager = MagicMock()
         mock_manager.jinx.return_value = "Success"
@@ -76,17 +65,7 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
             "private msg", interaction=self.ctx.interaction, ephemeral=True
         )
 
-    async def test_steal_disabled(self):
-        self.bot.game.features = {"fight": False}
-        await self.cog.steal.callback(self.cog, self.ctx, target=self.target_member)
-        self.bot.send_message.assert_awaited_once_with(
-            "Fight track is not enabled.",
-            interaction=self.ctx.interaction,
-            ephemeral=True,
-        )
-
     async def test_steal_enabled(self):
-        self.bot.game.features = {"fight": True}
         mock_manager = MagicMock()
         mock_manager.steal.return_value = "Stolen points"
         self.bot.game.managers.get.return_value = mock_manager

@@ -36,8 +36,8 @@ The project uses Google's Gemini AI for dynamic content generation:
 
 ### Feature Tracks
 The bot's features are organized into distinct "tracks":
-*   **Fight Track**: Player-vs-player interactions like jinx and steal (controlled by `JBOT_ENABLE_FIGHT`). Commands: `/power jinx`, `/power steal`.
-*   **Power-up Track**: Mechanics that reward consistent play — streaks, bonuses, and rest. Always enabled. The `/power rest` command belongs here and should **not** be gated behind `JBOT_ENABLE_FIGHT`.
+*   **Fight Track**: Player-vs-player interactions like jinx and steal. Always enabled. Commands: `/power jinx`, `/power steal`.
+*   **Power-up Track**: Mechanics that reward consistent play — streaks, bonuses, and rest. Always enabled. The `/power rest` command belongs here.
 *   **Coop Track**: [Future] Collaborative features. Not yet implemented.
 
 ### Database Access Pattern
@@ -112,7 +112,7 @@ As your partner, I will adhere to the following principles:
         - Dataset-specific settings (like `final_jeopardy_score_sub`) configured per-source
         - At least one valid source required for bot to start
     - **Configuration Categories**:
-        - **Features**: `JBOT_ENABLE_*` flags for feature toggles (in `.env`). Currently: `JBOT_ENABLE_FIGHT`
+        - **Features**: `JBOT_ENABLE_*` flags for feature toggles (in `.env`). Currently: `JBOT_ENABLE_SEASONS`
         - **Scheduling**: `JBOT_MORNING_TIME`, `JBOT_REMINDER_TIME`, `JBOT_EVENING_TIME` (in `.env`)
         - **Question Sources**: All configured in `sources.toml` - no dataset settings in `.env`
         - **Scoring/Bonuses**: `JBOT_BONUS_TRY_CSV`, `JBOT_BONUS_FASTEST_CSV`, `JBOT_BONUS_BEFORE_HINT`, `JBOT_BONUS_STREAK_PER_DAY`, `JBOT_BONUS_STREAK_CAP` (in `.env`)

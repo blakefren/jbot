@@ -12,8 +12,7 @@ A daily bot for group trivia questions and competition.
     ```
 2.  Create a `.env` file in the root directory by copying the `.env.template` file. Fill out the required fields, such as your Discord bot token.
 3.  Configure your question sources in `sources.toml`. This file defines which datasets to use, their weights for selection, and dataset-specific settings. See the comments in `sources.toml` for examples.
-4.  Enable or disable game tracks (Fight, Power-up, Coop) in the `.env` file using the `JBOT_ENABLE_*` flags.
-5.  The database will be created automatically when you run the bot for the first time.
+4.  The database will be created automatically when you run the bot for the first time.
 
 ## Running the Bot
 

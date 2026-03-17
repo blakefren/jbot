@@ -67,7 +67,6 @@ class TestGameRunner(unittest.TestCase):
         self.defaults = {
             "JBOT_RIDDLE_HISTORY_DAYS": "30",
             "JBOT_QUESTION_RETRIES": "10",
-            "JBOT_ENABLE_FIGHT": "True",
             "JBOT_EMOJI_FASTEST": "🥇",
             "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
             "JBOT_BONUS_FASTEST_CSV": "10,5,1",

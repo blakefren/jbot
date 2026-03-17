@@ -22,14 +22,6 @@ class Power(commands.Cog):
         description="Steal a target's streak bonus — but you can't answer until the hint.",
     )
     async def jinx(self, ctx: commands.Context, target: discord.Member):
-        if not self.bot.game.features.get("fight"):
-            await self.bot.send_message(
-                "Fight track is not enabled.",
-                interaction=ctx.interaction,
-                ephemeral=True,
-            )
-            return
-
         manager = self._get_manager()
         if manager:
             try:
@@ -84,14 +76,6 @@ class Power(commands.Cog):
         description=f"Steal bonuses from a target, but lose {ConfigReader().get('JBOT_STEAL_STREAK_COST', 3)} streak days.",
     )
     async def steal(self, ctx: commands.Context, target: discord.Member):
-        if not self.bot.game.features.get("fight"):
-            await self.bot.send_message(
-                "Fight track is not enabled.",
-                interaction=ctx.interaction,
-                ephemeral=True,
-            )
-            return
-
         manager = self._get_manager()
         if manager:
             try:
