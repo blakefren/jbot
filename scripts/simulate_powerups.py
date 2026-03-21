@@ -148,6 +148,12 @@ class ProceduralStrategy(Strategy):
         if use_powerup:
             p_type = None
             target = None
+            # TODO: Simulation only emits live-day powerup types ("jinx", "steal",
+            # "rest"). It does not model overnight preloading ("jinx_preload",
+            # "steal_preload"), so the DailyGameSimulator's steal_is_preload
+            # double-count guard and retro-preload interaction are not exercised
+            # here. Update strategies to emit preload events if overnight balance
+            # simulation is ever needed.
 
             if self.core_strategy == "Rester":
                 p_type = "rest"

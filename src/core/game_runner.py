@@ -128,6 +128,9 @@ class GameRunner:
                 f"Daily question already set with ID: {self.daily_question_id}"
             )
             try:
+                powerup_manager = self.managers.get("powerup")
+                if powerup_manager:
+                    powerup_manager.hydrate_pending_powerups(self.daily_question_id)
                 self.restore_game_state()
                 logging.info(f"Game state restored")
             except Exception as e:
@@ -176,6 +179,10 @@ class GameRunner:
                 )
 
             logging.info(f"Daily question set with ID: {self.daily_question_id}")
+
+            powerup_manager = self.managers.get("powerup")
+            if powerup_manager:
+                powerup_manager.hydrate_pending_powerups(self.daily_question_id)
 
     def end_daily_game(self):
         """

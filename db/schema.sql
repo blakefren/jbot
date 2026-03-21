@@ -110,7 +110,7 @@ CREATE TABLE IF NOT EXISTS powerup_usage (
     used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES players (id),
     FOREIGN KEY (target_user_id) REFERENCES players (id),
-    FOREIGN KEY (question_id) REFERENCES questions (id)
+    FOREIGN KEY (question_id) REFERENCES daily_questions (id)
 );
 
 -- This table stores a snapshot of player state at the start of each daily question.

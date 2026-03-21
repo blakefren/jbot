@@ -89,24 +89,60 @@ class DailyGameSimulator:
             if state.steal_attempt_by:
                 state.steal_attempt_by = None
 
-        elif ptype == "jinx":
+        elif ptype in ("jinx", "jinx_preload"):
             if target_id:
                 target_state = self.daily_state[target_id]
-                target_state.jinxed_by = user_id
-                state.silenced = True  # Attacker is silenced
+                state.silenced = True
+                if target_state.is_correct:
+                    # Retroactive: target already answered — resolve at reduced ratio
+                    retro_ratio = float(
+                        self.config.get("JBOT_RETRO_JINX_BONUS_RATIO", "0.5")
+                    )
+                    streak_val = target_state.bonuses.get("streak", 0)
+                    half = int(streak_val * retro_ratio)
+                    if half > 0:
+                        target_state.score_earned -= half
+                        state.score_earned += half
+                        target_state.bonuses.pop("streak", None)
+                    target_state.jinxed_by = user_id  # mark resolved
+                else:
+                    target_state.jinxed_by = user_id
+
+        elif ptype == "steal_preload":
+            # Streak was already deducted at pre-load time (before the daily snapshot).
+            # Do NOT apply streak_delta — it is already baked into initial_player_states.
+            if target_id:
+                target_state = self.daily_state[target_id]
+                state.stealing_from = target_id
+                state.steal_is_preload = True
+                target_state.steal_attempt_by = user_id
 
         elif ptype == "steal":
             if target_id:
                 target_state = self.daily_state[target_id]
-                # Attacker loses JBOT_STEAL_STREAK_COST streak days (minimum 0)
-                steal_streak_cost = int(self.config.get("JBOT_STEAL_STREAK_COST", "2"))
                 player = self.initial_player_states.get(user_id)
                 initial_streak = player.answer_streak if player else 0
-                state.streak_delta = -min(steal_streak_cost, initial_streak)
-
-                state.stealing_from = target_id
-
-                target_state.steal_attempt_by = user_id
+                if target_state.is_correct:
+                    # Retroactive: target already answered — higher cost, immediate resolution
+                    retro_cost = int(
+                        self.config.get("JBOT_RETRO_STEAL_STREAK_COST", "5")
+                    )
+                    state.streak_delta = -min(retro_cost, initial_streak)
+                    stealable = self.score_calculator.get_stealable_amount(
+                        target_state.bonuses
+                    )
+                    if stealable > 0:
+                        target_state.score_earned -= stealable
+                        state.score_earned += stealable
+                    state.stealing_from = target_id
+                else:
+                    # Normal: deferred resolution when target answers
+                    steal_streak_cost = int(
+                        self.config.get("JBOT_STEAL_STREAK_COST", "2")
+                    )
+                    state.streak_delta = -min(steal_streak_cost, initial_streak)
+                    state.stealing_from = target_id
+                    target_state.steal_attempt_by = user_id
 
         elif ptype == "rest_wakeup":
             # Bonus from a previous day's rest was already applied live to the DB.
@@ -166,8 +202,9 @@ class DailyGameSimulator:
         player = self.initial_player_states.get(user_id)
         initial_streak = player.answer_streak if player else 0
 
-        # If player used steal, their streak was reduced by JBOT_STEAL_STREAK_COST for this calculation
-        if state.stealing_from:
+        # If player used a daytime steal, their streak was reduced by JBOT_STEAL_STREAK_COST
+        # for this score calculation. For steal_preload, the cost is already in the snapshot.
+        if state.stealing_from and not state.steal_is_preload:
             steal_streak_cost = int(self.config.get("JBOT_STEAL_STREAK_COST", "2"))
             initial_streak = max(0, initial_streak - steal_streak_cost)
 

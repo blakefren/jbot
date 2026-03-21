@@ -47,6 +47,9 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Mock get_pending_multiplier to return 0.0 by default (no rest bonus)
         self.data_manager.get_pending_multiplier.return_value = 0.0
+        # No pending overnight powerups by default
+        self.data_manager.get_pending_powerup.return_value = None
+        self.data_manager.get_pending_powerup_for_target.return_value = None
 
     def test_rest_basic(self):
         """Test that rest marks the player as resting and sets pending multiplier."""
@@ -271,19 +274,23 @@ class TestPowerUpManager(unittest.TestCase):
         self.assertIsNone(state.jinxed_by)
 
     def test_powerups_blocked_without_question(self):
+        """
+        When question_id is None, jinx/steal enter overnight pre-load mode
+        (not an error). Rest still requires an active question.
+        """
         manager = PowerUpManager(self.player_manager, self.data_manager)
 
-        # Test Jinx
-        with self.assertRaises(PowerUpError) as cm:
-            manager.jinx("1", "2", None)
-        self.assertEqual(str(cm.exception), "There is no active question right now.")
+        # Jinx with question_id=None → overnight pre-load, should succeed
+        result = manager.jinx("1", "2", None)
+        self.assertIn("queued for tomorrow", result)
 
-        # Test Steal
-        with self.assertRaises(PowerUpError) as cm2:
-            manager.steal("1", "2", None)
-        self.assertEqual(str(cm2.exception), "There is no active question right now.")
+        # Reset state then try steal overnight — should also succeed.
+        # (attacker "1" now has a pending overnight powerup; use a fresh manager)
+        manager2 = PowerUpManager(self.player_manager, self.data_manager)
+        result2 = manager2.steal("1", "2", None)
+        self.assertIn("queued", result2)
 
-        # Test Rest
+        # Rest still requires an active question
         with self.assertRaises(PowerUpError) as cm3:
             manager.rest("1", None, "Ans")
         self.assertEqual(str(cm3.exception), "There is no active question right now.")

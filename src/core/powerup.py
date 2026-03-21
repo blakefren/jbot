@@ -52,6 +52,12 @@ class PowerUpManager(BaseManager):
         self.emoji_streak = _config.get("JBOT_EMOJI_STREAK", "🔥")
         self.rest_multiplier = float(_config.get("JBOT_REST_MULTIPLIER", "1.2"))
         self.steal_streak_cost = int(_config.get("JBOT_STEAL_STREAK_COST", "2"))
+        self.retro_steal_streak_cost = int(
+            _config.get("JBOT_RETRO_STEAL_STREAK_COST", "5")
+        )
+        self.retro_jinx_bonus_ratio = float(
+            _config.get("JBOT_RETRO_JINX_BONUS_RATIO", "0.5")
+        )
         # Transient state for the day
         self.daily_state: dict[str, DailyPlayerState] = {}
 
@@ -218,22 +224,83 @@ class PowerUpManager(BaseManager):
 
         return f"{self.emoji_stealing} <@{attacker_id}> stole {stealable_amount} pts from <@{target_id}>!"
 
+    def hydrate_pending_powerups(self, question_id: int):
+        """
+        Applies overnight pre-loaded powerups to the current day's daily_state.
+        Called at the start of a new question day before the question is announced.
+        Streak costs for steal_preload were already deducted at pre-load time.
+        """
+        if not isinstance(question_id, int) or question_id <= 0:
+            logging.warning(
+                "hydrate_pending_powerups called with invalid question_id=%r; skipping.",
+                question_id,
+            )
+            return
+        pending = self.data_manager.apply_pending_powerups(question_id)
+        for row in pending:
+            attacker_id = row["user_id"]
+            target_id = row["target_user_id"]
+            ptype = row["powerup_type"]
+
+            attacker_state = self._get_daily_state(attacker_id)
+            target_state = self._get_daily_state(target_id)
+
+            if ptype == "jinx_preload":
+                attacker_state.silenced = True
+                target_state.jinxed_by = attacker_id
+                logging.info(
+                    "[Hydration] Overnight jinx applied: %s \u2192 %s",
+                    attacker_id,
+                    target_id,
+                )
+            elif ptype == "steal_preload":
+                attacker_state.stealing_from = target_id
+                attacker_state.steal_is_preload = True
+                target_state.steal_attempt_by = attacker_id
+                logging.info(
+                    "[Hydration] Overnight steal applied: %s \u2192 %s",
+                    attacker_id,
+                    target_id,
+                )
+
     def jinx(self, attacker_id: str, target_id: str, question_id: int = None) -> str:
         """
         Jinx another player.
-        Attacker is silenced until 7 PM.
-        Target's streak points are blocked if they answer correctly (unless shielded).
-        """
-        if question_id is None:
-            raise PowerUpError("There is no active question right now.")
 
+        Overnight (question_id is None): pre-loads the jinx for the next question day.
+        Daytime: silences attacker until hint; if target already answered, resolves
+        immediately at a reduced ratio (retro_jinx_bonus_ratio) of the streak bonus.
+        """
         attacker = self.player_manager.get_player(attacker_id)
         target = self.player_manager.get_player(target_id)
 
         if not attacker or not target:
             raise PowerUpError("Invalid player(s).")
 
-        # Validation: Attacker must not have answered yet
+        if question_id is None:
+            # --- Overnight pre-load path ---
+            if self.data_manager.get_pending_powerup(attacker_id):
+                raise PowerUpError("You already have a powerup queued for tomorrow.")
+            if self.data_manager.get_pending_powerup_for_target(
+                target_id, "jinx_preload"
+            ):
+                raise PowerUpError(
+                    f"<@{target_id}> is already being targeted by a Jinx!"
+                )
+
+            # Silence attacker in-memory immediately; hydration will re-apply at morning
+            attacker_state = self._get_daily_state(attacker_id)
+            attacker_state.silenced = True
+            self.data_manager.log_powerup_usage(
+                attacker_id, "jinx_preload", target_id, None
+            )
+            return (
+                f"{self.emoji_silenced} Your jinx is queued for tomorrow! "
+                f"{target.name} won't know until it takes effect. "
+                f"You can't answer until the hint is revealed!"
+            )
+
+        # --- Daytime path ---
         last_correct = self.data_manager.get_last_correct_guess_date(attacker_id)
         if last_correct == self.data_manager.get_today():
             raise PowerUpError(
@@ -246,33 +313,84 @@ class PowerUpManager(BaseManager):
 
         target_state = self._get_daily_state(target_id)
 
-        # Check for duplicate Jinx
         if target_state.jinxed_by:
             raise PowerUpError(f"<@{target_id}> has already been jinxed!")
 
-        # Mark Attacker as SILENCED until the hint is sent
+        # Attacker is silenced regardless of target's answered state
         attacker_state.silenced = True
         self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
 
+        if target_state.is_correct:
+            # --- Retroactive: target already answered — resolve at reduced benefit ---
+            streak_bonus = target_state.bonuses.get("streak", 0)
+            half = int(streak_bonus * self.retro_jinx_bonus_ratio)
+            target_state.jinxed_by = attacker_id  # mark resolved
+            if half > 0:
+                self.player_manager.update_score(target_id, -half)
+                self.player_manager.update_score(attacker_id, half)
+                return (
+                    f"{self.emoji_jinxed} <@{target_id}> already answered \u2014 retroactive jinx! "
+                    f"You swiped half their streak bonus ({half} pts). "
+                    f"{self.emoji_silenced} You still can't answer until the hint is revealed."
+                )
+            return (
+                f"{self.emoji_jinxed} <@{target_id}> already answered but had no streak bonus \u2014 "
+                f"nothing to steal! "
+                f"{self.emoji_silenced} You still can't answer until the hint is revealed."
+            )
+
+        # Normal daytime path
         target_state.jinxed_by = attacker_id
-        return f"{self.emoji_silenced} Your jinx is set! {target.name} won't know until it takes effect. You can't answer until the hint is revealed!"
+        return (
+            f"{self.emoji_silenced} Your jinx is set! {target.name} won't know until it takes effect. "
+            f"You can't answer until the hint is revealed!"
+        )
 
     def steal(self, thief_id: str, target_id: str, question_id: int = None) -> str:
         """
         Steal points from another player.
-        Attacker's streak is reset immediately.
-        If attacker answers correctly, they steal bonuses from target.
-        """
-        if question_id is None:
-            raise PowerUpError("There is no active question right now.")
 
+        Overnight (question_id is None): pre-loads the steal for the next question day;
+        streak cost deducted immediately.
+        Daytime normal: streak cost deducted, bonuses stolen when target answers.
+        Daytime retroactive (target already answered): higher streak cost
+        (retro_steal_streak_cost), bonuses transferred immediately.
+        """
         thief = self.player_manager.get_player(thief_id)
         target = self.player_manager.get_player(target_id)
 
         if not thief or not target:
             raise PowerUpError("Invalid player(s).")
 
-        # Validation: Attacker must not have answered yet.
+        if question_id is None:
+            # --- Overnight pre-load path ---
+            if self.data_manager.get_pending_powerup(thief_id):
+                raise PowerUpError("You already have a powerup queued for tomorrow.")
+            if self.data_manager.get_pending_powerup_for_target(
+                target_id, "steal_preload"
+            ):
+                raise PowerUpError(
+                    f"<@{target_id}> is already being targeted for theft!"
+                )
+
+            # Deduct streak immediately; this cost is baked into tomorrow's snapshot
+            current_streak = thief.answer_streak if thief else 0
+            new_streak = max(0, current_streak - self.steal_streak_cost)
+            actual_lost = current_streak - new_streak
+            self.player_manager.set_streak(thief_id, new_streak)
+            self.data_manager.log_powerup_usage(
+                thief_id, "steal_preload", target_id, None
+            )
+            thief_state = self._get_daily_state(thief_id)
+            thief_state.stealing_from = target_id
+            thief_state.steal_is_preload = True
+            return (
+                f"{self.emoji_stealing} You've queued a heist for tomorrow! "
+                f"Sacrificed {actual_lost} streak days. "
+                f"If they answer correctly, you'll steal their bonuses."
+            )
+
+        # --- Daytime path ---
         last_correct = self.data_manager.get_last_correct_guess_date(thief_id)
         if last_correct == self.data_manager.get_today():
             raise PowerUpError(
@@ -285,21 +403,48 @@ class PowerUpManager(BaseManager):
 
         target_state = self._get_daily_state(target_id)
 
-        # Check for duplicate Steal
         if target_state.steal_attempt_by:
             raise PowerUpError(f"<@{target_id}> is already being targeted for theft!")
 
-        # Attacker Penalty: Reduce streak by STEAL_STREAK_COST (minimum 0)
-        thief = self.player_manager.get_player(thief_id)
-        new_streak = max(
-            0, (thief.answer_streak if thief else 0) - self.steal_streak_cost
-        )
+        if target_state.is_correct:
+            # --- Retroactive: target already answered — higher cost, immediate resolution ---
+            current_streak = thief.answer_streak if thief else 0
+            new_streak = max(0, current_streak - self.retro_steal_streak_cost)
+            actual_lost = current_streak - new_streak
+            self.player_manager.set_streak(thief_id, new_streak)
+            self.data_manager.log_powerup_usage(
+                thief_id, "steal", target_id, question_id
+            )
+            thief_state.stealing_from = target_id
+            stealable_amount = self.score_calculator.get_stealable_amount(
+                target_state.bonuses
+            )
+            if stealable_amount == 0:
+                return (
+                    f"{self.emoji_stealing} You sacrificed {actual_lost} streak days "
+                    f"to rob <@{target_id}>, but there was nothing to steal!"
+                )
+            self.player_manager.update_score(target_id, -stealable_amount)
+            self.player_manager.update_score(thief_id, stealable_amount)
+            target_state.steal_attempt_by = thief_id  # mark resolved
+            return (
+                f"{self.emoji_stealing} <@{target_id}> already answered! "
+                f"You paid {actual_lost} streak days and instantly swiped "
+                f"{stealable_amount} pts!"
+            )
+
+        # --- Normal daytime path ---
+        current_streak = thief.answer_streak if thief else 0
+        new_streak = max(0, current_streak - self.steal_streak_cost)
+        actual_lost = current_streak - new_streak
         self.player_manager.set_streak(thief_id, new_streak)
         self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
         thief_state.stealing_from = target_id
-
         target_state.steal_attempt_by = thief_id
-        return f"{self.emoji_stealing} You sacrificed {self.steal_streak_cost} streak days to rob <@{target_id}>! If they answer correctly, you'll steal their bonuses."
+        return (
+            f"{self.emoji_stealing} You sacrificed {actual_lost} streak days "
+            f"to rob <@{target_id}>! If they answer correctly, you'll steal their bonuses."
+        )
 
     def rest(
         self, player_id: str, question_id: int, question_answer: str

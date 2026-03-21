@@ -36,7 +36,10 @@ The project uses Google's Gemini AI for dynamic content generation:
 
 ### Feature Tracks
 The bot's features are organized into distinct "tracks":
-*   **Fight Track**: Player-vs-player interactions like jinx and steal. Always enabled. Commands: `/power jinx`, `/power steal`.
+*   **Fight Track**: Player-vs-player interactions like jinx and steal. Commands: `/power jinx`, `/power steal`.
+    - **Overnight Pre-loading**: When no question is active (`question_id is None`), jinx/steal are queued for the next day. Stored in `powerup_usage` with `question_id = NULL`. Steal streak cost is deducted immediately at pre-load time.
+    - **Retroactive Targeting**: A player can jinx/steal a target who has already answered. Jinx transfers a reduced share (`JBOT_RETRO_JINX_BONUS_RATIO`) of the target's streak bonus immediately. Retroactive steal costs more streak days (`JBOT_RETRO_STEAL_STREAK_COST`) and resolves immediately.
+    - **Hydration**: At the start of each question day, `PowerUpManager.hydrate_pending_powerups(question_id)` promotes all `question_id IS NULL` rows to the new question and activates them in `daily_state`.
 *   **Power-up Track**: Mechanics that reward consistent play — streaks, bonuses, and rest. Always enabled. The `/power rest` command belongs here.
 *   **Coop Track**: [Future] Collaborative features. Not yet implemented.
 
@@ -71,12 +74,12 @@ The project follows a strict "DataManager-Only" pattern:
 ### Core Managers
 *   **GameRunner**: Orchestrates the daily game flow, question delivery, and answer reveals
 *   **GuessHandler**: Processes player guesses and calculates scores in real-time
-*   **PowerUpManager**: Manages power-up mechanics (jinx, steal, rest) and streak tracking
+*   **PowerUpManager**: Manages power-up mechanics (jinx, steal, rest) and streak tracking. Also handles overnight pre-loading (`hydrate_pending_powerups()` called by `GameRunner.set_daily_question()`) and retroactive targeting.
 *   **PlayerManager**: Business logic for player operations
 *   **DataManager**: Exclusive database access layer
 *   **GeminiManager**: AI content generation (regular class instance, not a singleton)
 *   **RolesGameMode** (`src/core/roles.py`): Assigns DB roles based on score standings; called by `DiscordBot.apply_discord_roles()` in the evening task
-*   **DailyPlayerState** (`src/core/state.py`): In-memory dataclass holding all transient per-player state for the current question round (score earned, guesses, bonuses, jinx/steal/rest flags). Single source of truth during a round.
+*   **DailyPlayerState** (`src/core/state.py`): In-memory dataclass holding all transient per-player state for the current question round (score earned, guesses, bonuses, jinx/steal/rest flags). Single source of truth during a round. Key field: `steal_is_preload` — set `True` when the steal's streak cost was deducted overnight (before the daily snapshot), so the simulator skips the cost deduction to avoid double-counting.
 *   Managers should use dependency injection via constructors. **Note:** some existing modules (`powerup.py`, `guess_handler.py`, `trivia.py`) still instantiate `ConfigReader` at module level — this is a known issue tracked in the code review doc.
 
 ## My Persona
@@ -116,7 +119,7 @@ As your partner, I will adhere to the following principles:
         - **Scheduling**: `JBOT_MORNING_TIME`, `JBOT_REMINDER_TIME`, `JBOT_EVENING_TIME` (in `.env`)
         - **Question Sources**: All configured in `sources.toml` - no dataset settings in `.env`
         - **Scoring/Bonuses**: `JBOT_BONUS_TRY_CSV`, `JBOT_BONUS_FASTEST_CSV`, `JBOT_BONUS_BEFORE_HINT`, `JBOT_BONUS_STREAK_PER_DAY`, `JBOT_BONUS_STREAK_CAP` (in `.env`)
-        - **Power-ups**: `JBOT_REST_MULTIPLIER`, `JBOT_STEAL_STREAK_COST` (in `.env`)
+        - **Power-ups**: `JBOT_REST_MULTIPLIER`, `JBOT_STEAL_STREAK_COST`, `JBOT_RETRO_STEAL_STREAK_COST` (streak cost for retroactive steal, default 5), `JBOT_RETRO_JINX_BONUS_RATIO` (fraction of streak bonus transferred in retroactive jinx, default 0.5) (in `.env`)
         - **Behavior**: `JBOT_TAG_UNANSWERED_PLAYERS` — whether to @-mention players who haven't answered in the reminder message
         - **Emojis**: `JBOT_EMOJI_*` keys for all in-game emoji (fastest, streak, before-hint, jinxed, silenced, rest, etc.)
         - **Discord**: Bot tokens, role names (in `.env`)

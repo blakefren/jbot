@@ -612,6 +612,41 @@ class DataManager:
         results = self._db.execute_query(query, (question_id,))
         return results
 
+    def get_pending_powerup(self, user_id: str) -> dict | None:
+        """Returns the first unapplied overnight powerup for a player, or None."""
+        query = "SELECT * FROM powerup_usage WHERE user_id = ? AND question_id IS NULL LIMIT 1"
+        results = self._db.execute_query(query, (user_id,))
+        return results[0] if results else None
+
+    def get_pending_powerup_for_target(
+        self, target_user_id: str, powerup_type: str
+    ) -> dict | None:
+        """Returns the first unapplied overnight powerup of the given type targeting a player."""
+        query = (
+            "SELECT * FROM powerup_usage"
+            " WHERE target_user_id = ? AND powerup_type = ? AND question_id IS NULL LIMIT 1"
+        )
+        results = self._db.execute_query(query, (target_user_id, powerup_type))
+        return results[0] if results else None
+
+    def apply_pending_powerups(self, question_id: int) -> list[dict]:
+        """
+        Marks all unapplied overnight preload powerups as applied to the given question.
+        Returns the list of rows that were updated.
+        """
+        pending = self._db.execute_query(
+            "SELECT * FROM powerup_usage"
+            " WHERE question_id IS NULL AND powerup_type IN ('jinx_preload', 'steal_preload')"
+        )
+        if pending:
+            ids = [row["id"] for row in pending]
+            placeholders = ",".join("?" * len(ids))
+            self._db.execute_update(
+                f"UPDATE powerup_usage SET question_id = ? WHERE id IN ({placeholders})",
+                (question_id, *ids),
+            )
+        return list(pending) if pending else []
+
     def log_score_adjustment(
         self, player_id: str, admin_id: str, amount: int, reason: str
     ):
