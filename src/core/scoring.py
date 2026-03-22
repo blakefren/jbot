@@ -125,18 +125,24 @@ class ScoreCalculator:
                     messages.append(f"{rank_emoji} {ordinal} Fastest! (+{bonus})")
 
         # 4. Streak Bonus
-        # Streak bonus logic: min(streak * per_day, cap)
-        # Usually applied if streak >= 2
-        if streak_length >= 2:
-            streak_bonus = min(streak_length * self.streak_per_day, self.streak_cap)
-            if streak_bonus > 0:
-                points_earned += streak_bonus
-                bonuses["streak"] = streak_bonus
-                messages.append(
-                    f"{self.emoji_streak} {streak_length}-day streak! (+{streak_bonus})"
-                )
+        streak_bonus = self.get_streak_bonus(streak_length)
+        if streak_bonus > 0:
+            points_earned += streak_bonus
+            bonuses["streak"] = streak_bonus
+            messages.append(
+                f"{self.emoji_streak} {streak_length}-day streak! (+{streak_bonus})"
+            )
 
         return points_earned, bonuses, messages
+
+    def get_streak_bonus(self, streak_length: int) -> int:
+        """
+        Returns the streak bonus for a given streak length.
+        Extracted from calculate_points for use in post-answer recalculations.
+        """
+        if streak_length < 2:
+            return 0
+        return min(streak_length * self.streak_per_day, self.streak_cap)
 
     def get_stealable_amount(self, bonuses: dict) -> int:
         """

@@ -1,6 +1,6 @@
 # Combat Track: Post-Answer Logic — Design Document
 
-**Status:** Design Complete — Ready to Implement
+**Status:** Implemented
 **Proposal:** "Combat Track: Post-Answer Logic" (March 2026)
 **Author:** Lex (AI partner)
 

@@ -109,6 +109,34 @@ class DailyGameSimulator:
                 else:
                     target_state.jinxed_by = user_id
 
+        elif ptype == "jinx_late":
+            if target_id:
+                target_state = self.daily_state[target_id]
+                state.silenced = True
+                # Cost: strip before_hint and fastest bonuses from attacker's earned score
+                before_hint_val = state.bonuses.pop("before_hint", 0)
+                fastest_val = sum(
+                    state.bonuses.pop(k)
+                    for k in list(state.bonuses)
+                    if k.startswith("fastest_")
+                )
+                state.bonuses.pop("fastest", None)
+                state.score_earned -= before_hint_val + fastest_val
+                # Apply jinx to target (same resolution as regular jinx)
+                if target_state.is_correct:
+                    retro_ratio = float(
+                        self.config.get("JBOT_RETRO_JINX_BONUS_RATIO", "0.5")
+                    )
+                    streak_val = target_state.bonuses.get("streak", 0)
+                    half = int(streak_val * retro_ratio)
+                    if half > 0:
+                        target_state.score_earned -= half
+                        state.score_earned += half
+                        target_state.bonuses.pop("streak", None)
+                    target_state.jinxed_by = user_id  # mark resolved
+                else:
+                    target_state.jinxed_by = user_id
+
         elif ptype == "steal_preload":
             # Streak was already deducted at pre-load time (before the daily snapshot).
             # Do NOT apply streak_delta — it is already baked into initial_player_states.
@@ -128,7 +156,23 @@ class DailyGameSimulator:
                     retro_cost = int(
                         self.config.get("JBOT_RETRO_STEAL_STREAK_COST", "5")
                     )
-                    state.streak_delta = -min(retro_cost, initial_streak)
+                    if state.is_correct:
+                        # Late-day: thief already answered — override streak_delta from handle_guess
+                        effective_streak = initial_streak + 1
+                        new_streak = max(0, effective_streak - retro_cost)
+                        state.streak_delta = new_streak - initial_streak
+                        # Recalculate streak bonus based on reduced streak
+                        old_streak_bonus = state.bonuses.get("streak", 0)
+                        new_streak_bonus = self.score_calculator.get_streak_bonus(
+                            new_streak
+                        )
+                        state.score_earned -= old_streak_bonus - new_streak_bonus
+                        if new_streak_bonus > 0:
+                            state.bonuses["streak"] = new_streak_bonus
+                        else:
+                            state.bonuses.pop("streak", None)
+                    else:
+                        state.streak_delta = -min(retro_cost, initial_streak)
                     stealable = self.score_calculator.get_stealable_amount(
                         target_state.bonuses
                     )
@@ -141,7 +185,23 @@ class DailyGameSimulator:
                     steal_streak_cost = int(
                         self.config.get("JBOT_STEAL_STREAK_COST", "3")
                     )
-                    state.streak_delta = -min(steal_streak_cost, initial_streak)
+                    if state.is_correct:
+                        # Late-day: thief already answered — override streak_delta from handle_guess
+                        effective_streak = initial_streak + 1
+                        new_streak = max(0, effective_streak - steal_streak_cost)
+                        state.streak_delta = new_streak - initial_streak
+                        # Recalculate streak bonus based on reduced streak
+                        old_streak_bonus = state.bonuses.get("streak", 0)
+                        new_streak_bonus = self.score_calculator.get_streak_bonus(
+                            new_streak
+                        )
+                        state.score_earned -= old_streak_bonus - new_streak_bonus
+                        if new_streak_bonus > 0:
+                            state.bonuses["streak"] = new_streak_bonus
+                        else:
+                            state.bonuses.pop("streak", None)
+                    else:
+                        state.streak_delta = -min(steal_streak_cost, initial_streak)
                     state.stealing_from = target_id
                     target_state.steal_attempt_by = user_id
 
