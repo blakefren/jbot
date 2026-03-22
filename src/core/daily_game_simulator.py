@@ -138,7 +138,7 @@ class DailyGameSimulator:
                 else:
                     # Normal: deferred resolution when target answers
                     steal_streak_cost = int(
-                        self.config.get("JBOT_STEAL_STREAK_COST", "2")
+                        self.config.get("JBOT_STEAL_STREAK_COST", "3")
                     )
                     state.streak_delta = -min(steal_streak_cost, initial_streak)
                     state.stealing_from = target_id
@@ -205,7 +205,7 @@ class DailyGameSimulator:
         # If player used a daytime steal, their streak was reduced by JBOT_STEAL_STREAK_COST
         # for this score calculation. For steal_preload, the cost is already in the snapshot.
         if state.stealing_from and not state.steal_is_preload:
-            steal_streak_cost = int(self.config.get("JBOT_STEAL_STREAK_COST", "2"))
+            steal_streak_cost = int(self.config.get("JBOT_STEAL_STREAK_COST", "3"))
             initial_streak = max(0, initial_streak - steal_streak_cost)
 
         streak_length = initial_streak + 1

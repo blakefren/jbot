@@ -51,7 +51,7 @@ class PowerUpManager(BaseManager):
         self.emoji_rest_wakeup = _config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
         self.emoji_streak = _config.get("JBOT_EMOJI_STREAK", "🔥")
         self.rest_multiplier = float(_config.get("JBOT_REST_MULTIPLIER", "1.2"))
-        self.steal_streak_cost = int(_config.get("JBOT_STEAL_STREAK_COST", "2"))
+        self.steal_streak_cost = int(_config.get("JBOT_STEAL_STREAK_COST", "3"))
         self.retro_steal_streak_cost = int(
             _config.get("JBOT_RETRO_STEAL_STREAK_COST", "5")
         )
