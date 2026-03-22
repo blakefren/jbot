@@ -266,6 +266,30 @@ class TestRetroactiveJinx(unittest.TestCase):
         self.assertEqual(players["target"].score, 100)
         self.assertEqual(manager._get_daily_state("target").jinxed_by, "attacker")
 
+    def test_retro_jinx_triggered_after_on_guess(self):
+        """Regression: on_guess must set is_correct so jinx sees it retroactively."""
+        manager, pm, dm, players = _make_manager()
+        dm.get_pending_multiplier.return_value = 1.0
+
+        # Target answers correctly through the normal on_guess path
+        manager.on_guess(
+            player_id="target",
+            player_name="Target",
+            guess="answer",
+            is_correct=True,
+            points_earned=100,
+            bonus_values={"streak": 20},
+            question_id=99,
+        )
+
+        # Attacker jinxes after target has already answered
+        result = manager.jinx("attacker", "target", question_id=99)
+
+        # Should be retroactive: attacker gains 10, target loses 10
+        self.assertEqual(players["attacker"].score, 110)
+        self.assertEqual(players["target"].score, 90)
+        self.assertIn("retroactive jinx", result)
+
 
 class TestRetroactiveSteal(unittest.TestCase):
     def _setup_with_answered_target(self, target_bonuses=None):

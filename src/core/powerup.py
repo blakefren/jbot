@@ -121,6 +121,7 @@ class PowerUpManager(BaseManager):
 
         # Store earnings for potential theft
         if is_correct:
+            state.is_correct = True
             state.score_earned = points_earned
             state.bonuses = bonus_values
 
