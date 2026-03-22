@@ -74,6 +74,7 @@ class DailyGameSimulator:
 
         return self.calculate_final_results()
 
+    # TODO: can we delegate implementation to the PowerUp manager to avoid duplication?
     def handle_powerup(self, event: PowerUpEvent):
         user_id = event.user_id
         ptype = event.powerup_type
