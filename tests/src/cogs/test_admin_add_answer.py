@@ -44,15 +44,16 @@ class TestAdminAddAnswer(unittest.IsolatedAsyncioTestCase):
         self.bot.game.recalculate_scores_for_new_answer = AsyncMock()
 
     async def test_add_answer_apply_success(self):
-        """Test add_answer with apply=True sends both ephemeral details and public summary."""
-        # 1. Mock result from game engine
+        """apply=True: single public message with @mentions; ephemeral is just 'Done.'"""
         mock_result = {
             "status": "success",
             "updated_players": 2,
             "total_refunded": 500,
             "age_warning": None,
+            "rest_cleared_players": [],
             "details": [
                 {
+                    "user_id": "111",
                     "name": "Player1",
                     "score_before": 100,
                     "score_after": 300,
@@ -60,6 +61,7 @@ class TestAdminAddAnswer(unittest.IsolatedAsyncioTestCase):
                     "badges": ["BADGE"],
                 },
                 {
+                    "user_id": "222",
                     "name": "Player2",
                     "score_before": 200,
                     "score_after": 500,
@@ -72,54 +74,39 @@ class TestAdminAddAnswer(unittest.IsolatedAsyncioTestCase):
             return_value=mock_result
         )
 
-        # 2. Run command
         await self.cog.add_answer.callback(
             self.cog, self.ctx, answer_text="New Answer", apply=True
         )
 
-        # 3. Verify ephemeral deferral
         self.ctx.interaction.response.defer.assert_called_once_with(ephemeral=True)
-
-        # 4. Verify backend call
         self.bot.game.recalculate_scores_for_new_answer.assert_called_once_with(
             "New Answer", "12345", dry_run=False
         )
 
-        # 5. Verify ephemeral details sent to admin
-        # Should contain answer text and details
-        # The first call to followup.send is the one we care about
-        ephemeral_calls = self.ctx.interaction.followup.send.call_args_list
-        self.assertTrue(
-            len(ephemeral_calls) > 0, "Expected at least one followup message"
-        )
+        # Ephemeral reply is just a silent "Done."
+        ephemeral_text = self.ctx.interaction.followup.send.call_args[0][0]
+        self.assertEqual(ephemeral_text, "Done.")
 
-        # Get the first call's arguments
-        call_args_ephemeral = ephemeral_calls[0][0][0]
-
-        self.assertIn("Added alternative answer", call_args_ephemeral)
-        self.assertIn("Player1: 100 -> 300 (+200)", call_args_ephemeral)
-        self.assertIn("Player2: 200 -> 500 (+300)", call_args_ephemeral)
-
-        # 6. Verify public message sent to channel
+        # Public message uses @mentions and contains the summary
         self.ctx.channel.send.assert_called_once()
-        call_args_public = self.ctx.channel.send.call_args[0][0]
-
-        # Public message should contain summary but NOT the actual answer text "New Answer"
-        self.assertIn("Score Adjustment:", call_args_public)
-        self.assertIn("Player1", call_args_public)
-        self.assertIn("Player2", call_args_public)
-        # Ensure answer text is NOT leaked
-        self.assertNotIn("New Answer", call_args_public)
+        public_text = self.ctx.channel.send.call_args[0][0]
+        self.assertIn("Score Adjustment:", public_text)
+        self.assertIn("<@111>", public_text)
+        self.assertIn("<@222>", public_text)
+        # Answer not revealed — answer text must NOT appear
+        self.assertNotIn("New Answer", public_text)
 
     async def test_add_answer_dry_run(self):
-        """Test add_answer with apply=False (default) sends only ephemeral details."""
+        """apply=False: single ephemeral message with [DRY RUN], plain names, no public."""
         mock_result = {
             "status": "success",
             "updated_players": 1,
             "total_refunded": 100,
             "age_warning": None,
+            "rest_cleared_players": [],
             "details": [
                 {
+                    "user_id": "111",
                     "name": "Player1",
                     "score_before": 100,
                     "score_after": 200,
@@ -132,21 +119,20 @@ class TestAdminAddAnswer(unittest.IsolatedAsyncioTestCase):
             return_value=mock_result
         )
 
-        # Run command with apply=False
         await self.cog.add_answer.callback(
             self.cog, self.ctx, answer_text="New Answer", apply=False
         )
 
-        # Verify call was a dry run
         self.bot.game.recalculate_scores_for_new_answer.assert_called_once_with(
             "New Answer", "12345", dry_run=True
         )
 
-        # Verify message says [DRY RUN]
-        call_args = self.ctx.interaction.followup.send.call_args[0][0]
-        self.assertIn("[DRY RUN]", call_args)
+        ephemeral_text = self.ctx.interaction.followup.send.call_args[0][0]
+        self.assertIn("[DRY RUN]", ephemeral_text)
+        # Plain name used — no @mention
+        self.assertIn("Player1", ephemeral_text)
+        self.assertNotIn("<@111>", ephemeral_text)
 
-        # Verify NO public message sent
         self.ctx.channel.send.assert_not_called()
 
     async def test_add_answer_error(self):
@@ -165,3 +151,146 @@ class TestAdminAddAnswer(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Error: Something went wrong", args)
 
         self.ctx.channel.send.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _make_result(self, **overrides):
+        """Return a minimal success result dict, with optional field overrides."""
+        base = {
+            "status": "success",
+            "updated_players": 1,
+            "total_refunded": 100,
+            "age_warning": None,
+            "rest_cleared_players": [],
+            "details": [
+                {
+                    "user_id": "111",
+                    "name": "Player1",
+                    "score_before": 100,
+                    "score_after": 200,
+                    "diff": 100,
+                    "badges": [],
+                }
+            ],
+        }
+        base.update(overrides)
+        return base
+
+    def _set_revealed(self):
+        """Configure task mocks so is_revealed=True."""
+        from datetime import datetime, timedelta
+
+        self.bot.morning_message_task.is_running.return_value = True
+        self.bot.evening_message_task.is_running.return_value = True
+        now = datetime.now()
+        self.bot.morning_message_task.next_iteration = now + timedelta(hours=1)
+        self.bot.evening_message_task.next_iteration = now + timedelta(hours=12)
+
+    # ------------------------------------------------------------------
+    # Answer visibility
+    # ------------------------------------------------------------------
+
+    async def test_apply_not_revealed_answer_hidden_from_public(self):
+        """apply=True, not revealed: answer text must not appear in the public message."""
+        self.bot.game.recalculate_scores_for_new_answer = MagicMock(
+            return_value=self._make_result()
+        )
+        await self.cog.add_answer.callback(
+            self.cog, self.ctx, answer_text="Secret", apply=True
+        )
+        public_text = self.ctx.channel.send.call_args[0][0]
+        self.assertNotIn("Secret", public_text)
+
+    async def test_apply_revealed_shows_spoiler_in_public(self):
+        """apply=True, after reveal: public message shows answer under spoiler tags."""
+        self._set_revealed()
+        self.bot.game.recalculate_scores_for_new_answer = MagicMock(
+            return_value=self._make_result()
+        )
+        await self.cog.add_answer.callback(
+            self.cog, self.ctx, answer_text="SecretAnswer", apply=True
+        )
+        public_text = self.ctx.channel.send.call_args[0][0]
+        self.assertIn("||SecretAnswer||", public_text)
+
+    async def test_dry_run_not_revealed_answer_hidden_from_ephemeral(self):
+        """apply=False, not revealed: answer text must not appear in ephemeral message."""
+        self.bot.game.recalculate_scores_for_new_answer = MagicMock(
+            return_value=self._make_result()
+        )
+        await self.cog.add_answer.callback(
+            self.cog, self.ctx, answer_text="Secret", apply=False
+        )
+        ephemeral_text = self.ctx.interaction.followup.send.call_args[0][0]
+        self.assertNotIn("Secret", ephemeral_text)
+
+    async def test_dry_run_revealed_shows_answer_in_ephemeral(self):
+        """apply=False, after reveal: ephemeral shows answer (with spoiler) so admin sees it."""
+        self._set_revealed()
+        self.bot.game.recalculate_scores_for_new_answer = MagicMock(
+            return_value=self._make_result()
+        )
+        await self.cog.add_answer.callback(
+            self.cog, self.ctx, answer_text="SecretAnswer", apply=False
+        )
+        ephemeral_text = self.ctx.interaction.followup.send.call_args[0][0]
+        self.assertIn("||SecretAnswer||", ephemeral_text)
+
+    # ------------------------------------------------------------------
+    # Player tagging
+    # ------------------------------------------------------------------
+
+    async def test_apply_public_uses_mentions_not_plain_names(self):
+        """apply=True: public message uses <@id> mentions, not bare player names."""
+        self.bot.game.recalculate_scores_for_new_answer = MagicMock(
+            return_value=self._make_result()
+        )
+        await self.cog.add_answer.callback(
+            self.cog, self.ctx, answer_text="Ans", apply=True
+        )
+        public_text = self.ctx.channel.send.call_args[0][0]
+        self.assertIn("<@111>", public_text)
+
+    async def test_dry_run_ephemeral_uses_plain_names_not_mentions(self):
+        """apply=False: ephemeral must not contain @mentions."""
+        self.bot.game.recalculate_scores_for_new_answer = MagicMock(
+            return_value=self._make_result()
+        )
+        await self.cog.add_answer.callback(
+            self.cog, self.ctx, answer_text="Ans", apply=False
+        )
+        ephemeral_text = self.ctx.interaction.followup.send.call_args[0][0]
+        self.assertNotIn("<@", ephemeral_text)
+
+    # ------------------------------------------------------------------
+    # Rest-cleared players
+    # ------------------------------------------------------------------
+
+    async def test_apply_rest_cleared_mentioned_in_public(self):
+        """apply=True: resting players whose guess matched are @mentioned with rest note."""
+        result = self._make_result(
+            rest_cleared_players=[{"user_id": "999", "name": "Sleepy"}]
+        )
+        self.bot.game.recalculate_scores_for_new_answer = MagicMock(return_value=result)
+        await self.cog.add_answer.callback(
+            self.cog, self.ctx, answer_text="Ans", apply=True
+        )
+        public_text = self.ctx.channel.send.call_args[0][0]
+        self.assertIn("<@999>", public_text)
+        self.assertIn("Rest revoked", public_text)
+
+    async def test_dry_run_rest_cleared_shows_name_in_ephemeral(self):
+        """apply=False: resting players listed by name (no @mention) in dry-run ephemeral."""
+        result = self._make_result(
+            rest_cleared_players=[{"user_id": "999", "name": "Sleepy"}]
+        )
+        self.bot.game.recalculate_scores_for_new_answer = MagicMock(return_value=result)
+        await self.cog.add_answer.callback(
+            self.cog, self.ctx, answer_text="Ans", apply=False
+        )
+        ephemeral_text = self.ctx.interaction.followup.send.call_args[0][0]
+        self.assertIn("Sleepy", ephemeral_text)
+        self.assertIn("Rest revoked", ephemeral_text)
+        self.assertNotIn("<@999>", ephemeral_text)

@@ -419,3 +419,118 @@ class TestRecalculateScores(unittest.TestCase):
         self.assertIn("🎯", p2_detail["badges"])  # first_try
         # p2 answered after p1 (who was fastest), so no fastest badge
         self.assertNotIn("🥇", p2_detail["badges"])
+
+    # ------------------------------------------------------------------
+    # user_id in details
+    # ------------------------------------------------------------------
+
+    def test_details_include_user_id(self):
+        """Each entry in details must carry the player's user_id for Discord mentioning."""
+        guesses = [
+            {
+                "id": 1,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "800",
+                "is_correct": 0,
+                "guessed_at": "2023-01-01 10:00:00",
+            }
+        ]
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = guesses
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        self.mock_data_manager.get_alternative_answers.return_value = []
+        self.mock_data_manager.get_powerup_usages_for_question.return_value = []
+
+        result = self.game_runner.recalculate_scores_for_new_answer(
+            "800", "admin1", dry_run=True
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(len(result["details"]), 1)
+        self.assertIn("user_id", result["details"][0])
+        self.assertEqual(result["details"][0]["user_id"], "p1")
+
+    # ------------------------------------------------------------------
+    # rest_cleared_players
+    # ------------------------------------------------------------------
+
+    def _setup_resting_player_guess(self, guess_text="new_ans"):
+        """Configure mocks for a player who rested and guessed the new answer."""
+        from src.core.player import Player
+
+        mock_player = MagicMock(spec=Player)
+        mock_player.answer_streak = 0
+        mock_player.score = 0
+        mock_player.name = "RestPlayer"
+        self.game_runner.player_manager.get_all_players.return_value = {
+            "p_rest": mock_player
+        }
+
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = [
+            {
+                "id": 1,
+                "daily_question_id": 1,
+                "player_id": "p_rest",
+                "guess_text": guess_text,
+                "is_correct": 0,
+                "guessed_at": "2023-01-01 10:05:00",
+            }
+        ]
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        self.mock_data_manager.get_alternative_answers.return_value = []
+        # rest powerup fired before the guess
+        self.mock_data_manager.get_powerup_usages_for_question.return_value = [
+            {
+                "user_id": "p_rest",
+                "powerup_type": "rest",
+                "used_at": "2023-01-01 09:00:00",
+                "target_user_id": None,
+            }
+        ]
+
+    def test_rest_cleared_player_detected(self):
+        """A resting player whose guess matches the new answer appears in rest_cleared_players."""
+        self._setup_resting_player_guess("new_ans")
+
+        result = self.game_runner.recalculate_scores_for_new_answer(
+            "new_ans", "admin1", dry_run=True
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(len(result["rest_cleared_players"]), 1)
+        cleared = result["rest_cleared_players"][0]
+        self.assertEqual(cleared["user_id"], "p_rest")
+        self.assertEqual(cleared["name"], "RestPlayer")
+
+    def test_rest_cleared_clears_multiplier_when_applied(self):
+        """apply=True: clear_pending_multiplier is called for each rest-cleared player."""
+        self._setup_resting_player_guess("new_ans")
+
+        self.game_runner.recalculate_scores_for_new_answer(
+            "new_ans", "admin1", dry_run=False
+        )
+
+        self.mock_data_manager.clear_pending_multiplier.assert_called_once_with(
+            "p_rest"
+        )
+
+    def test_rest_cleared_no_db_call_when_dry_run(self):
+        """dry_run=True: rest is detected but clear_pending_multiplier is NOT called."""
+        self._setup_resting_player_guess("new_ans")
+
+        result = self.game_runner.recalculate_scores_for_new_answer(
+            "new_ans", "admin1", dry_run=True
+        )
+
+        self.assertEqual(len(result["rest_cleared_players"]), 1)
+        self.mock_data_manager.clear_pending_multiplier.assert_not_called()
+
+    def test_rest_cleared_only_for_matching_guess(self):
+        """A resting player whose guess does NOT match the new answer is not cleared."""
+        self._setup_resting_player_guess("wrong_guess")
+
+        result = self.game_runner.recalculate_scores_for_new_answer(
+            "new_ans", "admin1", dry_run=True
+        )
+
+        self.assertEqual(result["rest_cleared_players"], [])

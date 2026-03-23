@@ -875,6 +875,7 @@ class GameRunner:
                 newly_gained_keys = new_bonus_keys - old_bonus_keys
                 details.append(
                     {
+                        "user_id": user_id,
                         "name": player_name,
                         "score_before": new_res["initial_score"]
                         + old_res["score_earned"],
@@ -884,10 +885,34 @@ class GameRunner:
                     }
                 )
 
+        # Detect resting players whose guess now matches the new answer.
+        # Their pending rest multiplier should be cleared since they effectively answered.
+        checker = AnswerChecker()
+        rest_cleared_players = []
+        seen_resting: set[str] = set()
+        for event in events:
+            if not isinstance(event, GuessEvent):
+                continue
+            uid = event.user_id
+            if uid in seen_resting:
+                continue
+            state = scorer_new.daily_state.get(uid)
+            if (
+                state
+                and state.is_resting
+                and checker.is_correct(event.guess_text, new_answer)
+            ):
+                player_name = initial_states[uid].name if uid in initial_states else uid
+                rest_cleared_players.append({"user_id": uid, "name": player_name})
+                seen_resting.add(uid)
+                if not dry_run:
+                    self.data_manager.clear_pending_multiplier(uid)
+
         return {
             "status": "success",
             "updated_players": updated_players,
             "total_refunded": total_refunded,
             "details": details,
             "age_warning": age_warning,
+            "rest_cleared_players": rest_cleared_players,
         }
