@@ -136,9 +136,10 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Attacker steals
         msg = manager.steal("1", "2", "q1")
-        self.assertIn(f"sacrificed {manager.steal_streak_cost} streak days", msg)
+        self.assertIn(f"sacrificed {manager.engine.steal_streak_cost} streak days", msg)
         self.assertEqual(
-            self.players["1"].answer_streak, max(0, 3 - manager.steal_streak_cost)
+            self.players["1"].answer_streak,
+            max(0, 3 - manager.engine.steal_streak_cost),
         )  # 3 - cost
 
         # Target answers correctly and earns bonuses
@@ -160,7 +161,7 @@ class TestPowerUpManager(unittest.TestCase):
     def test_steal_no_points(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.steal("1", "2", "q1")
-        self.assertIn(f"sacrificed {manager.steal_streak_cost} streak days", msg)
+        self.assertIn(f"sacrificed {manager.engine.steal_streak_cost} streak days", msg)
 
         # Attacker answers correctly but target has no bonuses
         msgs = manager.on_guess(1, "P1", "ans", True)
@@ -242,7 +243,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First use
         msg = manager.steal("1", "2", "q1")
-        self.assertIn(f"sacrificed {manager.steal_streak_cost} streak days", msg)
+        self.assertIn(f"sacrificed {manager.engine.steal_streak_cost} streak days", msg)
 
         # Second use
         with self.assertRaises(PowerUpError) as cm:
@@ -319,7 +320,9 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First steal should succeed
         msg1 = manager.steal("1", "2", "q1")
-        self.assertIn(f"sacrificed {manager.steal_streak_cost} streak days", msg1)
+        self.assertIn(
+            f"sacrificed {manager.engine.steal_streak_cost} streak days", msg1
+        )
 
         # Verify first usage was logged
         self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)

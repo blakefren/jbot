@@ -6,6 +6,7 @@ from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 from src.core.player import Player
 from src.core.state import DailyPlayerState
 from src.core.scoring import ScoreCalculator
+from src.core.powerup_engine import PowerUpEngine
 
 
 class DailyGameSimulator:
@@ -33,6 +34,7 @@ class DailyGameSimulator:
         self.initial_player_states = initial_player_states
         self.config = config
         self.score_calculator = ScoreCalculator(self.config)
+        self.engine = PowerUpEngine(self.config)
 
         # Daily State per player
         self.daily_state = defaultdict(DailyPlayerState)
@@ -74,136 +76,39 @@ class DailyGameSimulator:
 
         return self.calculate_final_results()
 
-    # TODO: can we delegate implementation to the PowerUp manager to avoid duplication?
     def handle_powerup(self, event: PowerUpEvent):
         user_id = event.user_id
         ptype = event.powerup_type
         target_id = event.target_user_id
 
-        state = self.daily_state[user_id]
-
         if ptype == "rest":
-            state.is_resting = True
-            # Immediately resolve pending attacks as whiffs (same as live game)
-            if state.jinxed_by:
-                state.jinxed_by = None
-            if state.steal_attempt_by:
-                state.steal_attempt_by = None
+            self.engine.apply_rest(self.daily_state, user_id)
 
         elif ptype in ("jinx", "jinx_preload"):
             if target_id:
-                target_state = self.daily_state[target_id]
-                state.silenced = True
-                if target_state.is_correct:
-                    # Retroactive: target already answered — resolve at reduced ratio
-                    retro_ratio = float(
-                        self.config.get("JBOT_RETRO_JINX_BONUS_RATIO", "0.5")
-                    )
-                    streak_val = target_state.bonuses.get("streak", 0)
-                    half = int(streak_val * retro_ratio)
-                    if half > 0:
-                        target_state.score_earned -= half
-                        state.score_earned += half
-                        target_state.bonuses.pop("streak", None)
-                    target_state.jinxed_by = user_id  # mark resolved
-                else:
-                    target_state.jinxed_by = user_id
+                self.engine.apply_jinx(self.daily_state, user_id, target_id)
 
         elif ptype == "jinx_late":
             if target_id:
-                target_state = self.daily_state[target_id]
-                state.silenced = True
-                # Cost: strip before_hint and fastest bonuses from attacker's earned score
-                before_hint_val = state.bonuses.pop("before_hint", 0)
-                fastest_val = sum(
-                    state.bonuses.pop(k)
-                    for k in list(state.bonuses)
-                    if k.startswith("fastest_")
-                )
-                state.bonuses.pop("fastest", None)
-                state.score_earned -= before_hint_val + fastest_val
-                # Apply jinx to target (same resolution as regular jinx)
-                if target_state.is_correct:
-                    retro_ratio = float(
-                        self.config.get("JBOT_RETRO_JINX_BONUS_RATIO", "0.5")
-                    )
-                    streak_val = target_state.bonuses.get("streak", 0)
-                    half = int(streak_val * retro_ratio)
-                    if half > 0:
-                        target_state.score_earned -= half
-                        state.score_earned += half
-                        target_state.bonuses.pop("streak", None)
-                    target_state.jinxed_by = user_id  # mark resolved
-                else:
-                    target_state.jinxed_by = user_id
+                self.engine.apply_late_jinx(self.daily_state, user_id, target_id)
 
         elif ptype == "steal_preload":
-            # Streak was already deducted at pre-load time (before the daily snapshot).
-            # Do NOT apply streak_delta — it is already baked into initial_player_states.
             if target_id:
-                target_state = self.daily_state[target_id]
-                state.stealing_from = target_id
-                state.steal_is_preload = True
-                target_state.steal_attempt_by = user_id
+                self.engine.apply_steal(
+                    self.daily_state,
+                    user_id,
+                    target_id,
+                    initial_streak=0,
+                    is_preload=True,
+                )
 
         elif ptype == "steal":
             if target_id:
-                target_state = self.daily_state[target_id]
                 player = self.initial_player_states.get(user_id)
                 initial_streak = player.answer_streak if player else 0
-                if target_state.is_correct:
-                    # Retroactive: target already answered — higher cost, immediate resolution
-                    retro_cost = int(
-                        self.config.get("JBOT_RETRO_STEAL_STREAK_COST", "5")
-                    )
-                    if state.is_correct:
-                        # Late-day: thief already answered — override streak_delta from handle_guess
-                        effective_streak = initial_streak + 1
-                        new_streak = max(0, effective_streak - retro_cost)
-                        state.streak_delta = new_streak - initial_streak
-                        # Recalculate streak bonus based on reduced streak
-                        old_streak_bonus = state.bonuses.get("streak", 0)
-                        new_streak_bonus = self.score_calculator.get_streak_bonus(
-                            new_streak
-                        )
-                        state.score_earned -= old_streak_bonus - new_streak_bonus
-                        if new_streak_bonus > 0:
-                            state.bonuses["streak"] = new_streak_bonus
-                        else:
-                            state.bonuses.pop("streak", None)
-                    else:
-                        state.streak_delta = -min(retro_cost, initial_streak)
-                    stealable = self.score_calculator.get_stealable_amount(
-                        target_state.bonuses
-                    )
-                    if stealable > 0:
-                        target_state.score_earned -= stealable
-                        state.score_earned += stealable
-                    state.stealing_from = target_id
-                else:
-                    # Normal: deferred resolution when target answers
-                    steal_streak_cost = int(
-                        self.config.get("JBOT_STEAL_STREAK_COST", "3")
-                    )
-                    if state.is_correct:
-                        # Late-day: thief already answered — override streak_delta from handle_guess
-                        effective_streak = initial_streak + 1
-                        new_streak = max(0, effective_streak - steal_streak_cost)
-                        state.streak_delta = new_streak - initial_streak
-                        # Recalculate streak bonus based on reduced streak
-                        old_streak_bonus = state.bonuses.get("streak", 0)
-                        new_streak_bonus = self.score_calculator.get_streak_bonus(
-                            new_streak
-                        )
-                        state.score_earned -= old_streak_bonus - new_streak_bonus
-                        if new_streak_bonus > 0:
-                            state.bonuses["streak"] = new_streak_bonus
-                        else:
-                            state.bonuses.pop("streak", None)
-                    else:
-                        state.streak_delta = -min(steal_streak_cost, initial_streak)
-                    state.stealing_from = target_id
-                    target_state.steal_attempt_by = user_id
+                self.engine.apply_steal(
+                    self.daily_state, user_id, target_id, initial_streak
+                )
 
         elif ptype == "rest_wakeup":
             # Bonus from a previous day's rest was already applied live to the DB.
@@ -283,28 +188,18 @@ class DailyGameSimulator:
         # Apply Jinx/Silence Logic (Remove Streak Bonus, Transfer to Attacker)
         if state.jinxed_by or state.silenced:
             if "streak" in bonuses:
-                streak_val = bonuses.pop("streak")
-                points -= streak_val
-                if state.jinxed_by:
-                    attacker_state = self.daily_state[state.jinxed_by]
-                    attacker_state.score_earned += streak_val
+                transferred = self.engine.resolve_jinx_on_correct(
+                    self.daily_state, user_id, bonuses
+                )
+                points -= transferred
 
         state.score_earned += points
         state.bonuses = bonuses
         state.streak_delta += 1
 
         # Resolve Steal
-        attacker_id = state.steal_attempt_by
-        if attacker_id:
-            stealable = self.score_calculator.get_stealable_amount(bonuses)
-
-            if stealable > 0:
-                state.score_earned -= stealable
-                attacker_state = self.daily_state[attacker_id]
-                attacker_state.score_earned += stealable
-                # Do not clear stealing_from, as it marks the player as having used steal (resetting streak)
-
-            state.steal_attempt_by = None
+        if state.steal_attempt_by:
+            self.engine.resolve_steal_on_correct(self.daily_state, user_id)
 
     def end_of_day(self):
         # Ensure all players are processed for streak resets if they didn't answer

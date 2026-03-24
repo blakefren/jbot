@@ -35,6 +35,9 @@ class TestRecalculateScores(unittest.TestCase):
             "JBOT_EMOJI_STREAK": "🔥",
             "JBOT_RIDDLE_HISTORY_DAYS": "30",
             "JBOT_QUESTION_RETRIES": "10",
+            "JBOT_STEAL_STREAK_COST": "3",
+            "JBOT_RETRO_STEAL_STREAK_COST": "5",
+            "JBOT_RETRO_JINX_BONUS_RATIO": "0.5",
         }
         self.game_runner.config.get.side_effect = lambda k, d=None: self.defaults.get(k)
 

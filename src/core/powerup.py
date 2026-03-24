@@ -8,8 +8,8 @@ from src.cfg.main import ConfigReader
 from src.core.base_manager import BaseManager
 from src.core.data_manager import DataManager
 from src.core.player_manager import PlayerManager
+from src.core.powerup_engine import PowerUpEngine
 from src.core.state import DailyPlayerState
-from src.core.scoring import ScoreCalculator
 
 
 class PowerUpError(Exception):
@@ -41,7 +41,7 @@ class PowerUpManager(BaseManager):
         self.player_manager = player_manager
         self.data_manager = data_manager
         _config = config or ConfigReader()
-        self.score_calculator = ScoreCalculator(_config)
+        self.engine = PowerUpEngine(_config)
         # Config-driven constants
         self.emoji_jinxed = _config.get("JBOT_EMOJI_JINXED", "🥶")
         self.emoji_silenced = _config.get("JBOT_EMOJI_SILENCED", "🤐")
@@ -51,13 +51,6 @@ class PowerUpManager(BaseManager):
         self.emoji_rest_wakeup = _config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
         self.emoji_streak = _config.get("JBOT_EMOJI_STREAK", "🔥")
         self.rest_multiplier = float(_config.get("JBOT_REST_MULTIPLIER", "1.2"))
-        self.steal_streak_cost = int(_config.get("JBOT_STEAL_STREAK_COST", "3"))
-        self.retro_steal_streak_cost = int(
-            _config.get("JBOT_RETRO_STEAL_STREAK_COST", "5")
-        )
-        self.retro_jinx_bonus_ratio = float(
-            _config.get("JBOT_RETRO_JINX_BONUS_RATIO", "0.5")
-        )
         # Transient state for the day
         self.daily_state: dict[str, DailyPlayerState] = {}
 
@@ -85,45 +78,6 @@ class PowerUpManager(BaseManager):
             # Fallback for safety if passed a dict (e.g. from old tests)
             # But we should update tests too.
             pass
-
-    def _apply_late_day_jinx_cost(self, player_id: str, state: DailyPlayerState) -> int:
-        """Strip before_hint and fastest bonuses as the cost for a late-day jinx.
-
-        Updates state.bonuses, state.score_earned, and the DB score.
-        Returns the total points deducted.
-        # TODO: Consider delegating hint/fastest bonus identification to ScoreCalculator.
-        """
-        before_hint_val = state.bonuses.pop("before_hint", 0)
-        fastest_val = sum(
-            state.bonuses.pop(k)
-            for k in list(state.bonuses)
-            if k.startswith("fastest_")
-        )
-        state.bonuses.pop("fastest", None)  # alias, same value as fastest_1
-        total_cost = before_hint_val + fastest_val
-        if total_cost > 0:
-            state.score_earned -= total_cost
-            self.player_manager.update_score(player_id, -total_cost)
-        return total_cost
-
-    def _apply_late_day_streak_recalc(
-        self, player_id: str, state: DailyPlayerState, new_streak: int
-    ) -> None:
-        """Recalculate and apply the streak bonus after a late-day steal reduces the thief's streak.
-
-        Updates state.bonuses, state.score_earned, and the DB score.
-        # TODO: Consider delegating streak bonus recalculation to ScoreCalculator.
-        """
-        old_streak_bonus = state.bonuses.get("streak", 0)
-        new_streak_bonus = self.score_calculator.get_streak_bonus(new_streak)
-        streak_bonus_delta = old_streak_bonus - new_streak_bonus
-        if streak_bonus_delta != 0:
-            state.score_earned -= streak_bonus_delta
-            self.player_manager.update_score(player_id, -streak_bonus_delta)
-        if new_streak_bonus > 0:
-            state.bonuses["streak"] = new_streak_bonus
-        else:
-            state.bonuses.pop("streak", None)
 
     def can_answer(self, player_id: str, hint_sent: bool = False) -> tuple[bool, str]:
         """
@@ -213,13 +167,16 @@ class PowerUpManager(BaseManager):
         if not attacker_id or not correct:
             return ""
 
-        # Strip streak bonus from target and transfer it to the attacker.
-        streak_bonus = bonus_values.get("streak", 0)
-        if streak_bonus > 0:
-            self.player_manager.update_score(player_id, -streak_bonus)
-            self.player_manager.update_score(attacker_id, streak_bonus)
+        # Engine: transfer streak bonus in state, strip from bonus_values dict
+        transferred = self.engine.resolve_jinx_on_correct(
+            self.daily_state, player_id, bonus_values
+        )
+
+        if transferred > 0:
+            self.player_manager.update_score(player_id, -transferred)
+            self.player_manager.update_score(attacker_id, transferred)
             if points_tracker:
-                points_tracker["earned"] -= streak_bonus
+                points_tracker["earned"] -= transferred
 
             # Remove streak message if present
             if bonus_messages is not None:
@@ -228,7 +185,7 @@ class PowerUpManager(BaseManager):
                         bonus_messages.pop(i)
                         break
 
-            return f"{self.emoji_jinxed} <@{attacker_id}> swiped <@{player_id}>'s streak bonus of {streak_bonus} pts via Jinx!"
+            return f"{self.emoji_jinxed} <@{attacker_id}> swiped <@{player_id}>'s streak bonus of {transferred} pts via Jinx!"
 
         return f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx had no effect — <@{player_id}> had no streak bonus to steal!"
 
@@ -244,23 +201,18 @@ class PowerUpManager(BaseManager):
         if not attacker_id or not correct:
             return ""
 
-        # Success Check
-        target_bonuses = target_state.bonuses
-        stealable_amount = self.score_calculator.get_stealable_amount(target_bonuses)
+        # Engine: transfer stealable bonuses in state
+        stealable_amount = self.engine.resolve_steal_on_correct(
+            self.daily_state, target_id
+        )
 
         if stealable_amount == 0:
-            # Clear the steal attempt even if nothing stolen?
-            # Logic suggests yes, the attempt is used up.
-            target_state.steal_attempt_by = None
             return f"{self.emoji_stealing} <@{attacker_id}> tried to steal from <@{target_id}>, but there was nothing to steal!"
 
         self.player_manager.update_score(target_id, -stealable_amount)
         self.player_manager.update_score(attacker_id, stealable_amount)
         if points_tracker:
             points_tracker["earned"] -= stealable_amount
-
-        # Clear the steal attempt
-        target_state.steal_attempt_by = None
 
         return f"{self.emoji_stealing} <@{attacker_id}> stole {stealable_amount} pts from <@{target_id}>!"
 
@@ -282,21 +234,17 @@ class PowerUpManager(BaseManager):
             target_id = row["target_user_id"]
             ptype = row["powerup_type"]
 
-            attacker_state = self._get_daily_state(attacker_id)
-            target_state = self._get_daily_state(target_id)
-
             if ptype == "jinx_preload":
-                attacker_state.silenced = True
-                target_state.jinxed_by = attacker_id
+                self.engine.apply_preload_jinx(self.daily_state, attacker_id, target_id)
                 logging.info(
                     "[Hydration] Overnight jinx applied: %s \u2192 %s",
                     attacker_id,
                     target_id,
                 )
             elif ptype == "steal_preload":
-                attacker_state.stealing_from = target_id
-                attacker_state.steal_is_preload = True
-                target_state.steal_attempt_by = attacker_id
+                self.engine.apply_preload_steal(
+                    self.daily_state, attacker_id, target_id
+                )
                 logging.info(
                     "[Hydration] Overnight steal applied: %s \u2192 %s",
                     attacker_id,
@@ -358,33 +306,36 @@ class PowerUpManager(BaseManager):
 
         if is_late_day:
             # --- Late-day jinx: attacker already answered ---
-            total_cost = self._apply_late_day_jinx_cost(attacker_id, attacker_state)
+            # Engine handles cost stripping and jinx/retro application; DB write happens here.
+            cost, transferred = self.engine.apply_late_jinx(
+                self.daily_state, attacker_id, target_id
+            )
+            # DB: deduct cost, credit transferred amount
+            if cost > 0:
+                self.player_manager.update_score(attacker_id, -cost)
+            if transferred > 0:
+                self.player_manager.update_score(target_id, -transferred)
+                self.player_manager.update_score(attacker_id, transferred)
             self.data_manager.log_powerup_usage(
                 attacker_id, "jinx_late", target_id, question_id
             )
             cost_str = (
-                f" (cost you {total_cost} pts)"
-                if total_cost > 0
+                f" (cost you {cost} pts)"
+                if cost > 0
                 else " (free \u2014 no bonuses to lose)"
             )
 
-            if target_state.is_correct:
-                streak_bonus = target_state.bonuses.get("streak", 0)
-                half = int(streak_bonus * self.retro_jinx_bonus_ratio)
-                target_state.jinxed_by = attacker_id  # mark resolved
-                if half > 0:
-                    self.player_manager.update_score(target_id, -half)
-                    self.player_manager.update_score(attacker_id, half)
+            if self._get_daily_state(target_id).is_correct:
+                if transferred > 0:
                     return (
                         f"{self.emoji_jinxed} Late jinx on <@{target_id}>! "
-                        f"Swiped {half} pts of their streak bonus{cost_str}."
+                        f"Swiped {transferred} pts of their streak bonus{cost_str}."
                     )
                 return (
                     f"{self.emoji_jinxed} Late jinx landed on <@{target_id}>, "
                     f"but they had no streak bonus{cost_str}."
                 )
 
-            target_state.jinxed_by = attacker_id
             return (
                 f"{self.emoji_jinxed} Late jinx set on {target.name}{cost_str}! "
                 f"Their streak bonus is forfeit when they answer."
@@ -392,18 +343,16 @@ class PowerUpManager(BaseManager):
 
         # --- Normal daytime path ---
         self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
+        transferred = self.engine.apply_jinx(self.daily_state, attacker_id, target_id)
 
-        if target_state.is_correct:
-            # --- Retroactive: target already answered — resolve at reduced benefit ---
-            streak_bonus = target_state.bonuses.get("streak", 0)
-            half = int(streak_bonus * self.retro_jinx_bonus_ratio)
-            target_state.jinxed_by = attacker_id  # mark resolved
-            if half > 0:
-                self.player_manager.update_score(target_id, -half)
-                self.player_manager.update_score(attacker_id, half)
+        if self._get_daily_state(target_id).is_correct:
+            # Retroactive: target already answered
+            if transferred > 0:
+                self.player_manager.update_score(target_id, -transferred)
+                self.player_manager.update_score(attacker_id, transferred)
                 return (
                     f"{self.emoji_jinxed} <@{target_id}> already answered \u2014 retroactive jinx! "
-                    f"You swiped half their streak bonus ({half} pts). "
+                    f"You swiped half their streak bonus ({transferred} pts). "
                     f"{self.emoji_silenced} You still can't answer until the hint is revealed."
                 )
             return (
@@ -412,8 +361,7 @@ class PowerUpManager(BaseManager):
                 f"{self.emoji_silenced} You still can't answer until the hint is revealed."
             )
 
-        # Normal daytime path
-        target_state.jinxed_by = attacker_id
+        # Normal daytime path (target hasn't answered yet)
         return (
             f"{self.emoji_silenced} Your jinx is set! {target.name} won't know until it takes effect. "
             f"You can't answer until the hint is revealed!"
@@ -447,8 +395,10 @@ class PowerUpManager(BaseManager):
                 )
 
             # Deduct streak immediately; this cost is baked into tomorrow's snapshot
+            # TODO: move this to hydration and make it adjustable by config (retro steals have a higher cost)
             current_streak = thief.answer_streak if thief else 0
-            new_streak = max(0, current_streak - self.steal_streak_cost)
+            steal_cost = self.engine.steal_streak_cost
+            new_streak = max(0, current_streak - steal_cost)
             actual_lost = current_streak - new_streak
             self.player_manager.set_streak(thief_id, new_streak)
             self.data_manager.log_powerup_usage(
@@ -479,19 +429,18 @@ class PowerUpManager(BaseManager):
         if target_state.is_correct:
             # --- Retroactive: target already answered — higher cost, immediate resolution ---
             current_streak = thief.answer_streak if thief else 0
-            new_streak = max(0, current_streak - self.retro_steal_streak_cost)
-            actual_lost = current_streak - new_streak
-            self.player_manager.set_streak(thief_id, new_streak)
             self.data_manager.log_powerup_usage(
                 thief_id, "steal", target_id, question_id
             )
-            thief_state.stealing_from = target_id
-            # Late-day: thief already answered, recalculate their streak bonus
-            if is_late_day:
-                self._apply_late_day_streak_recalc(thief_id, thief_state, new_streak)
-            stealable_amount = self.score_calculator.get_stealable_amount(
-                target_state.bonuses
+            # Engine: sets state flags, streak_delta, bonus recalc (if late-day), score transfer.
+            deducted, stealable_amount, bonus_delta = self.engine.apply_steal(
+                self.daily_state, thief_id, target_id, current_streak
             )
+            new_streak = max(0, current_streak - deducted)
+            actual_lost = deducted
+            self.player_manager.set_streak(thief_id, new_streak)
+            if is_late_day and bonus_delta != 0:
+                self.player_manager.update_score(thief_id, bonus_delta)
             if stealable_amount == 0:
                 return (
                     f"{self.emoji_stealing} You sacrificed {actual_lost} streak days "
@@ -499,7 +448,6 @@ class PowerUpManager(BaseManager):
                 )
             self.player_manager.update_score(target_id, -stealable_amount)
             self.player_manager.update_score(thief_id, stealable_amount)
-            target_state.steal_attempt_by = thief_id  # mark resolved
             return (
                 f"{self.emoji_stealing} <@{target_id}> already answered! "
                 f"You paid {actual_lost} streak days and instantly swiped "
@@ -508,15 +456,16 @@ class PowerUpManager(BaseManager):
 
         # --- Normal / forward daytime path ---
         current_streak = thief.answer_streak if thief else 0
-        new_streak = max(0, current_streak - self.steal_streak_cost)
-        actual_lost = current_streak - new_streak
-        self.player_manager.set_streak(thief_id, new_streak)
         self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
-        thief_state.stealing_from = target_id
-        target_state.steal_attempt_by = thief_id
-        # Late-day: thief already answered, recalculate their streak bonus
-        if is_late_day:
-            self._apply_late_day_streak_recalc(thief_id, thief_state, new_streak)
+        # Engine: sets state flags, streak_delta, bonus recalc (if late-day).
+        deducted, _, bonus_delta = self.engine.apply_steal(
+            self.daily_state, thief_id, target_id, current_streak
+        )
+        new_streak = max(0, current_streak - deducted)
+        actual_lost = deducted
+        self.player_manager.set_streak(thief_id, new_streak)
+        if is_late_day and bonus_delta != 0:
+            self.player_manager.update_score(thief_id, bonus_delta)
         return (
             f"{self.emoji_stealing} You sacrificed {actual_lost} streak days "
             f"to rob <@{target_id}>! If they answer correctly, you'll steal their bonuses."
@@ -557,28 +506,23 @@ class PowerUpManager(BaseManager):
         if state.powerup_used_today:
             raise PowerUpError("You have already used a power-up today.")
 
-        # Mark as resting — blocks further guesses
-        state.is_resting = True
+        # Engine: mark resting, whiff pending attacks, return attacker IDs
+        whiffed_jinx_id, whiffed_steal_id = self.engine.apply_rest(
+            self.daily_state, player_id
+        )
         self.data_manager.log_powerup_usage(player_id, "rest", None, question_id)
 
         # Store rest multiplier for tomorrow
         self.data_manager.set_pending_multiplier(player_id, self.rest_multiplier)
 
-        # Immediately resolve any pending attacks as whiffs
         whiff_parts = []
-
-        if state.jinxed_by:
-            attacker_id = state.jinxed_by
-            state.jinxed_by = None
+        if whiffed_jinx_id:
             whiff_parts.append(
-                f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx had no effect — <@{player_id}> is resting!"
+                f"{self.emoji_jinxed} <@{whiffed_jinx_id}>'s Jinx had no effect — <@{player_id}> is resting!"
             )
-
-        if state.steal_attempt_by:
-            attacker_id = state.steal_attempt_by
-            state.steal_attempt_by = None
+        if whiffed_steal_id:
             whiff_parts.append(
-                f"{self.emoji_stealing} <@{attacker_id}>'s steal whiffed — "
+                f"{self.emoji_stealing} <@{whiffed_steal_id}>'s steal whiffed — "
                 f"<@{player_id}> has nothing to steal while resting "
                 f"(but the streak reset still stands)!"
             )

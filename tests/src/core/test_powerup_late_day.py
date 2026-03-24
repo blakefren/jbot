@@ -232,6 +232,9 @@ class TestStealLateDay(unittest.TestCase):
         }
         self.manager, self.pm, self.dm = _make_manager(self.players, return_today=True)
         t_state = self.manager._get_daily_state("thief")
+        t_state.is_correct = (
+            True  # thief has answered correctly today (late-day scenario)
+        )
         t_state.score_earned = 200
         # Default bonuses use streak=5 after answering → streak_length=6 → bonus=25 (capped)
         t_state.bonuses = thief_bonuses if thief_bonuses is not None else {"streak": 25}
@@ -245,19 +248,19 @@ class TestStealLateDay(unittest.TestCase):
     def test_late_steal_forward_recalculates_streak_bonus(self):
         """Forward steal (target not yet answered) recalculates thief's streak bonus.
 
-        thief streak=5 → after answering=6, bonus=25 (capped).
-        Forward cost=3 → new_streak=3, new_bonus=15. Delta=10 deducted.
+        thief streak=5 → effective streak after answering=6, bonus=25 (capped).
+        Forward cost=3 → effective-cost=3, new_bonus=15. Delta=10 deducted.
+        set_streak uses initial-cost=2 (stored value for future days).
         """
         t_state = self._setup(thief_streak=5, thief_bonuses={"streak": 25})
         initial_score = self.players["thief"].score  # 300
 
         self.manager.steal("thief", "target", question_id=1)
 
-        # streak cost: new = max(0, 5 - 3) = 2, set_streak called with 2
+        # streak cost: new stored = max(0, 5 - 3) = 2, set_streak called with 2
         self.pm.set_streak.assert_called_once_with("thief", 2)
-        # bonus delta: old=25, new=get_streak_bonus(2)=10, delta=15 deducted
-        # NOTE: thief.answer_streak is 5 (before answer), forward cost 3 → new = 5-3=2
-        new_bonus = 10  # min(2*5, 25)
+        # bonus uses effective-cost formula: effective=6, new_bonus_streak=6-3=3, bonus=15
+        new_bonus = 15  # min(3*5, 25)
         expected_score = initial_score - (25 - new_bonus)
         self.assertEqual(self.players["thief"].score, expected_score)
         self.assertEqual(t_state.bonuses.get("streak"), new_bonus)
