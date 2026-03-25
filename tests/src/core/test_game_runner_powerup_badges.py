@@ -139,6 +139,58 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
         self.assertIsNotNone(p2_line, "Player2 should be in leaderboard")
         self.assertIn("💸", p2_line)
 
+    def test_leaderboard_jinx_late_badge(self):
+        """jinx_late should produce the same silenced/jinxed badges as a regular jinx."""
+        self.mock_dm.get_powerup_usages_for_question.return_value = [
+            {"powerup_type": "jinx_late", "user_id": "p1", "target_user_id": "p2"}
+        ]
+        self.mock_dm.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "p1",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "p2",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:05:00",
+            },
+        ]
+        leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
+        lines = leaderboard.split("\n")
+        p1_line = next(l for l in lines if "Player1" in l)
+        p2_line = next(l for l in lines if "Player2" in l)
+        self.assertIn("🤐", p1_line)
+        self.assertIn("🥶", p2_line)
+
+    def test_leaderboard_jinx_preload_badge(self):
+        """jinx_preload should produce the same silenced/jinxed badges as a regular jinx."""
+        self.mock_dm.get_powerup_usages_for_question.return_value = [
+            {"powerup_type": "jinx_preload", "user_id": "p1", "target_user_id": "p2"}
+        ]
+        self.mock_dm.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "p1",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "p2",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:05:00",
+            },
+        ]
+        leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
+        lines = leaderboard.split("\n")
+        p1_line = next(l for l in lines if "Player1" in l)
+        p2_line = next(l for l in lines if "Player2" in l)
+        self.assertIn("🤐", p1_line)
+        self.assertIn("🥶", p2_line)
+
     def test_leaderboard_rest_badge(self):
         # p1 used rest
         self.mock_dm.get_powerup_usages_for_question.return_value = [

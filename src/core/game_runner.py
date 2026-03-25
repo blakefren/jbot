@@ -414,7 +414,7 @@ class GameRunner:
                 elif p_type == "rest_wakeup":
                     wakeup_player_ids.add(user_id)
 
-                if p_type == "jinx":
+                if p_type in ("jinx", "jinx_late", "jinx_preload"):
                     # Always show silenced emoji (attacker is silenced regardless)
                     powerup_badges[user_id].append(emoji_silenced)
 
