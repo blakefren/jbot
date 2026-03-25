@@ -386,11 +386,11 @@ class TestGameRunner(unittest.TestCase):
         ]
         self.mock_data_manager.get_player_streaks.return_value = []
         leaderboard = self.game_runner.get_scores_leaderboard()
-        self.assertIn("Rank", leaderboard)
+        self.assertIn("#", leaderboard)
         self.assertIn("Player", leaderboard)
-        self.assertIn("Score", leaderboard)
-        # Streak is now shown by default
-        self.assertIn("Streak", leaderboard)
+        self.assertIn("Pts", leaderboard)
+        # Streak emoji is now its own column header
+        self.assertIn("🔥", leaderboard)
         self.assertIn("Alice", leaderboard)
         self.assertIn("Bob", leaderboard)
         self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Bob"))
@@ -478,9 +478,21 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("Alice", leaderboard)
         self.assertIn("Bob", leaderboard)
         self.assertIn("Charlie", leaderboard)
-        self.assertIn("3🔥", leaderboard)
-        self.assertIn("5🔥", leaderboard)
-        self.assertNotIn("Bob 🔥", leaderboard)
+        # Streaks now appear as numbers in their own column, not combined with emoji
+        alice_line = next(
+            (line for line in leaderboard.split("\n") if "Alice" in line), None
+        )
+        charlie_line = next(
+            (line for line in leaderboard.split("\n") if "Charlie" in line), None
+        )
+        bob_line = next(
+            (line for line in leaderboard.split("\n") if "Bob" in line), None
+        )
+        self.assertIsNotNone(alice_line)
+        self.assertIn(" 3 ", alice_line)  # streak column value
+        self.assertIn(" 5 ", charlie_line)  # streak column value
+        # Bob has no streak — streak column should be blank for Bob
+        self.assertNotIn(" 1 ", bob_line)  # streak of 1 not shown (< 2)
 
     def test_get_player_history(self):
         """Test generating a player's history."""
@@ -959,28 +971,32 @@ class TestGameRunner(unittest.TestCase):
             "2023-01-01 09:00:00"
         )
 
-        # Badges string will be "10🔥 🥇 🎯"
-        # 10 (2) + 🔥 (1) + 🥇 (1) + 🎯 (1) = 5 chars in Python string
-        # But user wants width 8 due to the monospaced context of the leaderboard.
+        # Badges string will be "🥇🎯" (fastest + first try, without streak now in own column)
+        # 🥇 (2) + 🎯 (2) = width 4 in monospace context.
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 
         # We can check the divider line.
-        # The divider line format is: f"{'-'*4} {'-'*max_name} {'-'*max_score} {'-'*max_badges}"
+        # The divider line format is: f"{'-'*2} {'-'*max_name} {'-'*max_score} {'-'*max_streak} {'-'*max_badges}"
         # We need to extract the last part.
 
         lines = leaderboard.split("\n")
-        # lines[0] is ```Rank...
-        # lines[1] is ---- ...
+        # lines[0] is ```# ...
+        # lines[1] is -- ...
         divider_line = lines[1]
         parts = divider_line.split(" ")
+        # parts: ['--', '-----', '---', '--', '------']
+        # last part is badges divider, second-to-last is streak divider
         badges_divider = parts[-1]
+        streak_divider = parts[-2]
 
-        # Expected width: 8
+        # Badges divider: "Badges" header minimum = 6, so at least 6
+        self.assertGreaterEqual(len(badges_divider), 6)
+        # Streak divider: Alice has streak 10, so divider should be 2 wide (max of len("10"), 2)
         self.assertEqual(
-            len(badges_divider),
-            8,
-            f"Expected divider length 8, got {len(badges_divider)}",
+            len(streak_divider),
+            2,
+            f"Expected streak divider length 2, got {len(streak_divider)}",
         )
 
     def test_get_scores_leaderboard_badge_order(self):
@@ -1008,8 +1024,8 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # Expected order: Streak (🔥), First Try (🎯), Fastest (🥇)
-        # Note: The exact emojis depend on config, but defaults are used here.
+        # Expected badge order: First Try (🎯), Fastest (🥇)
+        # Streak is now a standalone column, not a badge.
         # We check the relative positions in the string.
         streak_pos = leaderboard.find("🔥")
         first_try_pos = leaderboard.find("🎯")
@@ -1019,6 +1035,7 @@ class TestGameRunner(unittest.TestCase):
         self.assertNotEqual(first_try_pos, -1)
         self.assertNotEqual(fastest_pos, -1)
 
+        # streak emoji appears in the header column, before any badges
         self.assertLess(streak_pos, first_try_pos)
         self.assertLess(first_try_pos, fastest_pos)
 

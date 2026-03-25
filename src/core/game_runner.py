@@ -483,16 +483,6 @@ class GameRunner:
             score = player["score"]
 
             badges = []
-            # Only show streaks of 2+ when player answered today (or when not showing daily bonuses)
-            if streak >= 2:
-                if show_daily_bonuses:
-                    if player_id in players_answered_correctly_today:
-                        badges.append(f"{streak}{emoji_streak}")
-                    elif player_id in resting_player_ids:
-                        badges.append(f"{streak}{emoji_streak_frozen}")
-                else:
-                    badges.append(f"{streak}{emoji_streak}")
-
             if show_daily_bonuses:
                 if player_id in first_try_solver_ids:
                     badges.append(emoji_first_try)
@@ -515,7 +505,12 @@ class GameRunner:
             badges_str = "".join(badges)
 
             all_player_data.append(
-                {"name": player_name, "score": score, "badges": badges_str}
+                {
+                    "name": player_name,
+                    "score": score,
+                    "streak": streak,
+                    "badges": badges_str,
+                }
             )
 
         # Sort players by score (desc), then by name (asc)
@@ -526,11 +521,18 @@ class GameRunner:
             max(len(p["name"]) for p in all_player_data) if all_player_data else 10
         )
         max_score = max(
-            5,  # Num chars in "score" header
+            3,  # Num chars in "Pts" header
             (
                 max(len(str(p["score"])) for p in all_player_data)
                 if all_player_data
                 else 0
+            ),
+        )
+        max_streak = max(
+            2,  # display width of streak emoji header
+            max(
+                (len(str(p["streak"])) for p in all_player_data if p["streak"] >= 2),
+                default=0,
             ),
         )
         max_badges = max(
@@ -542,13 +544,18 @@ class GameRunner:
             ),
         )
 
+        # Streak emoji header: emoji is 2 display-chars wide, so pad with spaces if column is wider
+        streak_header = " " * max(0, max_streak - 2) + emoji_streak
+
         # Header
-        header = f"{'Rank'} {'Player':<{max_name}} {'Score':<{max_score}}"
-        header += f" {'Badges' if show_daily_bonuses else 'Streak'}"
+        header = f"{'#':>2} {'Player':<{max_name}} {'Pts':<{max_score}} {streak_header}"
+        if show_daily_bonuses:
+            header += " Badges"
         header += "\n"
 
-        divider = f"{'-'*4} {'-'*max_name} {'-'*max_score}"
-        divider += f" {'-'*max_badges}"
+        divider = f"{'-'*2} {'-'*max_name} {'-'*max_score} {'-'*max_streak}"
+        if show_daily_bonuses:
+            divider += f" {'-'*max_badges}"
         divider += "\n"
 
         # Body
@@ -564,15 +571,25 @@ class GameRunner:
 
             name = p_data["name"]
             score = p_data["score"]
+            streak_val = p_data["streak"]
             badges = p_data["badges"]
+
+            streak_str = (
+                f"{streak_val:>{max_streak}}"
+                if streak_val >= 2
+                else f"{'':>{max_streak}}"
+            )
 
             # For ties, only show rank and score for the first player
             if p_data["score"] == last_score:
-                body += f"{'':>4} {name:<{max_name}} {'':>{max_score}}"
+                body += f"{'':>2} {name:<{max_name}} {'':>{max_score}} {streak_str}"
             else:
-                body += f"{rank:>4} {name:<{max_name}} {score:>{max_score}}"
+                body += (
+                    f"{rank:>2} {name:<{max_name}} {score:>{max_score}} {streak_str}"
+                )
 
-            body += f" {badges}"
+            if show_daily_bonuses:
+                body += f" {badges}"
 
             body += "\n"
 
