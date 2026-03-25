@@ -362,6 +362,8 @@ class PowerUpManager(BaseManager):
         if not thief or not target:
             raise PowerUpError("Invalid player(s).")
 
+        current_streak = thief.answer_streak if thief else 0
+
         if question_id is None:
             # --- Overnight pre-load path ---
             if self.data_manager.get_pending_powerup(thief_id):
@@ -372,17 +374,27 @@ class PowerUpManager(BaseManager):
                 raise PowerUpError(
                     f"<@{target_id}> is already being targeted for theft!"
                 )
+            if current_streak == 0:
+                raise PowerUpError(
+                    "You don't have any streak days to sacrifice. "
+                    "Keep your streak going before stealing!"
+                )
 
             # Streak cost is deducted at hydration (when the question goes live),
             # not here, so we don't bake an early penalty into the DB snapshot.
-            current_streak = thief.answer_streak if thief else 0
             steal_cost = self.engine.steal_streak_cost
             actual_lost = min(steal_cost, current_streak)
             self.data_manager.log_powerup_usage(
                 thief_id, "steal_preload", target_id, None
             )
+            if current_streak < steal_cost:
+                return (
+                    f"{self.emoji_stealing} Partial steal queued! You only have "
+                    f"{current_streak}/{steal_cost} streak days toward the cost — "
+                    f"will sacrifice all {actual_lost} for a partial steal when the question drops."
+                )
             return (
-                f"{self.emoji_stealing} You've queued a heist for tomorrow! "
+                f"{self.emoji_stealing} You've queued a steal for tomorrow! "
                 f"Will sacrifice {actual_lost} streak days when the question drops. "
                 f"If they answer correctly, you'll steal their bonuses."
             )
@@ -400,9 +412,14 @@ class PowerUpManager(BaseManager):
         if target_state.steal_attempt_by:
             raise PowerUpError(f"<@{target_id}> is already being targeted for theft!")
 
+        if current_streak == 0:
+            raise PowerUpError(
+                "You don't have any streak days to sacrifice. "
+                "Keep your streak going before stealing!"
+            )
+
         if target_state.is_correct:
             # --- Retroactive: target already answered — higher cost, immediate resolution ---
-            current_streak = thief.answer_streak if thief else 0
             self.data_manager.log_powerup_usage(
                 thief_id, "steal", target_id, question_id
             )
@@ -412,6 +429,7 @@ class PowerUpManager(BaseManager):
             )
             new_streak = max(0, current_streak - deducted)
             actual_lost = deducted
+            is_partial = current_streak < self.engine.retro_steal_streak_cost
             self.player_manager.set_streak(thief_id, new_streak)
             if is_late_day and bonus_delta != 0:
                 self.player_manager.update_score(thief_id, bonus_delta)
@@ -422,6 +440,12 @@ class PowerUpManager(BaseManager):
                 )
             self.player_manager.update_score(target_id, -stealable_amount)
             self.player_manager.update_score(thief_id, stealable_amount)
+            if is_partial:
+                return (
+                    f"{self.emoji_stealing} <@{target_id}> already answered! "
+                    f"You only had {actual_lost}/{self.engine.retro_steal_streak_cost} streak days — "
+                    f"partial steal: swiped {stealable_amount} pts!"
+                )
             return (
                 f"{self.emoji_stealing} <@{target_id}> already answered! "
                 f"You paid {actual_lost} streak days and instantly swiped "
@@ -429,7 +453,6 @@ class PowerUpManager(BaseManager):
             )
 
         # --- Normal / forward daytime path ---
-        current_streak = thief.answer_streak if thief else 0
         self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
         # Engine: sets state flags, streak_delta, bonus recalc (if late-day).
         deducted, _, bonus_delta = self.engine.apply_steal(
@@ -437,9 +460,17 @@ class PowerUpManager(BaseManager):
         )
         new_streak = max(0, current_streak - deducted)
         actual_lost = deducted
+        is_partial = current_streak < self.engine.steal_streak_cost
         self.player_manager.set_streak(thief_id, new_streak)
         if is_late_day and bonus_delta != 0:
             self.player_manager.update_score(thief_id, bonus_delta)
+        if is_partial:
+            return (
+                f"{self.emoji_stealing} Partial steal! You only had "
+                f"{actual_lost}/{self.engine.steal_streak_cost} streak days — "
+                f"sacrificing all {actual_lost} to steal a proportional share of "
+                f"<@{target_id}>'s bonuses if they answer correctly."
+            )
         return (
             f"{self.emoji_stealing} You sacrificed {actual_lost} streak days "
             f"to rob <@{target_id}>! If they answer correctly, you'll steal their bonuses."

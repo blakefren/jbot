@@ -26,6 +26,9 @@ class DailyPlayerState:
     # Power-up: Attack (Outgoing)
     silenced: bool = False  # Result of jinxing
     stealing_from: str | None = None  # User ID
+    steal_ratio: float = (
+        1.0  # Fraction of stealable bonuses the thief receives (≤1.0 when partial)
+    )
 
     @property
     def earned_today(self) -> int:

@@ -285,20 +285,12 @@ class TestStealLateDay(unittest.TestCase):
         self.assertEqual(self.players["thief"].score, initial_score - 25 + 10)
         self.assertNotIn("streak", t_state.bonuses)
 
-    def test_late_steal_zero_bonus_delta_no_update_call(self):
-        """If streak bonus doesn't change, update_score is not called for streak delta.
-
-        thief streak=1 → after answering streak=2, bonus=10.
-        Forward cost=3 → new_streak=0, new_bonus=0. delta=10 deducted.
-        But if bonus was already 0 (streak<2 yielded 0), no update needed.
-        """
-        # streak=1: after answer=2, bonus=10. Forward steal cost=3 → new=0, bonus=0.
-        # old bonus set to 0 (pre-existing) → delta = 0-0 = 0 → no update_score call.
+    def test_late_steal_zero_streak_rejected(self):
+        """Steal is rejected when thief has zero streak days (nothing to sacrifice)."""
         t_state = self._setup(thief_streak=0, thief_bonuses={})
-        # streak=0: after answer=1, bonus=0 (< 2 threshold). Forward cost 3 → new=0, bonus=0. Delta=0.
-        self.manager.steal("thief", "target", question_id=1)
-        # No score change for streak delta (both bonuses 0)
-        self.pm.update_score.assert_not_called()
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.steal("thief", "target", question_id=1)
+        self.assertIn("streak days", str(cm.exception))
 
     def test_late_steal_normal_path_unchanged_without_bonuses(self):
         """When thief has no streak bonus, no bonus recalculation side-effects occur."""
@@ -651,7 +643,9 @@ class TestStealThenLateJinxNoDoubleDeduction(unittest.TestCase):
         initial_states = {
             "B": Player(id="B", name="B", score=100, answer_streak=0),
             "A": Player(id="A", name="A", score=100, answer_streak=2),
-            "T": Player(id="T", name="T", score=100, answer_streak=0),
+            "T": Player(
+                id="T", name="T", score=100, answer_streak=3
+            ),  # needs ≥1 streak to steal
         }
         events = [
             # B answers first (fastest_1, before hint)

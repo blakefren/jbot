@@ -142,6 +142,14 @@ class PowerUpEngine:
         state is recalculated using ``effective_streak - cost`` and the delta is
         returned so callers can sync the DB.
 
+        **Partial steal**: if ``initial_streak < cost``, the thief pays their full
+        remaining streak and receives a proportional fraction (``initial_streak / cost``)
+        of the stealable bonuses. The thief's ``steal_ratio`` is stored in state so
+        ``resolve_steal_on_correct`` can apply the same scaling for forward steals.
+
+        Callers are responsible for enforcing that ``initial_streak > 0`` before
+        calling this method (``PowerUpManager.steal`` raises ``PowerUpError`` earlier).
+
         Returns ``(streak_days_deducted, stolen_amount, bonus_delta)``:
         - ``streak_days_deducted``: use ``initial_streak - deducted`` for ``set_streak``.
         - ``stolen_amount``: points transferred from target (retroactive only; 0 otherwise).
@@ -156,7 +164,12 @@ class PowerUpEngine:
         else:
             cost = self.steal_streak_cost
 
+        # Enforce: player must have at least 1 streak day to steal
+        if initial_streak == 0:
+            return 0, 0, 0
+
         streak_deducted = min(cost, initial_streak)
+        steal_ratio = min(1.0, initial_streak / cost)
 
         bonus_delta = 0
         if thief_state.is_correct:
@@ -171,15 +184,16 @@ class PowerUpEngine:
         else:
             thief_state.streak_delta = -streak_deducted
 
+        thief_state.steal_ratio = steal_ratio
         thief_state.stealing_from = target_id
 
         stolen_amount = 0
         if target_state.is_correct:
-            # Retroactive: resolve immediately; pop bonuses so a later late
-            # jinx on the same target cannot deduct them a second time.
-            stolen_amount = self.score_calculator.pop_stealable_bonuses(
+            # Retroactive: pop all bonuses to prevent re-stealing, then scale transfer.
+            total_stealable = self.score_calculator.pop_stealable_bonuses(
                 target_state.bonuses
             )
+            stolen_amount = round(total_stealable * steal_ratio)
             if stolen_amount > 0:
                 target_state.score_earned -= stolen_amount
                 thief_state.score_earned += stolen_amount
@@ -196,6 +210,10 @@ class PowerUpEngine:
     ) -> int:
         """Transfer stealable bonuses from target to thief when the target answers.
 
+        The amount transferred is scaled by the thief's ``steal_ratio`` (set during
+        ``apply_steal``).  A ratio of 1.0 means full steal; less than 1.0 means the
+        thief only paid a partial cost and receives a proportional share.
+
         Returns the number of points stolen (0 if nothing stealable or no pending steal).
         """
         target_state = self._get_state(daily_state, target_id)
@@ -207,11 +225,14 @@ class PowerUpEngine:
         target_state.steal_attempt_by = None  # consume the attempt regardless
 
         if stealable > 0:
-            target_state.score_earned -= stealable
             attacker_state = self._get_state(daily_state, attacker_id)
-            attacker_state.score_earned += stealable
+            stolen = round(stealable * attacker_state.steal_ratio)
+            if stolen > 0:
+                target_state.score_earned -= stolen
+                attacker_state.score_earned += stolen
+            return stolen
 
-        return stealable
+        return 0
 
     # ------------------------------------------------------------------
     # Rest

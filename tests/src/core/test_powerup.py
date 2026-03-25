@@ -469,3 +469,155 @@ class TestPowerUpManager(unittest.TestCase):
         # P2 starts at 100; +22 rest bonus applied, -32 stolen (base 110 not added here,
         # that's GuessHandler's responsibility, not PowerUpManager's)
         self.assertEqual(self.players["2"].score, 90)  # 100 + 22 rest - 32 stolen
+
+
+class TestStealEnforcementAndScaling(unittest.TestCase):
+    """Tests for steal enforcement (streak=0 rejected) and partial-steal scaling."""
+
+    def setUp(self):
+        self.player_manager = MagicMock()
+        self.data_manager = MagicMock()
+        self.players = {
+            "zero": Player(id="zero", name="Zero", score=100, answer_streak=0),
+            "partial": Player(id="partial", name="Partial", score=100, answer_streak=2),
+            "target": Player(id="target", name="Target", score=100, answer_streak=5),
+        }
+        self.player_manager.get_player.side_effect = lambda pid: self.players.get(pid)
+        self.data_manager.get_last_correct_guess_date.return_value = (
+            date.today() - timedelta(days=1)
+        )
+        self.data_manager.get_today.return_value = date.today()
+
+        def update_score(pid, amount):
+            if pid in self.players:
+                self.players[pid].score += amount
+
+        def set_streak(pid, value):
+            if pid in self.players:
+                self.players[pid].answer_streak = value
+
+        self.player_manager.update_score.side_effect = update_score
+        self.player_manager.set_streak.side_effect = set_streak
+        self.data_manager.get_pending_multiplier.return_value = 0.0
+        self.data_manager.get_pending_powerup.return_value = None
+        self.data_manager.get_pending_powerup_for_target.return_value = None
+
+    def _make_manager(self):
+        return PowerUpManager(self.player_manager, self.data_manager)
+
+    # ------------------------------------------------------------------
+    # Enforcement: streak=0 rejects steal in all paths
+    # ------------------------------------------------------------------
+
+    def test_zero_streak_daytime_forward_rejected(self):
+        """Player with 0 streak cannot initiate a forward daytime steal."""
+        m = self._make_manager()
+        with self.assertRaises(PowerUpError) as cm:
+            m.steal("zero", "target", "q1")
+        self.assertIn("streak days", str(cm.exception))
+        self.assertIsNone(m._get_daily_state("target").steal_attempt_by)
+
+    def test_zero_streak_daytime_retro_rejected(self):
+        """Player with 0 streak cannot steal retroactively after target answers."""
+        m = self._make_manager()
+        m._get_daily_state("target").is_correct = True
+        m._get_daily_state("target").bonuses = {"before_hint": 10}
+        with self.assertRaises(PowerUpError) as cm:
+            m.steal("zero", "target", "q1")
+        self.assertIn("streak days", str(cm.exception))
+        self.assertIn("before_hint", m._get_daily_state("target").bonuses)
+
+    def test_zero_streak_overnight_rejected(self):
+        """Player with 0 streak cannot queue an overnight steal."""
+        m = self._make_manager()
+        with self.assertRaises(PowerUpError) as cm:
+            m.steal("zero", "target", None)
+        self.assertIn("streak days", str(cm.exception))
+        self.data_manager.log_powerup_usage.assert_not_called()
+
+    def test_zero_streak_target_still_stealable(self):
+        """After a failed zero-streak steal, the target can be stolen by someone else."""
+        m = self._make_manager()
+        with self.assertRaises(PowerUpError):
+            m.steal("zero", "target", "q1")
+        # Give the partial player enough streak for a full steal, then steal succeeds
+        self.players["partial"].answer_streak = 3
+        msg = m.steal("partial", "target", "q1")
+        self.assertIn("streak days", msg)
+
+    # ------------------------------------------------------------------
+    # Partial steal (forward): fraction of bonuses stolen when target answers
+    # ------------------------------------------------------------------
+
+    def test_partial_steal_forward_steals_fraction(self):
+        """Forward steal with 2 streak days (cost 3) gets round(30 * 2/3) = 20 pts."""
+        m = self._make_manager()
+        cost = m.engine.steal_streak_cost  # default 3
+        m.steal("partial", "target", "q1")
+
+        self.assertAlmostEqual(m._get_daily_state("partial").steal_ratio, 2 / cost)
+
+        ctx = GuessContext(
+            "target",
+            "Target",
+            "ans",
+            True,
+            points_earned=130,
+            bonus_values={"before_hint": 10, "fastest_1": 20},
+        )
+        msgs = m.on_guess(ctx)
+
+        expected_stolen = round(30 * (2 / cost))
+        self.assertTrue(any(f"stole {expected_stolen} pts" in msg for msg in msgs))
+        self.assertEqual(self.players["partial"].score, 100 + expected_stolen)
+        self.assertEqual(self.players["target"].score, 100 - expected_stolen)
+
+    def test_partial_steal_forward_target_bonuses_cleared(self):
+        """After partial forward steal resolves, target bonuses dict is emptied."""
+        m = self._make_manager()
+        m.steal("partial", "target", "q1")
+
+        ctx = GuessContext(
+            "target",
+            "Target",
+            "ans",
+            True,
+            points_earned=120,
+            bonus_values={"before_hint": 10, "fastest_1": 10},
+        )
+        m.on_guess(ctx)
+
+        self.assertEqual(m._get_daily_state("target").bonuses, {})
+        self.assertIsNone(m._get_daily_state("target").steal_attempt_by)
+
+    # ------------------------------------------------------------------
+    # Partial steal (retroactive): fraction of bonuses stolen immediately
+    # ------------------------------------------------------------------
+
+    def test_partial_steal_retro_steals_fraction(self):
+        """Retro steal with 2 streak (cost 5) gets round(30 * 2/5) = 12 pts immediately."""
+        m = self._make_manager()
+        retro_cost = m.engine.retro_steal_streak_cost  # default 5
+
+        tgt = m._get_daily_state("target")
+        tgt.is_correct = True
+        tgt.score_earned = 130
+        tgt.bonuses = {"before_hint": 10, "fastest_1": 20}
+
+        m.steal("partial", "target", "q1")
+
+        expected_stolen = round(30 * (2 / retro_cost))
+        self.assertEqual(self.players["partial"].score, 100 + expected_stolen)
+        self.assertEqual(self.players["target"].score, 100 - expected_stolen)
+
+    def test_partial_steal_retro_target_bonuses_cleared(self):
+        """After retroactive partial steal, target bonuses dict is cleared."""
+        m = self._make_manager()
+        tgt = m._get_daily_state("target")
+        tgt.is_correct = True
+        tgt.score_earned = 110
+        tgt.bonuses = {"before_hint": 10}
+
+        m.steal("partial", "target", "q1")
+
+        self.assertEqual(m._get_daily_state("target").bonuses, {})
