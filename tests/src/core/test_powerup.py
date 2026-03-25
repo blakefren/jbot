@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import MagicMock
+from src.core.events import GuessContext
 from src.core.powerup import PowerUpManager, PowerUpError
 from src.core.player import Player
 
@@ -113,10 +114,8 @@ class TestPowerUpManager(unittest.TestCase):
         self.data_manager.get_pending_multiplier = MagicMock(return_value=1.2)
         self.data_manager.clear_pending_multiplier = MagicMock()
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        points_tracker = {"earned": 100}
-        msgs = manager.on_guess(
-            1, "P1", "ans", True, points_earned=100, points_tracker=points_tracker
-        )
+        ctx = GuessContext(1, "P1", "ans", True, points_earned=100)
+        msgs = manager.on_guess(ctx)
         # 1.2x means +20 on 100 pts
         self.assertTrue(any("Rest bonus" in m for m in msgs))
         self.assertEqual(self.players["1"].score, 120)  # 100 base + 20 bonus
@@ -150,9 +149,10 @@ class TestPowerUpManager(unittest.TestCase):
         # We need to manually set bonuses_today because on_guess sets it
         # But on_guess calls resolve_steal AFTER setting it.
 
-        msgs = manager.on_guess(
+        ctx = GuessContext(
             2, "P2", "ans", True, points_earned=100, bonus_values={"fastest": 10}
         )
+        msgs = manager.on_guess(ctx)
 
         self.assertTrue(any("stole 10 pts" in m for m in msgs))
         self.assertEqual(self.players["1"].score, 110)  # 100 + 10 stolen
@@ -164,7 +164,7 @@ class TestPowerUpManager(unittest.TestCase):
         self.assertIn(f"sacrificed {manager.engine.steal_streak_cost} streak days", msg)
 
         # Attacker answers correctly but target has no bonuses
-        msgs = manager.on_guess(1, "P1", "ans", True)
+        msgs = manager.on_guess(GuessContext(1, "P1", "ans", True))
         # Should be no steal message
         self.assertFalse(any("stole" in m for m in msgs))
 
@@ -176,12 +176,14 @@ class TestPowerUpManager(unittest.TestCase):
 
     def test_on_guess_correct(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        msgs = manager.on_guess("1", "P1", "guess", True, points_earned=100)
+        msgs = manager.on_guess(
+            GuessContext("1", "P1", "guess", True, points_earned=100)
+        )
         self.assertIsInstance(msgs, list)
 
     def test_on_guess_incorrect(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        msgs = manager.on_guess("1", "P1", "guess", False)
+        msgs = manager.on_guess(GuessContext("1", "P1", "guess", False))
         self.assertIsInstance(msgs, list)
         self.assertEqual(len(msgs), 0)
 
@@ -220,7 +222,9 @@ class TestPowerUpManager(unittest.TestCase):
         # Target (P2) answers correctly on first try (bonus)
         # on_guess calls resolve_steal
         msgs = manager.on_guess(
-            2, "P2", "ans", True, points_earned=120, bonus_values={"first_try": 20}
+            GuessContext(
+                2, "P2", "ans", True, points_earned=120, bonus_values={"first_try": 20}
+            )
         )
 
         # Verify steal — only canonical try_1 is present (not first_try alias), so full 20 is stealable
@@ -344,7 +348,9 @@ class TestPowerUpManager(unittest.TestCase):
         # Target (P2) answers correctly with a streak bonus
         # on_guess calls resolve_jinx
         msgs = manager.on_guess(
-            2, "P2", "ans", True, points_earned=100, bonus_values={"streak": 50}
+            GuessContext(
+                2, "P2", "ans", True, points_earned=100, bonus_values={"streak": 50}
+            )
         )
 
         # Verify message reflects the transfer
@@ -364,10 +370,7 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Mock bonus messages
         bonus_messages = ["🔥 6 day streak! (+25)"]
-        points_tracker = {"earned": 125}  # 100 base + 25 streak
-
-        # on_guess calls resolve_jinx
-        msgs = manager.on_guess(
+        ctx = GuessContext(
             2,
             "P2",
             "ans",
@@ -375,8 +378,10 @@ class TestPowerUpManager(unittest.TestCase):
             points_earned=125,
             bonus_values={"streak": 25},
             bonus_messages=bonus_messages,
-            points_tracker=points_tracker,
         )
+
+        # on_guess calls resolve_jinx
+        msgs = manager.on_guess(ctx)
 
         # Streak should NOT be frozen — set_streak should not be called
         self.player_manager.set_streak.assert_not_called()
@@ -387,8 +392,8 @@ class TestPowerUpManager(unittest.TestCase):
         # Verify streak message removed
         self.assertEqual(len(bonus_messages), 0)
 
-        # Verify points tracker updated (target net)
-        self.assertEqual(points_tracker["earned"], 100)
+        # Verify points_earned updated in ctx (target net)
+        self.assertEqual(ctx.points_earned, 100)
 
         # Verify attacker (P1) gained the stolen streak bonus
         self.assertEqual(self.players["1"].score, 125)  # 100 base + 25 stolen streak
@@ -403,9 +408,7 @@ class TestPowerUpManager(unittest.TestCase):
         # GuessHandler increments 0 -> 1.
         self.players["3"].answer_streak = 1
 
-        msgs = manager.on_guess(
-            3, "P3", "ans", True, points_earned=100, bonus_values={}
-        )
+        msgs = manager.on_guess(GuessContext(3, "P3", "ans", True, points_earned=100))
 
         # Streak should NOT be frozen — set_streak should not be called
         self.player_manager.set_streak.assert_not_called()
@@ -419,12 +422,14 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Target (P2) answers correctly with bonuses
         msgs = manager.on_guess(
-            2,
-            "P2",
-            "ans",
-            True,
-            points_earned=100,
-            bonus_values={"fastest": 20, "first_try": 10},
+            GuessContext(
+                2,
+                "P2",
+                "ans",
+                True,
+                points_earned=100,
+                bonus_values={"fastest": 20, "first_try": 10},
+            )
         )
 
         # Verify message contains points stolen
@@ -445,13 +450,15 @@ class TestPowerUpManager(unittest.TestCase):
         # Rest multiplier on 110: round(110 * 0.2) = 22 pts rest bonus
         # Stealable = before_hint (10) + rest (22) = 32 pts
         msgs = manager.on_guess(
-            2,
-            "P2",
-            "ans",
-            True,
-            points_earned=110,
-            bonus_values={"before_hint": 10},
-            question_id="q1",
+            GuessContext(
+                2,
+                "P2",
+                "ans",
+                True,
+                points_earned=110,
+                bonus_values={"before_hint": 10},
+                question_id="q1",
+            )
         )
 
         self.assertTrue(

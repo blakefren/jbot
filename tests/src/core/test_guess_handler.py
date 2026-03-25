@@ -1,6 +1,7 @@
 import unittest
 from datetime import date
 from unittest.mock import MagicMock, patch
+from src.core.events import GuessContext
 from src.core.guess_handler import GuessHandler, AlreadyAnsweredCorrectlyError
 from data.readers.question import Question
 
@@ -60,14 +61,14 @@ class TestGuessHandler(unittest.TestCase):
         # Streak should be incremented here
         self.player_manager.increment_streak.assert_called_once()
 
-        # Check that on_guess was called. Arguments are complex, so we just check it was called.
+        # Check that on_guess was called with a GuessContext
         self.managers["test_manager"].on_guess.assert_called_once()
-        args, _ = self.managers["test_manager"].on_guess.call_args
-        self.assertEqual(args[0], player_id)
-        self.assertEqual(args[1], player_name)
-        self.assertEqual(args[2], guess)
-        self.assertEqual(args[3], True)
-        # args[4] is points, args[5] is bonus_values
+        ctx = self.managers["test_manager"].on_guess.call_args[0][0]
+        self.assertIsInstance(ctx, GuessContext)
+        self.assertEqual(ctx.player_id, player_id)
+        self.assertEqual(ctx.player_name, player_name)
+        self.assertEqual(ctx.guess, guess)
+        self.assertTrue(ctx.is_correct)
 
     def test_handle_guess_incorrect(self):
         """Test handling an incorrect guess."""
@@ -96,11 +97,12 @@ class TestGuessHandler(unittest.TestCase):
         self.player_manager.increment_streak.assert_not_called()
 
         self.managers["test_manager"].on_guess.assert_called_once()
-        args, _ = self.managers["test_manager"].on_guess.call_args
-        self.assertEqual(args[0], player_id)
-        self.assertEqual(args[1], player_name)
-        self.assertEqual(args[2], guess)
-        self.assertEqual(args[3], False)
+        ctx = self.managers["test_manager"].on_guess.call_args[0][0]
+        self.assertIsInstance(ctx, GuessContext)
+        self.assertEqual(ctx.player_id, player_id)
+        self.assertEqual(ctx.player_name, player_name)
+        self.assertEqual(ctx.guess, guess)
+        self.assertFalse(ctx.is_correct)
 
     def test_handle_guess_already_answered_correctly(self):
         """Test that an error is raised if a player has already answered correctly."""
@@ -186,28 +188,16 @@ class TestGuessHandler(unittest.TestCase):
         self.assertFalse(result)
         self.assertEqual(num_guesses, 0)
 
-    def test_handle_guess_manager_on_guess_type_error_fallback(self):
-        """Test manager on_guess falls back when TypeError is raised."""
-        # Create a mock manager that raises TypeError on first call
+    def test_handle_guess_manager_on_guess_calls_with_context(self):
+        """Test that managers are called with a GuessContext."""
         mock_manager = MagicMock()
-        call_count = [0]
-
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                raise TypeError("Wrong signature")
-            # Second call (fallback) should succeed
-
-        mock_manager.on_guess.side_effect = side_effect
+        mock_manager.on_guess.return_value = []
         mock_manager.can_answer.return_value = (True, "")
 
-        # Create a local player manager mock
         local_player_manager = MagicMock()
-        # Mock get_player to return a player with answer_streak
         mock_player = MagicMock()
         mock_player.answer_streak = 1
         local_player_manager.get_player.return_value = mock_player
-        local_player_manager.increment_streak.return_value = 2
 
         handler = GuessHandler(
             self.data_manager,
@@ -218,44 +208,12 @@ class TestGuessHandler(unittest.TestCase):
         )
 
         self.data_manager.read_guess_history.return_value = []
+        handler.handle_guess(1, "Player", "Test Answer")
 
-        with patch("src.core.guess_handler.logging") as mock_logging:
-            result, _, _, _ = handler.handle_guess(1, "Player", "Test Answer")
-
-        # on_guess should have been called twice (initial + fallback)
-        self.assertEqual(mock_manager.on_guess.call_count, 2)
-
-    def test_handle_guess_manager_on_guess_both_fail(self):
-        """Test manager on_guess gracefully handles when both calls fail."""
-        mock_manager = MagicMock()
-        mock_manager.on_guess.side_effect = TypeError("Wrong signature")
-        mock_manager.can_answer.return_value = (True, "")
-
-        # Create a local player manager mock
-        local_player_manager = MagicMock()
-        # Mock get_player to return a player with answer_streak
-        mock_player = MagicMock()
-        mock_player.answer_streak = 1
-        local_player_manager.get_player.return_value = mock_player
-        local_player_manager.increment_streak.return_value = 2
-
-        handler = GuessHandler(
-            self.data_manager,
-            local_player_manager,
-            self.daily_question,
-            self.daily_question_id,
-            managers={"test": mock_manager},
-        )
-
-        self.data_manager.read_guess_history.return_value = []
-
-        with patch("src.core.guess_handler.logging"):
-            result, num_guesses, _, _ = handler.handle_guess(1, "Player", "Test Answer")
-
-        # Should not raise, just log error and continue
-        self.assertTrue(result)  # Answer was still correct
-        # on_guess called 4 times (initial + fallback 1 + fallback 2 + fallback 3)
-        self.assertEqual(mock_manager.on_guess.call_count, 4)
+        mock_manager.on_guess.assert_called_once()
+        ctx = mock_manager.on_guess.call_args[0][0]
+        self.assertIsInstance(ctx, GuessContext)
+        self.assertTrue(ctx.is_correct)
 
     def test_handle_guess_streak_increment(self):
         """Test that streak is incremented upon correct guess."""

@@ -70,6 +70,10 @@ class TestGameRunner(unittest.TestCase):
             "JBOT_EMOJI_FASTEST": "🥇",
             "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
             "JBOT_BONUS_FASTEST_CSV": "10,5,1",
+            "JBOT_BONUS_TRY_CSV": "20,10,5",
+            "JBOT_BONUS_BEFORE_HINT": "10",
+            "JBOT_BONUS_STREAK_PER_DAY": "5",
+            "JBOT_BONUS_STREAK_CAP": "25",
             "JBOT_EMOJI_FIRST_TRY": "🎯",
             "JBOT_EMOJI_BEFORE_HINT": "🧠",
             "JBOT_EMOJI_STREAK": "🔥",
@@ -352,18 +356,19 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.set_daily_question()
         player_id, player_name = 123, "Test Guesser"
 
-        with patch("src.core.game_runner.GuessHandler") as mock_guess_handler:
-            mock_handler_instance = mock_guess_handler.return_value
-            mock_handler_instance.handle_guess.return_value = (True, 1, 100, [])
+        # Replace the already-built guess_handler with a mock
+        mock_handler_instance = MagicMock()
+        mock_handler_instance.handle_guess.return_value = (True, 1, 100, [])
+        self.game_runner.guess_handler = mock_handler_instance
 
-            is_correct, num_guesses, points, bonuses = self.game_runner.handle_guess(
-                player_id, player_name, "test answer"
-            )
-            self.assertTrue(is_correct)
-            self.assertEqual(num_guesses, 1)
-            mock_handler_instance.handle_guess.assert_called_once_with(
-                player_id, player_name, "test answer"
-            )
+        is_correct, num_guesses, points, bonuses = self.game_runner.handle_guess(
+            player_id, player_name, "test answer"
+        )
+        self.assertTrue(is_correct)
+        self.assertEqual(num_guesses, 1)
+        mock_handler_instance.handle_guess.assert_called_once_with(
+            player_id, player_name, "test answer"
+        )
 
         # No daily question
         self.game_runner.daily_q = None

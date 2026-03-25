@@ -42,6 +42,7 @@ class GameRunner:
         self.managers = {}
         self.config = ConfigReader()
         self.reminder_time = None
+        self.guess_handler = None
 
         # Initialize PowerUpManager (always enabled)
         self.managers["powerup"] = PowerUpManager(
@@ -135,6 +136,7 @@ class GameRunner:
                 logging.info(f"Game state restored")
             except Exception as e:
                 logging.error(f"Failed to restore game state: {e}")
+            self._build_guess_handler()
             return
 
         # Otherwise, select a new question
@@ -184,6 +186,8 @@ class GameRunner:
             if powerup_manager:
                 powerup_manager.hydrate_pending_powerups(self.daily_question_id)
 
+            self._build_guess_handler()
+
     def end_daily_game(self):
         """
         Ends the daily game by clearing the current question and resetting manager states.
@@ -199,10 +203,23 @@ class GameRunner:
         self.daily_q = None
         self.daily_question_id = None
         self.question_db_id = None
+        self.guess_handler = None
 
         for manager in self.managers.values():
             if hasattr(manager, "reset_daily_state"):
                 manager.reset_daily_state()
+
+    def _build_guess_handler(self):
+        """Constructs and caches the GuessHandler for the current question day."""
+        self.guess_handler = GuessHandler(
+            self.data_manager,
+            self.player_manager,
+            self.daily_q,
+            self.daily_question_id,
+            self.managers,
+            reminder_time=self.reminder_time,
+            config=self.config,
+        )
 
     def add_subscriber(self, subscriber: Subscriber):
         self.data_manager.save_subscriber(subscriber)
@@ -306,15 +323,9 @@ class GameRunner:
         if not self.daily_q:
             return False, 0, 0, []  # No active question
 
-        guess_handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_q,
-            self.daily_question_id,
-            self.managers,
-            reminder_time=self.reminder_time,
-        )
-        return guess_handler.handle_guess(player_id, player_name, guess)
+        if not self.guess_handler:
+            self._build_guess_handler()
+        return self.guess_handler.handle_guess(player_id, player_name, guess)
 
     def get_scores_leaderboard(self, guild=None, show_daily_bonuses=False) -> str:
         """Computes and formats the leaderboard string."""

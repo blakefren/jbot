@@ -7,6 +7,7 @@ import logging
 from src.cfg.main import ConfigReader
 from src.core.base_manager import BaseManager
 from src.core.data_manager import DataManager
+from src.core.events import GuessContext
 from src.core.player_manager import PlayerManager
 from src.core.powerup_engine import PowerUpEngine
 from src.core.state import DailyPlayerState
@@ -94,111 +95,83 @@ class PowerUpManager(BaseManager):
             "You are Jinxed! You cannot answer until the hint is revealed.",
         )
 
-    def on_guess(
-        self,
-        player_id: int,
-        player_name: str,
-        guess: str,
-        is_correct: bool,
-        points_earned: int = 0,
-        bonus_values: dict = None,
-        bonus_messages: list[str] = None,
-        points_tracker: dict = None,
-        question_id: int = None,
-    ) -> list[str]:
-        if bonus_values is None:
-            bonus_values = {}
-
-        pid = str(player_id)
+    def on_guess(self, ctx: GuessContext) -> list[str]:
+        pid = str(ctx.player_id)
         state = self._get_daily_state(pid)
 
         # Store earnings for potential theft
-        if is_correct:
+        if ctx.is_correct:
             state.is_correct = True
-            state.score_earned = points_earned
-            state.bonuses = bonus_values
+            state.score_earned = ctx.points_earned
+            state.bonuses = ctx.bonus_values
 
         messages = []
 
         # Apply pending rest multiplier (from yesterday's rest) on correct answers
-        if is_correct and points_earned > 0:
+        if ctx.is_correct and ctx.points_earned > 0:
             pending_mult = self.data_manager.get_pending_multiplier(pid)
             if pending_mult > 1.0:
-                bonus_amount = round(points_earned * (pending_mult - 1.0))
+                bonus_amount = round(ctx.points_earned * (pending_mult - 1.0))
                 if bonus_amount > 0:
                     self.player_manager.update_score(pid, bonus_amount)
-                    if points_tracker:
-                        points_tracker["earned"] += bonus_amount
+                    ctx.points_earned += bonus_amount
                     state.bonuses["rest"] = bonus_amount
                     messages.append(
                         f"{self.emoji_rest_wakeup} Rest bonus! ×{pending_mult} on today's score (+{bonus_amount} pts)!"
                     )
                     self.data_manager.log_powerup_usage(
-                        pid, "rest_wakeup", None, question_id
+                        pid, "rest_wakeup", None, ctx.question_id
                     )
                 self.data_manager.clear_pending_multiplier(pid)
 
-        msg = self.resolve_jinx(
-            pid, is_correct, bonus_values, bonus_messages, points_tracker
-        )
+        msg = self.resolve_jinx(pid, ctx)
         if msg:
             messages.append(msg)
 
-        msg = self.resolve_steal(pid, is_correct, points_tracker)
+        msg = self.resolve_steal(pid, ctx)
         if msg:
             messages.append(msg)
 
         return messages
 
-    def resolve_jinx(
-        self,
-        player_id: str,
-        correct: bool,
-        bonus_values: dict,
-        bonus_messages: list[str] = None,
-        points_tracker: dict = None,
-    ) -> str:
+    def resolve_jinx(self, player_id: str, ctx: GuessContext) -> str:
         """
         Resolve Jinx effect on the target.
         """
         state = self._get_daily_state(player_id)
         attacker_id = state.jinxed_by
 
-        if not attacker_id or not correct:
+        if not attacker_id or not ctx.is_correct:
             return ""
 
         # Engine: transfer streak bonus in state, strip from bonus_values dict
         transferred = self.engine.resolve_jinx_on_correct(
-            self.daily_state, player_id, bonus_values
+            self.daily_state, player_id, ctx.bonus_values
         )
 
         if transferred > 0:
             self.player_manager.update_score(player_id, -transferred)
             self.player_manager.update_score(attacker_id, transferred)
-            if points_tracker:
-                points_tracker["earned"] -= transferred
+            ctx.points_earned -= transferred
 
             # Remove streak message if present
-            if bonus_messages is not None:
-                for i, msg in enumerate(bonus_messages):
-                    if self.emoji_streak in msg:
-                        bonus_messages.pop(i)
-                        break
+            for i, msg in enumerate(ctx.bonus_messages):
+                if self.emoji_streak in msg:
+                    ctx.bonus_messages.pop(i)
+                    break
 
             return f"{self.emoji_jinxed} <@{attacker_id}> swiped <@{player_id}>'s streak bonus of {transferred} pts via Jinx!"
 
         return f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx had no effect — <@{player_id}> had no streak bonus to steal!"
 
-    def resolve_steal(
-        self, target_id: str, correct: bool, points_tracker: dict = None
-    ) -> str:
+    def resolve_steal(self, target_id: str, ctx: GuessContext) -> str:
         """
         Resolve Steal effect when the target answers.
         """
         target_state = self._get_daily_state(target_id)
         attacker_id = target_state.steal_attempt_by
 
-        if not attacker_id or not correct:
+        if not attacker_id or not ctx.is_correct:
             return ""
 
         # Engine: transfer stealable bonuses in state
@@ -211,8 +184,7 @@ class PowerUpManager(BaseManager):
 
         self.player_manager.update_score(target_id, -stealable_amount)
         self.player_manager.update_score(attacker_id, stealable_amount)
-        if points_tracker:
-            points_tracker["earned"] -= stealable_amount
+        ctx.points_earned -= stealable_amount
 
         return f"{self.emoji_stealing} <@{attacker_id}> stole {stealable_amount} pts from <@{target_id}>!"
 

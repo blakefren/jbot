@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from unittest.mock import MagicMock
 
 from src.core.daily_game_simulator import DailyGameSimulator
-from src.core.events import GuessEvent, PowerUpEvent
+from src.core.events import GuessContext, GuessEvent, PowerUpEvent
 from src.core.player import Player
 from src.core.powerup import PowerUpError, PowerUpManager
 from src.core.state import DailyPlayerState
@@ -281,13 +281,15 @@ class TestRetroactiveJinx(unittest.TestCase):
 
         # Target answers correctly through the normal on_guess path
         manager.on_guess(
-            player_id="target",
-            player_name="Target",
-            guess="answer",
-            is_correct=True,
-            points_earned=100,
-            bonus_values={"streak": 20},
-            question_id=99,
+            GuessContext(
+                player_id="target",
+                player_name="Target",
+                guess="answer",
+                is_correct=True,
+                points_earned=100,
+                bonus_values={"streak": 20},
+                question_id=99,
+            )
         )
 
         # Attacker jinxes after target has already answered

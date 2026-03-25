@@ -265,10 +265,10 @@ A small `parse_timestamp(ts) -> datetime | None` utility (or a method on `DataMa
 
 | # | Issue | Location(s) | Impact | Effort | Status |
 |---|-------|-------------|--------|--------|--------|
-| 1 | Extract `PowerUpEngine` — remove sim/manager duplication | `daily_game_simulator.py`, `powerup.py` | High | High | Approach decided |
-| 2 | `GuessHandler` recreated per-guess | `game_runner.py`, `guess_handler.py` | Medium | Low | Approach decided |
-| 3 | `on_guess` multi-signature fallback + `GuessContext` | `guess_handler.py`, `base_manager.py` | Medium | Medium | Approach decided |
-| 4 | `ConfigReader` scattered ad-hoc instantiation | Multiple | Medium | Medium | Approach decided |
+| 1 | Extract `PowerUpEngine` — remove sim/manager duplication | `daily_game_simulator.py`, `powerup.py` | High | High | **Done** |
+| 2 | `GuessHandler` recreated per-guess | `game_runner.py`, `guess_handler.py` | Medium | Low | **Done** |
+| 3 | `on_guess` multi-signature fallback + `GuessContext` | `guess_handler.py`, `base_manager.py` | Medium | Medium | **Done** |
+| 4 | `ConfigReader` scattered ad-hoc instantiation | Multiple | Medium | Medium | **Done** |
 | 5 | Leaderboard badge key constants + helper extraction | `game_runner.py` | Medium | Low | Approach decided |
 | 6 | `DailyPlayerState` dual naming | `state.py` | Low | Low | Pending |
 | 7 | `AnswerChecker` instantiated in multiple places | `daily_game_simulator.py`, `guess_handler.py` | Low | Trivial | Pending |

@@ -5,6 +5,7 @@ from data.readers.question import Question
 from src.core.scoring import ScoreCalculator
 from src.core.answer_checker import AnswerChecker
 from src.cfg.main import ConfigReader
+from src.core.events import GuessContext
 
 
 class AlreadyAnsweredCorrectlyError(Exception):
@@ -35,6 +36,7 @@ class GuessHandler:
         managers: dict,
         fuzzy_threshold=2,
         reminder_time=None,
+        config: ConfigReader = None,
     ):
         self.data_manager = data_manager
         self.player_manager = player_manager
@@ -43,7 +45,7 @@ class GuessHandler:
         self.managers = managers
         self.fuzzy_threshold = fuzzy_threshold
         self.reminder_time = reminder_time
-        self.config = ConfigReader()
+        self.config = config or ConfigReader()
         self.score_calculator = ScoreCalculator(self.config)
         self._checker = AnswerChecker()
 
@@ -198,68 +200,25 @@ class GuessHandler:
         )
         logging.info(f"Player {player_name} guessed '{g}'. Correct: {is_correct}")
 
-        # Track points earned for message display
-        points_tracker = {"earned": points_earned}
+        # Build context and pass to all managers
+        ctx = GuessContext(
+            player_id=player_id,
+            player_name=player_name,
+            guess=guess,
+            is_correct=is_correct,
+            points_earned=points_earned,
+            bonus_values=bonus_values,
+            bonus_messages=bonus_messages,
+            question_id=self.daily_question_id,
+        )
 
-        # Resolve with active managers
         for manager in self.managers.values():
             if manager is not None and not isinstance(manager, type):
-                try:
-                    # Try calling with newest signature (including points_tracker)
-                    msgs = manager.on_guess(
-                        player_id,
-                        player_name,
-                        guess,
-                        is_correct,
-                        points_earned,
-                        bonus_values,
-                        bonus_messages,
-                        points_tracker,
-                        question_id=self.daily_question_id,
-                    )
-                    if msgs and isinstance(msgs, list):
-                        bonus_messages.extend(msgs)
-                except TypeError:
-                    # Fallback to previous signature (without points_tracker)
-                    try:
-                        msgs = manager.on_guess(
-                            player_id,
-                            player_name,
-                            guess,
-                            is_correct,
-                            points_earned,
-                            bonus_values,
-                            bonus_messages,
-                        )
-                        if msgs and isinstance(msgs, list):
-                            bonus_messages.extend(msgs)
-                    except TypeError:
-                        # Fallback to old signature (without bonus_messages)
-                        try:
-                            msgs = manager.on_guess(
-                                player_id,
-                                player_name,
-                                guess,
-                                is_correct,
-                                points_earned,
-                                bonus_values,
-                            )
-                            if msgs and isinstance(msgs, list):
-                                bonus_messages.extend(msgs)
-                        except TypeError as e:
-                            logging.error(
-                                f"Error calling on_guess for {type(manager).__name__}: {e}"
-                            )
-                            # Attempt to call with fewer arguments for backward compatibility
-                            try:
-                                manager.on_guess(player_id, is_correct)
-                            except TypeError:
-                                pass  # Or log that this also failed
-
-        # Update points_earned from tracker
-        points_earned = points_tracker["earned"]
+                msgs = manager.on_guess(ctx)
+                if msgs and isinstance(msgs, list):
+                    bonus_messages.extend(msgs)
 
         # Get the number of guesses for this question
         num_guesses = len(self.get_player_guesses(player_id))
 
-        return is_correct, num_guesses, points_earned, bonus_messages
+        return is_correct, num_guesses, ctx.points_earned, bonus_messages
