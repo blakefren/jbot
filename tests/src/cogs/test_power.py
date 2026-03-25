@@ -22,9 +22,10 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
         self.target_member.display_name = "Target"
 
     async def test_jinx_enabled(self):
-        # Mock the manager
+        # Mock the manager with target not yet answered (normal path → ephemeral)
         mock_manager = MagicMock()
         mock_manager.jinx.return_value = "Success"
+        mock_manager.daily_state = {}  # target not in state → not answered
         self.bot.game.managers.get.return_value = mock_manager
 
         await self.cog.jinx.callback(self.cog, self.ctx, target=self.target_member)
@@ -34,6 +35,21 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
         )
         self.bot.send_message.assert_awaited_once_with(
             "Success", interaction=self.ctx.interaction, ephemeral=True
+        )
+
+    async def test_jinx_target_already_answered_is_public(self):
+        # When target has already answered, result should be public (ephemeral=False)
+        mock_manager = MagicMock()
+        mock_manager.jinx.return_value = "Late jinx!"
+        target_state = MagicMock()
+        target_state.is_correct = True
+        mock_manager.daily_state = {"456": target_state}
+        self.bot.game.managers.get.return_value = mock_manager
+
+        await self.cog.jinx.callback(self.cog, self.ctx, target=self.target_member)
+
+        self.bot.send_message.assert_awaited_once_with(
+            "Late jinx!", interaction=self.ctx.interaction, ephemeral=False
         )
 
     async def test_rest_no_active_question(self):
