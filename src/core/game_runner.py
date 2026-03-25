@@ -548,7 +548,7 @@ class GameRunner:
         streak_header = " " * max(0, max_streak - 2) + emoji_streak
 
         # Header
-        header = f"{'#':>2} {'Player':<{max_name}} {'Pts':<{max_score}} {streak_header}"
+        header = f"🏆 {'Player':<{max_name}} {'Pts':<{max_score}} {streak_header}"
         if show_daily_bonuses:
             header += " Badges"
         header += "\n"

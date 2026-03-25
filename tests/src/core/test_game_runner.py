@@ -386,7 +386,7 @@ class TestGameRunner(unittest.TestCase):
         ]
         self.mock_data_manager.get_player_streaks.return_value = []
         leaderboard = self.game_runner.get_scores_leaderboard()
-        self.assertIn("#", leaderboard)
+        self.assertIn("🏆", leaderboard)
         self.assertIn("Player", leaderboard)
         self.assertIn("Pts", leaderboard)
         # Streak emoji is now its own column header
