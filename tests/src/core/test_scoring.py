@@ -171,12 +171,15 @@ class TestScoreCalculator(unittest.TestCase):
             "fastest": 10,
             "before_hint": 10,
         }
-        stealable = self.calculator.get_stealable_amount(bonuses)
+        stealable = self.calculator.pop_stealable_bonuses(bonuses)
         # All bonuses stealable except streak; alias keys (first_try, fastest) excluded
         # to avoid double-counting: try_1 (20) + fastest_1 (10) + before_hint (10) = 40
         self.assertEqual(stealable, 40)
+        # All stealable keys should be removed from the dict
+        self.assertEqual(bonuses, {})
 
     def test_stealable_legacy(self):
         bonuses = {"first_place": 10}
-        stealable = self.calculator.get_stealable_amount(bonuses)
+        stealable = self.calculator.pop_stealable_bonuses(bonuses)
         self.assertEqual(stealable, 10)
+        self.assertEqual(bonuses, {})

@@ -612,5 +612,88 @@ class TestSimulatorStealLateDay(unittest.TestCase):
         self.assertEqual(results["thief"]["final_streak"], 3)
 
 
+class TestStealThenLateJinxNoDoubleDeduction(unittest.TestCase):
+    """Regression: bonuses already stolen from a player must not be deducted
+    again when that same player later uses a late-day jinx."""
+
+    ANSWER = "apple"
+
+    def _make_simulator(self, initial_states, events):
+        question = Question(
+            question="Q?", answer=self.ANSWER, category="Test", clue_value=100
+        )
+        config = _make_config()
+        return DailyGameSimulator(
+            question=question,
+            answers=[self.ANSWER],
+            hint_timestamp="2023-01-01 12:00:00",
+            events=events,
+            initial_player_states=initial_states,
+            config=config,
+        )
+
+    def test_steal_target_then_late_jinx_no_double_deduction(self):
+        """A is targeted by steal from T. A answers correctly — T steals A's
+        try/before_hint/fastest bonuses. A then uses a late-day jinx on B.
+        The bonuses already transferred to T must NOT be deducted again as
+        the late-jinx cost.
+
+        A scoring:
+          base=100, try_1=20, first_try(alias), before_hint=10, fastest_2=5, streak(3)=15 → 150
+          Steal by T: -(20+10+5)=35 → 115 (try/before_hint/fastest removed from bonuses)
+          Late-jinx cost: before_hint+fastest already gone → 0  (was -15 before fix)
+          Retro jinx on B (B streak_length=1 < 2 → bonus=0): no transfer
+          Final A score_earned = 115
+
+        Without the fix, the jinx cost would re-deduct before_hint(10)+fastest_2(5)=15,
+        leaving A at 100.
+        """
+        initial_states = {
+            "B": Player(id="B", name="B", score=100, answer_streak=0),
+            "A": Player(id="A", name="A", score=100, answer_streak=2),
+            "T": Player(id="T", name="T", score=100, answer_streak=0),
+        }
+        events = [
+            # B answers first (fastest_1, before hint)
+            GuessEvent(
+                timestamp="2023-01-01 09:00:00",
+                user_id="B",
+                guess_text=self.ANSWER,
+            ),
+            # T steals from A before A has answered
+            PowerUpEvent(
+                timestamp="2023-01-01 09:05:00",
+                user_id="T",
+                powerup_type="steal",
+                target_user_id="A",
+            ),
+            # A answers (before hint, second fastest) → steal resolves, bonuses transferred to T
+            GuessEvent(
+                timestamp="2023-01-01 09:10:00",
+                user_id="A",
+                guess_text=self.ANSWER,
+            ),
+            # A uses a late-day jinx on B (A already answered → late-day path)
+            PowerUpEvent(
+                timestamp="2023-01-01 09:15:00",
+                user_id="A",
+                powerup_type="jinx_late",
+                target_user_id="B",
+            ),
+        ]
+        sim = self._make_simulator(initial_states, events)
+        results = sim.run()
+
+        # Stealable bonuses must be gone from A's bonus dict after steal resolved
+        a_bonuses = sim.daily_state["A"].bonuses
+        self.assertNotIn("before_hint", a_bonuses)
+        self.assertNotIn("fastest_1", a_bonuses)
+        self.assertNotIn("fastest_2", a_bonuses)
+
+        # A's final score: 115 (after steal, no double-deduction from jinx cost).
+        # Without the fix this would be 100 (jinx cost re-deducts already-stolen bonuses).
+        self.assertEqual(results["A"]["score_earned"], 115)
+
+
 if __name__ == "__main__":
     unittest.main()

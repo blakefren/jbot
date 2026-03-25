@@ -222,9 +222,8 @@ class DailyGameSimulator:
                 thief_state = self.daily_state[steal_attempt_by]
                 # Thief must also be correct to steal
                 if thief_state.is_correct and state.is_correct:
-                    target_bonuses = state.bonuses
-                    stolen_amount = self.score_calculator.get_stealable_amount(
-                        target_bonuses
+                    stolen_amount = self.score_calculator.pop_stealable_bonuses(
+                        state.bonuses
                     )
 
                     if stolen_amount > 0:

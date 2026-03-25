@@ -144,24 +144,25 @@ class ScoreCalculator:
             return 0
         return min(streak_length * self.streak_per_day, self.streak_cap)
 
-    def get_stealable_amount(self, bonuses: dict) -> int:
-        """
-        Determines how many points can be stolen based on the bonuses earned.
-        Standardizes 'Steal' logic across Live and Sim.
+    def pop_stealable_bonuses(self, bonuses: dict) -> int:
+        """Remove stealable bonus entries from the dict and return their total value.
 
-        Rules:
-        - All bonuses are stealable except streak.
-        - Alias keys (first_try, fastest) are only skipped when their canonical
-          equivalents (try_1, fastest_1) are also present, to avoid double-counting.
+        All bonuses except streak are stealable. Alias keys (first_try, fastest)
+        are removed but not counted when their canonical equivalents (try_1, fastest_1)
+        are present, to avoid double-counting.
         """
         NON_STEALABLE = {"streak"}
         stealable = 0
-        for key, val in bonuses.items():
+        to_remove = []
+        for key, val in list(bonuses.items()):
             if any(key == ns or key.startswith(ns + "_") for ns in NON_STEALABLE):
                 continue
+            to_remove.append(key)
             if key == "first_try" and "try_1" in bonuses:
-                continue
+                continue  # alias — remove but don't double-count
             if key == "fastest" and "fastest_1" in bonuses:
-                continue
+                continue  # alias — remove but don't double-count
             stealable += val
+        for key in to_remove:
+            bonuses.pop(key, None)
         return stealable

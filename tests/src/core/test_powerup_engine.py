@@ -337,8 +337,7 @@ class TestApplyStealRetro(unittest.TestCase):
             ),
         }
         self.engine.apply_steal(ds, "thief", "tgt", initial_streak=3)
-        # stealable = before_hint + fastest bonuses; try_1 is stealable, check via ScoreCalculator
-        # get_stealable_amount includes streak + before_hint + fastest
+        # pop_stealable_bonuses transfers try_1 + before_hint = 30
         transferred = ds["thief"].score_earned
         self.assertGreater(transferred, 0)
         self.assertEqual(ds["tgt"].score_earned + transferred, 50)

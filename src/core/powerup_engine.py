@@ -184,8 +184,9 @@ class PowerUpEngine:
 
         stolen_amount = 0
         if target_state.is_correct:
-            # Retroactive: resolve immediately
-            stolen_amount = self.score_calculator.get_stealable_amount(
+            # Retroactive: resolve immediately; pop bonuses so a later late
+            # jinx on the same target cannot deduct them a second time.
+            stolen_amount = self.score_calculator.pop_stealable_bonuses(
                 target_state.bonuses
             )
             if stolen_amount > 0:
@@ -211,7 +212,7 @@ class PowerUpEngine:
         if not attacker_id:
             return 0
 
-        stealable = self.score_calculator.get_stealable_amount(target_state.bonuses)
+        stealable = self.score_calculator.pop_stealable_bonuses(target_state.bonuses)
         target_state.steal_attempt_by = None  # consume the attempt regardless
 
         if stealable > 0:
