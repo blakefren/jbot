@@ -168,9 +168,10 @@ class DailyGameSimulator:
 
         # If player used any steal (daytime or preload), apply the streak cost to
         # initial_streak so scoring uses the correct post-cost streak length.
+        # streak_delta was set by apply_steal with the correct cost (normal vs retro),
+        # so deriving from it avoids duplicating config reads and fixes the retro-steal bug.
         if state.stealing_from:
-            steal_streak_cost = int(self.config.get("JBOT_STEAL_STREAK_COST", "3"))
-            initial_streak = max(0, initial_streak - steal_streak_cost)
+            initial_streak = max(0, initial_streak + state.streak_delta)
 
         streak_length = initial_streak + 1
 
