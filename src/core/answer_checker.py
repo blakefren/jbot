@@ -129,6 +129,26 @@ class AnswerChecker:
         if recall == 1.0 and len(answer) > 3:
             return True
 
+        # Near-miss fallback: exactly one token on each side is unmatched, but the
+        # pair is phonetically close (e.g. "Graham" vs "Grand" in a 3-part name).
+        # The crucial modifier guard above already blocked directional mismatches.
+        unmatched_g = [
+            tg
+            for tg in tokens_g
+            if not any(self.is_token_match(tg, ta) for ta in tokens_a)
+        ]
+        unmatched_a = [
+            ta
+            for ta in tokens_a
+            if not any(self.is_token_match(tg, ta) for tg in tokens_g)
+        ]
+        if len(unmatched_g) == 1 and len(unmatched_a) == 1 and len(tokens_a) >= 2:
+            if (
+                jellyfish.jaro_winkler_similarity(unmatched_g[0], unmatched_a[0])
+                >= 0.75
+            ):
+                return True
+
         return False
 
     def is_correct(self, guess: str, answer: str) -> bool:

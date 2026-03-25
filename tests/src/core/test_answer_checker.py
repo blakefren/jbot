@@ -191,6 +191,16 @@ class TestAnswerCheckerIsCorrect(unittest.TestCase):
         self.assertFalse(self.checker.is_correct("Virginia", "West Virginia"))
         self.assertFalse(self.checker.is_correct("York", "New York"))
 
+    def test_near_miss_middle_name(self):
+        # "Grand" vs "Graham" — JW ~0.79, close enough to accept
+        self.assertTrue(
+            self.checker.is_correct("Alexander Grand Bell", "Alexander Graham Bell")
+        )
+        # Truly different middle word should still fail
+        self.assertFalse(
+            self.checker.is_correct("Central Daylight Time", "Mountain Daylight Time")
+        )
+
     def test_validation_hierarchy(self):
         """Covers the full step-by-step validation logic described in the architecture."""
         cases = [
@@ -221,6 +231,7 @@ class TestAnswerCheckerIsCorrect(unittest.TestCase):
             ("carnivore", "carnivorous", True),
             ("React", "Reaction", True),
             ("tape", "a stapler", False),
+            ("Alexander Grand Bell", "Alexander Graham Bell", True),
         ]
         for guess, answer, expected in cases:
             with self.subTest(guess=guess, answer=answer):
