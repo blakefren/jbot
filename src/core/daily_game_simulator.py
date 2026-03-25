@@ -94,12 +94,10 @@ class DailyGameSimulator:
 
         elif ptype == "steal_preload":
             if target_id:
+                player = self.initial_player_states.get(user_id)
+                initial_streak = player.answer_streak if player else 0
                 self.engine.apply_steal(
-                    self.daily_state,
-                    user_id,
-                    target_id,
-                    initial_streak=0,
-                    is_preload=True,
+                    self.daily_state, user_id, target_id, initial_streak
                 )
 
         elif ptype == "steal":
@@ -168,9 +166,9 @@ class DailyGameSimulator:
         player = self.initial_player_states.get(user_id)
         initial_streak = player.answer_streak if player else 0
 
-        # If player used a daytime steal, their streak was reduced by JBOT_STEAL_STREAK_COST
-        # for this score calculation. For steal_preload, the cost is already in the snapshot.
-        if state.stealing_from and not state.steal_is_preload:
+        # If player used any steal (daytime or preload), apply the streak cost to
+        # initial_streak so scoring uses the correct post-cost streak length.
+        if state.stealing_from:
             steal_streak_cost = int(self.config.get("JBOT_STEAL_STREAK_COST", "3"))
             initial_streak = max(0, initial_streak - steal_streak_cost)
 

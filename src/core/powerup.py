@@ -242,13 +242,20 @@ class PowerUpManager(BaseManager):
                     target_id,
                 )
             elif ptype == "steal_preload":
-                self.engine.apply_preload_steal(
-                    self.daily_state, attacker_id, target_id
+                thief = self.player_manager.get_player(attacker_id)
+                initial_streak = thief.answer_streak if thief else 0
+                streak_deducted, _, _ = self.engine.apply_steal(
+                    self.daily_state, attacker_id, target_id, initial_streak
                 )
+                if streak_deducted > 0:
+                    self.player_manager.set_streak(
+                        attacker_id, initial_streak - streak_deducted
+                    )
                 logging.info(
-                    "[Hydration] Overnight steal applied: %s \u2192 %s",
+                    "[Hydration] Overnight steal applied: %s \u2192 %s (-%d streak)",
                     attacker_id,
                     target_id,
+                    streak_deducted,
                 )
 
     def jinx(self, attacker_id: str, target_id: str, question_id: int = None) -> str:
@@ -394,22 +401,17 @@ class PowerUpManager(BaseManager):
                     f"<@{target_id}> is already being targeted for theft!"
                 )
 
-            # Deduct streak immediately; this cost is baked into tomorrow's snapshot
-            # TODO: move this to hydration and make it adjustable by config (retro steals have a higher cost)
+            # Streak cost is deducted at hydration (when the question goes live),
+            # not here, so we don't bake an early penalty into the DB snapshot.
             current_streak = thief.answer_streak if thief else 0
             steal_cost = self.engine.steal_streak_cost
-            new_streak = max(0, current_streak - steal_cost)
-            actual_lost = current_streak - new_streak
-            self.player_manager.set_streak(thief_id, new_streak)
+            actual_lost = min(steal_cost, current_streak)
             self.data_manager.log_powerup_usage(
                 thief_id, "steal_preload", target_id, None
             )
-            thief_state = self._get_daily_state(thief_id)
-            thief_state.stealing_from = target_id
-            thief_state.steal_is_preload = True
             return (
                 f"{self.emoji_stealing} You've queued a heist for tomorrow! "
-                f"Sacrificed {actual_lost} streak days. "
+                f"Will sacrifice {actual_lost} streak days when the question drops. "
                 f"If they answer correctly, you'll steal their bonuses."
             )
 

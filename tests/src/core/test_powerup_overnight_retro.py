@@ -136,18 +136,25 @@ class TestOvernightSteal(unittest.TestCase):
             "attacker", "steal_preload", "target", None
         )
 
-    def test_overnight_steal_deducts_streak_immediately(self):
+    def test_overnight_steal_does_not_deduct_streak_immediately(self):
         manager, pm, dm, players = _make_manager()
+        initial_streak = players["attacker"].answer_streak  # 5
         manager.steal("attacker", "target", question_id=None)
-        # streak 5 − 3 = 2
-        self.assertEqual(players["attacker"].answer_streak, 2)
+        # Streak deduction now happens at hydration, not here
+        self.assertEqual(players["attacker"].answer_streak, initial_streak)
 
-    def test_overnight_steal_sets_stealing_from(self):
+    def test_overnight_steal_message_shows_projected_cost(self):
+        manager, pm, dm, players = _make_manager()
+        result = manager.steal("attacker", "target", question_id=None)
+        # Message should still mention the upcoming sacrifice
+        self.assertIn("sacrifice", result.lower())
+
+    def test_overnight_steal_sets_no_state_at_pretime(self):
+        """State is set during hydration, not at pre-load time."""
         manager, pm, dm, players = _make_manager()
         manager.steal("attacker", "target", question_id=None)
-        state = manager._get_daily_state("attacker")
-        self.assertEqual(state.stealing_from, "target")
-        self.assertTrue(state.steal_is_preload)
+        # No daily_state mutation at pre-load time
+        self.assertIsNone(manager._get_daily_state("attacker").stealing_from)
 
     def test_overnight_steal_blocks_if_already_queued(self):
         manager, pm, dm, players = _make_manager()
@@ -193,7 +200,8 @@ class TestHydration(unittest.TestCase):
         manager.hydrate_pending_powerups(question_id=42)
         state = manager._get_daily_state("attacker")
         self.assertEqual(state.stealing_from, "target")
-        self.assertTrue(state.steal_is_preload)
+        # Streak cost deducted at hydration time: 5 - 3 = 2
+        self.assertEqual(players["attacker"].answer_streak, 2)
         self.assertEqual(
             manager._get_daily_state("target").steal_attempt_by, "attacker"
         )
@@ -359,18 +367,19 @@ def _ts(hour, minute=0):
 
 class TestSimulatorOvernightStealPreload(unittest.TestCase):
     """
-    steal_preload: streak cost already baked into snapshot — simulator must NOT
-    apply streak_delta again.
+    steal_preload: streak cost is applied by apply_steal at preload/hydration time.
+    The snapshot captures the PRE-deduction streak; the simulator applies the
+    cost as a negative streak_delta (same as a daytime steal).
     """
 
-    def test_steal_preload_no_streak_delta(self):
-        """Thief's streak_delta should be 0 from the steal_preload event."""
+    def test_steal_preload_applies_streak_delta(self):
+        """Thief's streak_delta should be -cost+1 after steal_preload + answering."""
         config = _make_config()
-        attacker = Player(id="A", name="A", score=0, answer_streak=2)  # already reduced
+        # Snapshot streak = 5 (pre-deduction; cost=3 will be applied by apply_steal)
+        attacker = Player(id="A", name="A", score=0, answer_streak=5)
         target = Player(id="T", name="T", score=0, answer_streak=3)
         initial_states = {"A": attacker, "T": target}
 
-        # Overnight preload at 2 AM, then both answer at 9 AM
         events = [
             PowerUpEvent(_ts(2), "A", "steal_preload", "T"),
             GuessEvent(_ts(9), "T", "correct"),
@@ -381,13 +390,14 @@ class TestSimulatorOvernightStealPreload(unittest.TestCase):
         )
         results = sim.run(apply_end_of_day=False)
 
-        # Attacker's streak_delta should only be +1 (from answering), not +1 -3
-        self.assertEqual(results["A"]["streak_delta"], 1)
+        # apply_steal sets streak_delta=-3; answering adds +1 → net = -2
+        self.assertEqual(results["A"]["streak_delta"], -2)
 
     def test_steal_preload_still_steals_bonuses(self):
         """Bonuses are still transferred when target answers after a steal_preload."""
         config = _make_config()
-        attacker = Player(id="A", name="A", score=0, answer_streak=2)
+        # Snapshot streak = 5 (pre-deduction)
+        attacker = Player(id="A", name="A", score=0, answer_streak=5)
         target = Player(id="T", name="T", score=0, answer_streak=3)
         initial_states = {"A": attacker, "T": target}
 

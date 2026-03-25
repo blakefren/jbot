@@ -26,9 +26,6 @@ class DailyPlayerState:
     # Power-up: Attack (Outgoing)
     silenced: bool = False  # Result of jinxing
     stealing_from: str | None = None  # User ID
-    steal_is_preload: bool = (
-        False  # True when streak cost was deducted at pre-load time
-    )
 
     @property
     def earned_today(self) -> int:

@@ -228,34 +228,6 @@ class TestResolveJinxOnCorrect(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestApplyStealPreload(unittest.TestCase):
-    def setUp(self):
-        self.engine = _make_engine()
-
-    def test_sets_stealing_from_and_preload_flag(self):
-        ds = {}
-        self.engine.apply_steal(ds, "thief", "tgt", initial_streak=5, is_preload=True)
-        self.assertEqual(ds["thief"].stealing_from, "tgt")
-        self.assertTrue(ds["thief"].steal_is_preload)
-
-    def test_sets_steal_attempt_by_on_target(self):
-        ds = {}
-        self.engine.apply_steal(ds, "thief", "tgt", initial_streak=5, is_preload=True)
-        self.assertEqual(ds["tgt"].steal_attempt_by, "thief")
-
-    def test_returns_zero_zero_for_preload(self):
-        ds = {}
-        result = self.engine.apply_steal(
-            ds, "thief", "tgt", initial_streak=5, is_preload=True
-        )
-        self.assertEqual(result, (0, 0, 0))
-
-    def test_no_streak_delta_for_preload(self):
-        ds = {}
-        self.engine.apply_steal(ds, "thief", "tgt", initial_streak=5, is_preload=True)
-        self.assertEqual(ds["thief"].streak_delta, 0)
-
-
 # ---------------------------------------------------------------------------
 # apply_steal — normal forward (target not answered)
 # ---------------------------------------------------------------------------
@@ -488,10 +460,13 @@ class TestPreloads(unittest.TestCase):
 
     def test_preload_steal_sets_flags(self):
         ds = {}
-        self.engine.apply_preload_steal(ds, "thief", "tgt")
-        self.assertEqual(ds["thief"].stealing_from, "tgt")
-        self.assertTrue(ds["thief"].steal_is_preload)
-        self.assertEqual(ds["tgt"].steal_attempt_by, "thief")
+        self.engine.apply_preload_jinx(ds, "att", "tgt")  # jinx is unchanged
+        # steal preload now goes through apply_steal (no separate apply_preload_steal)
+        ds2 = {}
+        self.engine.apply_steal(ds2, "thief", "tgt", initial_streak=5)
+        self.assertEqual(ds2["thief"].stealing_from, "tgt")
+        self.assertEqual(ds2["tgt"].steal_attempt_by, "thief")
+        self.assertEqual(ds2["thief"].streak_delta, -3)  # normal cost applied
 
 
 # ---------------------------------------------------------------------------

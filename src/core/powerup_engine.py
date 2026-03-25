@@ -128,15 +128,12 @@ class PowerUpEngine:
         thief_id: str,
         target_id: str,
         initial_streak: int,
-        is_preload: bool = False,
     ) -> tuple[int, int, int]:
         """Set up a steal attempt and record streak cost in state.
 
-        For ``is_preload=True`` the streak cost was already deducted before the daily
-        snapshot; this method only sets the state flags (no streak_delta change).
-
-        For a normal daytime steal the streak cost is applied as a negative
-        ``streak_delta`` on the thief's state.
+        The streak cost is always applied as a negative ``streak_delta`` on the
+        thief's state — whether the steal was queued overnight (preload) or placed
+        during the day.
 
         If the target **has already answered** (retroactive steal), the stealable
         bonuses are transferred immediately and the higher retro cost is used.
@@ -153,12 +150,6 @@ class PowerUpEngine:
         """
         thief_state = self._get_state(daily_state, thief_id)
         target_state = self._get_state(daily_state, target_id)
-
-        if is_preload:
-            thief_state.stealing_from = target_id
-            thief_state.steal_is_preload = True
-            target_state.steal_attempt_by = thief_id
-            return 0, 0, 0
 
         if target_state.is_correct:
             cost = self.retro_steal_streak_cost
@@ -267,19 +258,6 @@ class PowerUpEngine:
         target_state = self._get_state(daily_state, target_id)
         attacker_state.silenced = True
         target_state.jinxed_by = attacker_id
-
-    def apply_preload_steal(
-        self,
-        daily_state: dict[str, DailyPlayerState],
-        attacker_id: str,
-        target_id: str,
-    ) -> None:
-        """Apply an overnight pre-loaded steal at the start of the question day."""
-        attacker_state = self._get_state(daily_state, attacker_id)
-        target_state = self._get_state(daily_state, target_id)
-        attacker_state.stealing_from = target_id
-        attacker_state.steal_is_preload = True
-        target_state.steal_attempt_by = attacker_id
 
     # ------------------------------------------------------------------
     # Streak bonus helpers
