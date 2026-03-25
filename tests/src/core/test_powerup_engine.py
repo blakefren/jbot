@@ -223,10 +223,6 @@ class TestResolveJinxOnCorrect(unittest.TestCase):
         self.assertEqual(result, 0)
 
 
-# ---------------------------------------------------------------------------
-# apply_steal — preload
-# ---------------------------------------------------------------------------
-
 
 # ---------------------------------------------------------------------------
 # apply_steal — normal forward (target not answered)
