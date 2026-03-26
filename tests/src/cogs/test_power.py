@@ -81,9 +81,11 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
             "private msg", interaction=self.ctx.interaction, ephemeral=True
         )
 
-    async def test_steal_enabled(self):
+    async def test_steal_forward_is_ephemeral(self):
+        # Target hasn't answered yet → forward steal stays ephemeral
         mock_manager = MagicMock()
         mock_manager.steal.return_value = "Stolen points"
+        mock_manager.daily_state = {}  # target not in state → not answered
         self.bot.game.managers.get.return_value = mock_manager
 
         await self.cog.steal.callback(self.cog, self.ctx, target=self.target_member)
@@ -93,6 +95,24 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
         )
         self.bot.send_message.assert_awaited_once_with(
             "Stolen points", interaction=self.ctx.interaction, ephemeral=True
+        )
+
+    async def test_steal_target_already_answered_is_public(self):
+        # Target already answered → retroactive steal resolves immediately, must be public
+        mock_manager = MagicMock()
+        mock_manager.steal.return_value = "Retro steal!"
+        target_state = MagicMock()
+        target_state.is_correct = True
+        mock_manager.daily_state = {"456": target_state}
+        self.bot.game.managers.get.return_value = mock_manager
+
+        await self.cog.steal.callback(self.cog, self.ctx, target=self.target_member)
+
+        mock_manager.steal.assert_called_once_with(
+            "123", "456", self.bot.game.daily_question_id
+        )
+        self.bot.send_message.assert_awaited_once_with(
+            "Retro steal!", interaction=self.ctx.interaction, ephemeral=False
         )
 
     async def test_power_group(self):

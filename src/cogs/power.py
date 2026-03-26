@@ -85,11 +85,18 @@ class Power(commands.Cog):
         manager = self._get_manager()
         if manager:
             try:
+                target_id = str(target.id)
+                target_state = manager.daily_state.get(target_id)
+                target_already_answered = (
+                    target_state is not None and target_state.is_correct
+                )
                 result = manager.steal(
-                    str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
+                    str(ctx.author.id), target_id, self.bot.game.daily_question_id
                 )
                 await self.bot.send_message(
-                    result, interaction=ctx.interaction, ephemeral=True
+                    result,
+                    interaction=ctx.interaction,
+                    ephemeral=not target_already_answered,
                 )
             except PowerUpError as e:
                 await self.bot.send_message(
