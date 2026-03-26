@@ -13,7 +13,7 @@ class Player:
     score: int = 0  # Lifetime total score (unchanged for compatibility)
     season_score: int = 0  # Current season score
     answer_streak: int = 0  # Current season streak
-    active_shield: bool = False
+    pending_rest_multiplier: float = 0.0
     # Lifetime statistics
     lifetime_questions: int = 0
     lifetime_correct: int = 0
@@ -28,7 +28,7 @@ class Player:
             "score": self.score,
             "season_score": self.season_score,
             "answer_streak": self.answer_streak,
-            "active_shield": self.active_shield,
+            "pending_rest_multiplier": self.pending_rest_multiplier,
             "lifetime_questions": self.lifetime_questions,
             "lifetime_correct": self.lifetime_correct,
             "lifetime_first_answers": self.lifetime_first_answers,
@@ -43,7 +43,7 @@ class Player:
             score=int(data.get("score", 0)),
             season_score=int(data.get("season_score", 0)),
             answer_streak=int(data.get("answer_streak", 0)),
-            active_shield=bool(data.get("active_shield", False)),
+            pending_rest_multiplier=float(data.get("pending_rest_multiplier", 0.0)),
             lifetime_questions=int(data.get("lifetime_questions", 0)),
             lifetime_correct=int(data.get("lifetime_correct", 0)),
             lifetime_first_answers=int(data.get("lifetime_first_answers", 0)),

@@ -19,37 +19,43 @@ class TestTsv(unittest.TestCase):
         self.assertEqual(parse_value(None), 0)
 
     def test_read_jeopardy_questions(self):
-        # Mock TSV data
+        """Test difficulty-based Jeopardy question reading."""
+        # Mock TSV data with a complete category (5 questions)
         mock_data = (
-            "category\tclue_value\tquestion\tanswer\tround\tair_date\tdaily_double_value\n"
-            "HISTORY\t$200\tThe year the Magna Carta was signed\tWhat is 1215?\tJeopardy!\t2023-01-01\t0\n"
-            "SCIENCE\t$400\tThe atomic number of Oxygen\tWhat is 8?\tDouble Jeopardy!\t2023-01-01\t0\n"
-            "FINAL\t$0\tThe only planet that rotates clockwise\tWhat is Venus?\tFinal Jeopardy!\t2023-01-01\t0\n"
+            "category\tclue_value\tanswer\tquestion\tround\tair_date\tdaily_double_value\n"
+            "HISTORY\t200\tQ1\tWhat is 1215?\t1\t2023-01-01\t0\n"
+            "HISTORY\t400\tQ2\tWhat is the year?\t1\t2023-01-01\t0\n"
+            "HISTORY\t600\tQ3\tWhat is answer 3?\t1\t2023-01-01\t0\n"
+            "HISTORY\t800\tQ4\tWhat is answer 4?\t1\t2023-01-01\t0\n"
+            "HISTORY\t1000\tQ5\tWhat is answer 5?\t1\t2023-01-01\t0\n"
+            "SCIENCE\t200\tQ6\tWhat is Oxygen?\t1\t2023-01-01\t0\n"
+            "SCIENCE\t400\tQ7\tWhat is 8?\t1\t2023-01-01\t0\n"
+            "SCIENCE\t600\tQ8\tWhat is carbon?\t1\t2023-01-01\t0\n"
+            "SCIENCE\t800\tQ9\tWhat is nitrogen?\t1\t2023-01-01\t0\n"
+            "SCIENCE\t1000\tQ10\tWhat is helium?\t1\t2023-01-01\t0\n"
         )
 
         with patch("builtins.open", mock_open(read_data=mock_data)):
-            questions = read_jeopardy_questions(
-                "dummy_path.tsv", final_jeopardy_score=2000
+            # Test easy difficulty (positions 1-2)
+            easy_questions = read_jeopardy_questions(
+                "dummy_path.tsv", difficulty="easy"
             )
-            self.assertEqual(len(questions), 3)
+            self.assertEqual(len(easy_questions), 4)  # 2 categories × 2 positions
+            self.assertTrue(all(q.clue_value == 200 for q in easy_questions))
 
-            # Test first question (regular Jeopardy)
-            self.assertIsInstance(questions[0], Question)
-            self.assertEqual(questions[0].category, "HISTORY")
-            self.assertEqual(questions[0].clue_value, 200)
-            self.assertEqual(questions[0].question, "What is 1215?")
-            self.assertEqual(questions[0].answer, "The year the Magna Carta was signed")
-            self.assertEqual(questions[0].data_source, "Jeopardy!")
-            self.assertEqual(questions[0].metadata["round"], "Jeopardy!")
+            # Test medium difficulty (positions 3-4)
+            medium_questions = read_jeopardy_questions(
+                "dummy_path.tsv", difficulty="medium"
+            )
+            self.assertEqual(len(medium_questions), 4)  # 2 categories × 2 positions
+            self.assertTrue(all(q.clue_value == 200 for q in medium_questions))
 
-            # Test second question (Double Jeopardy)
-            self.assertEqual(questions[1].clue_value, 400)
-            self.assertEqual(questions[1].metadata["round"], "Double Jeopardy!")
-
-            # Test final jeopardy question (should use final_jeopardy_score)
-            self.assertEqual(questions[2].category, "FINAL")
-            self.assertEqual(questions[2].clue_value, 2000)
-            self.assertEqual(questions[2].metadata["round"], "Final Jeopardy!")
+            # Test hard difficulty (position 5)
+            hard_questions = read_jeopardy_questions(
+                "dummy_path.tsv", difficulty="hard"
+            )
+            self.assertEqual(len(hard_questions), 2)  # 2 categories × 1 position
+            self.assertTrue(all(q.clue_value == 300 for q in hard_questions))
 
     def test_read_jeopardy_questions_file_not_found(self):
         with patch("builtins.open", side_effect=FileNotFoundError):

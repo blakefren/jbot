@@ -32,7 +32,7 @@ if __name__ == "__main__":
     # NOTE: This is the ONLY place outside DataManager that should create a Database instance.
     # All database operations must go through DataManager methods.
     db = Database(db_path)
-    data_manager = DataManager(db)
+    data_manager = DataManager(db, config.get("JBOT_TIMEZONE"))
     player_manager = PlayerManager(data_manager)
 
     # Start the game bot based on the messenger type

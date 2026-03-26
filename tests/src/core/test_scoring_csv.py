@@ -104,7 +104,7 @@ class TestScoreCalculatorCSV(unittest.TestCase):
         # e.g. Rank 4 (1pt), Try 4 (2pts)
         bonuses = {"fastest_4": 1, "try_4": 2, "streak": 5}
 
-        stealable = calculator.get_stealable_amount(bonuses)
+        stealable = calculator.pop_stealable_bonuses(dict(bonuses))
         # Should sum fastest_4 + try_4 = 3
         self.assertEqual(stealable, 3)
 

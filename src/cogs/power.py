@@ -18,37 +18,38 @@ class Power(commands.Cog):
 
     @power.command(
         name="jinx",
-        description="Prevents streak bonus, but you can't answer until the hint.",
+        description="Steal a target's streak bonus — but you can't answer until the hint.",
     )
     async def jinx(self, ctx: commands.Context, target: discord.Member):
-        if not self.bot.game.features.get("fight"):
-            await self.bot.send_message(
-                "Fight track is not enabled.",
-                interaction=ctx.interaction,
-                ephemeral=True,
-            )
-            return
-
         manager = self._get_manager()
         if manager:
             try:
+                target_id = str(target.id)
+                target_state = manager.daily_state.get(target_id)
+                target_already_answered = (
+                    target_state is not None and target_state.is_correct
+                )
                 result = manager.jinx(
-                    str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
+                    str(ctx.author.id), target_id, self.bot.game.daily_question_id
                 )
-                await self.bot.send_message(result, interaction=ctx.interaction)
+                await self.bot.send_message(
+                    result,
+                    interaction=ctx.interaction,
+                    ephemeral=not target_already_answered,
+                )
             except PowerUpError as e:
                 await self.bot.send_message(
                     str(e), interaction=ctx.interaction, ephemeral=True
                 )
 
     @power.command(
-        name="shield",
-        description="Reflect attacks, but lose points if you aren't attacked.",
+        name="rest",
+        description="Skip today, keep your streak, earn a point bonus tomorrow.",
     )
-    async def shield(self, ctx: commands.Context):
-        if not self.bot.game.features.get("fight"):
+    async def rest(self, ctx: commands.Context):
+        if not self.bot.game.daily_q:
             await self.bot.send_message(
-                "Fight track is not enabled.",
+                "There is no active question right now.",
                 interaction=ctx.interaction,
                 ephemeral=True,
             )
@@ -57,93 +58,50 @@ class Power(commands.Cog):
         manager = self._get_manager()
         if manager:
             try:
-                result = manager.use_shield(
-                    str(ctx.author.id), self.bot.game.daily_question_id
+                public_msg, private_msg = manager.rest(
+                    str(ctx.author.id),
+                    self.bot.game.daily_question_id,
+                    self.bot.game.daily_q.answer,
                 )
-                await self.bot.send_message(
-                    result, interaction=ctx.interaction, ephemeral=True
-                )
-            except PowerUpError as e:
+                # Send public announcement to the channel
+                await self.bot.send_message(public_msg, interaction=ctx.interaction)
+                # Send private answer disclosure (ephemeral for slash, DM for text)
+                if ctx.interaction:
+                    await self.bot.send_message(
+                        private_msg, interaction=ctx.interaction, ephemeral=True
+                    )
+                else:
+                    await ctx.author.send(private_msg)
+            except Exception as e:
                 await self.bot.send_message(
                     str(e), interaction=ctx.interaction, ephemeral=True
                 )
 
     @power.command(
-        name="steal", description="Steal fastest/first bonuses, but break your streak."
+        name="steal",
+        description="Steal bonuses from a target, but lose streak days.",
     )
     async def steal(self, ctx: commands.Context, target: discord.Member):
-        if not self.bot.game.features.get("fight"):
-            await self.bot.send_message(
-                "Fight track is not enabled.",
-                interaction=ctx.interaction,
-                ephemeral=True,
-            )
-            return
-
         manager = self._get_manager()
         if manager:
             try:
+                target_id = str(target.id)
+                target_state = manager.daily_state.get(target_id)
+                target_already_answered = (
+                    target_state is not None and target_state.is_correct
+                )
                 result = manager.steal(
-                    str(ctx.author.id), str(target.id), self.bot.game.daily_question_id
+                    str(ctx.author.id), target_id, self.bot.game.daily_question_id
                 )
                 await self.bot.send_message(
-                    result, interaction=ctx.interaction, ephemeral=True
+                    result,
+                    interaction=ctx.interaction,
+                    ephemeral=not target_already_answered,
                 )
             except PowerUpError as e:
                 await self.bot.send_message(
                     str(e), interaction=ctx.interaction, ephemeral=True
                 )
-
-    # TODO: Re-enable these commands when they are ready
-    # @power.command(name="wager", description="Wager points on the current question.")
-    # async def wager(self, ctx: commands.Context, amount: int):
-    #     """Wager points on the current question."""
-    #     if not self.bot.game.features.get("powerup"):
-    #         await self.bot.send_message(
-    #             "Power-up track is not enabled.",
-    #             interaction=ctx.interaction,
-    #             ephemeral=True,
-    #         )
-    #         return
-
-    #     manager = self._get_manager()
-    #     if manager:
-    #         result = manager.place_wager(str(ctx.author.id), amount)
-    #         await self.bot.send_message(result, interaction=ctx.interaction)
-
-    # @power.command(name="teamup", description="Team up with another player.")
-    # async def teamup(self, ctx: commands.Context, target_id: str):
-    #     """Team up with another player."""
-    #     if not self.bot.game.features.get("coop"):
-    #         await self.bot.send_message(
-    #             "Coop track is not enabled.",
-    #             interaction=ctx.interaction,
-    #             ephemeral=True,
-    #         )
-    #         return
-
-    #     manager = self._get_manager()
-    #     if manager:
-    #         result = manager.teamup(str(ctx.author.id), target_id)
-    #         await self.bot.send_message(result, interaction=ctx.interaction)
-
-    # @power.command(name="reveal", description="Reveal letters in the answer.")
-    # async def reveal(self, ctx: commands.Context):
-    #     """Reveal letters in the answer."""
-    #     if not self.bot.game.features.get("coop"):
-    #         await self.bot.send_message(
-    #             "Coop track is not enabled.",
-    #             interaction=ctx.interaction,
-    #             ephemeral=True,
-    #         )
-    #         return
-
-    #     # Reveal is not implemented in PowerUpManager yet.
-    #     await self.bot.send_message(
-    #         "This command is not yet implemented.",
-    #         interaction=ctx.interaction,
-    #         ephemeral=True,
-    #     )
 
 
 async def setup(bot):

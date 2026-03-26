@@ -5,14 +5,14 @@ A daily bot for group trivia questions and competition.
 
 ## Setup
 
-1.  Install the required Python packages:
+1.  Ensure you are running **Python 3.14** or later.
+2.  Install the required Python packages:
     ```
     pip install -r requirements.txt
     ```
 2.  Create a `.env` file in the root directory by copying the `.env.template` file. Fill out the required fields, such as your Discord bot token.
 3.  Configure your question sources in `sources.toml`. This file defines which datasets to use, their weights for selection, and dataset-specific settings. See the comments in `sources.toml` for examples.
-4.  Enable or disable game tracks (Fight, Power-up, Coop) in the `.env` file using the `JBOT_ENABLE_*` flags.
-5.  The database will be created automatically when you run the bot for the first time.
+4.  The database will be created automatically when you run the bot for the first time.
 
 ## Running the Bot
 
@@ -21,6 +21,21 @@ Once the setup is complete, you can run the bot with the following command:
 ```
 python run.py
 ```
+
+## Running with Docker (Recommended)
+
+You can also run the bot using Docker, which simplifies dependency management.
+
+1.  **Build and Start**:
+    ```bash
+    docker compose up -d
+    ```
+    This command will build the image and start the container in the background. It automatically loads your `.env` file and persists the `jbot.db` database.
+
+2.  **Manage**:
+    *   **Stop**: `docker compose stop`
+    *   **View Logs**: `docker compose logs -f`
+    *   **Rebuild**: `docker compose up -d --build` (Run this after changing code or requirements)
 
 ## Daily format
 
@@ -54,9 +69,6 @@ This track adds direct player-vs-player interactions.
 This track introduces mechanics that reward consistent play or provide other advantages.
 
 *   **Answer Streaks**: Players build up a "streak" for each consecutive correct answer. This can be used for scoring bonuses or as a target for other players' attacks.
-*   **Wager** (Planned): Players can wager a portion of their points on whether their answer is correct.
-    *   **Command**: `/power wager <amount>`
-    *   **Details**: Bets are capped at 25% of a player's current score (minimum 1 point).
 *   **Answering First**: The first player to answer the daily question correctly receives a point bonus.
 *   **Answering Before the Hint**: Players who answer correctly before the daily hint is revealed receive a point bonus.
 *   **Weekly Boss Fight** (Planned): A challenging weekly question with a large point reward.
@@ -65,9 +77,6 @@ This track introduces mechanics that reward consistent play or provide other adv
 
 This track focuses on collaborative features.
 
-*   **Teamup** (Planned): Two players can form a temporary alliance for the day. If either player answers correctly, both receive full points.
-    *   **Command**: `/power teamup <player_id>`
-    *   **Cost**: 25 points for each player.
 *   **Reveal Answer Letters** (Planned): Players can vote to reveal letters in the answer. Each vote costs points, and the cost increases with each revealed letter.
     *   **Command**: `/power reveal`
 *   **Red vs. Blue Teams** (Planned): Players are divided into two teams (either by choice or randomly). The team with the most correct responses at the end of the day gets bonus points.

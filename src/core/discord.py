@@ -52,6 +52,12 @@ try:
         EVENING_TIME_STR, datetime.time(hour=20, minute=0)
     ).replace(tzinfo=TIMEZONE)
 
+    # Calculate preparation time (10 minutes before morning message)
+    # ensuring we handle day boundaries correctly
+    _today_morning = datetime.datetime.combine(datetime.date.today(), MORNING_TIME)
+    _prep_dt = _today_morning - datetime.timedelta(minutes=10)
+    PREP_TIME = _prep_dt.time().replace(tzinfo=TIMEZONE)
+
 except Exception as e:
     logging.error(
         f"Error reading time configuration, defaulting to hardcoded times. Error: {e}"
@@ -60,6 +66,7 @@ except Exception as e:
     MORNING_TIME = datetime.time(hour=8, minute=0, tzinfo=TIMEZONE)
     REMINDER_TIME = datetime.time(hour=19, minute=30, tzinfo=TIMEZONE)
     EVENING_TIME = datetime.time(hour=20, minute=0, tzinfo=TIMEZONE)
+    PREP_TIME = datetime.time(hour=7, minute=50, tzinfo=TIMEZONE)
 
 
 class DiscordBot(commands.Bot):
@@ -143,6 +150,11 @@ class DiscordBot(commands.Bot):
         else:
             logging.info("Bot reconnected.")
         # Start the tasks
+        if not self.prepare_daily_question_task.is_running():
+            self.prepare_daily_question_task.start()
+            logging.info(
+                f"Preparation task started. Next iteration: {self.prepare_daily_question_task.next_iteration}"
+            )
         if not self.morning_message_task.is_running():
             self.morning_message_task.start()
             logging.info(
@@ -162,7 +174,7 @@ class DiscordBot(commands.Bot):
         now = datetime.datetime.now(TIMEZONE)
         if MORNING_TIME < now.time() < EVENING_TIME and self.game.daily_q is None:
             logging.info(f"Bot started after morning message time.")
-            self.game.set_daily_question()
+            await asyncio.to_thread(self.game.set_daily_question)
             if not self.game.daily_q:
                 logging.warning("No question found for today.")
             else:
@@ -218,6 +230,22 @@ class DiscordBot(commands.Bot):
 
         await self.process_commands(message)
 
+    @tasks.loop(time=PREP_TIME)
+    async def prepare_daily_question_task(self):
+        """
+        Prepares the daily question in advance to ensure the morning message happens on time.
+        This handles the potentially slow operations (LLM generation, validation) before the deadline.
+        """
+        logging.info(
+            f"Preparation task running at {datetime.datetime.now(TIMEZONE)}..."
+        )
+        try:
+            # Run in a thread pool to avoid blocking the event loop during Gemini API calls
+            await asyncio.to_thread(self.game.set_daily_question)
+            logging.info("Daily question prepared successfully.")
+        except Exception as e:
+            self._log_task_error(e, "prepare_daily_question_task")
+
     @tasks.loop(time=MORNING_TIME)
     async def morning_message_task(self, silent: bool = False):
         """Sends the morning message and question to all subscribers."""
@@ -225,7 +253,7 @@ class DiscordBot(commands.Bot):
             f"Morning message task running at {datetime.datetime.now(TIMEZONE)}..."
         )
         try:
-            self.game.set_daily_question()
+            await asyncio.to_thread(self.game.set_daily_question)
         except Exception as e:
             self._log_task_error(e, "morning_message_task - set_daily_question")
             # If we can't set a question, there's no point in sending a message.
@@ -287,26 +315,17 @@ class DiscordBot(commands.Bot):
         except Exception as e:
             self._log_task_error(e, "evening_message_task - update_roles")
 
-        # 2. Check shield usage (Fight Track)
-        shield_messages = []
-        if "powerup" in self.game.managers:
-            try:
-                shield_messages = self.game.managers["powerup"].check_shield_usage()
-            except Exception as e:
-                self._log_task_error(e, "evening_message_task - check_shield_usage")
+        # 2. (Shield check removed — rest mechanic has no end-of-day penalty)
 
         # 3. Send evening message
         if not silent:
             try:
 
-                def content_getter_with_shield(**kwargs):
-                    content = self.game.get_evening_message_content(**kwargs)
-                    if shield_messages:
-                        content += "\n\n" + "\n".join(shield_messages)
-                    return content
+                def content_getter(**kwargs):
+                    return self.game.get_evening_message_content(**kwargs)
 
                 await self._send_daily_message_to_all_subscribers(
-                    content_getter_with_shield,
+                    content_getter,
                     "evening_message",
                     send_leaderboard=True,
                     requires_guild=True,
@@ -469,9 +488,8 @@ class DiscordBot(commands.Bot):
         success_status="sent",
     ):
         """Sends a message to a Discord user, channel, or context. Supports ephemeral for interaction responses."""
-        assert (
-            target_id >= 0 or ctx is not None or interaction is not None
-        ), "Either target_id, ctx, or interaction must be provided."
+        if target_id < 0 and ctx is None and interaction is None:
+            raise ValueError("Either target_id, ctx, or interaction must be provided.")
         try:
             if interaction is not None:
                 # If responding to an interaction, support ephemeral
@@ -525,7 +543,10 @@ async def discord_bot_async(
     try:
         gemini_api_key = config.get_gemini_api_key()
         if gemini_api_key:
-            gemini_manager = GeminiManager(api_key=gemini_api_key)
+            gemini_manager = GeminiManager(
+                api_key=gemini_api_key,
+                model=config.get("GEMINI_MODEL", "gemini-2.5-pro"),
+            )
     except ValueError as e:
         logging.warning(f"Could not initialize GeminiManager: {e}")
 
@@ -536,7 +557,7 @@ async def discord_bot_async(
         sources=sources,
         gemini_manager=gemini_manager,
     )
-    game = GameRunner(question_selector, data_manager)
+    game = GameRunner(question_selector, data_manager, player_manager)
     game.reminder_time = REMINDER_TIME
 
     bot = DiscordBot(config.get("JBOT_DISCORD_BOT_TOKEN"), game, config, player_manager)

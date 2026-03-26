@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS "players" (
     score INTEGER DEFAULT 0, -- Lifetime total score (unchanged for safety)
     season_score INTEGER DEFAULT 0, -- Current season score (reset monthly)
     answer_streak INTEGER DEFAULT 0, -- Current season streak (reset monthly)
-    active_shield BOOLEAN DEFAULT FALSE,
+    pending_rest_multiplier REAL DEFAULT 0.0,
     -- Lifetime statistics
     lifetime_questions INTEGER DEFAULT 0,
     lifetime_correct INTEGER DEFAULT 0,
@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS powerup_usage (
     used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES players (id),
     FOREIGN KEY (target_user_id) REFERENCES players (id),
-    FOREIGN KEY (question_id) REFERENCES questions (id)
+    FOREIGN KEY (question_id) REFERENCES daily_questions (id)
 );
 
 -- This table stores a snapshot of player state at the start of each daily question.

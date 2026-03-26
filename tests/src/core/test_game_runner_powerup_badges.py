@@ -19,8 +19,7 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
             "JBOT_EMOJI_SILENCED": "🤐",
             "JBOT_EMOJI_STOLEN_FROM": "💸",
             "JBOT_EMOJI_STEALING": "💰",
-            "JBOT_EMOJI_SHIELD": "💝",
-            "JBOT_EMOJI_SHIELD_BROKEN": "💔",
+            "JBOT_EMOJI_REST": "😴",
             "JBOT_EMOJI_STREAK": "🔥",
             "JBOT_EMOJI_FASTEST": "🥇",
             "JBOT_EMOJI_FIRST_TRY": "🎯",
@@ -109,27 +108,110 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
         # p2 should have stolen from emoji
         self.assertIn("💸", leaderboard)
 
-    def test_leaderboard_shield_badge(self):
-        # p1 used shield
+    def test_leaderboard_steal_badge_attacker_did_not_answer(self):
+        """Steal badge should appear for attacker even if they never answered that day."""
+        # p1 stole from p2, but p1 never guessed
         self.mock_dm.get_powerup_usages_for_question.return_value = [
-            {"powerup_type": "shield", "user_id": "p1", "target_user_id": None}
+            {"powerup_type": "steal", "user_id": "p1", "target_user_id": "p2"}
+        ]
+        # Only p2 answered correctly today; p1 did not answer at all
+        self.mock_dm.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "p2",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:05:00",
+            },
         ]
 
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # p1 should have shield emoji
-        self.assertIn("💝", leaderboard)
+        # p1 should still have the stealing emoji
+        lines = leaderboard.split("\n")
+        p1_line = next((line for line in lines if "Player1" in line), None)
+        self.assertIsNotNone(p1_line, "Player1 should be in leaderboard")
+        self.assertIn(
+            "💰", p1_line, "Attacker should show stealing badge even without answering"
+        )
+
+        # p2 should have stolen_from emoji
+        p2_line = next((line for line in lines if "Player2" in line), None)
+        self.assertIsNotNone(p2_line, "Player2 should be in leaderboard")
+        self.assertIn("💸", p2_line)
+
+    def test_leaderboard_jinx_late_badge(self):
+        """jinx_late should produce the same silenced/jinxed badges as a regular jinx."""
+        self.mock_dm.get_powerup_usages_for_question.return_value = [
+            {"powerup_type": "jinx_late", "user_id": "p1", "target_user_id": "p2"}
+        ]
+        self.mock_dm.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "p1",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "p2",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:05:00",
+            },
+        ]
+        leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
+        lines = leaderboard.split("\n")
+        p1_line = next(l for l in lines if "Player1" in l)
+        p2_line = next(l for l in lines if "Player2" in l)
+        self.assertIn("🤐", p1_line)
+        self.assertIn("🥶", p2_line)
+
+    def test_leaderboard_jinx_preload_badge(self):
+        """jinx_preload should produce the same silenced/jinxed badges as a regular jinx."""
+        self.mock_dm.get_powerup_usages_for_question.return_value = [
+            {"powerup_type": "jinx_preload", "user_id": "p1", "target_user_id": "p2"}
+        ]
+        self.mock_dm.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "p1",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "p2",
+                "is_correct": True,
+                "guessed_at": "2024-01-01 10:05:00",
+            },
+        ]
+        leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
+        lines = leaderboard.split("\n")
+        p1_line = next(l for l in lines if "Player1" in l)
+        p2_line = next(l for l in lines if "Player2" in l)
+        self.assertIn("🤐", p1_line)
+        self.assertIn("🥶", p2_line)
+
+    def test_leaderboard_rest_badge(self):
+        # p1 used rest
+        self.mock_dm.get_powerup_usages_for_question.return_value = [
+            {"powerup_type": "rest", "user_id": "p1", "target_user_id": None}
+        ]
+
+        leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        # p1 should have rest emoji
+        self.assertIn("😴", leaderboard)
 
     def test_leaderboard_no_badges_if_not_show_daily_bonuses(self):
-        # p1 used shield
+        # p1 used rest
         self.mock_dm.get_powerup_usages_for_question.return_value = [
-            {"powerup_type": "shield", "user_id": "p1", "target_user_id": None}
+            {"powerup_type": "rest", "user_id": "p1", "target_user_id": None}
         ]
 
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=False)
 
-        # Should NOT have shield emoji
-        self.assertNotIn("💝", leaderboard)
+        # Should NOT have rest emoji
+        self.assertNotIn("😴", leaderboard)
 
     def test_leaderboard_duplicate_steal_blocked(self):
         """Test that when a second steal attempt is blocked, the target doesn't get duplicate badges."""

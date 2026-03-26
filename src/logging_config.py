@@ -14,12 +14,17 @@ def setup_logging(log_file_path: str = None):
     # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(log_formatter)
+    # Ensure console handles unicode characters safely
+    if hasattr(console_handler.stream, "reconfigure"):
+        try:
+            console_handler.stream.reconfigure(encoding="utf-8")
+        except AttributeError:
+            # Standard streams like sys.stdout might not support reconfiguration
+            pass
 
     # File handler
     if log_file_path is None:
-        project_root = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..")
-        )
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         log_file = os.path.join(project_root, "jbot.log")
     else:
         log_file = log_file_path
@@ -29,17 +34,19 @@ def setup_logging(log_file_path: str = None):
     )
     file_handler.setFormatter(log_formatter)
 
-    # TODO: replace the root logger with module-specific loggers
-    #       This will prevent extra log messages from other libraries
-    #       https://stackoverflow.com/questions/35325042
-    # TODO: make configurable by admin cmd
-    # Get the root logger
+    # Configure the root logger so all logging.info() / logging.warning() etc.
+    # calls throughout the codebase are captured, regardless of which logger
+    # module they originate from.
     root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
 
     # Remove all existing handlers to avoid duplicating them
     if root_logger.hasHandlers():
         root_logger.handlers.clear()
 
-    logging.basicConfig(
-        level=logging.INFO, handlers=[console_handler, file_handler], encoding="utf-8"
-    )
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+
+    # The named "jbot" logger inherits handlers from root via propagation.
+    # Explicitly set its level so child loggers (jbot.*) are not filtered.
+    logging.getLogger("jbot").setLevel(logging.INFO)

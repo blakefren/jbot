@@ -7,6 +7,11 @@ class ScoreCalculator:
     between the live game (GuessHandler) and the simulator (DailyGameSimulator).
     """
 
+    KEY_FIRST_TRY = "first_try"
+    KEY_BEFORE_HINT = "before_hint"
+    KEY_FASTEST = "fastest"
+    KEY_STREAK = "streak"
+
     def __init__(self, config: ConfigReader = None):
         if config is None:
             config = ConfigReader()
@@ -89,7 +94,7 @@ class ScoreCalculator:
 
                 # Special messaging/aliasing for 1st try
                 if guesses_count == 1:
-                    bonuses["first_try"] = bonus
+                    bonuses[self.KEY_FIRST_TRY] = bonus
                     messages.append(f"{self.emoji_first_try} First try! (+{bonus})")
                 else:
                     messages.append(
@@ -99,7 +104,7 @@ class ScoreCalculator:
         # 2. Before Hint Bonus
         if is_before_hint:
             points_earned += self.bonus_before_hint
-            bonuses["before_hint"] = self.bonus_before_hint
+            bonuses[self.KEY_BEFORE_HINT] = self.bonus_before_hint
             messages.append(
                 f"{self.emoji_before_hint} Pre-hint! (+{self.bonus_before_hint})"
             )
@@ -118,57 +123,51 @@ class ScoreCalculator:
 
                 # Special messaging/aliasing for 1st fastest
                 if answer_rank == 1:
-                    bonuses["fastest"] = bonus
+                    bonuses[self.KEY_FASTEST] = bonus
                     messages.append(f"{rank_emoji} Fastest! (+{bonus})")
                 else:
                     ordinal = self._get_ordinal(answer_rank)
                     messages.append(f"{rank_emoji} {ordinal} Fastest! (+{bonus})")
 
         # 4. Streak Bonus
-        # Streak bonus logic: min(streak * per_day, cap)
-        # Usually applied if streak >= 2
-        if streak_length >= 2:
-            streak_bonus = min(streak_length * self.streak_per_day, self.streak_cap)
-            if streak_bonus > 0:
-                points_earned += streak_bonus
-                bonuses["streak"] = streak_bonus
-                messages.append(
-                    f"{self.emoji_streak} {streak_length}-day streak! (+{streak_bonus})"
-                )
+        streak_bonus = self.get_streak_bonus(streak_length)
+        if streak_bonus > 0:
+            points_earned += streak_bonus
+            bonuses[self.KEY_STREAK] = streak_bonus
+            messages.append(
+                f"{self.emoji_streak} {streak_length}-day streak! (+{streak_bonus})"
+            )
 
         return points_earned, bonuses, messages
 
-    def get_stealable_amount(self, bonuses: dict) -> int:
+    def get_streak_bonus(self, streak_length: int) -> int:
         """
-        Determines how many points can be stolen based on the bonuses earned.
-        Standardizes 'Steal' logic across Live and Sim.
+        Returns the streak bonus for a given streak length.
+        Extracted from calculate_points for use in post-answer recalculations.
+        """
+        if streak_length < 2:
+            return 0
+        return min(streak_length * self.streak_per_day, self.streak_cap)
 
-        Rules:
-        - Fastest bonus is stealable.
-        - First Try bonus is stealable.
+    def pop_stealable_bonuses(self, bonuses: dict) -> int:
+        """Remove stealable bonus entries from the dict and return their total value.
+
+        All bonuses except streak are stealable. Alias keys (first_try, fastest)
+        are removed but not counted when their canonical equivalents (try_1, fastest_1)
+        are present, to avoid double-counting.
         """
+        NON_STEALABLE = {self.KEY_STREAK}
         stealable = 0
-
-        # Check explicit fastest keys
-        for key, val in bonuses.items():
-            if key.startswith("fastest_"):
-                stealable += val
-
-        # Fallback/Legacy: If 'fastest' is present but 'fastest_1' is not (shouldn't happen with new logic but for safety)
-        if "fastest" in bonuses and "fastest_1" not in bonuses:
-            stealable += bonuses["fastest"]
-
-        # Check explicit try keys
-        for key, val in bonuses.items():
-            if key.startswith("try_"):
-                stealable += val
-
-        # Fallback/Legacy
-        if "first_try" in bonuses and "try_1" not in bonuses:
-            stealable += bonuses["first_try"]
-
-        # Handle 'first_place' key alias if it exists from legacy data
-        if "first_place" in bonuses:
-            stealable += bonuses["first_place"]
-
+        to_remove = []
+        for key, val in list(bonuses.items()):
+            if any(key == ns or key.startswith(ns + "_") for ns in NON_STEALABLE):
+                continue
+            to_remove.append(key)
+            if key == self.KEY_FIRST_TRY and "try_1" in bonuses:
+                continue  # alias — remove but don't double-count
+            if key == self.KEY_FASTEST and "fastest_1" in bonuses:
+                continue  # alias — remove but don't double-count
+            stealable += val
+        for key in to_remove:
+            bonuses.pop(key, None)
         return stealable

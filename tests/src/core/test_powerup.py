@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import MagicMock
+from src.core.events import GuessContext
 from src.core.powerup import PowerUpManager, PowerUpError
 from src.core.player import Player
 
@@ -22,6 +23,7 @@ class TestPowerUpManager(unittest.TestCase):
         self.data_manager.get_last_correct_guess_date.return_value = (
             date.today() - timedelta(days=1)
         )
+        self.data_manager.get_today.return_value = date.today()
 
         # Mock update_score to actually update the player object for testing assertions
         def update_score(pid, amount):
@@ -30,19 +32,6 @@ class TestPowerUpManager(unittest.TestCase):
 
         self.player_manager.update_score.side_effect = update_score
 
-        # Mock activate/deactivate shield
-        def activate_shield(pid):
-            if pid in self.players:
-                self.players[pid].active_shield = True
-
-        self.player_manager.activate_shield.side_effect = activate_shield
-
-        def deactivate_shield(pid):
-            if pid in self.players:
-                self.players[pid].active_shield = False
-
-        self.player_manager.deactivate_shield.side_effect = deactivate_shield
-
         # Mock reset_streak
         def reset_streak(pid):
             if pid in self.players:
@@ -50,49 +39,107 @@ class TestPowerUpManager(unittest.TestCase):
 
         self.player_manager.reset_streak.side_effect = reset_streak
 
+        # Mock set_streak
+        def set_streak(pid, value):
+            if pid in self.players:
+                self.players[pid].answer_streak = value
+
+        self.player_manager.set_streak.side_effect = set_streak
+
+        # Mock get_pending_multiplier to return 0.0 by default (no rest bonus)
+        self.data_manager.get_pending_multiplier.return_value = 0.0
+        # No pending overnight powerups by default
+        self.data_manager.get_pending_powerup.return_value = None
+        self.data_manager.get_pending_powerup_for_target.return_value = None
+
+    def test_rest_basic(self):
+        """Test that rest marks the player as resting and sets pending multiplier."""
+        self.data_manager.get_pending_multiplier = MagicMock(return_value=0.0)
+        self.data_manager.set_pending_multiplier = MagicMock()
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        public_msg, private_msg = manager.rest("1", "q1", "Correct Answer")
+        self.assertIn("resting", public_msg)
+        self.assertIn("Correct Answer", private_msg)
+        self.assertTrue(manager._get_daily_state("1").is_resting)
+        self.data_manager.set_pending_multiplier.assert_called_once_with("1", 1.2)
+
+    def test_rest_already_answered(self):
+        """Test that resting after a correct answer is blocked."""
+        self.data_manager.get_last_correct_guess_date.return_value = (
+            self.data_manager.get_today.return_value
+        )
+        self.data_manager.get_today.return_value = date.today()
+        self.data_manager.get_last_correct_guess_date.return_value = date.today()
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        with self.assertRaises(PowerUpError) as cm:
+            manager.rest("1", "q1", "Correct Answer")
+        self.assertIn("already answered correctly", str(cm.exception))
+
+    def test_rest_blocks_guesses(self):
+        """Test that a resting player cannot submit guesses."""
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager._get_daily_state("1").is_resting = True
+        can_answer, reason = manager.can_answer("1")
+        self.assertFalse(can_answer)
+        self.assertIn("resting", reason)
+
+    def test_rest_resolves_steal_whiff(self):
+        """Test that an existing steal attempt is cleared when the target rests."""
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        # Simulate P1 having stolen from P2
+        manager._get_daily_state("2").steal_attempt_by = "1"
+        public_msg, _ = manager.rest("2", "q1", "Ans")
+        self.assertIn("whiffed", public_msg)
+        # steal_attempt_by should be cleared
+        self.assertIsNone(manager._get_daily_state("2").steal_attempt_by)
+
+    def test_rest_resolves_jinx_whiff(self):
+        """Test that a jinx is cleared when the target rests."""
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager._get_daily_state("2").jinxed_by = "1"
+        public_msg, _ = manager.rest("2", "q1", "Ans")
+        self.assertIn("no effect", public_msg)
+        self.assertIsNone(manager._get_daily_state("2").jinxed_by)
+
+    def test_rest_powerup_lockout(self):
+        """Test that resting blocks other power-ups."""
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        manager.rest("1", "q1", "Ans")
+        with self.assertRaises(PowerUpError) as cm:
+            manager.jinx("1", "2", "q1")
+        self.assertIn("already used a power-up today", str(cm.exception))
+
+    def test_rest_next_day_multiplier(self):
+        """Test that the 1.2x rest multiplier is applied on the next correct answer."""
+        self.data_manager.get_pending_multiplier = MagicMock(return_value=1.2)
+        self.data_manager.clear_pending_multiplier = MagicMock()
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        ctx = GuessContext(1, "P1", "ans", True, points_earned=100)
+        msgs = manager.on_guess(ctx)
+        # 1.2x means +20 on 100 pts
+        self.assertTrue(any("Rest bonus" in m for m in msgs))
+        self.assertEqual(self.players["1"].score, 120)  # 100 base + 20 bonus
+        self.data_manager.clear_pending_multiplier.assert_called_once_with("1")
+
     def test_jinx_basic(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.jinx("1", "2", "q1")
-        self.assertIn("jinxed", msg)
+        self.assertIn("jinx is set", msg)
         # No cost for jinx
         self.assertEqual(self.players["1"].score, 100)
         self.assertEqual(manager._get_daily_state("2").jinxed_by, "1")
         self.assertTrue(manager._get_daily_state("1").silenced)
-
-    def test_jinx_with_shield(self):
-        # Shield is now tracked in daily_state, not player object directly for this manager logic
-        # But use_shield sets it in daily_state
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.use_shield("2", "q1")
-
-        msg = manager.jinx("1", "2", "q1")
-        self.assertIn("blocked", msg)
-        self.assertTrue(manager._get_daily_state("2").shield_used)
-        # jinx_status is no longer used, we check if jinxed_by is NOT set
-        self.assertIsNone(manager._get_daily_state("2").jinxed_by)
-
-    def test_use_shield_basic(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.use_shield("1", "q1")
-        self.assertIn("Shield up", msg)
-        self.assertTrue(manager._get_daily_state("1").shield_active)
-        # No upfront cost
-        self.assertEqual(self.players["1"].score, 100)
-
-    def test_use_shield_already_active(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.use_shield("1", "q1")
-        with self.assertRaises(PowerUpError) as cm:
-            manager.use_shield("1", "q1")
-        self.assertIn("already used a power-up today", str(cm.exception))
 
     def test_steal_success(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
 
         # Attacker steals
         msg = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed your streak", msg)
-        self.assertEqual(self.players["1"].answer_streak, 0)
+        self.assertIn(f"sacrificed {manager.engine.steal_streak_cost} streak days", msg)
+        self.assertEqual(
+            self.players["1"].answer_streak,
+            max(0, 3 - manager.engine.steal_streak_cost),
+        )  # 3 - cost
 
         # Target answers correctly and earns bonuses
         # We simulate on_guess for the TARGET ("2")
@@ -102,9 +149,10 @@ class TestPowerUpManager(unittest.TestCase):
         # We need to manually set bonuses_today because on_guess sets it
         # But on_guess calls resolve_steal AFTER setting it.
 
-        msgs = manager.on_guess(
+        ctx = GuessContext(
             2, "P2", "ans", True, points_earned=100, bonus_values={"fastest": 10}
         )
+        msgs = manager.on_guess(ctx)
 
         self.assertTrue(any("stole 10 pts" in m for m in msgs))
         self.assertEqual(self.players["1"].score, 110)  # 100 + 10 stolen
@@ -113,95 +161,12 @@ class TestPowerUpManager(unittest.TestCase):
     def test_steal_no_points(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         msg = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed your streak", msg)
+        self.assertIn(f"sacrificed {manager.engine.steal_streak_cost} streak days", msg)
 
         # Attacker answers correctly but target has no bonuses
-        msgs = manager.on_guess(1, "P1", "ans", True)
+        msgs = manager.on_guess(GuessContext(1, "P1", "ans", True))
         # Should be no steal message
         self.assertFalse(any("stole" in m for m in msgs))
-
-    def test_wager_points_basic(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.place_wager("1", 10, "q1")
-        self.assertIn("wagered 10 pts", msg)
-        self.assertEqual(self.players["1"].score, 90)
-        self.assertEqual(manager._get_daily_state("1").wager, 10)
-
-    def test_wager_points_max_wager(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.place_wager("1", 100, "q1")
-        self.assertIn("wagered 25 pts", msg)  # 100//4 = 25
-        self.assertEqual(self.players["1"].score, 75)
-        self.assertEqual(manager._get_daily_state("1").wager, 25)
-
-    def test_wager_points_invalid(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        with self.assertRaises(PowerUpError) as cm:
-            manager.place_wager("1", 0, "q1")
-        self.assertIn("Invalid wager amount", str(cm.exception))
-        with self.assertRaises(PowerUpError) as cm2:
-            manager.place_wager("1", 200, "q1")
-        self.assertIn("Invalid wager amount", str(cm2.exception))
-
-    def test_resolve_wager_win(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.place_wager("1", 20, "q1")
-        msg = manager.resolve_wager("1", True)
-        self.assertIn("won their wager", msg)
-        self.assertEqual(manager._get_daily_state("1").wager, 0)
-
-    def test_resolve_wager_lose(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.place_wager("1", 20, "q1")
-        msg = manager.resolve_wager("1", False)
-        self.assertIn("lost wager", msg)
-        self.assertEqual(manager._get_daily_state("1").wager, 0)
-
-    def test_can_answer_hint_sent(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager._get_daily_state("1").silenced = True
-
-        # Case 1: Hint NOT sent -> Should be False
-        can_answer, reason = manager.can_answer("1", hint_sent=False)
-        self.assertFalse(can_answer)
-        self.assertIn("Jinxed", reason)
-
-        # Case 2: Hint SENT -> Should be True
-        can_answer, reason = manager.can_answer("1", hint_sent=True)
-        self.assertTrue(can_answer)
-
-    def test_teamup_success(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        msg = manager.teamup("1", "2", "q1")
-        self.assertEqual(self.players["1"].score, 75)
-        self.assertEqual(manager._get_daily_state("1").team_partner, "2")
-
-    def test_teamup_already_teamed(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.teamup("1", "2", "q1")
-        with self.assertRaises(PowerUpError) as cm:
-            manager.teamup("1", "3", "q1")
-        self.assertIn("already teamed up", str(cm.exception))
-
-    def test_teamup_not_enough_points(self):
-        self.players["1"].score = 10
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        with self.assertRaises(PowerUpError) as cm:
-            manager.teamup("1", "2", "q1")
-        self.assertIn("need at least", str(cm.exception))
-
-    def test_teamup_invalid_player(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        with self.assertRaises(PowerUpError) as cm:
-            manager.teamup("1", "999", "q1")
-        self.assertIn("Invalid player", str(cm.exception))
-
-    def test_resolve_teamup(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.teamup("1", "2", "q1")
-        manager.resolve_teamup("1", True)
-        self.assertTrue(manager._get_daily_state("1").team_success)
-        self.assertTrue(manager._get_daily_state("2").team_success)
 
     def test_steal_invalid_player(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -211,15 +176,16 @@ class TestPowerUpManager(unittest.TestCase):
 
     def test_on_guess_correct(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.place_wager("1", 20, "q1")
-        manager.on_guess("1", "P1", "guess", True)
-        self.assertEqual(manager._get_daily_state("1").wager, 0)
+        msgs = manager.on_guess(
+            GuessContext("1", "P1", "guess", True, points_earned=100)
+        )
+        self.assertIsInstance(msgs, list)
 
     def test_on_guess_incorrect(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        manager.place_wager("1", 20, "q1")
-        manager.on_guess("1", "P1", "guess", False)
-        self.assertEqual(manager._get_daily_state("1").wager, 0)
+        msgs = manager.on_guess(GuessContext("1", "P1", "guess", False))
+        self.assertIsInstance(msgs, list)
+        self.assertEqual(len(msgs), 0)
 
     def test_jinx_invalid_attacker(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -229,7 +195,7 @@ class TestPowerUpManager(unittest.TestCase):
 
     def test_can_answer_hint_sent(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
-        # Set silenced to True
+
         manager._get_daily_state("1").silenced = True
 
         # Case 1: Hint NOT sent -> Should be False
@@ -247,26 +213,6 @@ class TestPowerUpManager(unittest.TestCase):
             manager.jinx("1", "999", "q1")
         self.assertIn("Invalid player", str(cm.exception))
 
-    def test_place_wager_invalid_player(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        with self.assertRaises(PowerUpError) as cm:
-            manager.place_wager("999", 10, "q1")
-        self.assertIn("Invalid player", str(cm.exception))
-
-    def test_shield_shatter_penalty(self):
-        manager = PowerUpManager(self.player_manager, self.data_manager)
-        # Player 1 activates shield
-        manager.use_shield("1", "q1")
-        self.assertTrue(manager._get_daily_state("1").shield_active)
-        self.assertFalse(manager._get_daily_state("1").shield_used)
-
-        # End of day check - Shield unused
-        messages = manager.check_shield_usage()
-
-        # Verify penalty
-        self.assertEqual(self.players["1"].score, 90)  # 100 - 10
-        self.assertTrue(any("shattered" in m for m in messages))
-
     def test_steal_first_try_bonus(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
 
@@ -276,10 +222,12 @@ class TestPowerUpManager(unittest.TestCase):
         # Target (P2) answers correctly on first try (bonus)
         # on_guess calls resolve_steal
         msgs = manager.on_guess(
-            2, "P2", "ans", True, points_earned=120, bonus_values={"first_try": 20}
+            GuessContext(
+                2, "P2", "ans", True, points_earned=120, bonus_values={"first_try": 20}
+            )
         )
 
-        # Verify steal
+        # Verify steal — only canonical try_1 is present (not first_try alias), so full 20 is stealable
         self.assertTrue(any("stole 20 pts" in m for m in msgs))
         self.assertEqual(self.players["1"].score, 120)  # 100 + 20
         self.assertEqual(self.players["2"].score, 80)  # 100 - 20
@@ -288,7 +236,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First use
         msg = manager.jinx("1", "2", "q1")
-        self.assertIn("jinxed", msg)
+        self.assertIn("jinx is set", msg)
 
         # Second use
         with self.assertRaises(PowerUpError) as cm:
@@ -299,7 +247,7 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First use
         msg = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed your streak", msg)
+        self.assertIn(f"sacrificed {manager.engine.steal_streak_cost} streak days", msg)
 
         # Second use
         with self.assertRaises(PowerUpError) as cm:
@@ -310,18 +258,13 @@ class TestPowerUpManager(unittest.TestCase):
         """Test that using one powerup blocks others."""
         manager = PowerUpManager(self.player_manager, self.data_manager)
 
-        # Use Shield
-        manager.use_shield("1", "q1")
-
-        # Try Jinx
-        with self.assertRaises(PowerUpError) as cm:
-            manager.jinx("1", "2", "q1")
-        self.assertIn("already used a power-up today", str(cm.exception))
+        # Use Jinx
+        manager.jinx("1", "2", "q1")
 
         # Try Steal
-        with self.assertRaises(PowerUpError) as cm2:
+        with self.assertRaises(PowerUpError) as cm:
             manager.steal("1", "3", "q1")
-        self.assertIn("already used a power-up today", str(cm2.exception))
+        self.assertIn("already used a power-up today", str(cm.exception))
 
     def test_reset_daily_state(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -336,33 +279,32 @@ class TestPowerUpManager(unittest.TestCase):
         self.assertIsNone(state.jinxed_by)
 
     def test_powerups_blocked_without_question(self):
+        """
+        When question_id is None, jinx/steal enter overnight pre-load mode
+        (not an error). Rest still requires an active question.
+        """
         manager = PowerUpManager(self.player_manager, self.data_manager)
 
-        # Test Jinx
-        with self.assertRaises(PowerUpError) as cm:
-            manager.jinx("1", "2", None)
-        self.assertEqual(str(cm.exception), "There is no active question right now.")
+        # Jinx with question_id=None → overnight pre-load, should succeed
+        result = manager.jinx("1", "2", None)
+        self.assertIn("queued for tomorrow", result)
 
-        # Test Steal
-        with self.assertRaises(PowerUpError) as cm2:
-            manager.steal("1", "2", None)
-        self.assertEqual(str(cm2.exception), "There is no active question right now.")
+        # Reset state then try steal overnight — should also succeed.
+        # (attacker "1" now has a pending overnight powerup; use a fresh manager)
+        manager2 = PowerUpManager(self.player_manager, self.data_manager)
+        result2 = manager2.steal("1", "2", None)
+        self.assertIn("queued", result2)
 
-        # Test Shield
+        # Rest still requires an active question
         with self.assertRaises(PowerUpError) as cm3:
-            manager.use_shield("1", None)
+            manager.rest("1", None, "Ans")
         self.assertEqual(str(cm3.exception), "There is no active question right now.")
-
-        # Test Wager
-        with self.assertRaises(PowerUpError) as cm4:
-            manager.place_wager("1", 10, None)
-        self.assertEqual(str(cm4.exception), "There is no active question right now.")
 
     def test_duplicate_jinx(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First jinx should succeed
         msg1 = manager.jinx("1", "2", "q1")
-        self.assertIn("jinxed", msg1)
+        self.assertIn("jinx is set", msg1)
 
         # Verify first usage was logged
         self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)
@@ -382,7 +324,9 @@ class TestPowerUpManager(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         # First steal should succeed
         msg1 = manager.steal("1", "2", "q1")
-        self.assertIn("sacrificed your streak", msg1)
+        self.assertIn(
+            f"sacrificed {manager.engine.steal_streak_cost} streak days", msg1
+        )
 
         # Verify first usage was logged
         self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)
@@ -404,13 +348,19 @@ class TestPowerUpManager(unittest.TestCase):
         # Target (P2) answers correctly with a streak bonus
         # on_guess calls resolve_jinx
         msgs = manager.on_guess(
-            2, "P2", "ans", True, points_earned=100, bonus_values={"streak": 50}
+            GuessContext(
+                2, "P2", "ans", True, points_earned=100, bonus_values={"streak": 50}
+            )
         )
 
-        # Verify message contains points lost
-        self.assertTrue(any("froze their streak bonus" in m for m in msgs))
+        # Verify message reflects the transfer
+        self.assertTrue(any("swiped" in m and "streak bonus" in m for m in msgs))
+        # Verify attacker (P1) gained the streak bonus
+        self.assertEqual(self.players["1"].score, 150)  # 100 base + 50 stolen streak
+        # Verify target (P2) lost the streak bonus
+        self.assertEqual(self.players["2"].score, 50)  # 100 base - 50 stolen streak
 
-    def test_jinx_freezes_streak(self):
+    def test_jinx_steals_streak_bonus(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.jinx("1", "2", "q1")
 
@@ -420,10 +370,7 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Mock bonus messages
         bonus_messages = ["🔥 6 day streak! (+25)"]
-        points_tracker = {"earned": 125}  # 100 base + 25 streak
-
-        # on_guess calls resolve_jinx
-        msgs = manager.on_guess(
+        ctx = GuessContext(
             2,
             "P2",
             "ans",
@@ -431,22 +378,29 @@ class TestPowerUpManager(unittest.TestCase):
             points_earned=125,
             bonus_values={"streak": 25},
             bonus_messages=bonus_messages,
-            points_tracker=points_tracker,
         )
 
-        # Verify streak was decremented back to 5
-        self.player_manager.set_streak.assert_called_with("2", 5)
+        # on_guess calls resolve_jinx
+        msgs = manager.on_guess(ctx)
 
-        # Verify points deducted
-        self.assertTrue(any("froze their streak bonus" in m for m in msgs))
+        # Streak should NOT be frozen — set_streak should not be called
+        self.player_manager.set_streak.assert_not_called()
+
+        # Verify message reflects the transfer
+        self.assertTrue(any("swiped" in m and "streak bonus" in m for m in msgs))
 
         # Verify streak message removed
         self.assertEqual(len(bonus_messages), 0)
 
-        # Verify points tracker updated
-        self.assertEqual(points_tracker["earned"], 100)
+        # Verify points_earned updated in ctx (target net)
+        self.assertEqual(ctx.points_earned, 100)
 
-    def test_jinx_freezes_streak_no_bonus(self):
+        # Verify attacker (P1) gained the stolen streak bonus
+        self.assertEqual(self.players["1"].score, 125)  # 100 base + 25 stolen streak
+        # Verify target (P2) had the streak bonus deducted
+        self.assertEqual(self.players["2"].score, 75)  # 100 base - 25 stolen streak
+
+    def test_jinx_no_streak_bonus_no_effect(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
         manager.jinx("1", "3", "q1")  # P3 has 0 streak
 
@@ -454,15 +408,13 @@ class TestPowerUpManager(unittest.TestCase):
         # GuessHandler increments 0 -> 1.
         self.players["3"].answer_streak = 1
 
-        msgs = manager.on_guess(
-            3, "P3", "ans", True, points_earned=100, bonus_values={}
-        )
+        msgs = manager.on_guess(GuessContext(3, "P3", "ans", True, points_earned=100))
 
-        # Verify streak was decremented back to 0
-        self.player_manager.set_streak.assert_called_with("3", 0)
+        # Streak should NOT be frozen — set_streak should not be called
+        self.player_manager.set_streak.assert_not_called()
 
-        # Verify message
-        self.assertTrue(any("froze their streak" in m for m in msgs))
+        # Verify message reflects that there was nothing to steal
+        self.assertTrue(any("no streak bonus to steal" in m for m in msgs))
 
     def test_steal_resolution_message_content(self):
         manager = PowerUpManager(self.player_manager, self.data_manager)
@@ -470,13 +422,202 @@ class TestPowerUpManager(unittest.TestCase):
 
         # Target (P2) answers correctly with bonuses
         msgs = manager.on_guess(
-            2,
-            "P2",
-            "ans",
-            True,
-            points_earned=100,
-            bonus_values={"fastest": 20, "first_try": 10},
+            GuessContext(
+                2,
+                "P2",
+                "ans",
+                True,
+                points_earned=100,
+                bonus_values={"fastest": 20, "first_try": 10},
+            )
         )
 
         # Verify message contains points stolen
         self.assertTrue(any("stole 30 pts" in m for m in msgs))
+
+    def test_steal_includes_rest_bonus(self):
+        """Rest bonus earned on answer day must be included in stealable amount."""
+        # P2 rested yesterday, so has a pending 1.2x multiplier
+        self.data_manager.get_pending_multiplier.side_effect = lambda pid: (
+            1.2 if pid == "2" else 0.0
+        )
+
+        manager = PowerUpManager(self.player_manager, self.data_manager)
+        # P1 steals from P2
+        manager.steal("1", "2", "q1")
+
+        # P2 answers correctly: base 100 pts + before_hint bonus 10 pts = 110 pts
+        # Rest multiplier on 110: round(110 * 0.2) = 22 pts rest bonus
+        # Stealable = before_hint (10) + rest (22) = 32 pts
+        msgs = manager.on_guess(
+            GuessContext(
+                2,
+                "P2",
+                "ans",
+                True,
+                points_earned=110,
+                bonus_values={"before_hint": 10},
+                question_id="q1",
+            )
+        )
+
+        self.assertTrue(
+            any("stole 32 pts" in m for m in msgs),
+            f"Expected steal of 32 pts (10 before_hint + 22 rest). Messages: {msgs}",
+        )
+        self.assertEqual(self.players["1"].score, 132)  # 100 + 32 stolen
+        # P2 starts at 100; +22 rest bonus applied, -32 stolen (base 110 not added here,
+        # that's GuessHandler's responsibility, not PowerUpManager's)
+        self.assertEqual(self.players["2"].score, 90)  # 100 + 22 rest - 32 stolen
+
+
+class TestStealEnforcementAndScaling(unittest.TestCase):
+    """Tests for steal enforcement (streak=0 rejected) and partial-steal scaling."""
+
+    def setUp(self):
+        self.player_manager = MagicMock()
+        self.data_manager = MagicMock()
+        self.players = {
+            "zero": Player(id="zero", name="Zero", score=100, answer_streak=0),
+            "partial": Player(id="partial", name="Partial", score=100, answer_streak=2),
+            "target": Player(id="target", name="Target", score=100, answer_streak=5),
+        }
+        self.player_manager.get_player.side_effect = lambda pid: self.players.get(pid)
+        self.data_manager.get_last_correct_guess_date.return_value = (
+            date.today() - timedelta(days=1)
+        )
+        self.data_manager.get_today.return_value = date.today()
+
+        def update_score(pid, amount):
+            if pid in self.players:
+                self.players[pid].score += amount
+
+        def set_streak(pid, value):
+            if pid in self.players:
+                self.players[pid].answer_streak = value
+
+        self.player_manager.update_score.side_effect = update_score
+        self.player_manager.set_streak.side_effect = set_streak
+        self.data_manager.get_pending_multiplier.return_value = 0.0
+        self.data_manager.get_pending_powerup.return_value = None
+        self.data_manager.get_pending_powerup_for_target.return_value = None
+
+    def _make_manager(self):
+        return PowerUpManager(self.player_manager, self.data_manager)
+
+    # ------------------------------------------------------------------
+    # Enforcement: streak=0 rejects steal in all paths
+    # ------------------------------------------------------------------
+
+    def test_zero_streak_daytime_forward_rejected(self):
+        """Player with 0 streak cannot initiate a forward daytime steal."""
+        m = self._make_manager()
+        with self.assertRaises(PowerUpError) as cm:
+            m.steal("zero", "target", "q1")
+        self.assertIn("streak days", str(cm.exception))
+        self.assertIsNone(m._get_daily_state("target").steal_attempt_by)
+
+    def test_zero_streak_daytime_retro_rejected(self):
+        """Player with 0 streak cannot steal retroactively after target answers."""
+        m = self._make_manager()
+        m._get_daily_state("target").is_correct = True
+        m._get_daily_state("target").bonuses = {"before_hint": 10}
+        with self.assertRaises(PowerUpError) as cm:
+            m.steal("zero", "target", "q1")
+        self.assertIn("streak days", str(cm.exception))
+        self.assertIn("before_hint", m._get_daily_state("target").bonuses)
+
+    def test_zero_streak_overnight_rejected(self):
+        """Player with 0 streak cannot queue an overnight steal."""
+        m = self._make_manager()
+        with self.assertRaises(PowerUpError) as cm:
+            m.steal("zero", "target", None)
+        self.assertIn("streak days", str(cm.exception))
+        self.data_manager.log_powerup_usage.assert_not_called()
+
+    def test_zero_streak_target_still_stealable(self):
+        """After a failed zero-streak steal, the target can be stolen by someone else."""
+        m = self._make_manager()
+        with self.assertRaises(PowerUpError):
+            m.steal("zero", "target", "q1")
+        # Give the partial player enough streak for a full steal, then steal succeeds
+        self.players["partial"].answer_streak = 3
+        msg = m.steal("partial", "target", "q1")
+        self.assertIn("streak days", msg)
+
+    # ------------------------------------------------------------------
+    # Partial steal (forward): fraction of bonuses stolen when target answers
+    # ------------------------------------------------------------------
+
+    def test_partial_steal_forward_steals_fraction(self):
+        """Forward steal with 2 streak days (cost 3) gets round(30 * 2/3) = 20 pts."""
+        m = self._make_manager()
+        cost = m.engine.steal_streak_cost  # default 3
+        m.steal("partial", "target", "q1")
+
+        self.assertAlmostEqual(m._get_daily_state("partial").steal_ratio, 2 / cost)
+
+        ctx = GuessContext(
+            "target",
+            "Target",
+            "ans",
+            True,
+            points_earned=130,
+            bonus_values={"before_hint": 10, "fastest_1": 20},
+        )
+        msgs = m.on_guess(ctx)
+
+        expected_stolen = round(30 * (2 / cost))
+        self.assertTrue(any(f"stole {expected_stolen} pts" in msg for msg in msgs))
+        self.assertEqual(self.players["partial"].score, 100 + expected_stolen)
+        self.assertEqual(self.players["target"].score, 100 - expected_stolen)
+
+    def test_partial_steal_forward_target_bonuses_cleared(self):
+        """After partial forward steal resolves, target bonuses dict is emptied."""
+        m = self._make_manager()
+        m.steal("partial", "target", "q1")
+
+        ctx = GuessContext(
+            "target",
+            "Target",
+            "ans",
+            True,
+            points_earned=120,
+            bonus_values={"before_hint": 10, "fastest_1": 10},
+        )
+        m.on_guess(ctx)
+
+        self.assertEqual(m._get_daily_state("target").bonuses, {})
+        self.assertIsNone(m._get_daily_state("target").steal_attempt_by)
+
+    # ------------------------------------------------------------------
+    # Partial steal (retroactive): fraction of bonuses stolen immediately
+    # ------------------------------------------------------------------
+
+    def test_partial_steal_retro_steals_fraction(self):
+        """Retro steal with 2 streak (cost 5) gets round(30 * 2/5) = 12 pts immediately."""
+        m = self._make_manager()
+        retro_cost = m.engine.retro_steal_streak_cost  # default 5
+
+        tgt = m._get_daily_state("target")
+        tgt.is_correct = True
+        tgt.score_earned = 130
+        tgt.bonuses = {"before_hint": 10, "fastest_1": 20}
+
+        m.steal("partial", "target", "q1")
+
+        expected_stolen = round(30 * (2 / retro_cost))
+        self.assertEqual(self.players["partial"].score, 100 + expected_stolen)
+        self.assertEqual(self.players["target"].score, 100 - expected_stolen)
+
+    def test_partial_steal_retro_target_bonuses_cleared(self):
+        """After retroactive partial steal, target bonuses dict is cleared."""
+        m = self._make_manager()
+        tgt = m._get_daily_state("target")
+        tgt.is_correct = True
+        tgt.score_earned = 110
+        tgt.bonuses = {"before_hint": 10}
+
+        m.steal("partial", "target", "q1")
+
+        self.assertEqual(m._get_daily_state("target").bonuses, {})

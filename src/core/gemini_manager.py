@@ -8,11 +8,12 @@ import logging
 
 
 class GeminiManager:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-pro"):
         if not api_key:
             raise ValueError("Gemini API key is required.")
         try:
             self.api_key = api_key
+            self.model = model
             self.client = genai.Client(api_key=self.api_key)
             logging.info("GeminiManager initialized successfully.")
         except Exception as e:
@@ -23,9 +24,8 @@ class GeminiManager:
         """
         Generates content using the Gemini API.
 
-        Note: This is a blocking call that can take 10+ seconds. In the future,
-        consider making this async using asyncio.to_thread() to prevent blocking
-        Discord's event loop during API calls.
+        Note: This is a blocking call. Callers from async Discord tasks should
+        wrap this via asyncio.to_thread() to prevent blocking the event loop.
 
         Args:
             text: The prompt text.
@@ -38,7 +38,7 @@ class GeminiManager:
                 config = types.GenerateContentConfig(**generation_config)
 
             response = self.client.models.generate_content(
-                model="gemini-2.5-pro", contents=text, config=config
+                model=self.model, contents=text, config=config
             )
             return response.text
         except Exception as e:

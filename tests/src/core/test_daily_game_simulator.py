@@ -33,8 +33,7 @@ class TestDailyGameSimulator(unittest.TestCase):
                 "JBOT_EMOJI_SILENCED": "🤐",
                 "JBOT_EMOJI_STOLEN_FROM": "💸",
                 "JBOT_EMOJI_STEALING": "💰",
-                "JBOT_EMOJI_SHIELD": "💝",
-                "JBOT_EMOJI_SHIELD_BROKEN": "💔",
+                "JBOT_EMOJI_REST": "😴",
             }
             return vals.get(key, default)
 
@@ -52,13 +51,11 @@ class TestDailyGameSimulator(unittest.TestCase):
                 timestamp="2023-01-01 10:00:00",
                 user_id="p1",
                 guess_text="4",
-                is_correct=True,
             ),
             GuessEvent(
                 timestamp="2023-01-01 10:05:00",
                 user_id="p2",
                 guess_text="5",
-                is_correct=False,
             ),
         ]
 
@@ -93,12 +90,13 @@ class TestDailyGameSimulator(unittest.TestCase):
         self.assertEqual(results["p3"]["streak_delta"], -5)
         self.assertEqual(results["p3"]["final_streak"], 0)
 
-    def test_shield_usage(self):
+    def test_rest_mechanic(self):
+        """A resting player earns 0 points and has their streak frozen."""
         events = [
             PowerUpEvent(
                 timestamp="2023-01-01 09:00:00",
                 user_id="p1",
-                powerup_type="shield",
+                powerup_type="rest",
                 target_user_id=None,
             ),
         ]
@@ -113,7 +111,10 @@ class TestDailyGameSimulator(unittest.TestCase):
         )
         results = simulator.run()
 
-        self.assertEqual(results["p1"]["score_earned"], -10)
+        # Player rested: 0 points, streak unchanged (delta = 0)
+        self.assertEqual(results["p1"]["score_earned"], 0)
+        self.assertEqual(results["p1"]["streak_delta"], 0)
+        self.assertEqual(results["p1"]["final_streak"], 2)  # unchanged
 
     def test_jinx_success(self):
         # Re-run with P3 as target
@@ -128,7 +129,6 @@ class TestDailyGameSimulator(unittest.TestCase):
                 timestamp="2023-01-01 10:00:00",
                 user_id="p3",
                 guess_text="4",
-                is_correct=True,
             ),
         ]
         simulator = DailyGameSimulator(
@@ -159,13 +159,11 @@ class TestDailyGameSimulator(unittest.TestCase):
                 timestamp="2023-01-01 10:00:00",
                 user_id="p3",
                 guess_text="4",
-                is_correct=True,
             ),
             GuessEvent(
                 timestamp="2023-01-01 10:01:00",
                 user_id="p1",
                 guess_text="4",
-                is_correct=True,
             ),
         ]
 
@@ -173,15 +171,17 @@ class TestDailyGameSimulator(unittest.TestCase):
         # P3 Bonuses: First Try (20), Before Hint (10), Fastest (10), Streak (25).
         # Total P3 Score: 100 + 20 + 10 + 10 + 25 = 165.
 
-        # P1 answers second.
-        # P1 Bonuses: First Try (20), Before Hint (10), Streak (0 - reset by steal).
-        # Total P1 Score: 100 + 20 + 10 + 0 = 130.
+        # P1 answers second (1st try for P1, 2nd fastest overall).
+        # P1 effective streak after -2 cost: max(0, 2-2) = 0 → streak_length=1 (<2, no streak bonus)
+        # P1 Bonuses: Try 1 (20), Fastest 2 (5), Before Hint (10).
+        # Total P1 Score: 100 + 20 + 5 + 10 = 135.
 
-        # Steal Logic:
-        # P1 steals from P3.
-        # Stealable bonuses: "first_try" (20), "fastest" (10). Total 30.
-        # P3 loses 30 -> 135.
-        # P1 gains 30 -> 160.
+        # Steal Logic (partial steal: P1 streak=2, cost=3 → ratio=2/3):
+        # Stealable bonuses (all except streak; aliases skipped when canonical present):
+        # try_1 (20) + fastest_1 (10) + before_hint (10) = 40.
+        # Stolen = round(40 * 2/3) = 27.
+        # P3 loses 27 -> 138.
+        # P1 gains 27 -> 162.
 
         simulator = DailyGameSimulator(
             self.question,
@@ -193,12 +193,8 @@ class TestDailyGameSimulator(unittest.TestCase):
         )
         results = simulator.run()
 
-        self.assertEqual(results["p3"]["score_earned"], 135)
-        self.assertEqual(results["p1"]["score_earned"], 165)
+        self.assertEqual(results["p3"]["score_earned"], 138)
+        self.assertEqual(results["p1"]["score_earned"], 162)
 
-        # P1 streak reset cost?
-        # handle_powerup for steal:
-        # state["streak_delta"] = -initial_streak (-2)
-        # handle_guess: +1
-        # Net: -1
+        # P1 streak cost: deducted=min(3,2)=2, handle_guess +1 → net -1
         self.assertEqual(results["p1"]["streak_delta"], -1)

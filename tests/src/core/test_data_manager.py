@@ -19,7 +19,7 @@ class TestDataManager(unittest.TestCase):
                     "name": "Alice",
                     "score": 42,
                     "answer_streak": 3,
-                    "active_shield": 1,
+                    "pending_rest_multiplier": 0.0,
                 }
             ]
         )
@@ -27,7 +27,7 @@ class TestDataManager(unittest.TestCase):
         self.assertIsNotNone(player)
         self.assertEqual(player.name, "Alice")
         self.assertEqual(player.score, 42)
-        self.assertTrue(player.active_shield)
+        self.assertEqual(player.pending_rest_multiplier, 0.0)
 
         # Test not found
         self.db.execute_query = MagicMock(return_value=[])
@@ -40,9 +40,9 @@ class TestDataManager(unittest.TestCase):
         self.data_manager.create_player("1", "Alice")
         self.db.execute_update.assert_called_once_with(
             """
-            INSERT INTO players (id, name, score, season_score, answer_streak, active_shield,
+            INSERT INTO players (id, name, score, season_score, answer_streak,
                                 lifetime_questions, lifetime_correct, lifetime_first_answers, lifetime_best_streak)
-            VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0)
+            VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0)
         """,
             ("1", "Alice"),
         )
@@ -71,12 +71,12 @@ class TestDataManager(unittest.TestCase):
             "UPDATE players SET answer_streak = 0 WHERE id = ?", ("1",)
         )
 
-    def test_set_shield(self):
-        """Test setting a player's shield status."""
+    def test_set_pending_multiplier(self):
+        """Test setting a player's pending rest multiplier."""
         self.db.execute_update = MagicMock()
-        self.data_manager.set_shield("1", True)
+        self.data_manager.set_pending_multiplier("1", 1.2)
         self.db.execute_update.assert_called_once_with(
-            "UPDATE players SET active_shield = ? WHERE id = ?", (True, "1")
+            "UPDATE players SET pending_rest_multiplier = ? WHERE id = ?", (1.2, "1")
         )
 
     def test_load_players(self):
@@ -88,22 +88,22 @@ class TestDataManager(unittest.TestCase):
                 "name": "Alice",
                 "score": 42,
                 "answer_streak": 3,
-                "active_shield": 1,
+                "pending_rest_multiplier": 1.2,
             },
             {
                 "id": "2",
                 "name": "Bob",
                 "score": 0,
                 "answer_streak": 0,
-                "active_shield": 0,
+                "pending_rest_multiplier": 0.0,
             },
         ]
         players = self.data_manager.load_players()
         self.assertEqual(players["1"].name, "Alice")
         self.assertEqual(players["1"].score, 42)
         self.assertEqual(players["1"].answer_streak, 3)
-        self.assertTrue(players["1"].active_shield)
-        self.assertFalse(players["2"].active_shield)
+        self.assertEqual(players["1"].pending_rest_multiplier, 1.2)
+        self.assertEqual(players["2"].pending_rest_multiplier, 0.0)
 
         # Test empty DB
         self.db.execute_query = lambda query: []
@@ -411,7 +411,7 @@ class TestDataManager(unittest.TestCase):
                     "name": "Alice",
                     "score": 10,
                     "answer_streak": 2,
-                    "active_shield": 1,
+                    "pending_rest_multiplier": 0.0,
                 }
             ]
         )
@@ -990,27 +990,22 @@ class TestDataManagerIntegration(unittest.TestCase):
 
     def test_powerup_usage_tracking(self):
         """Test logging and retrieving powerup usage."""
-        # Create a question
+        # Create a question and daily question; powerups are keyed to daily_questions.id
         q = Question("Q?", "A", "Cat", 100, "test", "Hint")
         dq_id = self.data_manager.log_daily_question(q)
-
-        # Get question_id
-        query = "SELECT question_id FROM daily_questions WHERE id = ?"
-        result = self.db.execute_query(query, (dq_id,))
-        question_id = result[0]["question_id"]
 
         # Create players
         self.data_manager.create_player("p1", "Player1")
         self.data_manager.create_player("p2", "Player2")
 
-        # Log powerup usages
-        self.data_manager.log_powerup_usage("p1", "shield", question_id=question_id)
+        # Log powerup usages against the daily_question id (not questions.id)
+        self.data_manager.log_powerup_usage("p1", "shield", question_id=dq_id)
         self.data_manager.log_powerup_usage(
-            "p2", "attack", target_user_id="p1", question_id=question_id
+            "p2", "attack", target_user_id="p1", question_id=dq_id
         )
 
         # Retrieve usage for question
-        usages = self.data_manager.get_powerup_usages_for_question(question_id)
+        usages = self.data_manager.get_powerup_usages_for_question(dq_id)
         self.assertEqual(len(usages), 2)
 
         # Check details
@@ -1092,7 +1087,8 @@ class TestDataManagerIntegration(unittest.TestCase):
         # Check the date
         last_date = self.data_manager.get_last_correct_guess_date("p1")
         self.assertIsNotNone(last_date)
-        self.assertEqual(last_date, date.today())
+        # Use DataManager's timezone-aware date instead of system date
+        self.assertEqual(last_date, self.data_manager.get_today())
 
     def test_get_correct_guess_count(self):
         """Test counting correct guesses for a daily question."""
@@ -1148,6 +1144,28 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.assertEqual(p1.answer_streak, 5)  # Unchanged (answered correctly)
         self.assertEqual(p2.answer_streak, 0)  # Reset (didn't answer correctly)
         self.assertEqual(p3.answer_streak, 0)  # Already 0
+
+    def test_reset_unanswered_streaks_excludes_resting_players(self):
+        """Test that players who used the 'rest' power-up keep their streak."""
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+
+        self.data_manager.set_streak("p1", 5)
+        self.data_manager.set_streak("p2", 3)
+
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # p2 uses rest — neither player answers correctly
+        self.data_manager.log_powerup_usage("p2", "rest", None, dq_id)
+
+        self.data_manager.reset_unanswered_streaks(dq_id)
+
+        p1 = self.data_manager.get_player("p1")
+        p2 = self.data_manager.get_player("p2")
+
+        self.assertEqual(p1.answer_streak, 0)  # Reset (didn't answer or rest)
+        self.assertEqual(p2.answer_streak, 3)  # Preserved (resting)
 
     def test_get_guesses_for_daily_question(self):
         """Test retrieving all guesses for a daily question."""
@@ -1299,6 +1317,161 @@ class TestDataManagerIntegration(unittest.TestCase):
         query = "SELECT is_correct FROM guesses WHERE id = ?"
         result = self.db.execute_query(query, (guess_id,))
         self.assertEqual(result[0]["is_correct"], 1)
+
+    def test_clear_stale_rest_multipliers(self):
+        """Stale multipliers (no rest today) are cleared; today's rest multiplier is preserved."""
+        from data.readers.question import Question
+
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        self.data_manager.create_player("p1", "Player1")  # stale multiplier
+        self.data_manager.create_player("p2", "Player2")  # rested today
+        self.data_manager.create_player("p3", "Player3")  # no multiplier
+
+        # p1 has a leftover multiplier from a prior day (no powerup_usage row for this question)
+        self.data_manager.set_pending_multiplier("p1", 1.2)
+        # p2 rested today
+        self.data_manager.set_pending_multiplier("p2", 1.2)
+        self.data_manager.log_powerup_usage("p2", "rest", None, dq_id)
+
+        self.data_manager.clear_stale_rest_multipliers(dq_id)
+
+        self.assertEqual(self.data_manager.get_pending_multiplier("p1"), 0.0)
+        self.assertEqual(self.data_manager.get_pending_multiplier("p2"), 1.2)
+        self.assertEqual(self.data_manager.get_pending_multiplier("p3"), 0.0)
+
+
+class TestPendingPowerupDataManager(unittest.TestCase):
+    """Integration tests for overnight preload DataManager methods."""
+
+    def setUp(self):
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+        self.data_manager.initialize_database()
+        self.data_manager.create_player("attacker", "Attacker")
+        self.data_manager.create_player("target", "Target")
+
+    def tearDown(self):
+        self.db.close()
+
+    def _insert_preload(self, user_id, powerup_type, target_user_id, question_id=None):
+        self.data_manager.log_powerup_usage(
+            user_id, powerup_type, target_user_id, question_id
+        )
+
+    def test_get_pending_powerup_returns_row(self):
+        """get_pending_powerup returns a row when a NULL-qid preload exists."""
+        self._insert_preload("attacker", "jinx_preload", "target")
+        result = self.data_manager.get_pending_powerup("attacker")
+        self.assertIsNotNone(result)
+        self.assertEqual(result["user_id"], "attacker")
+        self.assertEqual(result["powerup_type"], "jinx_preload")
+
+    def test_get_pending_powerup_returns_none_when_empty(self):
+        """get_pending_powerup returns None when no pending preloads exist."""
+        result = self.data_manager.get_pending_powerup("attacker")
+        self.assertIsNone(result)
+
+    def test_get_pending_powerup_ignores_applied_rows(self):
+        """get_pending_powerup ignores rows that already have a question_id assigned."""
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+        self._insert_preload("attacker", "jinx_preload", "target", dq_id)
+        result = self.data_manager.get_pending_powerup("attacker")
+        self.assertIsNone(result)
+
+    def test_get_pending_powerup_for_target_returns_row(self):
+        """get_pending_powerup_for_target finds a matching pending row."""
+        self._insert_preload("attacker", "steal_preload", "target")
+        result = self.data_manager.get_pending_powerup_for_target(
+            "target", "steal_preload"
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(result["target_user_id"], "target")
+        self.assertEqual(result["user_id"], "attacker")
+
+    def test_get_pending_powerup_for_target_returns_none_when_empty(self):
+        result = self.data_manager.get_pending_powerup_for_target(
+            "target", "jinx_preload"
+        )
+        self.assertIsNone(result)
+
+    def test_get_pending_powerup_for_target_filters_by_type(self):
+        """get_pending_powerup_for_target does not match a different powerup type."""
+        self._insert_preload("attacker", "steal_preload", "target")
+        result = self.data_manager.get_pending_powerup_for_target(
+            "target", "jinx_preload"
+        )
+        self.assertIsNone(result)
+
+    def test_apply_pending_powerups_updates_row(self):
+        """apply_pending_powerups sets question_id and returns the updated row."""
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+        self._insert_preload("attacker", "jinx_preload", "target")
+
+        rows = self.data_manager.apply_pending_powerups(dq_id)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["powerup_type"], "jinx_preload")
+        updated = self.db.execute_query(
+            "SELECT question_id FROM powerup_usage WHERE user_id = ?", ("attacker",)
+        )
+        self.assertEqual(updated[0]["question_id"], dq_id)
+
+    def test_apply_pending_powerups_multiple_rows(self):
+        """apply_pending_powerups processes all pending rows in one call."""
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+        self._insert_preload("attacker", "jinx_preload", "target")
+        self._insert_preload("target", "steal_preload", "attacker")
+
+        rows = self.data_manager.apply_pending_powerups(dq_id)
+
+        self.assertEqual(len(rows), 2)
+        remaining = self.db.execute_query(
+            "SELECT * FROM powerup_usage WHERE question_id IS NULL"
+        )
+        self.assertEqual(len(remaining), 0)
+
+    def test_apply_pending_powerups_empty_returns_empty(self):
+        """apply_pending_powerups returns [] when no pending rows exist."""
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+        rows = self.data_manager.apply_pending_powerups(dq_id)
+        self.assertEqual(rows, [])
+
+    def test_apply_pending_powerups_skips_non_preload_types(self):
+        """apply_pending_powerups only touches jinx_preload/steal_preload rows."""
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+        self._insert_preload("attacker", "jinx", "target")  # live type, no qid
+        self._insert_preload("target", "jinx_preload", "attacker")  # preload type
+
+        rows = self.data_manager.apply_pending_powerups(dq_id)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["powerup_type"], "jinx_preload")
+        # The bare 'jinx' row should still have NULL question_id
+        untouched = self.db.execute_query(
+            "SELECT question_id FROM powerup_usage WHERE user_id = ? AND powerup_type = 'jinx'",
+            ("attacker",),
+        )
+        self.assertIsNone(untouched[0]["question_id"])
+
+    def test_get_powerup_usages_for_question_after_apply(self):
+        """After apply_pending_powerups, get_powerup_usages_for_question returns the rows."""
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+        self._insert_preload("attacker", "steal_preload", "target")
+        self.data_manager.apply_pending_powerups(dq_id)
+
+        usages = self.data_manager.get_powerup_usages_for_question(dq_id)
+        self.assertEqual(len(usages), 1)
+        self.assertEqual(usages[0]["powerup_type"], "steal_preload")
+        self.assertEqual(usages[0]["user_id"], "attacker")
+        self.assertEqual(usages[0]["target_user_id"], "target")
 
 
 if __name__ == "__main__":

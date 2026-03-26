@@ -27,7 +27,6 @@ class TestGameRunnerResetQuestion(unittest.TestCase):
         self.defaults = {
             "JBOT_RIDDLE_HISTORY_DAYS": "30",
             "JBOT_QUESTION_RETRIES": "10",
-            "JBOT_ENABLE_FIGHT": "True",
             "JBOT_EMOJI_FASTEST": "🥇",
         }
         self.mock_config_instance.get.side_effect = lambda k, d=None: self.defaults.get(

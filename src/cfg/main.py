@@ -210,11 +210,8 @@ class ConfigReader:
         )
         from data.readers.tsv import read_jeopardy_questions
         from data.readers.csv_reader import (
-            read_riddle_questions,
-            read_riddle_with_hints_questions,
             read_knowledge_bowl_questions,
             read_simple_questions,
-            read_general_trivia_questions,
         )
 
         sources = []
@@ -273,22 +270,18 @@ class ConfigReader:
 
                 # Load questions based on reader type
                 if reader_type == "jeopardy":
-                    score_sub = source_config.get("final_jeopardy_score_sub", 10000)
-                    allowed_values = source_config.get("clue_values", [100])
+                    difficulty = source_config.get("difficulty", "easy")
+                    final_jeopardy_score = default_points if default_points else 300
                     questions = read_jeopardy_questions(
-                        dataset_path, score_sub, allowed_clue_values=allowed_values
+                        dataset_path,
+                        difficulty=difficulty,
+                        final_jeopardy_score=final_jeopardy_score,
                     )
                 elif reader_type == "knowledge_bowl":
                     questions = read_knowledge_bowl_questions(dataset_path)
-                elif reader_type == "riddle":
-                    questions = read_riddle_questions(dataset_path)
-                elif reader_type == "riddle_with_hints":
-                    questions = read_riddle_with_hints_questions(dataset_path)
                 elif reader_type == "simple":
                     category = source_config.get("category", dataset_name)
                     questions = read_simple_questions(dataset_path, category)
-                elif reader_type == "general_trivia":
-                    questions = read_general_trivia_questions(dataset_path)
                 else:
                     logging.error(
                         f"File source {s_name} has unknown reader type: {reader_type}"

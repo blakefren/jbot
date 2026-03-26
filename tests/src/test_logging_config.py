@@ -36,8 +36,9 @@ class TestLoggingConfig(unittest.TestCase):
         setup_logging(log_file_path=self.test_log_file)
 
         file_handler_found = False
-        # We check logging.root.handlers because basicConfig adds handlers to the root logger.
-        for handler in logging.root.handlers:
+        # Handlers are attached to the root logger so all logging.info() calls are captured.
+        root_logger = logging.getLogger()
+        for handler in root_logger.handlers:
             if isinstance(handler, logging.handlers.RotatingFileHandler):
                 file_handler_found = True
                 self.assertEqual(
@@ -57,8 +58,9 @@ class TestLoggingConfig(unittest.TestCase):
 
         test_message = "This is a test with an emoji: 😐"
 
+        logger = logging.getLogger("jbot")
         try:
-            logging.info(test_message)
+            logger.info(test_message)
         except UnicodeEncodeError:
             self.fail("Logging with an emoji raised a UnicodeEncodeError.")
 

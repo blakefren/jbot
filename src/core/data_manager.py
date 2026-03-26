@@ -5,6 +5,7 @@ from src.core.player import Player
 from src.core.subscriber import Subscriber
 import os
 import logging
+import pytz
 
 # Project root for file paths
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -17,15 +18,27 @@ class DataManager:
     All other components must use DataManager methods for database operations.
     """
 
-    def __init__(self, db: "Database"):
+    def __init__(self, db: "Database", timezone: str = "US/Pacific"):
         """
         Initializes the data manager, connecting to the database.
 
         Args:
             db: Database instance. This is stored as a private attribute (_db)
                 to prevent direct access from outside this class.
+            timezone: The timezone to use for date/time operations.
         """
         self._db = db
+        try:
+            self.timezone = pytz.timezone(timezone)
+        except pytz.UnknownTimeZoneError:
+            logging.warning(
+                f"Unknown timezone '{timezone}', falling back to US/Pacific."
+            )
+            self.timezone = pytz.timezone("US/Pacific")
+
+    def get_today(self) -> date:
+        """Returns the current date in the configured timezone."""
+        return datetime.now(self.timezone).date()
 
     def initialize_database(self):
         """
@@ -42,7 +55,7 @@ class DataManager:
         """
         players = {}
         query = """
-            SELECT id, name, score, season_score, answer_streak, active_shield,
+            SELECT id, name, score, season_score, answer_streak, pending_rest_multiplier,
                    lifetime_questions, lifetime_correct, lifetime_first_answers, lifetime_best_streak
             FROM players
         """
@@ -54,7 +67,7 @@ class DataManager:
                 score=record.get("score", 0),
                 season_score=record.get("season_score", 0),
                 answer_streak=record.get("answer_streak", 0),
-                active_shield=bool(record.get("active_shield", False)),
+                pending_rest_multiplier=float(record.get("pending_rest_multiplier", 0.0)),
                 lifetime_questions=record.get("lifetime_questions", 0),
                 lifetime_correct=record.get("lifetime_correct", 0),
                 lifetime_first_answers=record.get("lifetime_first_answers", 0),
@@ -72,7 +85,7 @@ class DataManager:
     def get_player(self, player_id: str) -> Player | None:
         """Retrieves a single player from the database."""
         query = """
-            SELECT id, name, score, season_score, answer_streak, active_shield,
+            SELECT id, name, score, season_score, answer_streak, pending_rest_multiplier,
                    lifetime_questions, lifetime_correct, lifetime_first_answers, lifetime_best_streak
             FROM players
             WHERE id = ?
@@ -86,7 +99,7 @@ class DataManager:
                 score=record.get("score", 0),
                 season_score=record.get("season_score", 0),
                 answer_streak=record.get("answer_streak", 0),
-                active_shield=bool(record.get("active_shield", False)),
+                pending_rest_multiplier=float(record.get("pending_rest_multiplier", 0.0)),
                 lifetime_questions=record.get("lifetime_questions", 0),
                 lifetime_correct=record.get("lifetime_correct", 0),
                 lifetime_first_answers=record.get("lifetime_first_answers", 0),
@@ -96,11 +109,13 @@ class DataManager:
 
     def create_player(self, player_id: str, name: str):
         """Creates a new player in the database."""
-        query = """
-            INSERT INTO players (id, name, score, season_score, answer_streak, active_shield,
+        query = (
+            """
+            INSERT INTO players (id, name, score, season_score, answer_streak,
                                 lifetime_questions, lifetime_correct, lifetime_first_answers, lifetime_best_streak)
-            VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0, 0)
+            VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0)
         """
+        )
         self._db.execute_update(query, (player_id, name))
 
     def update_player_name(self, player_id: str, name: str):
@@ -123,10 +138,42 @@ class DataManager:
         query = "UPDATE players SET answer_streak = ? WHERE id = ?"
         self._db.execute_update(query, (streak, player_id))
 
-    def set_shield(self, player_id: str, active: bool):
-        """Sets a player's shield status."""
-        query = "UPDATE players SET active_shield = ? WHERE id = ?"
-        self._db.execute_update(query, (active, player_id))
+    def get_pending_multiplier(self, player_id: str) -> float:
+        """Returns the pending rest multiplier for a player (0.0 if none)."""
+        query = "SELECT pending_rest_multiplier FROM players WHERE id = ?"
+        result = self._db.execute_query(query, (player_id,))
+        if result:
+            return float(result[0]["pending_rest_multiplier"] or 0.0)
+        return 0.0
+
+    def set_pending_multiplier(self, player_id: str, multiplier: float):
+        """Sets the pending rest multiplier for a player."""
+        query = "UPDATE players SET pending_rest_multiplier = ? WHERE id = ?"
+        self._db.execute_update(query, (multiplier, player_id))
+
+    def clear_pending_multiplier(self, player_id: str):
+        """Clears the pending rest multiplier for a player (sets to 0.0)."""
+        query = "UPDATE players SET pending_rest_multiplier = 0.0 WHERE id = ?"
+        self._db.execute_update(query, (player_id,))
+
+    def clear_stale_rest_multipliers(self, daily_question_id: int):
+        """
+        Clears pending rest multipliers for players who did NOT rest today.
+        Called at end of day so bonuses don't carry beyond the next question.
+        Players who rested today keep their freshly-set multiplier.
+        """
+        rested_rows = self._db.execute_query(
+            "SELECT user_id FROM powerup_usage WHERE question_id = ? AND powerup_type = 'rest'",
+            (daily_question_id,),
+        )
+        rested_today = {row["user_id"] for row in rested_rows} if rested_rows else set()
+
+        stale_rows = self._db.execute_query(
+            "SELECT id FROM players WHERE pending_rest_multiplier > 0"
+        )
+        for row in stale_rows or []:
+            if row["id"] not in rested_today:
+                self.clear_pending_multiplier(row["id"])
 
     def adjust_player_score(self, player_id: str, amount: int):
         """
@@ -182,7 +229,7 @@ class DataManager:
             return None
 
         # Check if a daily question has already been logged for today
-        today = date.today()
+        today = self.get_today()
         daily_question_info = self.get_todays_daily_question()
 
         if daily_question_info and not force_new:
@@ -249,9 +296,7 @@ class DataManager:
                 )
             except Exception as e:
                 # Log error but continue for other players
-                # In a real scenario, we might want to be more aggressive, but we don't have a logger here easily accessible
-                # actually logging is imported in other files, let's check imports
-                print(f"Failed to snapshot player {player.id}: {e}")
+                logging.error(f"Failed to snapshot player {player.id}: {e}")
 
     def get_daily_snapshot(self, daily_question_id: int) -> dict[str, Player]:
         """
@@ -276,7 +321,6 @@ class DataManager:
                 name=name,
                 score=record["score"],
                 answer_streak=record["answer_streak"],
-                active_shield=False,
             )
 
         return snapshot
@@ -362,7 +406,8 @@ class DataManager:
     def reset_unanswered_streaks(self, daily_question_id: int):
         """
         Resets the answer streak to 0 for all players who did not have a correct guess
-        for the specified daily question.
+        for the specified daily question. Players who used the 'rest' power-up are
+        excluded so their streak is preserved.
         """
         query = """
             UPDATE players
@@ -372,9 +417,14 @@ class DataManager:
                 FROM guesses
                 WHERE daily_question_id = ? AND is_correct = 1
             )
+            AND id NOT IN (
+                SELECT user_id
+                FROM powerup_usage
+                WHERE question_id = ? AND powerup_type = 'rest'
+            )
             AND answer_streak > 0
         """
-        self._db.execute_update(query, (daily_question_id,))
+        self._db.execute_update(query, (daily_question_id, daily_question_id))
 
     def get_player_ids_with_role(self, role_name: str) -> set[int]:
         """
@@ -456,7 +506,7 @@ class DataManager:
         Returns:
             Optional[tuple[Question, int, int]]: (Question object, daily_question_id, question_id) or None
         """
-        today = date.today()
+        today = self.get_today()
         query = "SELECT id, question_id FROM daily_questions WHERE sent_at = ? ORDER BY id DESC LIMIT 1"
         daily_question_info = self._db.execute_query(query, (today,))
 
@@ -585,7 +635,41 @@ class DataManager:
         results = self._db.execute_query(query, (question_id,))
         return results
 
-    # TODO: log streak adjustment as well
+    def get_pending_powerup(self, user_id: str) -> dict | None:
+        """Returns the first unapplied overnight powerup for a player, or None."""
+        query = "SELECT * FROM powerup_usage WHERE user_id = ? AND question_id IS NULL LIMIT 1"
+        results = self._db.execute_query(query, (user_id,))
+        return results[0] if results else None
+
+    def get_pending_powerup_for_target(
+        self, target_user_id: str, powerup_type: str
+    ) -> dict | None:
+        """Returns the first unapplied overnight powerup of the given type targeting a player."""
+        query = (
+            "SELECT * FROM powerup_usage"
+            " WHERE target_user_id = ? AND powerup_type = ? AND question_id IS NULL LIMIT 1"
+        )
+        results = self._db.execute_query(query, (target_user_id, powerup_type))
+        return results[0] if results else None
+
+    def apply_pending_powerups(self, question_id: int) -> list[dict]:
+        """
+        Marks all unapplied overnight preload powerups as applied to the given question.
+        Returns the list of rows that were updated.
+        """
+        pending = self._db.execute_query(
+            "SELECT * FROM powerup_usage"
+            " WHERE question_id IS NULL AND powerup_type IN ('jinx_preload', 'steal_preload')"
+        )
+        if pending:
+            ids = [row["id"] for row in pending]
+            placeholders = ",".join("?" * len(ids))
+            self._db.execute_update(
+                f"UPDATE powerup_usage SET question_id = ? WHERE id IN ({placeholders})",
+                (question_id, *ids),
+            )
+        return list(pending) if pending else []
+
     def log_score_adjustment(
         self, player_id: str, admin_id: str, amount: int, reason: str
     ):

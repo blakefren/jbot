@@ -79,7 +79,6 @@ class Admin(commands.Cog):
                 member.id,
                 member.display_name,
                 is_channel=False,
-                db_conn=self.bot.data_manager.db,
             )
             target_name = member.display_name
         else:  # channel
@@ -87,7 +86,6 @@ class Admin(commands.Cog):
                 channel.id,
                 channel.name,
                 is_channel=True,
-                db_conn=self.bot.data_manager.db,
             )
             target_name = channel.name
 
@@ -128,38 +126,48 @@ class Admin(commands.Cog):
         except Exception:
             pass
 
-        msg = (
+        # Build the message body (shared between dry-run and applied)
+        if is_revealed:
+            header = f"Added ||{answer_text}|| as a correct answer.\n"
+        else:
+            header = "Added alternative answer.\n"
+
+        summary = (
             f"Updated scores for {result['updated_players']} players.\n"
             f"Total points refunded: {result['total_refunded']}."
         )
-
-        # Add age warning if present
         if result.get("age_warning"):
-            msg = result["age_warning"] + "\n" + msg
+            summary = result["age_warning"] + "\n" + summary
 
-        if result.get("details"):
-            msg += "\n\n**Details:**\n"
-            for d in result["details"]:
-                badges = "".join(d["badges"])
-                msg += f"{d['name']}: {d['score_before']} -> {d['score_after']} ({d['diff']:+}) {badges}\n"
-        if not apply:
-            msg = (
-                f"**[DRY RUN]** No changes applied. Run with `apply=True` to execute.\n"
-                + msg
-            )
-
-        # Send ephemeral details message
-        if is_revealed:
-            details_msg = f"Added '{answer_text}' as a correct answer.\n" + msg
-        else:
-            details_msg = f"Added alternative answer.\n" + msg
-
-        await ctx.interaction.followup.send(details_msg)
-
-        # If apply=True, also send a public announcement
         if apply:
-            public_msg = f"Scores updated for {result['updated_players']} players. (+{result['total_refunded']} pts total)"
+            # Public message only — tag affected players
+            public_msg = f"**Score Adjustment:**\n{header}{summary}"
+            if result.get("details"):
+                public_msg += "\n\n**Details:**\n"
+                for d in result["details"]:
+                    badges = "".join(d["badges"])
+                    public_msg += f"<@{d['user_id']}>: {d['score_before']} -> {d['score_after']} ({d['diff']:+}) {badges}\n"
+            if result.get("rest_cleared_players"):
+                mentions = " ".join(
+                    f"<@{r['user_id']}>" for r in result["rest_cleared_players"]
+                )
+                public_msg += (
+                    f"\nRest revoked — got it right with the new answer: {mentions}"
+                )
+            await ctx.interaction.followup.send("Done.", ephemeral=True)
             await ctx.channel.send(public_msg)
+        else:
+            # Ephemeral dry-run message only — no mentions
+            dry_msg = f"**[DRY RUN]** No changes applied. Run with `apply=True` to execute.\n{header}{summary}"
+            if result.get("details"):
+                dry_msg += "\n\n**Details:**\n"
+                for d in result["details"]:
+                    badges = "".join(d["badges"])
+                    dry_msg += f"{d['name']}: {d['score_before']} -> {d['score_after']} ({d['diff']:+}) {badges}\n"
+            if result.get("rest_cleared_players"):
+                names = ", ".join(r["name"] for r in result["rest_cleared_players"])
+                dry_msg += f"\nRest revoked (newly correct with new answer): {names}"
+            await ctx.interaction.followup.send(dry_msg)
 
     @admin.command(name="resend", description="Resend a scheduled message.")
     @discord.app_commands.choices(

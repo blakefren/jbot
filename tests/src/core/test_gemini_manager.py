@@ -9,7 +9,7 @@ class TestGeminiManager(unittest.TestCase):
         self.mock_client_class = mock_client_class
         self.mock_client = MagicMock()
         self.mock_client_class.return_value = self.mock_client
-        self.gemini_manager = GeminiManager(api_key="test_key")
+        self.gemini_manager = GeminiManager(api_key="test_key", model="gemini-test")
 
     def test_init_success(self):
         self.mock_client_class.assert_called_once_with(api_key="test_key")
@@ -27,7 +27,7 @@ class TestGeminiManager(unittest.TestCase):
         response = self.gemini_manager.generate_content("Hello")
         self.assertEqual(response, "Hello there!")
         self.mock_client.models.generate_content.assert_called_once_with(
-            model="gemini-2.5-pro", contents="Hello", config=None
+            model="gemini-test", contents="Hello", config=None
         )
 
     def test_generate_content_failure(self):

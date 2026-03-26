@@ -13,7 +13,11 @@ class TestPlayerManager(unittest.TestCase):
     def test_get_player(self):
         """Test retrieving a single player via DataManager."""
         expected_player = Player(
-            id="123", name="John Doe", score=10, answer_streak=5, active_shield=True
+            id="123",
+            name="John Doe",
+            score=10,
+            answer_streak=5,
+            pending_rest_multiplier=0.0,
         )
         self.mock_data_manager.get_player.return_value = expected_player
 
@@ -89,16 +93,6 @@ class TestPlayerManager(unittest.TestCase):
         """Test resetting a player's streak."""
         self.manager.reset_streak("123")
         self.mock_data_manager.reset_streak.assert_called_with("123")
-
-    def test_activate_shield(self):
-        """Test activating a player's shield."""
-        self.manager.activate_shield("123")
-        self.mock_data_manager.set_shield.assert_called_with("123", True)
-
-    def test_deactivate_shield(self):
-        """Test deactivating a player's shield."""
-        self.manager.deactivate_shield("123")
-        self.mock_data_manager.set_shield.assert_called_with("123", False)
 
     def test_get_or_create_player_existing(self):
         """Test get_or_create_player with an existing player."""

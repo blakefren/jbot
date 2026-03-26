@@ -47,7 +47,7 @@ class Database:
         """
         # If db_path is not in memory, join with the directory of this file
         if db_path != ":memory:":
-            # Go up one level from `core` to `src`, then into `database`
+            # Go up one level from `core` to `src`. Then join with the provided db_path.
             db_path = os.path.join(os.path.dirname(__file__), "jbot.db")
 
         self.db_path = db_path
@@ -60,7 +60,7 @@ class Database:
         Establishes a connection to the SQLite database.
         """
         try:
-            self.conn = sqlite3.connect(self.db_path)
+            self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self.conn.row_factory = sqlite3.Row  # Access columns by name
             logging.info(f"Successfully connected to the database at '{self.db_path}'.")
         except sqlite3.Error as e:

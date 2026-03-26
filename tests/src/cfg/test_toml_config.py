@@ -277,7 +277,7 @@ points = 200
     def test_parse_question_sources_file_jeopardy_with_settings(
         self, mock_read_jeopardy, mock_validate, mock_base_dir, mock_toml_path
     ):
-        """Test parsing Jeopardy source with dataset-specific settings."""
+        """Test parsing Jeopardy source with difficulty-based settings."""
         toml_path = os.path.join(self.config_dir, "jeopardy.toml")
         with open(toml_path, "w") as f:
             f.write("""
@@ -290,8 +290,7 @@ type = "file"
 dataset = "jeopardy"
 weight = 75.0
 reader = "jeopardy"
-clue_values = [200, 400, 600]
-final_jeopardy_score_sub = 5000
+difficulty = "medium"
 points = 150
 """)
 
@@ -311,22 +310,22 @@ points = 150
                 self.assertEqual(len(sources), 1)
                 self.assertEqual(sources[0].name, "jeopardy_test")
 
-                # Verify dataset-specific settings were passed
+                # Verify difficulty-based settings were passed
                 expected_path = os.path.normpath(
                     os.path.join(self.temp_dir, "datasets", "jeopardy.tsv")
                 )
                 actual_call = mock_read_jeopardy.call_args
                 self.assertEqual(os.path.normpath(actual_call[0][0]), expected_path)
-                self.assertEqual(actual_call[0][1], 5000)  # final_jeopardy_score_sub
-                self.assertEqual(actual_call[1]["allowed_clue_values"], [200, 400, 600])
+                self.assertEqual(actual_call[1]["difficulty"], "medium")
+                self.assertEqual(actual_call[1]["final_jeopardy_score"], 150)
 
     @patch("src.cfg.main.SOURCES_TOML_PATH")
     @patch("src.cfg.main.BASE_DIR")
     @patch("src.cfg.main.ConfigReader.validate_config")
     @patch("data.readers.csv_reader.read_knowledge_bowl_questions")
-    @patch("data.readers.csv_reader.read_riddle_with_hints_questions")
+    @patch("data.readers.csv_reader.read_simple_questions")
     def test_parse_question_sources_multiple_file_sources(
-        self, mock_riddle, mock_kb, mock_validate, mock_base_dir, mock_toml_path
+        self, mock_simple, mock_kb, mock_validate, mock_base_dir, mock_toml_path
     ):
         """Test parsing multiple file sources with different reader types."""
         toml_path = os.path.join(self.config_dir, "multi.toml")
@@ -334,7 +333,7 @@ points = 150
             f.write("""
 [datasets]
 kb = "datasets/kb.csv"
-riddles = "datasets/riddles.csv"
+simple = "datasets/simple.csv"
 
 [[source]]
 name = "kb_source"
@@ -344,11 +343,12 @@ weight = 60.0
 reader = "knowledge_bowl"
 
 [[source]]
-name = "riddle_source"
+name = "simple_source"
 type = "file"
-dataset = "riddles"
+dataset = "simple"
 weight = 40.0
-reader = "riddle_with_hints"
+reader = "simple"
+category = "Simple"
 """)
 
         mock_toml_path.__str__ = lambda _: toml_path
@@ -357,7 +357,7 @@ reader = "riddle_with_hints"
         from data.readers.question import Question
 
         mock_kb.return_value = [Question("KB1", "A1", "KB", 100)]
-        mock_riddle.return_value = [Question("R1", "A1", "Riddle", 100)]
+        mock_simple.return_value = [Question("S1", "A1", "Simple", 100)]
 
         with patch("src.cfg.main.SOURCES_TOML_PATH", toml_path):
             with patch("src.cfg.main.BASE_DIR", self.temp_dir):
@@ -368,11 +368,11 @@ reader = "riddle_with_hints"
                 self.assertEqual(len(sources), 2)
                 source_names = [s.name for s in sources]
                 self.assertIn("kb_source", source_names)
-                self.assertIn("riddle_source", source_names)
+                self.assertIn("simple_source", source_names)
 
                 # Verify both readers were called
                 self.assertTrue(mock_kb.called)
-                self.assertTrue(mock_riddle.called)
+                self.assertTrue(mock_simple.called)
 
     @patch("src.cfg.main.SOURCES_TOML_PATH")
     @patch("src.cfg.main.BASE_DIR")

@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from unittest.mock import MagicMock
 from src.core.daily_game_simulator import DailyGameSimulator
 from src.core.events import GuessEvent, PowerUpEvent
@@ -33,8 +34,7 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
                 "JBOT_EMOJI_SILENCED": "🤐",
                 "JBOT_EMOJI_STOLEN_FROM": "💸",
                 "JBOT_EMOJI_STEALING": "💰",
-                "JBOT_EMOJI_SHIELD": "💝",
-                "JBOT_EMOJI_SHIELD_BROKEN": "💔",
+                "JBOT_EMOJI_REST": "😴",
             }
             return vals.get(key, default)
 
@@ -48,13 +48,13 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
 
     def test_run_midday(self):
         """Test that run(apply_end_of_day=False) skips decay and resets."""
-        # P1 uses shield but doesn"t use it (should decay if end of day)
+        # P1 uses rest (streak should be frozen, not reset)
         # P3 doesn"t answer (should reset streak if end of day)
         events = [
             PowerUpEvent(
                 timestamp="2023-01-01 09:00:00",
                 user_id="p1",
-                powerup_type="shield",
+                powerup_type="rest",
                 target_user_id=None,
             ),
         ]
@@ -71,124 +71,107 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
         # Run WITHOUT end of day logic
         results = simulator.run(apply_end_of_day=False)
 
-        # P1: Shield active, no decay (-10)
+        # P1: Resting, 0 points, streak unchanged
         self.assertEqual(results["p1"]["score_earned"], 0)
-        self.assertTrue(simulator.daily_state["p1"].shield_active)
+        self.assertTrue(simulator.daily_state["p1"].is_resting)
 
-        # P3: No answer, no streak reset (and thus not in results because apply_end_of_day=False)
+        # P3: No answer, not in results when apply_end_of_day=False
         self.assertNotIn("p3", results)
 
-    def test_wager_win(self):
-        """Test wager logic: deduction and win multiplier."""
+    def test_sort_with_mixed_datetime_and_str_timestamps(self):
+        """Regression: sorting events with mixed datetime/str timestamps must not raise TypeError."""
         events = [
-            PowerUpEvent(
-                timestamp="2023-01-01 09:00:00",
-                user_id="p1",
-                powerup_type="wager",
-                amount=50,
+            GuessEvent(
+                timestamp=datetime(2023, 1, 1, 10, 5, 0),  # datetime object
+                user_id="p2",
+                guess_text="4",
             ),
+            PowerUpEvent(
+                timestamp="2023-01-01 09:00:00",  # str
+                user_id="p1",
+                powerup_type="rest",
+                target_user_id=None,
+            ),
+            GuessEvent(
+                timestamp=datetime(2023, 1, 1, 10, 0, 0),  # datetime object
+                user_id="p1",
+                guess_text="4",
+            ),
+        ]
+
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+        )
+        # Should not raise TypeError when sorting mixed timestamp types
+        results = simulator.run()
+        self.assertIn("p1", results)
+        self.assertIn("p2", results)
+
+    def test_hint_comparison_with_datetime_event_timestamp(self):
+        """Regression: comparing a datetime event timestamp against a str hint_timestamp must not raise TypeError."""
+        # Guess before hint (datetime ts < str hint_timestamp)
+        events_before = [
+            GuessEvent(
+                timestamp=datetime(2023, 1, 1, 10, 0, 0),
+                user_id="p1",
+                guess_text="4",
+            ),
+        ]
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            "2023-01-01 12:00:00",  # str hint_timestamp
+            events_before,
+            self.initial_states,
+            self.config,
+        )
+        results = simulator.run(apply_end_of_day=False)
+        # Before-hint bonus should apply
+        self.assertIn("🧠", results["p1"]["badges"])
+
+        # Guess after hint (datetime ts > str hint_timestamp)
+        events_after = [
+            GuessEvent(
+                timestamp=datetime(2023, 1, 1, 14, 0, 0),
+                user_id="p1",
+                guess_text="4",
+            ),
+        ]
+        simulator2 = DailyGameSimulator(
+            self.question,
+            self.answers,
+            "2023-01-01 12:00:00",  # str hint_timestamp
+            events_after,
+            self.initial_states,
+            self.config,
+        )
+        results2 = simulator2.run(apply_end_of_day=False)
+        # Before-hint bonus should NOT apply
+        self.assertNotIn("🧠", results2["p1"]["badges"])
+
+    def test_hint_timestamp_as_datetime_object(self):
+        """hint_timestamp provided as a datetime object should work without TypeError."""
+        events = [
             GuessEvent(
                 timestamp="2023-01-01 10:00:00",
                 user_id="p1",
                 guess_text="4",
-                is_correct=True,
             ),
         ]
-
         simulator = DailyGameSimulator(
             self.question,
             self.answers,
-            self.hint_timestamp,
+            datetime(2023, 1, 1, 12, 0, 0),  # datetime object, not str
             events,
             self.initial_states,
             self.config,
         )
-        results = simulator.run()
-
-        # P1 Score Calculation:
-        # Initial: 100
-        # Wager: -50 (Current: 50)
-        # Correct Answer Points:
-        #   Base: 100
-        #   First Try: 20
-        #   Before Hint: 10
-        #   Fastest: 10
-        #   Streak: 3*5 = 15
-        #   Total Earned: 155
-        # Score before wager resolution: 50 + 155 = 205 ? NO. Wager calc uses pre-points score.
-        # Wager Winnings: 50 * (100 / (50 + 100)) = 33
-        # Total Score Earned: 155 + 33 = 188
-
-        self.assertEqual(results["p1"]["score_earned"], 188)
-
-    def test_wager_loss(self):
-        """Test wager logic: deduction and loss."""
-        events = [
-            PowerUpEvent(
-                timestamp="2023-01-01 09:00:00",
-                user_id="p1",
-                powerup_type="wager",
-                amount=50,
-            ),
-            GuessEvent(
-                timestamp="2023-01-01 10:00:00",
-                user_id="p1",
-                guess_text="wrong",
-                is_correct=False,
-            ),
-        ]
-
-        simulator = DailyGameSimulator(
-            self.question,
-            self.answers,
-            self.hint_timestamp,
-            events,
-            self.initial_states,
-            self.config,
-        )
-        results = simulator.run()
-
-        # P1 Score: -50 (Wager lost)
-        self.assertEqual(results["p1"]["score_earned"], -50)
-
-    def test_teamup(self):
-        """Test teamup logic."""
-        events = [
-            PowerUpEvent(
-                timestamp="2023-01-01 09:00:00",
-                user_id="p1",
-                powerup_type="teamup",
-                target_user_id="p2",
-            ),
-            GuessEvent(
-                timestamp="2023-01-01 10:00:00",
-                user_id="p1",
-                guess_text="4",
-                is_correct=True,
-            ),
-        ]
-
-        simulator = DailyGameSimulator(
-            self.question,
-            self.answers,
-            self.hint_timestamp,
-            events,
-            self.initial_states,
-            self.config,
-        )
-
-        results = simulator.run()
-
-        # P1:
-        # Cost: -25
-        # Answer: Correct (points earned, let"s say 100 base)
-        # Team Success: True
-
-        # P2:
-        # Cost: -25
-        # Team Success: True (via P1)
-
-        self.assertTrue(simulator.daily_state["p1"].team_success)
-        self.assertTrue(simulator.daily_state["p2"].team_success)
-        self.assertEqual(simulator.daily_state["p1"].team_partner, "p2")
-        self.assertEqual(simulator.daily_state["p2"].team_partner, "p1")
+        # Should not raise TypeError
+        results = simulator.run(apply_end_of_day=False)
+        # Guess is before the datetime hint_timestamp, so before-hint bonus applies
+        self.assertIn("🧠", results["p1"]["badges"])

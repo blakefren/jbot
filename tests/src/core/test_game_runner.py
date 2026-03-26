@@ -67,8 +67,13 @@ class TestGameRunner(unittest.TestCase):
         self.defaults = {
             "JBOT_RIDDLE_HISTORY_DAYS": "30",
             "JBOT_QUESTION_RETRIES": "10",
-            "JBOT_ENABLE_FIGHT": "True",
             "JBOT_EMOJI_FASTEST": "🥇",
+            "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
+            "JBOT_BONUS_FASTEST_CSV": "10,5,1",
+            "JBOT_BONUS_TRY_CSV": "20,10,5",
+            "JBOT_BONUS_BEFORE_HINT": "10",
+            "JBOT_BONUS_STREAK_PER_DAY": "5",
+            "JBOT_BONUS_STREAK_CAP": "25",
             "JBOT_EMOJI_FIRST_TRY": "🎯",
             "JBOT_EMOJI_BEFORE_HINT": "🧠",
             "JBOT_EMOJI_STREAK": "🔥",
@@ -76,8 +81,7 @@ class TestGameRunner(unittest.TestCase):
             "JBOT_EMOJI_SILENCED": "🤐",
             "JBOT_EMOJI_STOLEN_FROM": "💸",
             "JBOT_EMOJI_STEALING": "💰",
-            "JBOT_EMOJI_SHIELD": "💝",
-            "JBOT_EMOJI_SHIELD_BROKEN": "💔",
+            "JBOT_EMOJI_REST": "😴",
             "JBOT_PLAYER_ROLE_NAME": "Players",
             "JBOT_FIRST_PLACE_ROLE_NAME": "First Place",
         }
@@ -245,6 +249,8 @@ class TestGameRunner(unittest.TestCase):
         mock_manager.reset_daily_state.assert_called_once()
         # Verify streaks were reset for unanswered players
         self.mock_data_manager.reset_unanswered_streaks.assert_called_once_with(123)
+        # Verify stale rest multipliers were expired
+        self.mock_data_manager.clear_stale_rest_multipliers.assert_called_once_with(123)
 
     def test_get_evening_message_content(self):
         """Test generating the evening message content with deduplicated, sorted, and bolded guesses."""
@@ -350,18 +356,19 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.set_daily_question()
         player_id, player_name = 123, "Test Guesser"
 
-        with patch("src.core.game_runner.GuessHandler") as mock_guess_handler:
-            mock_handler_instance = mock_guess_handler.return_value
-            mock_handler_instance.handle_guess.return_value = (True, 1, 100, [])
+        # Replace the already-built guess_handler with a mock
+        mock_handler_instance = MagicMock()
+        mock_handler_instance.handle_guess.return_value = (True, 1, 100, [])
+        self.game_runner.guess_handler = mock_handler_instance
 
-            is_correct, num_guesses, points, bonuses = self.game_runner.handle_guess(
-                player_id, player_name, "test answer"
-            )
-            self.assertTrue(is_correct)
-            self.assertEqual(num_guesses, 1)
-            mock_handler_instance.handle_guess.assert_called_once_with(
-                player_id, player_name, "test answer"
-            )
+        is_correct, num_guesses, points, bonuses = self.game_runner.handle_guess(
+            player_id, player_name, "test answer"
+        )
+        self.assertTrue(is_correct)
+        self.assertEqual(num_guesses, 1)
+        mock_handler_instance.handle_guess.assert_called_once_with(
+            player_id, player_name, "test answer"
+        )
 
         # No daily question
         self.game_runner.daily_q = None
@@ -379,11 +386,11 @@ class TestGameRunner(unittest.TestCase):
         ]
         self.mock_data_manager.get_player_streaks.return_value = []
         leaderboard = self.game_runner.get_scores_leaderboard()
-        self.assertIn("Rank", leaderboard)
+        self.assertIn("🏆", leaderboard)
         self.assertIn("Player", leaderboard)
-        self.assertIn("Score", leaderboard)
-        # Streak is now shown by default
-        self.assertIn("Streak", leaderboard)
+        self.assertIn("Pts", leaderboard)
+        # Streak emoji is now its own column header
+        self.assertIn("🔥", leaderboard)
         self.assertIn("Alice", leaderboard)
         self.assertIn("Bob", leaderboard)
         self.assertTrue(leaderboard.find("Alice") < leaderboard.find("Bob"))
@@ -471,9 +478,21 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("Alice", leaderboard)
         self.assertIn("Bob", leaderboard)
         self.assertIn("Charlie", leaderboard)
-        self.assertIn("3🔥", leaderboard)
-        self.assertIn("5🔥", leaderboard)
-        self.assertNotIn("Bob 🔥", leaderboard)
+        # Streaks now appear as numbers in their own column, not combined with emoji
+        alice_line = next(
+            (line for line in leaderboard.split("\n") if "Alice" in line), None
+        )
+        charlie_line = next(
+            (line for line in leaderboard.split("\n") if "Charlie" in line), None
+        )
+        bob_line = next(
+            (line for line in leaderboard.split("\n") if "Bob" in line), None
+        )
+        self.assertIsNotNone(alice_line)
+        self.assertIn(" 3 ", alice_line)  # streak column value
+        self.assertIn(" 5 ", charlie_line)  # streak column value
+        # Bob has no streak — streak column should be blank for Bob
+        self.assertNotIn(" 1 ", bob_line)  # streak of 1 not shown (< 2)
 
     def test_get_player_history(self):
         """Test generating a player's history."""
@@ -492,9 +511,9 @@ class TestGameRunner(unittest.TestCase):
 
         history = self.game_runner.get_player_history(123, "Alice")
         self.assertIn("-- Your stats, Alice --", history)
-        self.assertIn("Total guesses: 4", history)
-        self.assertIn("Correct rate:  75.00%", history)
         self.assertIn("Score:         300", history)
+        self.assertIn("Streak:        0 day(s)", history)
+        self.assertIn("Correct:       3/4 (75.0%)", history)
 
     def test_get_scores_leaderboard_alphabetical_tie(self):
         """Test that players with the same score are sorted alphabetically."""
@@ -823,6 +842,78 @@ class TestGameRunner(unittest.TestCase):
         alice_line = next((line for line in lines if "Alice" in line), None)
         self.assertIsNotNone(alice_line)
         self.assertNotIn("🥇", alice_line)
+        # Alice is 2nd fastest and should now get 🥈
+        self.assertIn("🥈", alice_line)
+
+    def test_get_scores_leaderboard_second_and_third_fastest(self):
+        """Test that 2nd and 3rd fastest guessers get their respective rank badges."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 100},
+            {"id": "2", "name": "Bob", "score": 100},
+            {"id": "3", "name": "Charlie", "score": 100},
+            {"id": "4", "name": "Dave", "score": 100},
+        ]
+        self.mock_data_manager.get_player_streaks.return_value = []
+        self.game_runner.daily_question_id = 123
+
+        self.mock_data_manager.read_guess_history.return_value = [
+            {
+                "daily_question_id": 123,
+                "player_id": "2",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:00:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "1",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:05:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "3",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:10:00",
+            },
+            {
+                "daily_question_id": 123,
+                "player_id": "4",
+                "is_correct": True,
+                "guessed_at": "2023-01-01 10:15:00",
+            },
+        ]
+        self.mock_data_manager.get_first_try_solvers.return_value = []
+
+        leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
+        lines = leaderboard.split("\n")
+
+        def get_line(name):
+            return next((l for l in lines if name in l), None)
+
+        bob_line = get_line("Bob")
+        alice_line = get_line("Alice")
+        charlie_line = get_line("Charlie")
+        dave_line = get_line("Dave")
+
+        # Bob is 1st fastest → 🥇
+        self.assertIsNotNone(bob_line)
+        self.assertIn("🥇", bob_line)
+
+        # Alice is 2nd fastest → 🥈
+        self.assertIsNotNone(alice_line)
+        self.assertIn("🥈", alice_line)
+        self.assertNotIn("🥇", alice_line)
+
+        # Charlie is 3rd fastest → 🥉
+        self.assertIsNotNone(charlie_line)
+        self.assertIn("🥉", charlie_line)
+        self.assertNotIn("🥇", charlie_line)
+
+        # Dave is 4th — no fastest badge
+        self.assertIsNotNone(dave_line)
+        self.assertNotIn("🥇", dave_line)
+        self.assertNotIn("🥈", dave_line)
+        self.assertNotIn("🥉", dave_line)
 
     def test_get_scores_leaderboard_first_try_bonus(self):
         """Test that the first try bonus emoji is shown."""
@@ -880,28 +971,32 @@ class TestGameRunner(unittest.TestCase):
             "2023-01-01 09:00:00"
         )
 
-        # Badges string will be "10🔥 🥇 🎯"
-        # 10 (2) + 🔥 (1) + 🥇 (1) + 🎯 (1) = 5 chars in Python string
-        # But user wants width 8 due to the monospaced context of the leaderboard.
+        # Badges string will be "🥇🎯" (fastest + first try, without streak now in own column)
+        # 🥇 (2) + 🎯 (2) = width 4 in monospace context.
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 
         # We can check the divider line.
-        # The divider line format is: f"{'-'*4} {'-'*max_name} {'-'*max_score} {'-'*max_badges}"
+        # The divider line format is: f"{'-'*2} {'-'*max_name} {'-'*max_score} {'-'*max_streak} {'-'*max_badges}"
         # We need to extract the last part.
 
         lines = leaderboard.split("\n")
-        # lines[0] is ```Rank...
-        # lines[1] is ---- ...
+        # lines[0] is ```# ...
+        # lines[1] is -- ...
         divider_line = lines[1]
         parts = divider_line.split(" ")
+        # parts: ['--', '-----', '---', '--', '------']
+        # last part is badges divider, second-to-last is streak divider
         badges_divider = parts[-1]
+        streak_divider = parts[-2]
 
-        # Expected width: 8
+        # Badges divider: "Badges" header minimum = 6, so at least 6
+        self.assertGreaterEqual(len(badges_divider), 6)
+        # Streak divider: Alice has streak 10, so divider should be 2 wide (max of len("10"), 2)
         self.assertEqual(
-            len(badges_divider),
-            8,
-            f"Expected divider length 8, got {len(badges_divider)}",
+            len(streak_divider),
+            2,
+            f"Expected streak divider length 2, got {len(streak_divider)}",
         )
 
     def test_get_scores_leaderboard_badge_order(self):
@@ -929,8 +1024,8 @@ class TestGameRunner(unittest.TestCase):
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # Expected order: Streak (🔥), First Try (🎯), Fastest (🥇)
-        # Note: The exact emojis depend on config, but defaults are used here.
+        # Expected badge order: First Try (🎯), Fastest (🥇)
+        # Streak is now a standalone column, not a badge.
         # We check the relative positions in the string.
         streak_pos = leaderboard.find("🔥")
         first_try_pos = leaderboard.find("🎯")
@@ -940,6 +1035,7 @@ class TestGameRunner(unittest.TestCase):
         self.assertNotEqual(first_try_pos, -1)
         self.assertNotEqual(fastest_pos, -1)
 
+        # streak emoji appears in the header column, before any badges
         self.assertLess(streak_pos, first_try_pos)
         self.assertLess(first_try_pos, fastest_pos)
 

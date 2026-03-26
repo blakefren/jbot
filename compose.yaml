@@ -1,0 +1,13 @@
+services:
+  jbot:
+    image: jbot
+    build: .
+    container_name: jbot-container
+    env_file:
+      - .env
+    environment:
+      - TZ=US/Pacific
+      - DEBIAN_FRONTEND=noninteractive
+    volumes:
+      - ./db/jbot.db:/app/db/jbot.db
+    restart: unless-stopped
