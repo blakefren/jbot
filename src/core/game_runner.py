@@ -445,7 +445,6 @@ class GameRunner:
         badge_map = self._build_daily_badges(self.daily_question_id, show_daily_bonuses)
 
         emoji_streak = self.config.get("JBOT_EMOJI_STREAK")
-        emoji_streak_frozen = self.config.get("JBOT_EMOJI_STREAK_FROZEN")
 
         # Create a list of player data
         all_player_data = []
