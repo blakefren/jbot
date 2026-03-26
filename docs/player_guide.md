@@ -126,4 +126,4 @@ Whiffs on rest?    Yes                         Yes (streak cost still applies)
 
 ## ❓ Questions or Issues?
 
-Ping an **@admin** if something seems off — wrong answer not being accepted, a score looks incorrect, etc. Admins can add alternative correct answers and adjust scores retroactively.
+Ping an **@admin** if something seems off — wrong answer not being accepted, a score looks incorrect, etc. Admins can add alternative correct answers and adjust scores retroactively. You can also leave #feedback if you have ideas!
