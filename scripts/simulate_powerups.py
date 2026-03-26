@@ -22,7 +22,7 @@ ANSWER_WINDOW_MINUTES = 60
 FAST_ANSWER_WINDOW_MINUTES = 5  # For Speedsters
 LATE_ANSWER_DELAY_HOURS = 6
 POWERUP_FAIL_RATE = 0.2  # Chance that powerup is used after target answers
-PROACTIVE_MISS_RATE = 0.05  # Chance that proactive shield is forgotten
+HINT_DELAY_HOURS = 4  # Hours after question start until hint is revealed
 
 # --- Difficulty ---
 # Each day's question is drawn from one of three tiers.
@@ -145,8 +145,8 @@ class ProceduralStrategy(Strategy):
         else:
             use_powerup = False
 
+        p_type = None  # Track chosen powerup — used to apply post-jinx silence
         if use_powerup:
-            p_type = None
             target = None
             # TODO: Simulation only emits live-day powerup types ("jinx", "steal",
             # "rest"). It does not model overnight preloading ("jinx_preload",
@@ -198,24 +198,33 @@ class ProceduralStrategy(Strategy):
                     return events
 
         # 2. Guess Logic
-        events.append(self._create_guess(player_id, game_state))
+        # Silenced players (jinx users) must answer after hint is revealed.
+        events.append(
+            self._create_guess(player_id, game_state, after_hint=(p_type == "jinx"))
+        )
         return events
 
-    def _create_guess(self, player_id, game_state):
+    def _create_guess(self, player_id, game_state, after_hint=False):
         base_time = game_state.base_time
         difficulty = game_state.difficulty
 
+        # Silenced players (jinx users) cannot answer until hint is revealed.
+        # This mirrors can_answer() in the live game which blocks silenced players pre-hint.
+        if after_hint:
+            hint_time = base_time + datetime.timedelta(hours=HINT_DELAY_HOURS)
+            timestamp = hint_time + datetime.timedelta(minutes=random.randint(0, 30))
         # Speed
-        if self.speed == "Fast":
+        elif self.speed == "Fast":
             # 0-5 mins
             delta = datetime.timedelta(minutes=random.randint(0, 5))
+            timestamp = base_time + delta
         elif self.speed == "Slow":
             # 6-12 hours
             delta = datetime.timedelta(minutes=random.randint(360, 720))
+            timestamp = base_time + delta
         else:  # Average
             delta = datetime.timedelta(minutes=random.randint(0, 60))
-
-        timestamp = base_time + delta
+            timestamp = base_time + delta
 
         # Accuracy: player's innate skill ± difficulty modifier
         acc_map = {"Perfect": 1.0, "High": 0.98, "Usually": 0.90, "Sometimes": 0.60}
@@ -338,7 +347,12 @@ class AdaptiveStrategy(ProceduralStrategy):
                 )
             )
 
-        events.append(self._create_guess(player_id, game_state))
+        # Silenced players (jinx users) must answer after hint is revealed.
+        events.append(
+            self._create_guess(
+                player_id, game_state, after_hint=(powerup_type == "jinx")
+            )
+        )
         return events
 
 
