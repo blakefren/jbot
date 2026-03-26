@@ -67,7 +67,9 @@ class DataManager:
                 score=record.get("score", 0),
                 season_score=record.get("season_score", 0),
                 answer_streak=record.get("answer_streak", 0),
-                pending_rest_multiplier=float(record.get("pending_rest_multiplier", 0.0)),
+                pending_rest_multiplier=float(
+                    record.get("pending_rest_multiplier", 0.0)
+                ),
                 lifetime_questions=record.get("lifetime_questions", 0),
                 lifetime_correct=record.get("lifetime_correct", 0),
                 lifetime_first_answers=record.get("lifetime_first_answers", 0),
@@ -99,7 +101,9 @@ class DataManager:
                 score=record.get("score", 0),
                 season_score=record.get("season_score", 0),
                 answer_streak=record.get("answer_streak", 0),
-                pending_rest_multiplier=float(record.get("pending_rest_multiplier", 0.0)),
+                pending_rest_multiplier=float(
+                    record.get("pending_rest_multiplier", 0.0)
+                ),
                 lifetime_questions=record.get("lifetime_questions", 0),
                 lifetime_correct=record.get("lifetime_correct", 0),
                 lifetime_first_answers=record.get("lifetime_first_answers", 0),
@@ -109,13 +113,11 @@ class DataManager:
 
     def create_player(self, player_id: str, name: str):
         """Creates a new player in the database."""
-        query = (
-            """
+        query = """
             INSERT INTO players (id, name, score, season_score, answer_streak,
                                 lifetime_questions, lifetime_correct, lifetime_first_answers, lifetime_best_streak)
             VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0)
         """
-        )
         self._db.execute_update(query, (player_id, name))
 
     def update_player_name(self, player_id: str, name: str):

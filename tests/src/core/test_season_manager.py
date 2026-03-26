@@ -34,7 +34,9 @@ class TestSeasonManager(unittest.TestCase):
         )
         self.mock_data_manager.get_current_season.return_value = active_season
 
-        result = self.manager.get_or_create_current_season()
+        with patch("src.core.season_manager.date") as mock_date:
+            mock_date.today.return_value = date(2026, 1, 15)
+            result = self.manager.get_or_create_current_season()
 
         self.assertEqual(result, active_season)
         self.mock_data_manager.get_current_season.assert_called_once()
