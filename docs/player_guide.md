@@ -86,14 +86,14 @@ You get **one power-up per day**. Power-ups can be used at any time **until the 
 
 ### 💰 `/power steal @player`
 
-**Cost:** **3 streak days** deducted from your own streak.
+**Cost:** **2 streak days** deducted from your own streak.
 **Effect:** Steal your target's bonuses (try + before-hint + fastest + rest multiplier) when they answer. Their base question value and streak bonus are not stolen.
 
 **Timing matters:**
 - **Target hasn't answered yet** — bonuses transfer when they answer.
-- **Target already answered** — costs **5 streak days** and transfers immediately.
+- **Target already answered** — costs **4 streak days** and transfers immediately.
 
-**Partial steals:** If you have fewer streak days than the cost, you'll steal a proportional share of their bonuses (e.g. 1 day instead of 3 = ~33% of bonuses).
+**Partial steals:** If you have fewer streak days than the cost, you'll steal a proportional share of their bonuses (e.g. 1 day instead of 2 = ~50% of bonuses).
 
 ---
 
@@ -102,7 +102,7 @@ You get **one power-up per day**. Power-ups can be used at any time **until the 
 ```
                    Jinx                       Steal
 ───────────────────────────────────────────────────────────────
-Your cost          Silenced until hint         3–5 streak days
+Your cost          Silenced until hint         2–4 streak days
 What you take      Target's streak bonus       Target's try/hint/speed/rest bonuses
 Retroactive?       Yes (50% of bonus)          Yes (costs more)
 Overnight OK?      Yes                         Yes
