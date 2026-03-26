@@ -127,7 +127,7 @@ As your partner, I will adhere to the following principles:
     - **Migration Safety**: `update_schema.py` compares current database against `schema.sql`, applies changes incrementally
     - **Verification**: After migration, run `python db/verify_schema.py` to ensure schema matches expectations
     - **Production Database**: The actual `jbot.db` is in the root directory (not in `db/`), gitignored for safety
-*   **Documentation**: I will check `docs/` for any architectural plans or investigation notes before implementing major features.
+*   **Documentation**: I will check `docs/` for any architectural plans or investigation notes before implementing major features. `docs/player_guide.md` is the canonical player-facing reference and should be kept aligned with actual gameplay (scoring values, power-up mechanics, timing, commands) whenever those change.
 *   **Logging**: Use Python's standard `logging` module throughout (configured in `src/logging_config.py`). Log levels: INFO for normal operations, WARNING for recoverable issues, ERROR for failures. Include appropriate logging for debugging and monitoring when adding features.
 *   **Code Quality Tools**:
     - **Coverage Reports**: Generated in `htmlcov_*/` directories per module
