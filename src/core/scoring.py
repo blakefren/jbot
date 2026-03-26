@@ -7,6 +7,11 @@ class ScoreCalculator:
     between the live game (GuessHandler) and the simulator (DailyGameSimulator).
     """
 
+    KEY_FIRST_TRY = "first_try"
+    KEY_BEFORE_HINT = "before_hint"
+    KEY_FASTEST = "fastest"
+    KEY_STREAK = "streak"
+
     def __init__(self, config: ConfigReader = None):
         if config is None:
             config = ConfigReader()
@@ -89,7 +94,7 @@ class ScoreCalculator:
 
                 # Special messaging/aliasing for 1st try
                 if guesses_count == 1:
-                    bonuses["first_try"] = bonus
+                    bonuses[self.KEY_FIRST_TRY] = bonus
                     messages.append(f"{self.emoji_first_try} First try! (+{bonus})")
                 else:
                     messages.append(
@@ -99,7 +104,7 @@ class ScoreCalculator:
         # 2. Before Hint Bonus
         if is_before_hint:
             points_earned += self.bonus_before_hint
-            bonuses["before_hint"] = self.bonus_before_hint
+            bonuses[self.KEY_BEFORE_HINT] = self.bonus_before_hint
             messages.append(
                 f"{self.emoji_before_hint} Pre-hint! (+{self.bonus_before_hint})"
             )
@@ -118,7 +123,7 @@ class ScoreCalculator:
 
                 # Special messaging/aliasing for 1st fastest
                 if answer_rank == 1:
-                    bonuses["fastest"] = bonus
+                    bonuses[self.KEY_FASTEST] = bonus
                     messages.append(f"{rank_emoji} Fastest! (+{bonus})")
                 else:
                     ordinal = self._get_ordinal(answer_rank)
@@ -128,7 +133,7 @@ class ScoreCalculator:
         streak_bonus = self.get_streak_bonus(streak_length)
         if streak_bonus > 0:
             points_earned += streak_bonus
-            bonuses["streak"] = streak_bonus
+            bonuses[self.KEY_STREAK] = streak_bonus
             messages.append(
                 f"{self.emoji_streak} {streak_length}-day streak! (+{streak_bonus})"
             )
@@ -151,16 +156,16 @@ class ScoreCalculator:
         are removed but not counted when their canonical equivalents (try_1, fastest_1)
         are present, to avoid double-counting.
         """
-        NON_STEALABLE = {"streak"}
+        NON_STEALABLE = {self.KEY_STREAK}
         stealable = 0
         to_remove = []
         for key, val in list(bonuses.items()):
             if any(key == ns or key.startswith(ns + "_") for ns in NON_STEALABLE):
                 continue
             to_remove.append(key)
-            if key == "first_try" and "try_1" in bonuses:
+            if key == self.KEY_FIRST_TRY and "try_1" in bonuses:
                 continue  # alias — remove but don't double-count
-            if key == "fastest" and "fastest_1" in bonuses:
+            if key == self.KEY_FASTEST and "fastest_1" in bonuses:
                 continue  # alias — remove but don't double-count
             stealable += val
         for key in to_remove:

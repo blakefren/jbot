@@ -31,20 +31,6 @@ class DailyPlayerState:
     )
 
     @property
-    def earned_today(self) -> int:
-        """Alias for score_earned to match PowerUpManager naming conventions."""
-        return self.score_earned
-
-    @property
-    def bonuses_today(self) -> dict[str, int]:
-        """Alias for bonuses."""
-        return self.bonuses
-
-    @bonuses_today.setter
-    def bonuses_today(self, value: dict[str, int]):
-        self.bonuses = value
-
-    @property
     def powerup_used_today(self) -> bool:
         """
         Determines if a powerup was used today based on state flags.

@@ -7,6 +7,7 @@ from src.core.player import Player
 from src.core.state import DailyPlayerState
 from src.core.scoring import ScoreCalculator
 from src.core.powerup_engine import PowerUpEngine
+from src.core.utils import parse_timestamp
 
 
 class DailyGameSimulator:
@@ -22,14 +23,12 @@ class DailyGameSimulator:
         events: list[GameEvent],
         initial_player_states: dict[str, Player],
         config,
+        answer_checker: AnswerChecker = None,
     ):
         self.question = question
         self.answers = answers  # List of valid answer strings (standard + corrections)
         # Normalize hint_timestamp to datetime for consistent comparison
-        if isinstance(hint_timestamp, str):
-            self.hint_timestamp = datetime.fromisoformat(hint_timestamp)
-        else:
-            self.hint_timestamp = hint_timestamp  # datetime or None
+        self.hint_timestamp = parse_timestamp(hint_timestamp)
         self.events = events  # List of GameEvent objects
         self.initial_player_states = initial_player_states
         self.config = config
@@ -44,7 +43,7 @@ class DailyGameSimulator:
         self.correct_answers_count = 0
 
         # Helper for answer matching
-        self.checker = AnswerChecker()
+        self.checker = answer_checker or AnswerChecker()
 
     def run(self, apply_end_of_day: bool = True) -> dict:
         """
@@ -55,15 +54,7 @@ class DailyGameSimulator:
         """
 
         # Sort events strictly by timestamp, normalizing to datetime for comparison
-        def _ts_key(event):
-            ts = event.timestamp
-            if isinstance(ts, datetime):
-                return ts
-            if isinstance(ts, str):
-                return datetime.fromisoformat(ts)
-            return datetime.fromisoformat(str(ts))
-
-        self.events.sort(key=_ts_key)
+        self.events.sort(key=lambda event: parse_timestamp(event.timestamp))
 
         for event in self.events:
             if isinstance(event, PowerUpEvent):
@@ -148,13 +139,8 @@ class DailyGameSimulator:
 
         is_before_hint = True
         if self.hint_timestamp:
-            # Normalize event timestamp to datetime for comparison
-            ts_dt = (
-                datetime.fromisoformat(timestamp)
-                if isinstance(timestamp, str)
-                else timestamp
-            )
-            if ts_dt > self.hint_timestamp:
+            ts_dt = parse_timestamp(timestamp)
+            if ts_dt and ts_dt > self.hint_timestamp:
                 is_before_hint = False
 
         # Check Answer Rank
@@ -256,10 +242,10 @@ class DailyGameSimulator:
     # Maps bonus keys (from ScoreCalculator) to their display emoji config keys.
     # Add new bonus types here as they are introduced in scoring.py.
     _BONUS_EMOJI_MAP = [
-        ("first_try", "JBOT_EMOJI_FIRST_TRY"),
-        ("before_hint", "JBOT_EMOJI_BEFORE_HINT"),
-        ("fastest", "JBOT_EMOJI_FASTEST"),
-        ("streak", "JBOT_EMOJI_STREAK"),
+        (ScoreCalculator.KEY_FIRST_TRY, "JBOT_EMOJI_FIRST_TRY"),
+        (ScoreCalculator.KEY_BEFORE_HINT, "JBOT_EMOJI_BEFORE_HINT"),
+        (ScoreCalculator.KEY_FASTEST, "JBOT_EMOJI_FASTEST"),
+        (ScoreCalculator.KEY_STREAK, "JBOT_EMOJI_STREAK"),
     ]
 
     def _get_badges(self, bonus_keys):

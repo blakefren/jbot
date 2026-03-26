@@ -18,6 +18,7 @@ from src.cfg.main import ConfigReader
 from src.core.daily_game_simulator import DailyGameSimulator
 from src.core.events import GuessEvent, PowerUpEvent
 from src.core.answer_checker import AnswerChecker
+from src.core.utils import parse_timestamp
 
 
 class GameRunner:
@@ -43,6 +44,7 @@ class GameRunner:
         self.config = ConfigReader()
         self.reminder_time = None
         self.guess_handler = None
+        self.answer_checker = AnswerChecker()
 
         # Initialize PowerUpManager (always enabled)
         self.managers["powerup"] = PowerUpManager(
@@ -219,6 +221,7 @@ class GameRunner:
             self.managers,
             reminder_time=self.reminder_time,
             config=self.config,
+            answer_checker=self.answer_checker,
         )
 
     def add_subscriber(self, subscriber: Subscriber):
@@ -241,22 +244,11 @@ class GameRunner:
 
         events = []
         for g in guesses:
-            ts = g["guessed_at"]
-            if isinstance(ts, str):
-                try:
-                    ts = datetime.fromisoformat(ts)
-                except ValueError:
-                    pass
+            ts = parse_timestamp(g["guessed_at"])
             events.append(GuessEvent(ts, g["player_id"], g["guess_text"]))
 
         for p in powerups:
-            ts = p["used_at"]
-            if isinstance(ts, str):
-                try:
-                    ts = datetime.fromisoformat(ts)
-                except ValueError:
-                    pass
-
+            ts = parse_timestamp(p["used_at"])
             target = p["target_user_id"]
             events.append(PowerUpEvent(ts, p["user_id"], p["powerup_type"], target))
 
@@ -279,13 +271,9 @@ class GameRunner:
         answers = [self.daily_q.answer] + self.data_manager.get_alternative_answers(
             self.question_db_id
         )
-        hint_ts = self.data_manager.get_hint_sent_timestamp(self.daily_question_id)
-        if isinstance(hint_ts, str):
-            try:
-                hint_ts = datetime.fromisoformat(hint_ts)
-            except ValueError:
-                logging.warning(f"Failed to parse hint timestamp: {hint_ts}")
-                hint_ts = None
+        hint_ts = parse_timestamp(
+            self.data_manager.get_hint_sent_timestamp(self.daily_question_id)
+        )
 
         simulator = DailyGameSimulator(
             self.daily_q,
@@ -294,6 +282,7 @@ class GameRunner:
             events,
             initial_players,
             self.config,
+            answer_checker=self.answer_checker,
         )
 
         # Run simulation (without end_of_day logic)
@@ -327,6 +316,121 @@ class GameRunner:
             self._build_guess_handler()
         return self.guess_handler.handle_guess(player_id, player_name, guess)
 
+    def _build_daily_badges(
+        self, daily_question_id: int, show_daily_bonuses: bool
+    ) -> dict[str, list[str]]:
+        """
+        Queries the DB and assembles per-player badge emoji lists for the leaderboard.
+        Badge order per player: first_try → before_hint → fastest → rest_wakeup → powerup.
+        Returns a dict mapping player_id to a list of emoji strings.
+        """
+        result: dict[str, list[str]] = defaultdict(list)
+
+        players_answered_correctly_today: set = set()
+
+        if show_daily_bonuses and daily_question_id:
+            all_guesses = self.data_manager.read_guess_history()
+            daily_correct_guesses = [
+                g
+                for g in all_guesses
+                if g.get("daily_question_id") == daily_question_id
+                and g.get("is_correct")
+            ]
+            players_answered_correctly_today = {
+                g["player_id"] for g in daily_correct_guesses
+            }
+            daily_correct_guesses.sort(key=lambda x: x.get("guessed_at"))
+
+            emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY")
+            first_try_solvers = self.data_manager.get_first_try_solvers(
+                daily_question_id
+            )
+            for p in first_try_solvers:
+                result[p["id"]].append(emoji_first_try)
+
+            hint_timestamp_str = self.data_manager.get_hint_sent_timestamp(
+                daily_question_id
+            )
+            emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT")
+            for g in daily_correct_guesses:
+                if hint_timestamp_str:
+                    if g.get("guessed_at") < hint_timestamp_str:
+                        result[g["player_id"]].append(emoji_before_hint)
+                else:
+                    result[g["player_id"]].append(emoji_before_hint)
+
+            emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST")
+            emoji_fastest_csv_raw = self.config.get("JBOT_EMOJI_FASTEST_CSV", "")
+            emoji_fastest_list = (
+                [e.strip() for e in emoji_fastest_csv_raw.split(",") if e.strip()]
+                if emoji_fastest_csv_raw
+                else []
+            )
+            fastest_csv_raw = self.config.get("JBOT_BONUS_FASTEST_CSV", "")
+            num_fastest_ranks = (
+                len([x for x in fastest_csv_raw.split(",") if x.strip()])
+                if fastest_csv_raw
+                else 1
+            )
+            for rank, guess in enumerate(
+                daily_correct_guesses[:num_fastest_ranks], start=1
+            ):
+                badge = (
+                    emoji_fastest_list[rank - 1]
+                    if 0 < rank <= len(emoji_fastest_list)
+                    else emoji_fastest
+                )
+                result[guess["player_id"]].append(badge)
+
+            emoji_rest_wakeup = self.config.get("JBOT_EMOJI_REST_WAKEUP")
+            if daily_question_id:
+                powerups_for_wakeup = self.data_manager.get_powerup_usages_for_question(
+                    daily_question_id
+                )
+                for p in powerups_for_wakeup:
+                    if p["powerup_type"] == "rest_wakeup":
+                        result[p["user_id"]].append(emoji_rest_wakeup)
+
+        # Powerup badges (shown regardless of show_daily_bonuses, but only rendered
+        # when show_daily_bonuses=True — see leaderboard caller)
+        if daily_question_id:
+            emoji_jinxed = self.config.get("JBOT_EMOJI_JINXED")
+            emoji_silenced = self.config.get("JBOT_EMOJI_SILENCED")
+            emoji_stolen_from = self.config.get("JBOT_EMOJI_STOLEN_FROM")
+            emoji_stealing = self.config.get("JBOT_EMOJI_STEALING")
+            emoji_rest = self.config.get("JBOT_EMOJI_REST")
+
+            powerups = self.data_manager.get_powerup_usages_for_question(
+                daily_question_id
+            )
+            for p in powerups:
+                p_type = p["powerup_type"]
+                user_id = p["user_id"]
+                target_id = p["target_user_id"]
+
+                if p_type in ("jinx", "jinx_late", "jinx_preload"):
+                    result[user_id].append(emoji_silenced)
+                    if target_id:
+                        if show_daily_bonuses:
+                            if target_id in players_answered_correctly_today:
+                                result[target_id].append(emoji_jinxed)
+                        else:
+                            result[target_id].append(emoji_jinxed)
+                elif p_type == "steal":
+                    if show_daily_bonuses:
+                        if target_id in players_answered_correctly_today:
+                            result[user_id].append(emoji_stealing)
+                            if target_id:
+                                result[target_id].append(emoji_stolen_from)
+                    else:
+                        result[user_id].append(emoji_stealing)
+                        if target_id:
+                            result[target_id].append(emoji_stolen_from)
+                elif p_type == "rest":
+                    result[user_id].append(emoji_rest)
+
+        return dict(result)
+
     def get_scores_leaderboard(self, guild=None, show_daily_bonuses=False) -> str:
         """Computes and formats the leaderboard string."""
         player_scores = self.data_manager.get_player_scores()
@@ -338,129 +442,10 @@ class GameRunner:
             s["id"]: s["answer_streak"] for s in self.data_manager.get_player_streaks()
         }
 
-        # Get daily bonuses if requested
-        fastest_guessers: dict[int, str] = {}  # rank (1-based) -> player_id
-        first_try_solver_ids = set()
-        before_hint_solver_ids = set()
-        players_answered_correctly_today = set()
+        badge_map = self._build_daily_badges(self.daily_question_id, show_daily_bonuses)
 
-        if show_daily_bonuses and self.daily_question_id:
-            all_guesses = self.data_manager.read_guess_history()
-            daily_correct_guesses = [
-                g
-                for g in all_guesses
-                if g.get("daily_question_id") == self.daily_question_id
-                and g.get("is_correct")
-            ]
-            players_answered_correctly_today = {
-                g["player_id"] for g in daily_correct_guesses
-            }
-            # Sort by guessed_at to determine order
-            daily_correct_guesses.sort(key=lambda x: x.get("guessed_at"))
-
-            # Track all ranked fastest guessers (up to as many ranks as configured)
-            fastest_csv_raw = self.config.get("JBOT_BONUS_FASTEST_CSV", "")
-            num_fastest_ranks = (
-                len([x for x in fastest_csv_raw.split(",") if x.strip()])
-                if fastest_csv_raw
-                else 1
-            )
-            for rank, guess in enumerate(
-                daily_correct_guesses[:num_fastest_ranks], start=1
-            ):
-                fastest_guessers[rank] = guess["player_id"]
-
-            # Check for before hint solvers
-            hint_timestamp_str = self.data_manager.get_hint_sent_timestamp(
-                self.daily_question_id
-            )
-
-            for g in daily_correct_guesses:
-                if hint_timestamp_str:
-                    if g.get("guessed_at") < hint_timestamp_str:
-                        before_hint_solver_ids.add(g["player_id"])
-                else:
-                    # If hint hasn't been sent, everyone is before hint
-                    before_hint_solver_ids.add(g["player_id"])
-
-            first_try_solvers = self.data_manager.get_first_try_solvers(
-                self.daily_question_id
-            )
-            first_try_solver_ids = {p["id"] for p in first_try_solvers}
-
-        emoji_fastest = self.config.get("JBOT_EMOJI_FASTEST")
-        emoji_fastest_csv_raw = self.config.get("JBOT_EMOJI_FASTEST_CSV", "")
-        emoji_fastest_list = (
-            [e.strip() for e in emoji_fastest_csv_raw.split(",") if e.strip()]
-            if emoji_fastest_csv_raw
-            else []
-        )
-        emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY")
-        emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT")
         emoji_streak = self.config.get("JBOT_EMOJI_STREAK")
         emoji_streak_frozen = self.config.get("JBOT_EMOJI_STREAK_FROZEN")
-
-        # Powerup badges
-        emoji_jinxed = self.config.get("JBOT_EMOJI_JINXED")
-        emoji_silenced = self.config.get("JBOT_EMOJI_SILENCED")
-        emoji_stolen_from = self.config.get("JBOT_EMOJI_STOLEN_FROM")
-        emoji_stealing = self.config.get("JBOT_EMOJI_STEALING")
-        emoji_rest = self.config.get("JBOT_EMOJI_REST")
-        emoji_rest_wakeup = self.config.get("JBOT_EMOJI_REST_WAKEUP")
-
-        powerup_badges = defaultdict(list)
-        resting_player_ids = set()
-        wakeup_player_ids = set()
-        if self.daily_question_id:
-            powerups = self.data_manager.get_powerup_usages_for_question(
-                self.daily_question_id
-            )
-            for p in powerups:
-                p_type = p["powerup_type"]
-                user_id = p["user_id"]
-                target_id = p["target_user_id"]
-
-                if p_type == "rest":
-                    resting_player_ids.add(user_id)
-                elif p_type == "rest_wakeup":
-                    wakeup_player_ids.add(user_id)
-
-                if p_type in ("jinx", "jinx_late", "jinx_preload"):
-                    # Always show silenced emoji (attacker is silenced regardless)
-                    powerup_badges[user_id].append(emoji_silenced)
-
-                    # Only show jinxed emoji if target answered today
-                    if target_id:
-                        if (
-                            show_daily_bonuses
-                            and target_id in players_answered_correctly_today
-                        ):
-                            powerup_badges[target_id].append(emoji_jinxed)
-                        elif not show_daily_bonuses:
-                            powerup_badges[target_id].append(emoji_jinxed)
-                elif p_type == "steal":
-                    # Show stealing emoji if the target answered correctly today
-                    # (i.e. the steal actually fired). The attacker doesn't need to
-                    # have answered correctly - they steal when the target answers.
-                    if (
-                        show_daily_bonuses
-                        and target_id in players_answered_correctly_today
-                    ):
-                        powerup_badges[user_id].append(emoji_stealing)
-                    elif not show_daily_bonuses:
-                        powerup_badges[user_id].append(emoji_stealing)
-
-                    # Only show stolen_from emoji if target answered correctly today
-                    if target_id:
-                        if (
-                            show_daily_bonuses
-                            and target_id in players_answered_correctly_today
-                        ):
-                            powerup_badges[target_id].append(emoji_stolen_from)
-                        elif not show_daily_bonuses:
-                            powerup_badges[target_id].append(emoji_stolen_from)
-                elif p_type == "rest":
-                    powerup_badges[user_id].append(emoji_rest)
 
         # Create a list of player data
         all_player_data = []
@@ -484,23 +469,7 @@ class GameRunner:
 
             badges = []
             if show_daily_bonuses:
-                if player_id in first_try_solver_ids:
-                    badges.append(emoji_first_try)
-                if player_id in before_hint_solver_ids:
-                    badges.append(emoji_before_hint)
-                for rank, gid in fastest_guessers.items():
-                    if player_id == gid:
-                        if 0 < rank <= len(emoji_fastest_list):
-                            badges.append(emoji_fastest_list[rank - 1])
-                        else:
-                            badges.append(emoji_fastest)
-                        break
-                if player_id in wakeup_player_ids:
-                    badges.append(emoji_rest_wakeup)
-
-                # Add powerup badges
-                if player_id in powerup_badges:
-                    badges.extend(powerup_badges[player_id])
+                badges.extend(badge_map.get(player_id, []))
 
             badges_str = "".join(badges)
 
@@ -788,7 +757,7 @@ class GameRunner:
         """
         # Use DataManager to mark guesses as correct, using GuessHandler's matching logic
         num_updated = self.data_manager.mark_matching_guesses_as_correct(
-            daily_question_id, new_answer, AnswerChecker().is_correct
+            daily_question_id, new_answer, self.answer_checker.is_correct
         )
 
         if num_updated > 0:
@@ -837,13 +806,25 @@ class GameRunner:
 
         # 2. Run Scorer (Old)
         scorer_old = DailyGameSimulator(
-            daily_q, old_answers, hint_ts, events, initial_states, self.config
+            daily_q,
+            old_answers,
+            hint_ts,
+            events,
+            initial_states,
+            self.config,
+            answer_checker=self.answer_checker,
         )
         results_old = scorer_old.run()
 
         # 3. Run Scorer (New)
         scorer_new = DailyGameSimulator(
-            daily_q, new_answers, hint_ts, events, initial_states, self.config
+            daily_q,
+            new_answers,
+            hint_ts,
+            events,
+            initial_states,
+            self.config,
+            answer_checker=self.answer_checker,
         )
         results_new = scorer_new.run()
 
@@ -915,7 +896,6 @@ class GameRunner:
 
         # Detect resting players whose guess now matches the new answer.
         # Their pending rest multiplier should be cleared since they effectively answered.
-        checker = AnswerChecker()
         rest_cleared_players = []
         seen_resting: set[str] = set()
         for event in events:
@@ -928,7 +908,7 @@ class GameRunner:
             if (
                 state
                 and state.is_resting
-                and checker.is_correct(event.guess_text, new_answer)
+                and self.answer_checker.is_correct(event.guess_text, new_answer)
             ):
                 player_name = initial_states[uid].name if uid in initial_states else uid
                 rest_cleared_players.append({"user_id": uid, "name": player_name})

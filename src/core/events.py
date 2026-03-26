@@ -12,7 +12,6 @@ class GameEvent:
 @dataclass
 class GuessEvent(GameEvent):
     guess_text: str
-    is_correct: bool = False  # Populated during simulation
 
 
 @dataclass

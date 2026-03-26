@@ -51,13 +51,11 @@ class TestDailyGameSimulator(unittest.TestCase):
                 timestamp="2023-01-01 10:00:00",
                 user_id="p1",
                 guess_text="4",
-                is_correct=True,
             ),
             GuessEvent(
                 timestamp="2023-01-01 10:05:00",
                 user_id="p2",
                 guess_text="5",
-                is_correct=False,
             ),
         ]
 
@@ -131,7 +129,6 @@ class TestDailyGameSimulator(unittest.TestCase):
                 timestamp="2023-01-01 10:00:00",
                 user_id="p3",
                 guess_text="4",
-                is_correct=True,
             ),
         ]
         simulator = DailyGameSimulator(
@@ -162,13 +159,11 @@ class TestDailyGameSimulator(unittest.TestCase):
                 timestamp="2023-01-01 10:00:00",
                 user_id="p3",
                 guess_text="4",
-                is_correct=True,
             ),
             GuessEvent(
                 timestamp="2023-01-01 10:01:00",
                 user_id="p1",
                 guess_text="4",
-                is_correct=True,
             ),
         ]
 

@@ -12,16 +12,16 @@ class TestDailyPlayerState(unittest.TestCase):
         self.assertEqual(state.bonuses, {})
 
     def test_aliases(self):
-        """Test that alias properties work correctly."""
+        """Test that score_earned and bonuses fields work correctly."""
         state = DailyPlayerState()
         state.score_earned = 100
         state.bonuses = {"streak": 10}
 
-        self.assertEqual(state.earned_today, 100)
-        self.assertEqual(state.bonuses_today, {"streak": 10})
+        self.assertEqual(state.score_earned, 100)
+        self.assertEqual(state.bonuses, {"streak": 10})
 
-        # Test setter alias
-        state.bonuses_today = {"fastest": 5}
+        # Test direct field assignment
+        state.bonuses = {"fastest": 5}
         self.assertEqual(state.bonuses, {"fastest": 5})
 
     def test_powerup_used_today_resting(self):

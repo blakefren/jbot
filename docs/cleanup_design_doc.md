@@ -269,12 +269,12 @@ A small `parse_timestamp(ts) -> datetime | None` utility (or a method on `DataMa
 | 2 | `GuessHandler` recreated per-guess | `game_runner.py`, `guess_handler.py` | Medium | Low | **Done** |
 | 3 | `on_guess` multi-signature fallback + `GuessContext` | `guess_handler.py`, `base_manager.py` | Medium | Medium | **Done** |
 | 4 | `ConfigReader` scattered ad-hoc instantiation | Multiple | Medium | Medium | **Done** |
-| 5 | Leaderboard badge key constants + helper extraction | `game_runner.py` | Medium | Low | Approach decided |
-| 6 | `DailyPlayerState` dual naming | `state.py` | Low | Low | Pending |
-| 7 | `AnswerChecker` instantiated in multiple places | `daily_game_simulator.py`, `guess_handler.py` | Low | Trivial | Pending |
-| 8 | Hint timestamp normalization duplicated | `daily_game_simulator.py`, `game_runner.py` | Low | Trivial | Pending |
+| 5 | Leaderboard badge key constants + helper extraction | `game_runner.py` | Medium | Low | **Done** |
+| 6 | `DailyPlayerState` dual naming | `state.py` | Low | Low | **Done** |
+| 7 | `AnswerChecker` instantiated in multiple places | `daily_game_simulator.py`, `guess_handler.py` | Low | Trivial | **Done** |
+| 8 | Hint timestamp normalization duplicated | `daily_game_simulator.py`, `game_runner.py` | Low | Trivial | **Done** |
 | 9 | `points_tracker` mutable dict → `GuessContext.points_earned` | `guess_handler.py`, `powerup.py` | Low | Medium | Resolved by #3 |
-| 10 | `GuessEvent.is_correct` dead field | `events.py` | Cosmetic | Trivial | Pending |
+| 10 | `GuessEvent.is_correct` dead field | `events.py` | Cosmetic | Trivial | **Done** |
 
 **Implementation order**: #1 → #2 + #3 + #4 together → #5 → remaining low/trivial
 

@@ -37,6 +37,7 @@ class GuessHandler:
         fuzzy_threshold=2,
         reminder_time=None,
         config: ConfigReader = None,
+        answer_checker: AnswerChecker = None,
     ):
         self.data_manager = data_manager
         self.player_manager = player_manager
@@ -47,7 +48,7 @@ class GuessHandler:
         self.reminder_time = reminder_time
         self.config = config or ConfigReader()
         self.score_calculator = ScoreCalculator(self.config)
-        self._checker = AnswerChecker()
+        self._checker = answer_checker or AnswerChecker()
 
         if self.data_manager:
             self.alternative_answers = self.data_manager.get_alternative_answers(
