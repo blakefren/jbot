@@ -91,6 +91,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_config_instance.get_bool.side_effect = lambda k, d=False: (
             str(self.defaults.get(k)).lower() == "true" if k in self.defaults else d
         )
+        self.mock_config_instance.is_seasons_enabled.return_value = False
 
         self.mock_question_selector = MagicMock()
         self.mock_data_manager = MagicMock(spec=DataManager)
@@ -720,6 +721,42 @@ class TestGameRunner(unittest.TestCase):
         self.game_runner.set_daily_question()
 
         self.assertEqual(self.game_runner.daily_question_id, 555)
+
+    def test_initialization_creates_season_manager(self):
+        """Test that GameRunner creates a SeasonManager on init."""
+        from src.core.season_manager import SeasonManager
+
+        self.assertIsInstance(self.game_runner.season_manager, SeasonManager)
+
+    def test_set_daily_question_calls_season_transition_when_enabled(self):
+        """Test that set_daily_question triggers season transition check when seasons are enabled."""
+        from src.core.season import Season
+        from datetime import date
+
+        self.mock_config_instance.is_seasons_enabled.return_value = True
+        self.game_runner = GameRunner(
+            self.mock_question_selector, self.mock_data_manager
+        )
+        # Return an active season so no creation path is exercised
+        active_season = Season(
+            1, "April 2026", date(2026, 4, 1), date(2026, 4, 30), True
+        )
+        self.mock_data_manager.get_current_season.return_value = active_season
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+
+        self.game_runner.set_daily_question()
+
+        self.mock_data_manager.get_current_season.assert_called()
+
+    def test_set_daily_question_skips_season_transition_when_disabled(self):
+        """Test that set_daily_question skips season logic when seasons are disabled."""
+        # Seasons already disabled in setUp — just confirm no season DB calls
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+
+        self.game_runner.set_daily_question()
+
+        self.mock_data_manager.get_current_season.assert_not_called()
+        self.mock_data_manager.create_season.assert_not_called()
 
     def test_get_reminder_message_content_no_daily_question(self):
         """Test get_reminder_message_content when no daily question is set."""

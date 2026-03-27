@@ -132,7 +132,7 @@ CREATE TABLE season_challenges (
 
 **Decision**: Dropped. The `guess_events`/`powerup_events` JSON blobs would have duplicated rows already in `guesses` and `powerup_usage` — a sync liability with no benefit. Per-day season breakdowns are derivable via date-range JOIN on `seasons.start_date/end_date`. `season_scores` handles aggregates; `DailyGameSimulator` already reads from the raw tables for replay.
 
-> **Action required**: The table was added to `db/schema.sql` before this decision. Remove it from schema.sql and run a migration (`DROP TABLE IF EXISTS season_daily_scores`) before launch. Safe to drop — the wiring was never implemented so the table has never been written to.
+> **Done**: Removed from `db/schema.sql` and dropped from `jbot.db` (was empty).
 
 ### Modified Tables
 
@@ -163,7 +163,8 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
 ### Phase 1: Database & Core Infrastructure ✅ COMPLETE
 
 1. ✅ **Schema Updates** (`db/schema.sql`)
-   - All new tables added: `seasons`, `season_scores`, `season_challenges` (`season_daily_scores` was added but has been **dropped** — see Database Schema Changes for rationale; remove from `db/schema.sql`)
+   - All new tables added: `seasons`, `season_scores`, `season_challenges`
+   - `season_daily_scores` removed — dropped from `db/schema.sql` and `jbot.db` (table was empty; see Database Schema Changes for rationale)
    - All new `players` columns added: `season_score`, `lifetime_questions`, `lifetime_correct`, `lifetime_first_answers`, `lifetime_best_streak`
 
 2. ✅ **DataManager Extensions** (`src/core/data_manager.py`)
@@ -180,11 +181,11 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
    - Data models in `src/core/season.py`: `Season`, `SeasonScore`, `SeasonChallenge` dataclasses
    - Unit tests in `tests/src/core/test_season_manager.py` and `tests/src/core/test_season.py`
 
-5. ❌ **Integrate SeasonManager with GameRunner** (`src/core/game_runner.py`) — **TODO**
-   - Wire in `SeasonManager` instance (constructor injection)
-   - Call `season_manager.check_season_transition()` at the start of the morning routine
-   - Call `season_manager.get_or_create_current_season()` so a season always exists before the day's question
-   - Call `season_manager.initialize_player_for_season()` when a new player joins mid-season
+5. ✅ **Integrate SeasonManager with GameRunner** (`src/core/game_runner.py`)
+   - `SeasonManager` instantiated in `__init__` via `self.data_manager` + `self.config` (no constructor signature change)
+   - `check_season_transition()` called at the top of `set_daily_question()` — runs on every morning task, prep task, and mid-day restart
+   - Disabled cleanly when `JBOT_ENABLE_SEASONS=False` (no-ops without touching DB)
+   - GameRunner tests updated: `is_seasons_enabled.return_value = False` in `setUp`; 3 new tests cover init, enabled path, and disabled path
 
 ### Phase 3: Scoring Integration ❌ NOT STARTED
 
@@ -392,10 +393,10 @@ Get ready for the April 2026 season! 🎯
 4. ✅ Implement Phase 1 — DataManager, models, config
 5. ✅ Implement Phase 2 — SeasonManager, ChallengeManager
 6. ✅ Unit tests for core season logic
-7. ❌ **Wire SeasonManager into GameRunner** (morning routine + season transitions)
+7. ✅ **Wire SeasonManager into GameRunner** — `check_season_transition()` in `set_daily_question()`; GameRunner tests updated
 8. ❌ **Wire season score recording into GuessHandler** (season + lifetime stat updates)
 9. ❌ **Update game.py** — season leaderboard, stats, trophy display
-10. ❌ **Update admin.py** — `/admin season end`, `/admin season info`
+10. ❌ **Update admin.py** — `/admin season` command (`info` default, `end:True` flag)
 11. ❌ **Transition announcements** — end-of-season, new-season welcome, reminder
 12. ❌ Integration tests for wiring layer
 13. ❌ Enable `JBOT_ENABLE_SEASONS=True`, run `db/update_schema.py` on production DB

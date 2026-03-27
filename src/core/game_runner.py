@@ -19,6 +19,7 @@ from src.core.daily_game_simulator import DailyGameSimulator
 from src.core.events import GuessEvent, PowerUpEvent
 from src.core.answer_checker import AnswerChecker
 from src.core.utils import parse_timestamp
+from src.core.season_manager import SeasonManager
 
 
 class GameRunner:
@@ -51,6 +52,13 @@ class GameRunner:
             self.player_manager, self.data_manager
         )
         logging.info("PowerUpManager enabled.")
+
+        # Initialize SeasonManager (enabled via config flag)
+        self.season_manager = SeasonManager(self.data_manager, self.config)
+        if self.season_manager.is_enabled():
+            logging.info("SeasonManager enabled.")
+        else:
+            logging.info("SeasonManager disabled (JBOT_ENABLE_SEASONS=False).")
 
     def _get_valid_question(self) -> Question:
         """
@@ -120,6 +128,11 @@ class GameRunner:
         make this async to prevent blocking Discord's event loop.
         """
         logging.debug(f"GameRunner.set_daily_question.")
+
+        # Check for season transition (end old season, create new one if needed).
+        # Must run before the question is set so scores are attributed to the
+        # correct season from the start of the day.
+        self.season_manager.check_season_transition()
 
         # Check for an existing daily question ID for today
         daily_question_data = self.data_manager.get_todays_daily_question()
