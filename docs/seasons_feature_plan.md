@@ -1,8 +1,9 @@
 # Seasons Feature Plan
 
-**Status**: Planning
-**Target**: Major feature release
+**Status**: In Progress — Infrastructure complete, wiring remaining
+**Target**: April 1, 2026 launch
 **Date Created**: January 19, 2026
+**Last Updated**: March 26, 2026
 
 ## Overview
 
@@ -37,12 +38,7 @@ Implement a monthly seasons system to create recurring competitive cycles while 
 
 4. **Trophy/Badge System**:
    - End-of-season awards for top 3 players
-   - **Options for display**:
-     - A) Discord role (e.g., "🏆 Jan 2026 Champion") - low visibility, clutters roles
-     - B) Trophy emoji in leaderboard next to name - high visibility, permanent record
-     - C) Dedicated `/game trophies <player>` command - middle ground
-     - D) Combination: Trophy emoji + command for details
-   - **Decision**: Option D - emoji on leaderboard (🥇🥈🥉) + `/game trophies` for full history
+   - **Decision**: No separate trophies command. Season placement medals (🥇🥈🥉) and historical trophy count (🏆×3) are surfaced in `/game leaderboard all_time:True` and `/game stats @player all_time:True`. Default leaderboard stays clean.
    - Multiple players can share same trophy placement (ties allowed)
 
 5. **Monthly Challenges**:
@@ -132,23 +128,11 @@ CREATE TABLE season_challenges (
 );
 ```
 
-#### `season_daily_scores`
-```sql
--- Track daily performance within seasons for event sourcing
-CREATE TABLE season_daily_scores (
-    player_id INTEGER NOT NULL,
-    season_id INTEGER NOT NULL,
-    question_date TEXT NOT NULL,         -- ISO8601 date
-    points_earned INTEGER DEFAULT 0,
-    answered_correctly INTEGER DEFAULT 0,
-    -- Event sourcing data
-    guess_events TEXT,                   -- JSON array of events
-    powerup_events TEXT,                 -- JSON array of events
-    PRIMARY KEY (player_id, season_id, question_date),
-    FOREIGN KEY (player_id) REFERENCES players(player_id),
-    FOREIGN KEY (season_id) REFERENCES seasons(season_id)
-);
-```
+#### ~~`season_daily_scores`~~ — REMOVED
+
+**Decision**: Dropped. The `guess_events`/`powerup_events` JSON blobs would have duplicated rows already in `guesses` and `powerup_usage` — a sync liability with no benefit. Per-day season breakdowns are derivable via date-range JOIN on `seasons.start_date/end_date`. `season_scores` handles aggregates; `DailyGameSimulator` already reads from the raw tables for replay.
+
+> **Action required**: The table was added to `db/schema.sql` before this decision. Remove it from schema.sql and run a migration (`DROP TABLE IF EXISTS season_daily_scores`) before launch. Safe to drop — the wiring was never implemented so the table has never been written to.
 
 ### Modified Tables
 
@@ -176,123 +160,94 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
    - New columns auto-initialize to 0 via DEFAULT constraints.
    - `UPDATE players SET answer_streak = 0` (reset for season 1).
    - Existing `update_schema.py` can handle this (only adding columns, no renames).
-### Phase 1: Database & Core Infrastructure
+### Phase 1: Database & Core Infrastructure ✅ COMPLETE
 
-1. **Schema Updates** (`db/schema.sql`)
-   - Add new tables: `seasons`, `season_scores`, `season_challenges`, `season_daily_scores`
-   - Add new columns to `players` table (no column renames)
-   - Existing `db/update_schema.py` can handle migration (only adding, not renaming)
+1. ✅ **Schema Updates** (`db/schema.sql`)
+   - All new tables added: `seasons`, `season_scores`, `season_challenges` (`season_daily_scores` was added but has been **dropped** — see Database Schema Changes for rationale; remove from `db/schema.sql`)
+   - All new `players` columns added: `season_score`, `lifetime_questions`, `lifetime_correct`, `lifetime_first_answers`, `lifetime_best_streak`
 
-2. **DataManager Extensions** (`src/core/data_manager.py`)
-   - `get_current_season()` → Season object or None
-   - `create_season(name, start_date, end_date)` → season_id
-   - `end_season(season_id)` → finalize rankings, award trophies
-   - `get_season_scores(season_id, limit)` → list of scores
-   - `get_player_season_score(player_id, season_id)` → score data
-   - `get_player_all_time_stats(player_id)` → lifetime data (uses `players.score`)
-   - `get_player_trophies(player_id)` → list of past trophies with counts
-   - `update_season_score(player_id, season_id, **kwargs)`
-   - `update_lifetime_stats(player_id, **kwargs)` → updates `players.score` and lifetime_* columns
+2. ✅ **DataManager Extensions** (`src/core/data_manager.py`)
+   - All season methods implemented: `get_current_season`, `create_season`, `end_season`, `get_season_scores`, `get_player_season_score`, `get_player_trophies`, `update_season_score`, `update_lifetime_stats`, `reset_all_player_season_scores`, `finalize_season_rankings`, and more
 
-3. **Configuration** (`.env` / `src/cfg/main.py`)
-   ```
-   # Season Configuration
-   JBOT_ENABLE_SEASONS=true
-   JBOT_SEASON_DURATION_DAYS=30
-   JBOT_SEASON_AUTO_CREATE=true
-   JBOT_SEASON_TROPHY_POSITIONS=3  # Award top 3
-   JBOT_BONUS_STREAK_TYPE=season   # Use 'season' streak for point bonuses for fairness
-   ```
+3. ✅ **Configuration** (`.env.template` / `src/cfg/main.py`)
+   - All `JBOT_SEASON_*` keys present in `.env.template`
+   - All getters implemented in `src/cfg/main.py`: `is_seasons_enabled()`, `get_season_mode()`, `get_season_auto_create()`, `get_season_trophy_positions()`, etc.
 
-### Phase 2: Season Manager
+### Phase 2: Season Manager ✅ COMPLETE
 
-4. **Create SeasonManager** (`src/core/season_manager.py`)
-   - Singleton pattern like other managers
-   - `get_or_create_current_season()` → ensures active season exists
-   - `check_season_transition()` → called daily, handles end-of-season
-   - `finalize_season(season_id)` → calculate rankings, award trophies
-   - `get_season_leaderboard(season_id, limit)` → formatted leaderboard
-   - `get_all_time_leaderboard(limit)` → formatted all-time stats
-   - `initialize_player_for_season(player_id, season_id)` → create record
-   - **Date Handling**: Ensure corrections check `Question.date`, not `Correction.date`.
+4. ✅ **SeasonManager created** (`src/core/season_manager.py`)
+   - `get_or_create_current_season()`, `check_season_transition()`, `finalize_season()`, `get_season_leaderboard()`, `get_all_time_leaderboard()`, `initialize_player_for_season()` all implemented
+   - Data models in `src/core/season.py`: `Season`, `SeasonScore`, `SeasonChallenge` dataclasses
+   - Unit tests in `tests/src/core/test_season_manager.py` and `tests/src/core/test_season.py`
 
-5. **Integrate with GameRunner** (`src/core/game_runner.py`)
-   - Check for season transition during morning routine
-   - Initialize season scores for new players
-   - Update both season and lifetime stats on answer
+5. ❌ **Integrate SeasonManager with GameRunner** (`src/core/game_runner.py`) — **TODO**
+   - Wire in `SeasonManager` instance (constructor injection)
+   - Call `season_manager.check_season_transition()` at the start of the morning routine
+   - Call `season_manager.get_or_create_current_season()` so a season always exists before the day's question
+   - Call `season_manager.initialize_player_for_season()` when a new player joins mid-season
 
-### Phase 3: Scoring Integration
+### Phase 3: Scoring Integration ❌ NOT STARTED
 
-6. **Update GuessHandler** (`src/core/guess_handler.py`)
-   - Record scores to both `season_daily_scores` and `daily_scores`
-   - Update `season_scores` (authoritative for season)
-   - Update `players.season_score` (cache)
-   - Update `players.score` (accumulative lifetime total)
-   - **Streak Logic**:
-     - Increment `players.answer_streak` (Resets on season start).
-     - Update `players.lifetime_best_streak` if exceeded.
-   - On corrections: Use event replay ensuring correct season attribution via date.
+6. ❌ **Update GuessHandler** (`src/core/guess_handler.py`) — **TODO**
+   - Wire in `SeasonManager` instance
+   - On correct answer: update `season_scores` table and `players.season_score` cache
+   - On correct answer: update `players.score` (lifetime) and `lifetime_*` stat columns
+   - **Streak logic**: increment `players.answer_streak`; update `players.lifetime_best_streak` if exceeded
+   - On corrections: replay via `DailyGameSimulator` using `Question.date` for correct season attribution
 
-7. **Update ScoreCalculator** (`src/core/scoring.py`)
-   - Update to accept `streak_val` as parameter (uses seasonal streak)
-   - Ensure consistent calculation.
+7. ❌ **Update ScoreCalculator** (`src/core/scoring.py`) — **TODO**
+   - Verify `streak_val` parameter already uses seasonal streak; no change if it reads from `players.answer_streak` already
 
-9. **Enhance Game Cog** (`src/cogs/game.py`)
-   - `/game leaderboard [all_time:bool=False]` - Enhanced to show season by default
-     - Header: "🏆 January 2026 Season - Day 19/31 - Challenge: ⚡ Speed Demon"
-     - Trophy emojis for current season leaders + historical count: "🥇 Alice (1,234 pts) 🏆×3"
-     - Historical trophy count provides context and bragging rights
-   - `/game stats [player] [all_time:bool=False]` - Enhanced to show:
-     - Season stats by default (or all-time if flag set)
-     - Trophy history at bottom: "Trophies: 🥇×2 🥈×1 🥉×3"
-     - Current challenge progress: "⚡ Speed Demon: 3/10 answers before hint"
+### Phase 4: Discord Commands ❌ NOT STARTED
 
-10. **Minimal Admin Commands** (`src/cogs/admin.py`)
-    - `/admin season end` - Manually end current season (emergency/testing)
-    - `/admin season info` - Debug season state (shows season_id, dates, active challenges)
+8. ❌ **Enhance Game Cog** (`src/cogs/game.py`) — **TODO**
+   - `/game leaderboard` (default — current season):
+     - Header: "🏆 April 2026 Season - Day X/30 - Challenge: ⚡ Speed Demon"
+     - Plain season standings — **no medal decorations** (preserves existing leaderboard format)
+   - `/game leaderboard all_time:True` (all-time view):
+     - Lifetime points + historical trophy count: "Alice (12,340 pts total) 🏆×3"
+     - Past season medal tallies shown per player
+   - `/game stats [player] [all_time:bool=False]` — season stats by default
+     - All-time view: "Trophies: 🥇×2 🥈×1 🥉×3"
+     - Challenge progress: "⚡ Speed Demon: 3/10 answers before hint"
 
-### Phase 5: Challenges
+9. ❌ **Admin Command** (`src/cogs/admin.py`) — **TODO**
+    - Single `@admin.command(name="season")` with optional flags — no nested subgroup needed:
+      ```
+      /admin season [end:bool=False] [force:bool=False]
+      ```
+      - **Default** (no flags): shows season info — season_id, name, start/end dates, day X/N, active challenge, player count
+      - **`end:True`**: ends the current season (finalize rankings, award trophies, create next season)
+        - **Mid-day guard**: if `game_runner.daily_question_id` is not None, block with an error: *"A question is active — ending the season now would freeze out players who haven't answered yet. Wait until after the answer is revealed, or use `force:True` to override."*
+        - **`force:True`**: skips the mid-day guard for testing/emergency. Log a warning. Season ends with whatever scores are currently in `season_scores`.
 
-11. **Challenge System** (`src/core/challenge_manager.py`)
-    - Track challenge progress during season
-    - Award badges on completion
-    - Display challenge status in `/game season`
-    - Auto-select challenge at season start (exclude previous month's)
+### Phase 5: Challenges ✅ COMPLETE
 
-12. **Challenge Pool** (hardcoded or config)
-    - Define 4-6 challenges:
-      - "⚡ Speed Demon": Answer 10 questions before hint reveal
-      - "🔥 Perfectionist": Achieve a 7-day answer streak
-      - "🎯 First Blood": Get 5 first answers this season
-      - "🏃 Marathon Runner": Answer 25 questions this season
-      - "💯 Ace": Get 15 correct answers this season
-      - "🎲 Risk Taker": Answer 5 questions without using hints (future)
-    - Random selection algorithm: exclude previous month's challenge
+10. ✅ **ChallengeManager created** (`src/core/challenge_manager.py`)
+    - Challenge progress tracking, badge awarding, auto-selection with rotation implemented
 
-### Phase 6: Display & Polish
+11. ✅ **Challenge Pool defined** (in `challenge_manager.py`)
+    - 6 challenges implemented with rotation algorithm (excludes previous month's challenge)
 
-13. **Trophy Display**
-    - Add trophy emoji to leaderboard for current season top 3
-    - Format: `🥇 PlayerName (1,234 pts) 🏆×3` (medal + historical count)
-    - Trophy count shows total wins across all seasons
-    - Provides context and recognition for consistent performers
+### Phase 6: Display & Polish ❌ NOT STARTED
 
-14. **Transition Announcements**
-    - Bot announces season end in channel
-    - Show final leaderboard and trophy winners
-    - Welcome message for new season
+12. ❌ **Trophy Display** (part of game.py work above) — **TODO**
+    - Leaderboard format: `🥇 PlayerName (1,234 pts) 🏆×3`
 
-15. **Testing**
-    - Unit tests for SeasonManager
-    - Integration tests for season transitions
-    - Simulator updates for season boundaries
+13. ❌ **Transition Announcements** — **TODO**
+    - Season-end announcement with final leaderboard and trophy winners
+    - New-season welcome message
+    - Reminder message N days before season end
 
-16. **Historical Season Analysis Tool** (`scripts/backfill_seasons.py`)
-    - Analyze existing `daily_scores` data
-    - Generate hypothetical seasons from historical data
-    - Report: Who would have won each month?
-    - Report: Average score gaps, competitive balance metrics
-    - Option to actually populate `seasons` and `season_scores` tables with historical data
+14. **Testing**
+    - ✅ Unit tests for `SeasonManager` (`tests/src/core/test_season_manager.py`)
+    - ✅ Unit tests for `Season` dataclasses (`tests/src/core/test_season.py`)
+    - ❌ Integration tests for `GameRunner` + `GuessHandler` season wiring — **TODO**
+    - ❌ End-to-end season transition test — **TODO**
+
+15. ✅ **Historical Season Analysis Tool** (`scripts/backfill_seasons.py`)
+    - Supports `--dry-run` (analysis) and `--populate` (writes to DB) modes
+    - Reconstructs hypothetical monthly seasons from historical `daily_scores` data
 
 ## Edge Cases & Considerations
 
@@ -358,11 +313,8 @@ JBOT_SEASON_REMINDER_DAYS=3             # Days before end to remind about season
 ### What Players See
 
 1. **Leaderboard Changes**:
-   - Header shows: "🏆 January 2026 Season - Day 19/31 - Challenge: ⚡ Speed Demon"
-   - Default display is season stats
-   - Trophy emojis for current season top 3 + historical count: "🥇 Alice (1,234 pts) 🏆×3"
-   - Historical trophy count provides recognition for consistent performers
-   - Command: `/game leaderboard all_time:True` for lifetime stats
+   - **Default** (`/game leaderboard`): Current season standings. Header shows "🏆 April 2026 Season - Day X/30 - Challenge: ⚡ Speed Demon". Plain rankings — no medal decoration (preserves existing format).
+   - **All-time** (`/game leaderboard all_time:True`): Lifetime points + historical trophy counts, e.g. "Alice (12,340 pts total) 🏆×3"
 
 2. **Stats Command Enhanced**:
    - `/game stats @player` shows season stats, trophy history, and challenge progress
@@ -376,8 +328,8 @@ JBOT_SEASON_REMINDER_DAYS=3             # Days before end to remind about season
    - "🏆 Season Complete! Congratulations to January 2026 winners: 🥇 @Alice, 🥈 @Bob, 🥉 @Charlie"
 
 4. **Trophy Display**:
-   - Leaderboard shows trophies: "🥇 Alice (1,234 pts) 🏆×3"
-   - `/game trophies @Alice` shows detailed history
+   - Trophy history visible in `/game leaderboard all_time:True` and `/game stats @player all_time:True`
+   - No separate `/game trophies` command
 
 ### Migration Message
 
@@ -385,7 +337,7 @@ When feature launches, announce:
 ```
 📢 Big Update: Seasons Are Here!
 
-Starting February 1st, we're introducing monthly seasons!
+Starting April 1st, we're introducing monthly seasons!
 
 What's changing:
 ✅ Points reset each month for fresh competition
@@ -399,7 +351,7 @@ What's staying the same:
 ✅ Your Answer Streak (resets only on miss or new season)
 ✅ Your total lifetime stats are preserved
 
-Get ready for the February 2026 season! 🎯
+Get ready for the April 2026 season! 🎯
 ```
 
 ## Success Metrics
@@ -424,24 +376,27 @@ Get ready for the February 2026 season! 🎯
 2. **Challenge selection**: Auto-select from pool of 4-6, random each month, no repeats from previous month
 3. **Historical seasons**: Build backfill tool (`scripts/backfill_seasons.py`) to analyze and optionally populate historical data
 4. **Tie-breaking**: No tie-breaking needed. Multiple players can share trophy positions (e.g., two 🥇 winners)
-5. **Display format**: Current season top 3 shown on leaderboard with medals (🥇🥈🥉) + historical trophy count (🏆×3)
+5. **Display format**: Default leaderboard shows season standings with no medal decoration (preserves existing format). All-time leaderboard shows lifetime points + historical trophy count (🏆×3). No separate `/game trophies` command.
 6. **Season duration**: Calendar months (Jan 1-31, Feb 1-28, etc.) for intuitive naming; variable length acceptable
 7. **Schema safety**: Keep `players.score` as lifetime (no rename). Add `players.season_score` for current season. Use `answer_streak` for season streak (resets monthly).
-8. **Command consolidation**: Zero new commands - enhance existing `/game leaderboard` and `/game stats` with `all_time` parameter
+8. **Command consolidation**: Zero new top-level commands. Enhance existing `/game leaderboard` and `/game stats` with `all_time` parameter. Admin uses single `/admin season [end:bool] [force:bool]` — info by default, `end:True` ends the season (blocked mid-day unless `force:True`). No `/game trophies` command — trophy history lives in the all-time views.
 9. **Season bootstrap**: Check/create seasons during morning routine, not on bot startup
 10. **Testing**: Mock time injection for testing season transitions without waiting for calendar boundaries
-11. **Rollout strategy**: Implement with `JBOT_ENABLE_SEASONS=false`, test thoroughly, enable for February 1st launch
+11. **Rollout strategy**: Implement with `JBOT_ENABLE_SEASONS=false`, test thoroughly, enable for April 1st launch
 
-## Next Steps
+## Next Steps (Target: April 1, 2026)
 
-1. ✅ Review and refine this plan (COMPLETE)
-2. Build historical analysis tool (`scripts/backfill_seasons.py`)
-   - Validate season concept with real data
-   - Identify potential issues before implementation
-3. Create database migration script
-4. Implement Phase 1 (database & infrastructure)
-5. Test season creation/transition locally
-6. Implement Phase 2-4 (core functionality)
-7. Internal testing with test data
-8. Announce feature to players
-9. Launch with February 2026 season
+1. ✅ Review and refine this plan
+2. ✅ Build historical analysis tool (`scripts/backfill_seasons.py`)
+3. ✅ Database schema and migration (`db/schema.sql` + `update_schema.py`)
+4. ✅ Implement Phase 1 — DataManager, models, config
+5. ✅ Implement Phase 2 — SeasonManager, ChallengeManager
+6. ✅ Unit tests for core season logic
+7. ❌ **Wire SeasonManager into GameRunner** (morning routine + season transitions)
+8. ❌ **Wire season score recording into GuessHandler** (season + lifetime stat updates)
+9. ❌ **Update game.py** — season leaderboard, stats, trophy display
+10. ❌ **Update admin.py** — `/admin season end`, `/admin season info`
+11. ❌ **Transition announcements** — end-of-season, new-season welcome, reminder
+12. ❌ Integration tests for wiring layer
+13. ❌ Enable `JBOT_ENABLE_SEASONS=True`, run `db/update_schema.py` on production DB
+14. ❌ Announce feature to players and launch April 2026 season
