@@ -176,18 +176,3 @@ CREATE TABLE IF NOT EXISTS season_challenges (
     completion_criteria TEXT NOT NULL, -- JSON: {"before_hint": 10}
     FOREIGN KEY (season_id) REFERENCES seasons(season_id)
 );
-
--- This table tracks daily performance within seasons for event sourcing.
-CREATE TABLE IF NOT EXISTS season_daily_scores (
-    player_id TEXT NOT NULL,
-    season_id INTEGER NOT NULL,
-    question_date TEXT NOT NULL, -- ISO8601 date
-    points_earned INTEGER DEFAULT 0,
-    answered_correctly INTEGER DEFAULT 0,
-    -- Event sourcing data
-    guess_events TEXT, -- JSON array of events
-    powerup_events TEXT, -- JSON array of events
-    PRIMARY KEY (player_id, season_id, question_date),
-    FOREIGN KEY (player_id) REFERENCES players(id),
-    FOREIGN KEY (season_id) REFERENCES seasons(season_id)
-);
