@@ -1,9 +1,9 @@
 # Seasons Feature Plan
 
-**Status**: In Progress — Infrastructure complete, wiring remaining
+**Status**: Feature complete — pending enable + deploy
 **Target**: April 1, 2026 launch
 **Date Created**: January 19, 2026
-**Last Updated**: March 26, 2026
+**Last Updated**: March 27, 2026
 
 ## Overview
 
@@ -394,7 +394,7 @@ Get ready for the April 2026 season! 🎯
 8. ✅ **Wire season score recording into GuessHandler** (season + lifetime stat updates)
 9. ✅ **Update game.py** — season leaderboard, stats, trophy display
 10. ✅ **Update admin.py** — `/admin season` command (`info` default, `end:True` flag)
-11. ❌ **Transition announcements** — end-of-season, new-season welcome, reminder
-12. ❌ Integration tests for wiring layer
-13. ❌ Enable `JBOT_ENABLE_SEASONS=True`, run `db/update_schema.py` on production DB
+11. ✅ **Transition announcements** — end-of-season, new-season welcome, reminder
+12. ⏭️ Integration tests for wiring layer — skipped (adequate unit coverage, time pressure)
+13. ❌ Enable `JBOT_ENABLE_SEASONS=True`, run `db/update_schema.py` on production DB, optionally run `scripts/backfill_seasons.py --populate` for historical trophies
 14. ❌ Announce feature to players and launch April 2026 season
