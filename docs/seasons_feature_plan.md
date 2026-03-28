@@ -316,7 +316,7 @@ JBOT_SEASON_REMINDER_DAYS=3             # Days before end to remind about season
 
 2. **Stats Command Enhanced**:
    - `/game stats @player` shows season stats, trophy history, and challenge progress
-   - Trophy history displayed as: "Trophies: 🥇×2 🥈×1 🥉×3" (all-time c   ount)
+   - Trophy history displayed as: "Trophies: 🥇×2 🥈×1 🥉×3" (all-time count)
    - Challenge progress: "⚡ Speed Demon: 3/10 answers before hint"
    - Command: `/game stats @player all_time:True` for lifetime stats
 
