@@ -187,30 +187,26 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
    - Disabled cleanly when `JBOT_ENABLE_SEASONS=False` (no-ops without touching DB)
    - GameRunner tests updated: `is_seasons_enabled.return_value = False` in `setUp`; 3 new tests cover init, enabled path, and disabled path
 
-### Phase 3: Scoring Integration ❌ NOT STARTED
+### Phase 3: Scoring Integration ✅ COMPLETE
 
-6. ❌ **Update GuessHandler** (`src/core/guess_handler.py`) — **TODO**
-   - Wire in `SeasonManager` instance
-   - On correct answer: update `season_scores` table and `players.season_score` cache
-   - On correct answer: update `players.score` (lifetime) and `lifetime_*` stat columns
-   - **Streak logic**: increment `players.answer_streak`; update `players.lifetime_best_streak` if exceeded
-   - On corrections: replay via `DailyGameSimulator` using `Question.date` for correct season attribution
+6. ✅ **Update GuessHandler** (`src/core/guess_handler.py`)
+   - `season_manager=None` added to constructor; `GameRunner._build_guess_handler()` passes `self.season_manager`
+   - On correct answer: `initialize_player_season_score` + `increment_season_stat` for `points`, `correct_answers`, `questions_answered`, `first_answers` (rank 1); `increment_lifetime_stat('season_score')` for cache; `update_season_score` for `current_streak`/`best_streak`
+   - Lifetime stats always updated: `lifetime_correct`, `lifetime_questions`, `lifetime_first_answers` (rank 1), `lifetime_best_streak` if exceeded
+   - Season calls guarded by `self.season_manager.enabled`
+   - 3 new tests added; all 746 tests pass
 
-7. ❌ **Update ScoreCalculator** (`src/core/scoring.py`) — **TODO**
-   - Verify `streak_val` parameter already uses seasonal streak; no change if it reads from `players.answer_streak` already
+7. ✅ **ScoreCalculator** (`src/core/scoring.py`) — no change needed
+   - `streak_val` already reads from `players.answer_streak` (the season streak field)
 
-### Phase 4: Discord Commands ❌ NOT STARTED
+### Phase 4: Discord Commands ✅ COMPLETE
 
-8. ❌ **Enhance Game Cog** (`src/cogs/game.py`) — **TODO**
-   - `/game leaderboard` (default — current season):
-     - Header: "🏆 April 2026 Season - Day X/30 - Challenge: ⚡ Speed Demon"
-     - Plain season standings — **no medal decorations** (preserves existing leaderboard format)
-   - `/game leaderboard all_time:True` (all-time view):
-     - Lifetime points + historical trophy count: "Alice (12,340 pts total) 🏆×3"
-     - Past season medal tallies shown per player
-   - `/game stats [player] [all_time:bool=False]` — season stats by default
-     - All-time view: "Trophies: 🥇×2 🥈×1 🥉×3"
-     - Challenge progress: "⚡ Speed Demon: 3/10 answers before hint"
+8. ✅ **Enhance Game Cog** (`src/cogs/game.py`)
+   - `/game leaderboard` (default — current season): header with season name + Day X/N; streak emoji beside players with streak ≥ 2; falls back to `get_scores_leaderboard` if no active season
+   - `/game leaderboard all_time:True`: lifetime points + per-player trophy tallies (🥇/🥈/🥉 counts) from `get_trophy_counts`
+   - `/game profile` (default — current season): season score, streak, best streak, correct/total rate from `season_scores`
+   - `/game profile all_time:True`: falls back to `get_player_history` (lifetime stats)
+   - Seasons disabled: all commands fall through to existing pre-seasons behavior
 
 9. ❌ **Admin Command** (`src/cogs/admin.py`) — **TODO**
     - Single `@admin.command(name="season")` with optional flags — no nested subgroup needed:
@@ -232,8 +228,8 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
 
 ### Phase 6: Display & Polish ❌ NOT STARTED
 
-12. ❌ **Trophy Display** (part of game.py work above) — **TODO**
-    - Leaderboard format: `🥇 PlayerName (1,234 pts) 🏆×3`
+12. ✅ **Trophy Display** (part of game.py work above)
+    - All-time leaderboard format: `{rank}. {name:<16} {score:>7} pts 🥇×N 🥈×N 🥉×N`
 
 13. ❌ **Transition Announcements** — **TODO**
     - Season-end announcement with final leaderboard and trophy winners
@@ -243,7 +239,7 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
 14. **Testing**
     - ✅ Unit tests for `SeasonManager` (`tests/src/core/test_season_manager.py`)
     - ✅ Unit tests for `Season` dataclasses (`tests/src/core/test_season.py`)
-    - ❌ Integration tests for `GameRunner` + `GuessHandler` season wiring — **TODO**
+    - ✅ Integration tests for `GameRunner` + `GuessHandler` season wiring (3 new tests in `test_guess_handler.py`)
     - ❌ End-to-end season transition test — **TODO**
 
 15. ✅ **Historical Season Analysis Tool** (`scripts/backfill_seasons.py`)
@@ -319,7 +315,7 @@ JBOT_SEASON_REMINDER_DAYS=3             # Days before end to remind about season
 
 2. **Stats Command Enhanced**:
    - `/game stats @player` shows season stats, trophy history, and challenge progress
-   - Trophy history displayed as: "Trophies: 🥇×2 🥈×1 🥉×3" (all-time count)
+   - Trophy history displayed as: "Trophies: 🥇×2 🥈×1 🥉×3" (all-time c   ount)
    - Challenge progress: "⚡ Speed Demon: 3/10 answers before hint"
    - Command: `/game stats @player all_time:True` for lifetime stats
 

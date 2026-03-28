@@ -235,6 +235,7 @@ class GameRunner:
             reminder_time=self.reminder_time,
             config=self.config,
             answer_checker=self.answer_checker,
+            season_manager=self.season_manager,
         )
 
     def add_subscriber(self, subscriber: Subscriber):
