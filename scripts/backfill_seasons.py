@@ -66,6 +66,12 @@ class SeasonAnalyzer:
         result = cursor.fetchone()
         return result["name"] if result else f"Unknown ({player_id})"
 
+    def get_all_player_ids(self) -> List[str]:
+        """Get all known player IDs."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT id FROM players")
+        return [row["id"] for row in cursor.fetchall()]
+
     def calculate_question_points(
         self, guesses: List[Dict], daily_question_id: int
     ) -> Dict[str, int]:
@@ -87,6 +93,90 @@ class SeasonAnalyzer:
                     first_correct_awarded = True
 
         return dict(points)
+
+    def calculate_question_accurate_stats(self, guesses: List[Dict]) -> Dict[str, Dict]:
+        """
+        Calculate accurate per-player stats for one question from raw guesses.
+        Identifies: correct answer, first correct, wrong answer.
+
+        Returns dict of player_id -> {correct: bool, first: bool, wrong: bool}
+        """
+        stats = {}
+        first_correct_player = None
+
+        for guess in guesses:
+            pid = guess["player_id"]
+            if pid not in stats:
+                stats[pid] = {"correct": False, "first": False, "wrong": False}
+
+            if guess["is_correct"]:
+                stats[pid]["correct"] = True
+                if first_correct_player is None:
+                    first_correct_player = pid
+                    stats[pid]["first"] = True
+            else:
+                stats[pid]["wrong"] = True
+
+        return stats
+
+    def get_accurate_season_stats(self, questions: List[Dict]) -> Dict[str, Dict]:
+        """
+        Compute accurate per-player season stats from raw guesses.
+
+        Returns dict of player_id -> {
+            correct_answers, questions_answered, first_answers, best_streak
+        }
+        Streak resets on both wrong answers AND unanswered questions, matching
+        live game behavior. Players who had answered at least one question in this
+        season are tracked; anyone who didn't answer a given question gets their
+        streak reset.
+        Points, final_rank, and trophy are intentionally omitted (not accurately
+        reconstructable without full scoring replay).
+        """
+        player_stats = defaultdict(
+            lambda: {
+                "correct_answers": 0,
+                "questions_answered": 0,
+                "first_answers": 0,
+                "best_streak": 0,
+                "_current_streak": 0,
+                "_seen": False,  # has this player answered at least once this season?
+            }
+        )
+
+        for dq in questions:
+            guesses = self.get_guesses_for_question(dq["id"])
+            question_stats = self.calculate_question_accurate_stats(guesses)
+            answered_pids = set(question_stats.keys())
+
+            # Mark any new players as seen
+            for pid in answered_pids:
+                player_stats[pid]["_seen"] = True
+
+            # Process each known player for this question
+            for pid, s in player_stats.items():
+                if not s["_seen"]:
+                    continue  # player hadn't joined yet
+
+                qs = question_stats.get(pid)
+                if qs and qs["correct"]:
+                    s["correct_answers"] += 1
+                    s["questions_answered"] += 1
+                    s["_current_streak"] += 1
+                    if s["_current_streak"] > s["best_streak"]:
+                        s["best_streak"] = s["_current_streak"]
+                    if qs["first"]:
+                        s["first_answers"] += 1
+                else:
+                    # Wrong answer or unanswered — both reset streak
+                    s["_current_streak"] = 0
+
+        # Strip internal tracking fields
+        return {
+            pid: {k: v for k, v in s.items() if not k.startswith("_")}
+            for pid, s in player_stats.items()
+            if s["_seen"]
+        }
 
     def group_questions_by_month(
         self, daily_questions: List[Dict]
@@ -365,6 +455,100 @@ class SeasonAnalyzer:
                 f"(Excluded {len(months) - len(valid_months)} month(s) with fewer than {MIN_QUESTIONS_PER_SEASON} questions)"
             )
 
+    def populate_stats_only(self):
+        """
+        Populate seasons and season_scores with ACCURATE stats only.
+
+        Points, final_rank, and trophy are left as 0/NULL — they cannot be
+        reconstructed accurately without a full scoring replay. What IS accurate:
+          - correct_answers / questions_answered (same value; both only count correct)
+          - first_answers (first correct per question)
+          - best_streak (longest consecutive correct run; resets on wrong answer or unanswered question)
+
+        Safe to run after the bot has already created a current season — existing
+        seasons are skipped via INSERT OR IGNORE on the seasons row, and
+        season_scores rows are skipped if already present.
+        """
+        print(
+            "This will populate seasons/season_scores with accurate participation stats."
+        )
+        print(
+            "Points, rankings, and trophies will NOT be set (not accurately reconstructable)."
+        )
+
+        confirm = input("Continue? (yes/no): ")
+        if confirm.lower() != "yes":
+            print("Aborted.")
+            return
+
+        daily_questions = self.get_all_daily_questions()
+        months = self.group_questions_by_month(daily_questions)
+
+        MIN_QUESTIONS_PER_SEASON = 20
+        valid_months = {
+            month_key: questions
+            for month_key, questions in months.items()
+            if len(questions) >= MIN_QUESTIONS_PER_SEASON
+        }
+
+        cursor = self.conn.cursor()
+        populated = 0
+        skipped = 0
+
+        for month_key in sorted(valid_months.keys()):
+            questions = valid_months[month_key]
+            dt = datetime.strptime(month_key, "%Y-%m")
+            month_name = dt.strftime("%B %Y")
+
+            first_question_date = questions[0]["sent_at"].split(" ")[0]
+            last_question_date = questions[-1]["sent_at"].split(" ")[0]
+
+            try:
+                # INSERT OR IGNORE so active/existing seasons are left untouched
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO seasons (season_name, start_date, end_date, is_active)
+                    VALUES (?, ?, ?, 0)
+                    """,
+                    (month_name, first_question_date, last_question_date),
+                )
+                if cursor.rowcount == 0:
+                    print(f"  (skipping {month_name} — season row already exists)")
+                    skipped += 1
+                    continue
+
+                season_id = cursor.lastrowid
+                player_stats = self.get_accurate_season_stats(questions)
+
+                for pid, stats in player_stats.items():
+                    cursor.execute(
+                        """
+                        INSERT OR IGNORE INTO season_scores
+                            (player_id, season_id, correct_answers, questions_answered,
+                             first_answers, best_streak)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            pid,
+                            season_id,
+                            stats["correct_answers"],
+                            stats["questions_answered"],
+                            stats["first_answers"],
+                            stats["best_streak"],
+                        ),
+                    )
+
+                print(f"✓ {month_name} — {len(player_stats)} player(s)")
+                populated += 1
+
+            except sqlite3.Error as e:
+                print(f"Error populating {month_name}: {e}")
+                self.conn.rollback()
+                return
+
+        self.conn.commit()
+        print(f"\nDone. Populated {populated} season(s), skipped {skipped}.")
+
     def close(self):
         """Close database connection."""
         self.conn.close()
@@ -382,7 +566,12 @@ def main():
     parser.add_argument(
         "--populate",
         action="store_true",
-        help="Actually populate seasons tables (run after schema migration)",
+        help="Populate seasons tables using simplified scoring (for analysis only — not accurate for trophies)",
+    )
+    parser.add_argument(
+        "--stats-only",
+        action="store_true",
+        help="Populate seasons with accurate participation stats only (no points/trophies). Recommended for production.",
     )
 
     args = parser.parse_args()
@@ -408,6 +597,8 @@ def main():
     try:
         if args.populate:
             analyzer.populate_seasons_tables()
+        elif args.stats_only:
+            analyzer.populate_stats_only()
         else:
             # Default: dry run
             report = analyzer.generate_report()

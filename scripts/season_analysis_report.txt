@@ -63,15 +63,15 @@ HISTORICAL SEASON ANALYSIS
    Gap (1st-2nd): 200 points
 
 📅 March 2026
-   Questions: 27
+   Questions: 28
    Players: 16
 
    Leaderboard:
-      🥇 1. Blake: 2700 pts (22/27 correct)
-      🥈 2. lanie: 2550 pts (23/27 correct)
-      🥉 3. TaoMike: 2450 pts (22/27 correct)
-       4. Kenny: 2100 pts (19/27 correct)
-       5. Kimberly: 1900 pts (19/27 correct)
+      🥇 1. Blake: 2800 pts (23/28 correct)
+      🥈 2. lanie: 2650 pts (24/28 correct)
+      🥉 3. TaoMike: 2450 pts (22/28 correct)
+       4. Kenny: 2100 pts (19/28 correct)
+       5. Kimberly: 2000 pts (20/28 correct)
    Gap (1st-2nd): 150 points
 
 ================================================================================
