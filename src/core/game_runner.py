@@ -60,6 +60,9 @@ class GameRunner:
         else:
             logging.info("SeasonManager disabled (JBOT_ENABLE_SEASONS=False).")
 
+        # Pending season announcements to be broadcast on next morning message
+        self.pending_season_announcements: list[str] = []
+
     def _get_valid_question(self) -> Question:
         """
         Helper method to find a valid question, retrying if necessary.
@@ -132,7 +135,14 @@ class GameRunner:
         # Check for season transition (end old season, create new one if needed).
         # Must run before the question is set so scores are attributed to the
         # correct season from the start of the day.
-        self.season_manager.check_season_transition()
+        transitioned, season_msgs = self.season_manager.check_season_transition()
+        self.pending_season_announcements.extend(season_msgs)
+
+        # Check for season ending soon reminder (only when no transition today)
+        if not transitioned:
+            reminder = self.season_manager.get_reminder_announcement()
+            if reminder:
+                self.pending_season_announcements.append(reminder)
 
         # Check for an existing daily question ID for today
         daily_question_data = self.data_manager.get_todays_daily_question()

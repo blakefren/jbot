@@ -109,7 +109,42 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
         self.bot._log_task_error.assert_called_once()
 
-    # --- Reminder Task Tests ---
+    async def test_morning_message_task_drains_season_announcements(self):
+        """Pending season announcements are broadcast before the morning message."""
+        self.bot._broadcast_announcement = AsyncMock()
+        self.bot.game.pending_season_announcements = ["Season ended!", "New season!"]
+
+        await self.morning_task_coro(self.bot, silent=False)
+
+        self.assertEqual(self.bot._broadcast_announcement.await_count, 2)
+        calls = self.bot._broadcast_announcement.call_args_list
+        self.assertEqual(calls[0], call("Season ended!"))
+        self.assertEqual(calls[1], call("New season!"))
+        # List should be cleared after draining
+        self.assertEqual(self.bot.game.pending_season_announcements, [])
+
+    async def test_morning_message_task_no_announcements_when_silent(self):
+        """Season announcements are NOT sent in silent mode."""
+        self.bot._broadcast_announcement = AsyncMock()
+        self.bot.game.pending_season_announcements = ["Season ended!"]
+
+        await self.morning_task_coro(self.bot, silent=True)
+
+        self.bot._broadcast_announcement.assert_not_awaited()
+
+    async def test_morning_message_task_announcement_error_is_logged(self):
+        """A failed broadcast logs the error but does not abort remaining announcements."""
+        self.bot._broadcast_announcement = AsyncMock(
+            side_effect=Exception("Discord error")
+        )
+        self.bot.game.pending_season_announcements = ["Msg1", "Msg2"]
+
+        await self.morning_task_coro(self.bot, silent=False)
+
+        # Both attempted, both failed, both logged; morning message still sent
+        self.assertEqual(self.bot._broadcast_announcement.await_count, 2)
+        self.assertEqual(self.bot._log_task_error.call_count, 2)
+        self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
 
     async def test_reminder_message_task_success(self):
         """Verify the reminder task runs successfully."""

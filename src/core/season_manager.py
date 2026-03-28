@@ -64,7 +64,9 @@ class SeasonManager:
 
         return current_season
 
-    def check_season_transition(self, current_date: date = None) -> bool:
+    def check_season_transition(
+        self, current_date: date = None
+    ) -> tuple[bool, list[str]]:
         """
         Check if we need to transition to a new season.
 
@@ -72,10 +74,12 @@ class SeasonManager:
             current_date: Date to check (defaults to today)
 
         Returns:
-            True if a transition occurred, False otherwise
+            Tuple of (transitioned, msgs) where transitioned is True if a season
+            change occurred, and msgs is a list of announcement strings to broadcast
+            (empty if no announcements are configured or no transition happened)
         """
         if not self.enabled:
-            return False
+            return False, []
 
         if current_date is None:
             current_date = date.today()
@@ -85,7 +89,7 @@ class SeasonManager:
         if not current_season:
             # No season exists - create one
             self._create_new_season(current_date)
-            return True
+            return True, []
 
         if current_date > current_season.end_date:
             # Season has ended - finalize and create new one
@@ -93,10 +97,23 @@ class SeasonManager:
                 f"Season {current_season.season_name} ended on {current_season.end_date}"
             )
             self.finalize_season(current_season.season_id)
-            self._create_new_season(current_date)
-            return True
 
-        return False
+            msgs = []
+            if self.config.get_season_announce_end():
+                leaderboard = self.get_season_leaderboard(current_season.season_id)
+                msgs.append(
+                    self.build_season_end_announcement(current_season, leaderboard)
+                )
+
+            new_season = self._create_new_season(current_date)
+
+            if self.config.get_season_announce_start():
+                challenge = self.data_manager.get_season_challenge(new_season.season_id)
+                msgs.append(self.build_new_season_announcement(new_season, challenge))
+
+            return True, msgs
+
+        return False, []
 
     def _create_new_season(self, start_date: date) -> Season:
         """
@@ -213,6 +230,94 @@ class SeasonManager:
         self.data_manager.end_season(season_id)
 
         self.logger.info(f"Season {season.season_name} finalized")
+
+    def build_season_end_announcement(self, season: Season, leaderboard: list) -> str:
+        """
+        Build the season-end announcement message.
+
+        Args:
+            season: The season that just ended
+            leaderboard: List of (SeasonScore, player_name) tuples, sorted by points
+
+        Returns:
+            Formatted announcement string
+        """
+        lines = [f"🏁 **{season.season_name} Season Complete!**"]
+
+        trophy_entries = [(score, name) for score, name in leaderboard if score.trophy]
+        if trophy_entries:
+            lines.append("\nCongratulations to our top players:")
+            for score, name in trophy_entries:
+                lines.append(f"{score.trophy_emoji} **{name}** — {score.points:,} pts")
+        else:
+            lines.append("\nNo players participated this season.")
+
+        total = len(leaderboard)
+        if total:
+            lines.append(f"\n{total} player(s) competed this season.")
+
+        return "\n".join(lines)
+
+    def build_new_season_announcement(self, season: Season, challenge=None) -> str:
+        """
+        Build the new-season welcome announcement message.
+
+        Args:
+            season: The new season that just started
+            challenge: Optional SeasonChallenge object
+
+        Returns:
+            Formatted announcement string
+        """
+        lines = [
+            f"🎉 **{season.season_name} Season has begun!**",
+            "Points reset — everyone starts fresh. Good luck! 💪",
+        ]
+        if challenge:
+            lines.append(
+                f"\nChallenge this month: {challenge.badge_emoji} **{challenge.challenge_name}** — {challenge.description}"
+            )
+        return "\n".join(lines)
+
+    def build_season_reminder(
+        self, season: Season, leaderboard: list, days_remaining: int
+    ) -> str:
+        """
+        Build the season-ending reminder message.
+
+        Args:
+            season: The current season
+            leaderboard: List of (SeasonScore, player_name) tuples
+            days_remaining: Days left in the season
+
+        Returns:
+            Formatted reminder string
+        """
+        day_word = "day" if days_remaining == 1 else "days"
+        lines = [
+            f"⏰ **{days_remaining} {day_word} left in the {season.season_name} season!**"
+        ]
+        if leaderboard:
+            lines.append("\nCurrent standings:")
+            for i, (score, name) in enumerate(leaderboard[:5], start=1):
+                lines.append(f"{i}. **{name}** — {score.points:,} pts")
+        return "\n".join(lines)
+
+    def get_reminder_announcement(self) -> Optional[str]:
+        """
+        Return a reminder message if today is the configured number of days
+        before the season ends, otherwise return None.
+        """
+        if not self.enabled:
+            return None
+        current_season = self.data_manager.get_current_season()
+        if not current_season:
+            return None
+        if not self.should_send_season_reminder(current_season):
+            return None
+        days_remaining = self.get_days_until_season_end(current_season)
+        leaderboard = self.get_season_leaderboard(current_season.season_id)
+        return self.build_season_reminder(current_season, leaderboard, days_remaining)
 
     def get_season_leaderboard(
         self, season_id: Optional[int] = None, limit: int = 10

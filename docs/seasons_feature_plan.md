@@ -227,16 +227,21 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
 12. ✅ **Trophy Display** (part of game.py work above)
     - All-time leaderboard format: `{rank}. {name:<16} {score:>7} pts 🥇×N 🥈×N 🥉×N`
 
-13. ❌ **Transition Announcements** — **TODO**
-    - Season-end announcement with final leaderboard and trophy winners
-    - New-season welcome message
-    - Reminder message N days before season end
+13. ✅ **Transition Announcements** (`src/core/season_manager.py`, `src/core/game_runner.py`, `src/core/discord.py`)
+    - `check_season_transition()` now returns `(bool, list[str])` — announcement messages built during transition
+    - `build_season_end_announcement()`, `build_new_season_announcement()`, `build_season_reminder()` builder methods
+    - `get_reminder_announcement()` — fires on the configured day count before season end
+    - `GameRunner.pending_season_announcements` list accumulates msgs during `set_daily_question()`
+    - `DiscordBot.morning_message_task` drains the list via `_broadcast_announcement()` before regular morning send
+    - Controlled by `JBOT_SEASON_ANNOUNCE_END`, `JBOT_SEASON_ANNOUNCE_START`, `JBOT_SEASON_REMINDER_DAYS`
 
 14. **Testing**
     - ✅ Unit tests for `SeasonManager` (`tests/src/core/test_season_manager.py`)
     - ✅ Unit tests for `Season` dataclasses (`tests/src/core/test_season.py`)
     - ✅ Integration tests for `GameRunner` + `GuessHandler` season wiring (3 new tests in `test_guess_handler.py`)
-    - ❌ End-to-end season transition test — **TODO**
+    - ✅ Announcement builder tests — 16 tests in `TestSeasonManagerAnnouncements`
+    - ✅ GameRunner `pending_season_announcements` tests (populated on transition, empty mid-month)
+    - ✅ `morning_message_task` announcement drain tests (`test_discord.py`)
 
 15. ✅ **Historical Season Analysis Tool** (`scripts/backfill_seasons.py`)
     - Supports `--dry-run` (analysis) and `--populate` (writes to DB) modes
