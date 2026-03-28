@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Optional
 from db.database import Database
 from data.readers.question import Question
 from src.core.player import Player
@@ -1076,10 +1077,30 @@ class DataManager:
         """
         self._db.execute_update(query, tuple(values))
 
+    # Allowlist of valid season_scores columns for increment_season_stat
+    _VALID_SEASON_STAT_COLUMNS = frozenset(
+        {
+            "points",
+            "questions_answered",
+            "correct_answers",
+            "first_answers",
+            "current_streak",
+            "best_streak",
+            "shields_used",
+            "double_points_used",
+        }
+    )
+
     def increment_season_stat(
         self, player_id: str, season_id: int, stat_name: str, amount: int = 1
     ):
         """Atomically increment a season stat."""
+        if stat_name not in self._VALID_SEASON_STAT_COLUMNS:
+            raise ValueError(
+                f"increment_season_stat: invalid stat_name '{stat_name}'. "
+                f"Must be one of: {sorted(self._VALID_SEASON_STAT_COLUMNS)}"
+            )
+
         self.initialize_player_season_score(player_id, season_id)
 
         query = f"""
