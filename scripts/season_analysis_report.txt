@@ -39,27 +39,51 @@ HISTORICAL SEASON ANALYSIS
    Gap (1st-2nd): 200 points
 
 📅 January 2026
-   Questions: 28
+   Questions: 31
    Players: 15
 
    Leaderboard:
-      🥇 1. lanie: 3100 pts (27/28 correct)
-      🥈 2. Blake: 3050 pts (27/28 correct)
-      🥉 3. TaoMike: 2750 pts (26/28 correct)
-       4. Kimberly: 2650 pts (26/28 correct)
-       5. bunnyfarts83: 2500 pts (25/28 correct)
-   Gap (1st-2nd): 50 points
+      🥇 1. Blake: 3450 pts (30/31 correct)
+      🥇 1. lanie: 3450 pts (30/31 correct)
+      🥉 3. TaoMike: 3050 pts (29/31 correct)
+       4. Kimberly: 2950 pts (29/31 correct)
+       5. bunnyfarts83: 2800 pts (28/31 correct)
+   Gap (1st-2nd): 0 points
+
+📅 February 2026
+   Questions: 28
+   Players: 16
+
+   Leaderboard:
+      🥇 1. lanie: 3000 pts (26/28 correct)
+      🥈 2. Blake: 2800 pts (25/28 correct)
+      🥉 3. TaoMike: 2600 pts (24/28 correct)
+       4. Shiver: 2500 pts (24/28 correct)
+       5. Kenny: 2350 pts (22/28 correct)
+   Gap (1st-2nd): 200 points
+
+📅 March 2026
+   Questions: 27
+   Players: 16
+
+   Leaderboard:
+      🥇 1. Blake: 2700 pts (22/27 correct)
+      🥈 2. lanie: 2550 pts (23/27 correct)
+      🥉 3. TaoMike: 2450 pts (22/27 correct)
+       4. Kenny: 2100 pts (19/27 correct)
+       5. Kimberly: 1900 pts (19/27 correct)
+   Gap (1st-2nd): 150 points
 
 ================================================================================
 SUMMARY STATISTICS
 ================================================================================
 
 Trophy Case (Most Season Wins):
-   🏆 lanie: 3 wins
-   🏆 Blake: 2 wins
+   🏆 lanie: 4 wins
+   🏆 Blake: 4 wins
 
 Competitive Balance (1st-2nd Place Gaps):
-   Average: 88 points
+   Average: 108 points
    Minimum: 0 points (closest race)
    Maximum: 200 points (biggest blowout)
 

@@ -208,15 +208,11 @@ ALTER TABLE players ADD COLUMN lifetime_best_streak INTEGER DEFAULT 0;
    - `/game profile all_time:True`: falls back to `get_player_history` (lifetime stats)
    - Seasons disabled: all commands fall through to existing pre-seasons behavior
 
-9. ❌ **Admin Command** (`src/cogs/admin.py`) — **TODO**
-    - Single `@admin.command(name="season")` with optional flags — no nested subgroup needed:
-      ```
-      /admin season [end:bool=False] [force:bool=False]
-      ```
-      - **Default** (no flags): shows season info — season_id, name, start/end dates, day X/N, active challenge, player count
-      - **`end:True`**: ends the current season (finalize rankings, award trophies, create next season)
-        - **Mid-day guard**: if `game_runner.daily_question_id` is not None, block with an error: *"A question is active — ending the season now would freeze out players who haven't answered yet. Wait until after the answer is revealed, or use `force:True` to override."*
-        - **`force:True`**: skips the mid-day guard for testing/emergency. Log a warning. Season ends with whatever scores are currently in `season_scores`.
+9. ✅ **Admin Command** (`src/cogs/admin.py`)
+    - `/admin season` — default (no flags): shows season ID, name, dates, day X/N, active challenge, player count
+    - `/admin season end:True` — finalizes rankings, awards trophies, creates next season; blocked mid-day unless `force:True`
+    - `/admin season end:True force:True` — overrides mid-day guard with a logged warning
+    - Seasons disabled or no active season: returns an informative error
 
 ### Phase 5: Challenges ✅ COMPLETE
 
@@ -390,9 +386,9 @@ Get ready for the April 2026 season! 🎯
 5. ✅ Implement Phase 2 — SeasonManager, ChallengeManager
 6. ✅ Unit tests for core season logic
 7. ✅ **Wire SeasonManager into GameRunner** — `check_season_transition()` in `set_daily_question()`; GameRunner tests updated
-8. ❌ **Wire season score recording into GuessHandler** (season + lifetime stat updates)
-9. ❌ **Update game.py** — season leaderboard, stats, trophy display
-10. ❌ **Update admin.py** — `/admin season` command (`info` default, `end:True` flag)
+8. ✅ **Wire season score recording into GuessHandler** (season + lifetime stat updates)
+9. ✅ **Update game.py** — season leaderboard, stats, trophy display
+10. ✅ **Update admin.py** — `/admin season` command (`info` default, `end:True` flag)
 11. ❌ **Transition announcements** — end-of-season, new-season welcome, reminder
 12. ❌ Integration tests for wiring layer
 13. ❌ Enable `JBOT_ENABLE_SEASONS=True`, run `db/update_schema.py` on production DB
