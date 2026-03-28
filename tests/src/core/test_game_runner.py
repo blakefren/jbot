@@ -728,6 +728,14 @@ class TestGameRunner(unittest.TestCase):
 
         self.assertIsInstance(self.game_runner.season_manager, SeasonManager)
 
+    def test_build_guess_handler_passes_season_manager(self):
+        """Test that _build_guess_handler wires season_manager through to GuessHandler."""
+        self.game_runner._build_guess_handler()
+        self.assertIs(
+            self.game_runner.guess_handler.season_manager,
+            self.game_runner.season_manager,
+        )
+
     def test_set_daily_question_calls_season_transition_when_enabled(self):
         """Test that set_daily_question triggers season transition check when seasons are enabled."""
         from src.core.season import Season
