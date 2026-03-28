@@ -1003,7 +1003,25 @@ class DataManager:
         """Get all seasons, ordered by specified column."""
         from src.core.season import Season
 
-        query = f"SELECT * FROM seasons ORDER BY {order_by}"
+        # Allowlist of supported order_by values to avoid SQL injection via ORDER BY
+        allowed_orderings = {
+            "start_date ASC": "start_date ASC",
+            "start_date DESC": "start_date DESC",
+            "end_date ASC": "end_date ASC",
+            "end_date DESC": "end_date DESC",
+            "season_name ASC": "season_name ASC",
+            "season_name DESC": "season_name DESC",
+        }
+        order_by_sql = allowed_orderings.get(order_by, "start_date DESC")
+        if order_by_sql != order_by:
+            logging.warning(
+                "DataManager.get_all_seasons received unsupported order_by '%s'; "
+                "falling back to '%s'.",
+                order_by,
+                order_by_sql,
+            )
+
+        query = f"SELECT * FROM seasons ORDER BY {order_by_sql}"
         result = self._db.execute_query(query)
         return [Season.from_db_row(row) for row in result]
 
@@ -1045,13 +1063,11 @@ class DataManager:
 
     def initialize_player_season_score(self, player_id: str, season_id: int):
         """Create a season_scores record for a player if it doesn't exist."""
-        existing = self.get_player_season_score(player_id, season_id)
-        if not existing:
-            query = """
-                INSERT INTO season_scores (player_id, season_id)
-                VALUES (?, ?)
-            """
-            self._db.execute_update(query, (player_id, season_id))
+        query = """
+            INSERT OR IGNORE INTO season_scores (player_id, season_id)
+            VALUES (?, ?)
+        """
+        self._db.execute_update(query, (player_id, season_id))
 
     def update_season_score(self, player_id: str, season_id: int, **kwargs):
         """
@@ -1240,8 +1256,27 @@ class DataManager:
         """
         self._db.execute_update(query, tuple(values))
 
+    # Allowlist of valid players columns for increment_lifetime_stat
+    _VALID_LIFETIME_STAT_COLUMNS = frozenset(
+        {
+            "score",
+            "season_score",
+            "answer_streak",
+            "lifetime_questions",
+            "lifetime_correct",
+            "lifetime_first_answers",
+            "lifetime_best_streak",
+        }
+    )
+
     def increment_lifetime_stat(self, player_id: str, stat_name: str, amount: int = 1):
         """Atomically increment a lifetime stat."""
+        if stat_name not in self._VALID_LIFETIME_STAT_COLUMNS:
+            raise ValueError(
+                f"increment_lifetime_stat: invalid stat_name '{stat_name}'. "
+                f"Must be one of: {sorted(self._VALID_LIFETIME_STAT_COLUMNS)}"
+            )
+
         query = f"""
             UPDATE players
             SET {stat_name} = {stat_name} + ?

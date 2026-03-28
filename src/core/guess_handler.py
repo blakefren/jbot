@@ -146,6 +146,11 @@ class GuessHandler:
         bonus_messages = []
         bonus_values = {}
 
+        # Determine if this is the player's first attempt for this question
+        # (must be checked before logging the guess below)
+        previous_guesses = self.get_player_guesses(player_id)
+        is_first_attempt = len(previous_guesses) == 0
+
         if is_correct:
             # Gather inputs for ScoreCalculator
             base_value = self.daily_q.clue_value or 100
@@ -157,7 +162,6 @@ class GuessHandler:
             answer_rank = existing_correct_count + 1
 
             # Check Attempt Number (before logging this guess)
-            previous_guesses = self.get_player_guesses(player_id)
             guesses_count = len(previous_guesses) + 1
 
             # Check Before Hint (before logging this guess)
@@ -203,15 +207,11 @@ class GuessHandler:
                 current_season = self.data_manager.get_current_season()
                 if current_season:
                     sid = current_season.season_id
-                    self.data_manager.initialize_player_season_score(str_pid, sid)
                     self.data_manager.increment_season_stat(
                         str_pid, sid, "points", points_earned
                     )
                     self.data_manager.increment_season_stat(
                         str_pid, sid, "correct_answers"
-                    )
-                    self.data_manager.increment_season_stat(
-                        str_pid, sid, "questions_answered"
                     )
                     if answer_rank == 1:
                         self.data_manager.increment_season_stat(
@@ -232,7 +232,6 @@ class GuessHandler:
 
             # Lifetime stats (always, regardless of seasons flag)
             self.data_manager.increment_lifetime_stat(str_pid, "lifetime_correct")
-            self.data_manager.increment_lifetime_stat(str_pid, "lifetime_questions")
             if answer_rank == 1:
                 self.data_manager.increment_lifetime_stat(
                     str_pid, "lifetime_first_answers"
@@ -241,6 +240,16 @@ class GuessHandler:
                 self.data_manager.update_lifetime_stats(
                     str_pid, lifetime_best_streak=new_streak
                 )
+
+        # Track questions_answered on first attempt, regardless of correctness
+        if is_first_attempt:
+            if self.season_manager is not None and self.season_manager.enabled:
+                current_season = self.data_manager.get_current_season()
+                if current_season:
+                    self.data_manager.increment_season_stat(
+                        str_pid, current_season.season_id, "questions_answered"
+                    )
+            self.data_manager.increment_lifetime_stat(str_pid, "lifetime_questions")
 
         self.data_manager.log_player_guess(
             player_id, player_name, self.daily_question_id, g, is_correct
