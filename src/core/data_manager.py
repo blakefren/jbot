@@ -983,8 +983,10 @@ class DataManager:
             INSERT INTO seasons (season_name, start_date, end_date, is_active)
             VALUES (?, ?, ?, 1)
         """
-        cursor = self._db.execute_update(query, (season_name, start_date, end_date))
-        return cursor.lastrowid
+        _, lastrowid = self._db.execute_update(
+            query, (season_name, start_date, end_date)
+        )
+        return lastrowid if lastrowid is not None else 0
 
     def get_season_by_id(self, season_id: int):
         """Get a specific season by ID."""
