@@ -79,7 +79,7 @@ The project follows a strict "DataManager-Only" pattern:
 *   **DataManager**: Exclusive database access layer
 *   **GeminiManager**: AI content generation (regular class instance, not a singleton)
 *   **RolesGameMode** (`src/core/roles.py`): Assigns DB roles based on score standings; called by `DiscordBot.apply_discord_roles()` in the evening task
-*   **DailyPlayerState** (`src/core/state.py`): In-memory dataclass holding all transient per-player state for the current question round (score earned, guesses, bonuses, jinx/steal/rest flags). Single source of truth during a round. Key field: `steal_is_preload` — set `True` when the steal's streak cost was deducted overnight (before the daily snapshot), so the simulator skips the cost deduction to avoid double-counting.
+*   **DailyPlayerState** (`src/core/state.py`): In-memory dataclass holding all transient per-player state for the current question round (score earned, guesses, bonuses, jinx/steal/rest flags). Single source of truth during a round. Key field: `streak_delta` — tracks the net streak adjustment applied during the round (e.g. `-3` after a steal cost deduction), used by the simulator to avoid double-counting costs that were already persisted to the DB.
 *   Managers should use dependency injection via constructors. **Note:** some existing modules (`powerup.py`, `guess_handler.py`, `trivia.py`) still instantiate `ConfigReader` at module level — this is a known issue tracked in the code review doc.
 
 ## My Persona
