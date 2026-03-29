@@ -47,22 +47,8 @@ class SeasonManager:
         if not self.enabled:
             return None
 
-        current_season = self.data_manager.get_current_season()
-
-        if current_season:
-            # Check if we need to transition to a new season
-            today = date.today()
-            if today > current_season.end_date:
-                self.logger.info(
-                    f"Current season {current_season.season_name} has ended. Creating new season."
-                )
-                current_season = self._create_new_season(today)
-        else:
-            # No active season exists - create one
-            self.logger.info("No active season found. Creating new season.")
-            current_season = self._create_new_season(date.today())
-
-        return current_season
+        self.check_season_transition()
+        return self.data_manager.get_current_season()
 
     def check_season_transition(
         self, current_date: date = None
@@ -87,9 +73,11 @@ class SeasonManager:
         current_season = self.data_manager.get_current_season()
 
         if not current_season:
-            # No season exists - create one
-            self._create_new_season(current_date)
-            return True, []
+            # No season exists - only create one if auto-create is on
+            if self.config.get_season_auto_create():
+                self._create_new_season(current_date)
+                return True, []
+            return False, []
 
         if current_date > current_season.end_date:
             # Season has ended - finalize and create new one

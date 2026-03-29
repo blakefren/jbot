@@ -39,15 +39,16 @@ class TestSeasonManager(unittest.TestCase):
             result = self.manager.get_or_create_current_season()
 
         self.assertEqual(result, active_season)
-        self.mock_data_manager.get_current_season.assert_called_once()
         self.mock_data_manager.create_season.assert_not_called()
 
     def test_get_or_create_current_season_no_season(self):
-        """Test creating new season when none exists."""
-        self.mock_data_manager.get_current_season.return_value = None
+        """Test creating new season when none exists and auto-create is on."""
+        self.mock_config.get_season_auto_create.return_value = True
         new_season = Season(
             1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True
         )
+        # check_season_transition sees None, creates; get_or_create re-fetches the new season
+        self.mock_data_manager.get_current_season.side_effect = [None, new_season]
         self.mock_data_manager.get_season_by_id.return_value = new_season
 
         with patch("src.core.season_manager.date") as mock_date:
@@ -57,23 +58,44 @@ class TestSeasonManager(unittest.TestCase):
         self.assertEqual(result, new_season)
         self.mock_data_manager.create_season.assert_called_once()
 
-    def test_get_or_create_current_season_expired(self):
-        """Test handling expired season."""
-        expired_season = Season(
-            1, "December 2025", date(2025, 12, 1), date(2025, 12, 31), True
-        )
-        self.mock_data_manager.get_current_season.return_value = expired_season
-        new_season = Season(
-            2, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True
-        )
-        self.mock_data_manager.get_season_by_id.return_value = new_season
+    def test_get_or_create_current_season_no_season_auto_create_disabled(self):
+        """Test that no season is created when none exists and auto-create is off."""
+        self.mock_config.get_season_auto_create.return_value = False
+        self.mock_data_manager.get_current_season.return_value = None
 
         with patch("src.core.season_manager.date") as mock_date:
             mock_date.today.return_value = date(2026, 1, 15)
             result = self.manager.get_or_create_current_season()
 
-        # Should create new season
+        self.assertIsNone(result)
+        self.mock_data_manager.create_season.assert_not_called()
+
+    def test_get_or_create_current_season_expired(self):
+        """Test handling expired season: delegates to check_season_transition."""
+        expired_season = Season(
+            1, "December 2025", date(2025, 12, 1), date(2025, 12, 31), True
+        )
+        new_season = Season(
+            2, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True
+        )
+        # check_season_transition sees expired, finalizes; get_or_create re-fetches new season
+        self.mock_data_manager.get_current_season.side_effect = [
+            expired_season,
+            new_season,
+        ]
+        self.mock_data_manager.get_season_by_id.return_value = new_season
+        self.mock_config.get_season_announce_end.return_value = False
+        self.mock_config.get_season_announce_start.return_value = False
+
+        with patch("src.core.season_manager.date") as mock_date:
+            mock_date.today.return_value = date(2026, 1, 15)
+            result = self.manager.get_or_create_current_season()
+
+        # Should finalize old season and create new one via check_season_transition
+        self.mock_data_manager.finalize_season_rankings.assert_called_once_with(1)
+        self.mock_data_manager.end_season.assert_called_once_with(1)
         self.mock_data_manager.create_season.assert_called_once()
+        self.assertEqual(result, new_season)
 
     def test_check_season_transition_same_month(self):
         """Test check_season_transition when still in same month."""
@@ -108,6 +130,17 @@ class TestSeasonManager(unittest.TestCase):
         self.mock_data_manager.finalize_season_rankings.assert_called_with(1)
         self.mock_data_manager.end_season.assert_called_with(1)
         self.mock_data_manager.create_season.assert_called_once()
+
+    def test_check_season_transition_no_season_auto_create_disabled(self):
+        """check_season_transition returns (False, []) when no season and auto-create is off."""
+        self.mock_config.get_season_auto_create.return_value = False
+        self.mock_data_manager.get_current_season.return_value = None
+
+        transitioned, msgs = self.manager.check_season_transition(date(2026, 1, 15))
+
+        self.assertFalse(transitioned)
+        self.assertEqual(msgs, [])
+        self.mock_data_manager.create_season.assert_not_called()
 
     def test_finalize_season(self):
         """Test season finalization."""
