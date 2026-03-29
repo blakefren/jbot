@@ -141,11 +141,11 @@ The game runs on **monthly seasons**. Points reset at the start of each calendar
 
 Top 3 players at the end of each season earn a permanent trophy. Ties are allowed — if two players share first, both get 🥇 and the next unique score earns 🥉.
 
-Use `/game leaderboard all_time:True` or `/game stats @player all_time:True` to see full trophy history.
+Use `/game leaderboard all_time:True` or `/game profile @player all_time:True` to see full trophy history.
 
 ### Monthly Challenge ⚡
 
-Each season has a community challenge (e.g., "Answer 10 questions before the hint drops"). Progress is shown on `/game stats`. Completing it earns a special badge for the season.
+Each season has a community challenge (e.g., "Answer 10 questions before the hint drops"). Progress is shown on `/game profile`. Completing it earns a special badge for the season.
 
 ---
 
