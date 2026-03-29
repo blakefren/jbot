@@ -207,6 +207,7 @@ class GuessHandler:
                 current_season = self.data_manager.get_current_season()
                 if current_season:
                     sid = current_season.season_id
+                    self.data_manager.initialize_player_season_score(str_pid, sid)
                     self.data_manager.increment_season_stat(
                         str_pid, sid, "points", points_earned
                     )
