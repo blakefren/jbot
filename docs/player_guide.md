@@ -117,7 +117,6 @@ Whiffs on rest?    Yes                         Yes (streak cost still applies)
 /answer <guess>        Submit a guess (private)
 /game status           Time until next event; your score & streak
 /game profile          Your personal stats and accuracy
-/game stats @player    Season stats + challenge progress
 /power rest            Skip today, freeze streak, earn ×1.2 tomorrow
 /power jinx @...       Silence yourself; steal their streak bonus
 /power steal @...      Pay streak days; steal their bonuses
