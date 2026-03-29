@@ -1123,12 +1123,18 @@ class DataManager:
 
         return counts
 
-    def finalize_season_rankings(self, season_id: int):
+    def finalize_season_rankings(self, season_id: int, trophy_positions: int = 3):
         """
         Calculate and store final rankings for a season.
         Awards trophies to top performers.
         Handles ties: players with same score get same rank and trophy.
+
+        Args:
+            season_id: ID of the season to finalize
+            trophy_positions: Number of top ranks that receive a trophy (default 3)
         """
+        _TROPHY_NAMES = ["gold", "silver", "bronze"]
+
         scores = self.get_season_scores(season_id, limit=1000)  # Get all
 
         # Determine rankings (with tie handling)
@@ -1143,13 +1149,9 @@ class DataManager:
             # Assign rank
             season_score.final_rank = current_rank
 
-            # Award trophies to top 3 ranks (multiple players can share)
-            if current_rank == 1:
-                season_score.trophy = "gold"
-            elif current_rank == 2:
-                season_score.trophy = "silver"
-            elif current_rank == 3:
-                season_score.trophy = "bronze"
+            # Award trophy if within configured positions and a name exists for the rank
+            if current_rank <= trophy_positions and current_rank <= len(_TROPHY_NAMES):
+                season_score.trophy = _TROPHY_NAMES[current_rank - 1]
 
             # Update database
             self.update_season_score(

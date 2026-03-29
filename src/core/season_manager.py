@@ -212,7 +212,8 @@ class SeasonManager:
         self.logger.info(f"Finalizing season: {season.season_name}")
 
         # Calculate rankings and award trophies
-        self.data_manager.finalize_season_rankings(season_id)
+        trophy_positions = self.config.get_season_trophy_positions()
+        self.data_manager.finalize_season_rankings(season_id, trophy_positions)
 
         # Mark season as inactive
         self.data_manager.end_season(season_id)

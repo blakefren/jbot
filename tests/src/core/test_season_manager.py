@@ -92,7 +92,7 @@ class TestSeasonManager(unittest.TestCase):
             result = self.manager.get_or_create_current_season()
 
         # Should finalize old season and create new one via check_season_transition
-        self.mock_data_manager.finalize_season_rankings.assert_called_once_with(1)
+        self.mock_data_manager.finalize_season_rankings.assert_called_once_with(1, 3)
         self.mock_data_manager.end_season.assert_called_once_with(1)
         self.mock_data_manager.create_season.assert_called_once()
         self.assertEqual(result, new_season)
@@ -127,7 +127,7 @@ class TestSeasonManager(unittest.TestCase):
 
         self.assertTrue(transitioned)
         # Finalize is called from check_season_transition
-        self.mock_data_manager.finalize_season_rankings.assert_called_with(1)
+        self.mock_data_manager.finalize_season_rankings.assert_called_with(1, 3)
         self.mock_data_manager.end_season.assert_called_with(1)
         self.mock_data_manager.create_season.assert_called_once()
 
@@ -146,10 +146,11 @@ class TestSeasonManager(unittest.TestCase):
         """Test season finalization."""
         season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
         self.mock_data_manager.get_season_by_id.return_value = season
+        self.mock_config.get_season_trophy_positions.return_value = 3
 
         self.manager.finalize_season(season.season_id)
 
-        self.mock_data_manager.finalize_season_rankings.assert_called_once_with(1)
+        self.mock_data_manager.finalize_season_rankings.assert_called_once_with(1, 3)
         self.mock_data_manager.end_season.assert_called_once_with(1)
 
     def test_get_season_leaderboard(self):
