@@ -1187,7 +1187,7 @@ class DataManager:
             (season_id, challenge_name, description, badge_emoji, completion_criteria)
             VALUES (?, ?, ?, ?, ?)
         """
-        cursor = self._db.execute_update(
+        _, lastrowid = self._db.execute_update(
             query,
             (
                 season_id,
@@ -1197,7 +1197,7 @@ class DataManager:
                 json.dumps(completion_criteria),
             ),
         )
-        return cursor.lastrowid
+        return lastrowid if lastrowid is not None else 0
 
     def update_lifetime_stats(self, player_id: str, **kwargs):
         """
