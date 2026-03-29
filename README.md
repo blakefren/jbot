@@ -48,50 +48,35 @@ question selection.
 
 ## Game Features
 
-The bot's features are organized into three distinct "tracks" that can be enabled or disabled independently via the `.env` file.
+### Power-ups
 
-### Fight Track
+*   **Jinx**: Target another player to block their streak bonus for the day. The attacker is silenced until the hint is revealed.
+    *   **Command**: `/power jinx <player>`
+*   **Steal**: Target another player to steal their try/speed bonuses. Costs the attacker streak days.
+    *   **Command**: `/power steal <player>`
+*   **Rest**: Skip today's question while freezing your streak. Earn a score multiplier on your next correct answer.
+    *   **Command**: `/power rest`
 
-This track adds direct player-vs-player interactions.
+Power-ups can be queued overnight before the daily question is posted. Jinx and steal can also be used retroactively against players who have already answered.
 
-*   **Jinx**: An offensive action that prevents a player from earning streak bonuses that day. If the target answers correctly, they still get base points, but the attacker is silenced until the hint is revealed.
-    *   **Command**: `/power jinx <player_id>`
-    *   **Cost**: No point cost, but attacker is silenced.
-*   **Steal**: An offensive action that allows a player to steal some bonuses (First Try, Fastest) the target earns that day.
-    *   **Command**: `/power steal <player_id>`
-    *   **Cost**: Resets the attacker's answer streak to zero.
-*   **Shield**: A defensive action that protects a player from the next incoming attack (Jinx or Steal).
-    *   **Command**: `/power shield`
-    *   **Cost**: No upfront cost, but -10 points if unused by end of day.
+### Scoring Bonuses
 
-### Power-up Track
+*   **Answer Streak**: Earn bonus points for each consecutive day answered correctly. Streaks are a resource — they feed into the streak bonus and are the cost of using `/power steal`.
+*   **First Try**: Bonus points for getting the answer right on your first guess.
+*   **Fastest Answer**: Bonus points for being among the first players to answer correctly.
+*   **Before Hint**: Bonus points for answering correctly before the daily hint is revealed.
 
-This track introduces mechanics that reward consistent play or provide other advantages.
+### Seasons
 
-*   **Answer Streaks**: Players build up a "streak" for each consecutive correct answer. This can be used for scoring bonuses or as a target for other players' attacks.
-*   **Answering First**: The first player to answer the daily question correctly receives a point bonus.
-*   **Answering Before the Hint**: Players who answer correctly before the daily hint is revealed receive a point bonus.
-*   **Weekly Boss Fight** (Planned): A challenging weekly question with a large point reward.
-
-### Coop Track
-
-This track focuses on collaborative features.
-
-*   **Reveal Answer Letters** (Planned): Players can vote to reveal letters in the answer. Each vote costs points, and the cost increases with each revealed letter.
-    *   **Command**: `/power reveal`
-*   **Red vs. Blue Teams** (Planned): Players are divided into two teams (either by choice or randomly). The team with the most correct responses at the end of the day gets bonus points.
+Monthly seasons reset scores and track standings independently. The top players at the end of each season earn trophies. Each season also includes a rotating monthly challenge with a bonus objective. Seasons can be enabled or disabled via the `JBOT_ENABLE_SEASONS` flag in `.env`.
 
 ## Commands
 
-The bot's commands are organized into groups:
-
-*   **`/game`**: General game information.
-    *   `/game status`: Check the current game status, next event time, and active question.
-    *   `/game leaderboard`: View the score leaderboard.
-    *   `/game profile`: View your player stats and history.
-    *   `/game rules`: View the currently active rules and enabled features.
-*   **`/power`**: Actions related to the Fight, Power-up, and Coop tracks.
 *   **`/answer`**: Submit your answer to the daily question.
+*   **`/game status`**: Check the current game status, next event time, and active question.
+*   **`/game leaderboard`**: View the score leaderboard (season or all-time).
+*   **`/game profile`**: View your player stats and history.
+*   **`/power`**: Use a power-up (jinx, steal, rest).
 
 ## Database
 
