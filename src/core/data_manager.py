@@ -11,6 +11,7 @@ import pytz
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
+# TODO: review for SQL injection risks.
 class DataManager:
     """
     Handles all database interactions for the bot.
