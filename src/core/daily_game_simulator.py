@@ -75,9 +75,13 @@ class DailyGameSimulator:
         if ptype == "rest":
             self.engine.apply_rest(self.daily_state, user_id)
 
-        elif ptype in ("jinx", "jinx_preload"):
+        elif ptype == "jinx":
             if target_id:
                 self.engine.apply_jinx(self.daily_state, user_id, target_id)
+
+        elif ptype == "jinx_preload":
+            if target_id:
+                self.engine.apply_preload_jinx(self.daily_state, user_id, target_id)
 
         elif ptype == "jinx_late":
             if target_id:
