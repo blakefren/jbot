@@ -200,25 +200,6 @@ class DailyGameSimulator:
                 if player.answer_streak > 0:
                     self.daily_state[user_id].streak_delta = -player.answer_streak
 
-        for user_id, state in self.daily_state.items():
-            # Resting players: streak is frozen (streak_delta stays 0)
-            if state.is_resting:
-                continue
-
-            # Steal Resolution
-            steal_attempt_by = state.steal_attempt_by
-            if steal_attempt_by:
-                thief_state = self.daily_state[steal_attempt_by]
-                # Thief must also be correct to steal
-                if thief_state.is_correct and state.is_correct:
-                    stolen_amount = self.score_calculator.pop_stealable_bonuses(
-                        state.bonuses
-                    )
-
-                    if stolen_amount > 0:
-                        state.score_earned -= stolen_amount
-                        thief_state.score_earned += stolen_amount
-
     def calculate_final_results(self):
         results = {}
         for user_id, state in self.daily_state.items():
