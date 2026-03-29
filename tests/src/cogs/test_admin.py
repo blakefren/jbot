@@ -438,6 +438,122 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         )
 
 
+class TestAdminSeasonCommand(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.bot = MagicMock()
+        self.bot.game = MagicMock()
+        self.bot.data_manager = MagicMock()
+
+        self.cog = Admin(self.bot)
+
+        self.ctx = MagicMock()
+        self.ctx.defer = AsyncMock()
+        self.ctx.send = AsyncMock()
+        self.ctx.author = MagicMock()
+
+        # Default: seasons enabled, active season present, no active question
+        self.bot.game.season_manager.enabled = True
+        self.bot.game.daily_question_id = None
+
+        from src.core.season import Season
+        from datetime import date
+
+        self.mock_season = Season(
+            season_id=7,
+            season_name="April 2026",
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 30),
+            is_active=True,
+        )
+        self.bot.game.data_manager.get_current_season.return_value = self.mock_season
+        self.bot.game.season_manager.get_season_progress.return_value = (5, 30)
+        self.bot.game.data_manager.get_season_scores.return_value = ["p1", "p2", "p3"]
+
+    async def test_season_info_disabled(self):
+        """Returns error when seasons are disabled."""
+        self.bot.game.season_manager.enabled = False
+        await self.cog.season.callback(self.cog, self.ctx)
+        self.ctx.send.assert_called_once_with(
+            "Seasons are not enabled.", ephemeral=True
+        )
+
+    async def test_season_info_no_active_season(self):
+        """Returns error when no active season exists."""
+        self.bot.game.data_manager.get_current_season.return_value = None
+        await self.cog.season.callback(self.cog, self.ctx)
+        self.ctx.send.assert_called_once_with("No active season found.", ephemeral=True)
+
+    async def test_season_info_with_challenge(self):
+        """Default (no flags) returns season info card including challenge name."""
+        mock_challenge = MagicMock()
+        mock_challenge.badge_emoji = "⚡"
+        mock_challenge.challenge_name = "Speed Demon"
+        self.bot.game.data_manager.get_season_challenge.return_value = mock_challenge
+
+        await self.cog.season.callback(self.cog, self.ctx)
+
+        self.ctx.send.assert_called_once()
+        msg = self.ctx.send.call_args[0][0]
+        self.assertIn("April 2026", msg)
+        self.assertIn("Day 5/30", msg)
+        self.assertIn("⚡ Speed Demon", msg)
+        self.assertIn("3", msg)  # player count
+
+    async def test_season_info_no_challenge(self):
+        """Default (no flags) shows 'None' when no challenge is set."""
+        self.bot.game.data_manager.get_season_challenge.return_value = None
+
+        await self.cog.season.callback(self.cog, self.ctx)
+
+        msg = self.ctx.send.call_args[0][0]
+        self.assertIn("None", msg)
+
+    async def test_season_end_no_active_question(self):
+        """end:True finalizes the season and reports the next season name."""
+        from src.core.season import Season
+        from datetime import date
+
+        next_season = Season(8, "May 2026", date(2026, 5, 1), date(2026, 5, 31), True)
+        self.bot.game.season_manager.get_or_create_current_season.return_value = (
+            next_season
+        )
+
+        await self.cog.season.callback(self.cog, self.ctx, end=True)
+
+        self.bot.game.season_manager.finalize_season.assert_called_once_with(7)
+        self.bot.game.season_manager.get_or_create_current_season.assert_called_once()
+        msg = self.ctx.send.call_args[0][0]
+        self.assertIn("April 2026", msg)
+        self.assertIn("May 2026", msg)
+
+    async def test_season_end_blocked_mid_day(self):
+        """end:True is blocked when a question is active and force is False."""
+        self.bot.game.daily_question_id = 42
+
+        await self.cog.season.callback(self.cog, self.ctx, end=True, force=False)
+
+        self.bot.game.season_manager.finalize_season.assert_not_called()
+        msg = self.ctx.send.call_args[0][0]
+        self.assertIn("A question is active", msg)
+
+    async def test_season_end_force_mid_day(self):
+        """end:True force:True proceeds and logs a warning when question is active."""
+        self.bot.game.daily_question_id = 42
+        from src.core.season import Season
+        from datetime import date
+
+        next_season = Season(8, "May 2026", date(2026, 5, 1), date(2026, 5, 31), True)
+        self.bot.game.season_manager.get_or_create_current_season.return_value = (
+            next_season
+        )
+
+        with patch("src.cogs.admin.logging") as mock_log:
+            await self.cog.season.callback(self.cog, self.ctx, end=True, force=True)
+            mock_log.warning.assert_called_once()
+
+        self.bot.game.season_manager.finalize_season.assert_called_once_with(7)
+
+
 class TestAdminSetup(unittest.IsolatedAsyncioTestCase):
     async def test_setup(self):
         """Test that the setup function adds the cog."""

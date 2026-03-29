@@ -120,6 +120,38 @@ class ConfigReader:
             raise ValueError("GEMINI_API_KEY not found in environment variables.")
         return key
 
+    def is_seasons_enabled(self) -> bool:
+        """Check if seasons feature is enabled."""
+        return self.get_bool("JBOT_ENABLE_SEASONS")
+
+    def get_season_mode(self) -> str:
+        """Get season mode: 'calendar' or 'rolling'."""
+        return self.get("JBOT_SEASON_MODE", "calendar")
+
+    def get_season_duration_days(self) -> int:
+        """Get season duration in days (only used for rolling mode)."""
+        return int(self.get("JBOT_SEASON_DURATION_DAYS"))
+
+    def get_season_auto_create(self) -> bool:
+        """Check if seasons should be auto-created."""
+        return self.get_bool("JBOT_SEASON_AUTO_CREATE")
+
+    def get_season_trophy_positions(self) -> int:
+        """Get number of trophy positions (typically 3 for gold/silver/bronze)."""
+        return int(self.get("JBOT_SEASON_TROPHY_POSITIONS"))
+
+    def get_season_announce_end(self) -> bool:
+        """Check if season end should be announced."""
+        return self.get_bool("JBOT_SEASON_ANNOUNCE_END")
+
+    def get_season_announce_start(self) -> bool:
+        """Check if season start should be announced."""
+        return self.get_bool("JBOT_SEASON_ANNOUNCE_START")
+
+    def get_season_reminder_days(self) -> int:
+        """Get number of days before season end to send reminder."""
+        return int(self.get("JBOT_SEASON_REMINDER_DAYS"))
+
     def _load_toml_config(self) -> dict:
         """
         Loads the TOML configuration file.

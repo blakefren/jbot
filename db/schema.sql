@@ -25,9 +25,15 @@ CREATE TABLE IF NOT EXISTS daily_questions (
 CREATE TABLE IF NOT EXISTS "players" (
     id TEXT PRIMARY KEY, -- Corresponds to discord_id
     name TEXT,
-    score INTEGER DEFAULT 0,
-    answer_streak INTEGER DEFAULT 0,
+    score INTEGER DEFAULT 0, -- Lifetime total score (unchanged for safety)
+    season_score INTEGER DEFAULT 0, -- Current season score (reset monthly)
+    answer_streak INTEGER DEFAULT 0, -- Current season streak (reset monthly)
     pending_rest_multiplier REAL DEFAULT 0.0,
+    -- Lifetime statistics
+    lifetime_questions INTEGER DEFAULT 0,
+    lifetime_correct INTEGER DEFAULT 0,
+    lifetime_first_answers INTEGER DEFAULT 0,
+    lifetime_best_streak INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -124,4 +130,49 @@ CREATE TABLE IF NOT EXISTS daily_player_states (
     FOREIGN KEY (daily_question_id) REFERENCES daily_questions (id),
     FOREIGN KEY (player_id) REFERENCES players (id),
     UNIQUE(daily_question_id, player_id)
+);
+
+-- SEASONS FEATURE TABLES
+
+-- This table stores season information for monthly competitions.
+CREATE TABLE IF NOT EXISTS seasons (
+    season_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    season_name TEXT NOT NULL, -- e.g., "January 2026"
+    start_date TEXT NOT NULL, -- ISO8601: "2026-01-01"
+    end_date TEXT NOT NULL, -- ISO8601: "2026-01-31"
+    is_active INTEGER NOT NULL DEFAULT 0 -- 1 = current season, 0 = past
+);
+
+-- This table stores player performance within each season.
+CREATE TABLE IF NOT EXISTS season_scores (
+    player_id TEXT NOT NULL,
+    season_id INTEGER NOT NULL,
+    points INTEGER DEFAULT 0,
+    questions_answered INTEGER DEFAULT 0,
+    correct_answers INTEGER DEFAULT 0,
+    first_answers INTEGER DEFAULT 0,
+    current_streak INTEGER DEFAULT 0,
+    best_streak INTEGER DEFAULT 0,
+    -- Power-up specific stats
+    shields_used INTEGER DEFAULT 0,
+    double_points_used INTEGER DEFAULT 0,
+    -- Challenge progress
+    challenge_progress TEXT DEFAULT '{}', -- JSON blob
+    -- Placement
+    final_rank INTEGER, -- Set when season ends
+    trophy TEXT, -- "gold", "silver", "bronze", null
+    PRIMARY KEY (player_id, season_id),
+    FOREIGN KEY (player_id) REFERENCES players(id),
+    FOREIGN KEY (season_id) REFERENCES seasons(season_id)
+);
+
+-- This table stores monthly challenges for each season.
+CREATE TABLE IF NOT EXISTS season_challenges (
+    challenge_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    season_id INTEGER NOT NULL,
+    challenge_name TEXT NOT NULL, -- "Speed Demon"
+    description TEXT NOT NULL, -- "Answer 10 questions before hint"
+    badge_emoji TEXT, -- "⚡"
+    completion_criteria TEXT NOT NULL, -- JSON: {"before_hint": 10}
+    FOREIGN KEY (season_id) REFERENCES seasons(season_id)
 );

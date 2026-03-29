@@ -260,6 +260,17 @@ class DiscordBot(commands.Bot):
             return
 
         if not silent:
+            # Send any pending season announcements (transition or reminder)
+            announcements = list(self.game.pending_season_announcements)
+            self.game.pending_season_announcements.clear()
+            for msg in announcements:
+                try:
+                    await self._broadcast_announcement(msg)
+                except Exception as e:
+                    self._log_task_error(
+                        e, "morning_message_task - season_announcement"
+                    )
+
             try:
                 await self._send_daily_message_to_all_subscribers(
                     self.game.get_morning_message_content,
@@ -476,6 +487,16 @@ class DiscordBot(commands.Bot):
             content=f"Error in {task_name}: {e}",
             status="failed",
         )
+
+    async def _broadcast_announcement(self, message: str):
+        """Send a plain message to all subscribers (no daily_q required)."""
+        for sub in self.game.get_subscribed_users():
+            await self.send_message(
+                message,
+                is_channel=sub.is_channel,
+                target_id=sub.sub_id,
+                success_status="season_announcement",
+            )
 
     async def send_message(
         self,

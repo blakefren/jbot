@@ -114,13 +114,38 @@ Whiffs on rest?    Yes                         Yes (streak cost still applies)
 ## 📋 Commands
 
 ```
-/answer <guess>      Submit a guess (private)
-/game status         Time until next event; your score & streak
-/game profile        Your personal stats and accuracy
-/power rest          Skip today, freeze streak, earn ×1.2 tomorrow
-/power jinx @...     Silence yourself; steal their streak bonus
-/power steal @...    Pay streak days; steal their bonuses
+/answer <guess>        Submit a guess (private)
+/game status           Time until next event; your score & streak
+/game profile          Your personal stats and accuracy
+/power rest            Skip today, freeze streak, earn ×1.2 tomorrow
+/power jinx @...       Silence yourself; steal their streak bonus
+/power steal @...      Pay streak days; steal their bonuses
 ```
+
+---
+
+## 🏆 Seasons
+
+The game runs on **monthly seasons**. Points reset at the start of each calendar month, giving everyone a fresh shot at the top spot. All-time stats are always preserved.
+
+### What Resets Each Season
+- **Season score** — back to 0, race begins again
+- **Streak** — resets on the first question of the new season
+
+### What Carries Over
+- Your **lifetime total score** (visible with `all_time:True` in the leaderboard or stats)
+- Lifetime correct answers, first answers, and personal bests
+- Your **trophy collection** (see below)
+
+### Trophies 🥇🥈🥉
+
+Top 3 players at the end of each season earn a permanent trophy. Ties are allowed — if two players share first, both get 🥇 and the next unique score earns 🥉.
+
+Use `/game leaderboard all_time:True` or `/game profile @player all_time:True` to see full trophy history.
+
+### Monthly Challenge ⚡
+
+Each season has a community challenge (e.g., "Answer 10 questions before the hint drops"). Progress is shown on `/game profile`. Completing it earns a special badge for the season.
 
 ---
 

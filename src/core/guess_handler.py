@@ -38,6 +38,7 @@ class GuessHandler:
         reminder_time=None,
         config: ConfigReader = None,
         answer_checker: AnswerChecker = None,
+        season_manager=None,
     ):
         self.data_manager = data_manager
         self.player_manager = player_manager
@@ -49,6 +50,7 @@ class GuessHandler:
         self.config = config or ConfigReader()
         self.score_calculator = ScoreCalculator(self.config)
         self._checker = answer_checker or AnswerChecker()
+        self.season_manager = season_manager
 
         if self.data_manager:
             self.alternative_answers = self.data_manager.get_alternative_answers(
@@ -112,17 +114,18 @@ class GuessHandler:
             self.daily_question_id
         )
         hint_sent = hint_timestamp is not None
+        str_pid = str(player_id)
 
         # Check if player is allowed to answer (e.g. Jinxed)
         for manager in self.managers.values():
             if hasattr(manager, "can_answer"):
                 try:
                     can_answer, reason = manager.can_answer(
-                        str(player_id), hint_sent=hint_sent
+                        str_pid, hint_sent=hint_sent
                     )
                 except TypeError:
                     # Fallback for managers that don't accept hint_sent
-                    can_answer, reason = manager.can_answer(str(player_id))
+                    can_answer, reason = manager.can_answer(str_pid)
 
                 if not can_answer:
                     raise JinxedError(reason)
@@ -143,6 +146,11 @@ class GuessHandler:
         bonus_messages = []
         bonus_values = {}
 
+        # Determine if this is the player's first attempt for this question
+        # (must be checked before logging the guess below)
+        previous_guesses = self.get_player_guesses(player_id)
+        is_first_attempt = len(previous_guesses) == 0
+
         if is_correct:
             # Gather inputs for ScoreCalculator
             base_value = self.daily_q.clue_value or 100
@@ -154,7 +162,6 @@ class GuessHandler:
             answer_rank = existing_correct_count + 1
 
             # Check Attempt Number (before logging this guess)
-            previous_guesses = self.get_player_guesses(player_id)
             guesses_count = len(previous_guesses) + 1
 
             # Check Before Hint (before logging this guess)
@@ -165,12 +172,10 @@ class GuessHandler:
                     is_before_hint = True
 
             # Determine Streak details
-            player = self.player_manager.get_player(str(player_id))
+            player = self.player_manager.get_player(str_pid)
             current_streak = player.answer_streak if player else 0
 
-            last_correct_date = self.data_manager.get_last_correct_guess_date(
-                str(player_id)
-            )
+            last_correct_date = self.data_manager.get_last_correct_guess_date(str_pid)
             today = self.data_manager.get_today()
 
             if last_correct_date == today:
@@ -191,10 +196,61 @@ class GuessHandler:
             )
 
             # Apply Score & Streak
-            self.player_manager.get_or_create_player(str(player_id), player_name)
-            self.player_manager.update_score(str(player_id), points_earned)
+            self.player_manager.get_or_create_player(str_pid, player_name)
+            self.player_manager.update_score(str_pid, points_earned)
             if last_correct_date != today:
-                self.player_manager.increment_streak(str(player_id), player_name)
+                self.player_manager.increment_streak(str_pid, player_name)
+
+            # Record season and lifetime stats
+            # Season stats (only when seasons feature is active)
+            if self.season_manager is not None and self.season_manager.enabled:
+                current_season = self.data_manager.get_current_season()
+                if current_season:
+                    sid = current_season.season_id
+                    self.data_manager.initialize_player_season_score(str_pid, sid)
+                    self.data_manager.increment_season_stat(
+                        str_pid, sid, "points", points_earned
+                    )
+                    self.data_manager.increment_season_stat(
+                        str_pid, sid, "correct_answers"
+                    )
+                    if answer_rank == 1:
+                        self.data_manager.increment_season_stat(
+                            str_pid, sid, "first_answers"
+                        )
+                    self.data_manager.increment_lifetime_stat(
+                        str_pid, "season_score", points_earned
+                    )
+                    existing_ss = self.data_manager.get_player_season_score(
+                        str_pid, sid
+                    )
+                    streak_updates = {"current_streak": new_streak}
+                    if existing_ss is None or new_streak > existing_ss.best_streak:
+                        streak_updates["best_streak"] = new_streak
+                    self.data_manager.update_season_score(
+                        str_pid, sid, **streak_updates
+                    )
+
+            # Lifetime stats (always, regardless of seasons flag)
+            self.data_manager.increment_lifetime_stat(str_pid, "lifetime_correct")
+            if answer_rank == 1:
+                self.data_manager.increment_lifetime_stat(
+                    str_pid, "lifetime_first_answers"
+                )
+            if new_streak > (player.lifetime_best_streak if player else 0):
+                self.data_manager.update_lifetime_stats(
+                    str_pid, lifetime_best_streak=new_streak
+                )
+
+        # Track questions_answered on first attempt, regardless of correctness
+        if is_first_attempt:
+            if self.season_manager is not None and self.season_manager.enabled:
+                current_season = self.data_manager.get_current_season()
+                if current_season:
+                    self.data_manager.increment_season_stat(
+                        str_pid, current_season.season_id, "questions_answered"
+                    )
+            self.data_manager.increment_lifetime_stat(str_pid, "lifetime_questions")
 
         self.data_manager.log_player_guess(
             player_id, player_name, self.daily_question_id, g, is_correct

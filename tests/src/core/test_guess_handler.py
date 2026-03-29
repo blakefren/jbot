@@ -197,6 +197,7 @@ class TestGuessHandler(unittest.TestCase):
         local_player_manager = MagicMock()
         mock_player = MagicMock()
         mock_player.answer_streak = 1
+        mock_player.lifetime_best_streak = 0
         local_player_manager.get_player.return_value = mock_player
 
         handler = GuessHandler(
@@ -224,6 +225,7 @@ class TestGuessHandler(unittest.TestCase):
         # Mock player with existing streak
         mock_player = MagicMock()
         mock_player.answer_streak = 5
+        mock_player.lifetime_best_streak = 5
         self.player_manager.get_player.return_value = mock_player
 
         # Mock last correct guess date to be yesterday
@@ -260,6 +262,7 @@ class TestGuessHandler(unittest.TestCase):
         # Mock player with existing streak (already incremented today)
         mock_player = MagicMock()
         mock_player.answer_streak = 6
+        mock_player.lifetime_best_streak = 6
         self.player_manager.get_player.return_value = mock_player
 
         # Mock last correct guess date to be TODAY
@@ -323,6 +326,115 @@ class TestGuessHandler(unittest.TestCase):
             # Base points (100) + First Try (20) + Before Hint Bonus (10) + 2nd Fastest (5) = 135
             self.assertEqual(points, 135)
             self.assertTrue(any("Pre-hint!" in msg for msg in bonuses))
+
+    def _make_correct_guess_setup(self):
+        """Helper: configure mocks for a clean first-correct-answer scenario."""
+        from datetime import timedelta
+
+        mock_player = MagicMock()
+        mock_player.answer_streak = 0
+        mock_player.lifetime_best_streak = 0
+        self.player_manager.get_player.return_value = mock_player
+        self.data_manager.get_correct_guess_count.return_value = 0  # first answer
+        self.data_manager.get_last_correct_guess_date.return_value = (
+            date.today() - timedelta(days=1)
+        )
+        self.data_manager.read_guess_history.return_value = []
+        self.data_manager.get_hint_sent_timestamp.return_value = None
+        self.data_manager.get_today.return_value = date.today()
+        self.data_manager.get_alternative_answers.return_value = []
+
+    def test_season_stats_updated_when_seasons_enabled(self):
+        """Season stat methods are called when seasons flag is on and answer is correct."""
+        self._make_correct_guess_setup()
+
+        mock_season = MagicMock()
+        mock_season.season_id = 42
+        self.data_manager.get_current_season.return_value = mock_season
+
+        mock_existing_ss = MagicMock()
+        mock_existing_ss.best_streak = 0
+        self.data_manager.get_player_season_score.return_value = mock_existing_ss
+
+        mock_season_manager = MagicMock()
+        mock_season_manager.enabled = True
+
+        handler = GuessHandler(
+            self.data_manager,
+            self.player_manager,
+            self.daily_question,
+            self.daily_question_id,
+            self.managers,
+            season_manager=mock_season_manager,
+        )
+
+        is_correct, _, points, _ = handler.handle_guess(1, "Alice", "Test Answer")
+
+        self.assertTrue(is_correct)
+        self.data_manager.initialize_player_season_score.assert_called_once_with(
+            "1", 42
+        )
+        # points, correct_answers, questions_answered incremented
+        self.assertGreaterEqual(self.data_manager.increment_season_stat.call_count, 3)
+        # first_answers incremented (answer_rank == 1)
+        stat_names = [
+            call.args[2]
+            for call in self.data_manager.increment_season_stat.call_args_list
+        ]
+        self.assertIn("first_answers", stat_names)
+        # season_score cache updated atomically
+        self.data_manager.increment_lifetime_stat.assert_any_call(
+            "1", "season_score", points
+        )
+        # streak written back to season_scores
+        self.data_manager.update_season_score.assert_called_once()
+
+    def test_season_stats_not_updated_when_seasons_disabled(self):
+        """Season stat methods are NOT called when the seasons flag is off."""
+        self._make_correct_guess_setup()
+
+        mock_season_manager = MagicMock()
+        mock_season_manager.enabled = False
+
+        handler = GuessHandler(
+            self.data_manager,
+            self.player_manager,
+            self.daily_question,
+            self.daily_question_id,
+            self.managers,
+            season_manager=mock_season_manager,
+        )
+
+        is_correct, _, _, _ = handler.handle_guess(1, "Alice", "Test Answer")
+
+        self.assertTrue(is_correct)
+        self.data_manager.initialize_player_season_score.assert_not_called()
+        self.data_manager.increment_season_stat.assert_not_called()
+        self.data_manager.update_season_score.assert_not_called()
+
+    def test_lifetime_stats_always_updated_on_correct_answer(self):
+        """Lifetime stat increments fire on a correct answer regardless of seasons flag."""
+        self._make_correct_guess_setup()
+
+        # No season_manager
+        handler = GuessHandler(
+            self.data_manager,
+            self.player_manager,
+            self.daily_question,
+            self.daily_question_id,
+            self.managers,
+        )
+
+        is_correct, _, _, _ = handler.handle_guess(1, "Alice", "Test Answer")
+
+        self.assertTrue(is_correct)
+        lifetime_calls = [
+            call.args[1]
+            for call in self.data_manager.increment_lifetime_stat.call_args_list
+        ]
+        self.assertIn("lifetime_correct", lifetime_calls)
+        self.assertIn("lifetime_questions", lifetime_calls)
+        self.assertIn("lifetime_first_answers", lifetime_calls)
 
 
 if __name__ == "__main__":

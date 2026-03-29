@@ -188,6 +188,7 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Reminder", args[0])
 
     async def test_leaderboard(self):
+        self.bot.game.season_manager.enabled = False
         self.bot.game.get_scores_leaderboard.return_value = "Leaderboard"
         await self.cog.leaderboard.callback(self.cog, self.ctx)
         self.bot.send_message.assert_awaited_once_with(
@@ -195,6 +196,7 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_profile(self):
+        self.bot.game.season_manager.enabled = False
         self.ctx.author.id = 123
         self.ctx.author.display_name = "Test"
         self.bot.game.get_player_history.return_value = "History"

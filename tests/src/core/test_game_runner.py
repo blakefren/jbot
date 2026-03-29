@@ -91,6 +91,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_config_instance.get_bool.side_effect = lambda k, d=False: (
             str(self.defaults.get(k)).lower() == "true" if k in self.defaults else d
         )
+        self.mock_config_instance.is_seasons_enabled.return_value = False
 
         self.mock_question_selector = MagicMock()
         self.mock_data_manager = MagicMock(spec=DataManager)
@@ -721,7 +722,112 @@ class TestGameRunner(unittest.TestCase):
 
         self.assertEqual(self.game_runner.daily_question_id, 555)
 
-    def test_get_reminder_message_content_no_daily_question(self):
+    def test_initialization_creates_season_manager(self):
+        """Test that GameRunner creates a SeasonManager on init."""
+        from src.core.season_manager import SeasonManager
+
+        self.assertIsInstance(self.game_runner.season_manager, SeasonManager)
+
+    def test_build_guess_handler_passes_season_manager(self):
+        """Test that _build_guess_handler wires season_manager through to GuessHandler."""
+        self.game_runner._build_guess_handler()
+        self.assertIs(
+            self.game_runner.guess_handler.season_manager,
+            self.game_runner.season_manager,
+        )
+
+    def test_set_daily_question_calls_season_transition_when_enabled(self):
+        """Test that set_daily_question triggers season transition check when seasons are enabled."""
+        from src.core.season import Season
+        from datetime import date
+
+        self.mock_config_instance.is_seasons_enabled.return_value = True
+        self.game_runner = GameRunner(
+            self.mock_question_selector, self.mock_data_manager
+        )
+        # Return an active season so no creation path is exercised
+        active_season = Season(
+            1, "April 2026", date(2026, 4, 1), date(2026, 4, 30), True
+        )
+        self.mock_data_manager.get_current_season.return_value = active_season
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+
+        self.game_runner.set_daily_question()
+
+        self.mock_data_manager.get_current_season.assert_called()
+
+    def test_set_daily_question_skips_season_transition_when_disabled(self):
+        """Test that set_daily_question skips season logic when seasons are disabled."""
+        # Seasons already disabled in setUp — just confirm no season DB calls
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+
+        self.game_runner.set_daily_question()
+
+        self.mock_data_manager.get_current_season.assert_not_called()
+        self.mock_data_manager.create_season.assert_not_called()
+
+    def test_pending_season_announcements_populated_on_transition(self):
+        """Announcements from a season transition are stored in pending list."""
+        from src.core.season import Season
+        from datetime import date
+        from unittest.mock import patch
+
+        self.mock_config_instance.is_seasons_enabled.return_value = True
+        self.game_runner = GameRunner(
+            self.mock_question_selector, self.mock_data_manager
+        )
+        expired_season = Season(
+            1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True
+        )
+        new_season = Season(
+            2, "February 2026", date(2026, 2, 1), date(2026, 2, 28), True
+        )
+        self.mock_data_manager.get_current_season.return_value = expired_season
+        self.mock_data_manager.get_season_by_id.return_value = new_season
+        self.mock_data_manager.get_season_scores.return_value = []
+        self.mock_data_manager.get_season_challenge.return_value = None
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+        self.mock_config_instance.get_season_announce_end.return_value = True
+        self.mock_config_instance.get_season_announce_start.return_value = True
+        self.mock_config_instance.get_season_mode.return_value = "calendar"
+        self.mock_config_instance.get_season_auto_create.return_value = True
+
+        # Patch date so the season appears expired
+        with patch("src.core.season_manager.date") as mock_date:
+            mock_date.today.return_value = date(2026, 2, 1)
+            self.game_runner.set_daily_question()
+
+        # Both end and start messages should be queued
+        self.assertEqual(len(self.game_runner.pending_season_announcements), 2)
+        combined = " ".join(self.game_runner.pending_season_announcements)
+        self.assertIn("January 2026", combined)
+        self.assertIn("February 2026", combined)
+
+    def test_pending_season_announcements_empty_when_no_transition(self):
+        """No announcements queued when season is still active and no reminder fires."""
+        from src.core.season import Season
+        from datetime import date
+        from unittest.mock import patch
+
+        self.mock_config_instance.is_seasons_enabled.return_value = True
+        self.game_runner = GameRunner(
+            self.mock_question_selector, self.mock_data_manager
+        )
+        active_season = Season(
+            1, "April 2026", date(2026, 4, 1), date(2026, 4, 30), True
+        )
+        self.mock_data_manager.get_current_season.return_value = active_season
+        self.mock_data_manager.get_todays_daily_question.return_value = None
+        self.mock_config_instance.get_season_announce_end.return_value = True
+        self.mock_config_instance.get_season_reminder_days.return_value = 5
+
+        # Today is mid-month — not a reminder day and not expired
+        with patch("src.core.season_manager.date") as mock_date:
+            mock_date.today.return_value = date(2026, 4, 15)
+            self.game_runner.set_daily_question()
+
+        self.assertEqual(self.game_runner.pending_season_announcements, [])
+
         """Test get_reminder_message_content when no daily question is set."""
         self.game_runner.daily_q = None
         result = self.game_runner.get_reminder_message_content(tag_unanswered=True)

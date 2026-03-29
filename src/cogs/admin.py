@@ -1,3 +1,5 @@
+import logging
+
 import discord
 from discord.ext import commands
 
@@ -262,6 +264,78 @@ class Admin(commands.Cog):
         """(admin) Check the bot's response time."""
         response_content = "Pong!"
         await self.bot.send_message(response_content, interaction=ctx.interaction)
+
+    @admin.command(name="season", description="View or end the current season.")
+    async def season(
+        self,
+        ctx: commands.Context,
+        end: bool = False,
+        force: bool = False,
+    ):
+        """(admin) Show season info, or end the current season with end:True."""
+        await ctx.defer(ephemeral=True)
+
+        game = self.bot.game
+        season_manager = game.season_manager
+
+        if not season_manager.enabled:
+            await ctx.send("Seasons are not enabled.", ephemeral=True)
+            return
+
+        current_season = game.data_manager.get_current_season()
+        if not current_season:
+            await ctx.send("No active season found.", ephemeral=True)
+            return
+
+        if not end:
+            # Info view
+            current_day, total_days = season_manager.get_season_progress(current_season)
+            challenge = game.data_manager.get_season_challenge(current_season.season_id)
+            player_count = len(
+                game.data_manager.get_season_scores(
+                    current_season.season_id, limit=1000
+                )
+            )
+            challenge_str = (
+                f"{challenge.badge_emoji} {challenge.challenge_name}"
+                if challenge
+                else "None"
+            )
+            lines = [
+                f"**Season: {current_season.season_name}**",
+                f"ID:        {current_season.season_id}",
+                f"Dates:     {current_season.start_date} → {current_season.end_date}",
+                f"Progress:  Day {current_day}/{total_days}",
+                f"Challenge: {challenge_str}",
+                f"Players:   {player_count}",
+            ]
+            await ctx.send("\n".join(lines), ephemeral=True)
+            return
+
+        # end:True — mid-day guard
+        if game.daily_question_id is not None and not force:
+            await ctx.send(
+                "A question is active — ending the season now would freeze out players "
+                "who haven't answered yet. Wait until after the answer is revealed, "
+                "or use `force:True` to override.",
+                ephemeral=True,
+            )
+            return
+
+        if force and game.daily_question_id is not None:
+            logging.warning(
+                f"Admin {ctx.author} force-ending season {current_season.season_id} "
+                "while a daily question is active."
+            )
+
+        season_manager.finalize_season(current_season.season_id)
+        next_season = season_manager.get_or_create_current_season()
+        next_name = next_season.season_name if next_season else "unknown"
+        await ctx.send(
+            f"✅ Season **{current_season.season_name}** finalized. "
+            f"Next season: **{next_name}**.",
+            ephemeral=True,
+        )
 
 
 async def setup(bot):
