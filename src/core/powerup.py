@@ -186,7 +186,9 @@ class PowerUpManager(BaseManager):
         self.player_manager.update_score(attacker_id, stealable_amount)
         ctx.points_earned -= stealable_amount
 
-        return f"{self.emoji_stealing} <@{attacker_id}> stole {stealable_amount} pts from <@{target_id}>!"
+        thief_state = self._get_daily_state(attacker_id)
+        partial_note = " (partial steal)" if thief_state.steal_ratio < 1.0 else ""
+        return f"{self.emoji_stealing} <@{attacker_id}> stole {stealable_amount} pts from <@{target_id}>!{partial_note}"
 
     def hydrate_pending_powerups(self, question_id: int):
         """
