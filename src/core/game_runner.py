@@ -465,6 +465,12 @@ class GameRunner:
         streaks = {
             s["id"]: s["answer_streak"] for s in self.data_manager.get_player_streaks()
         }
+        # Zero out streaks for players who won't keep them today (evening leaderboard).
+        # This mirrors the reset_unanswered_streaks logic so the display is accurate
+        # even before end_daily_game() runs.
+        if self.daily_question_id:
+            keepers = self.data_manager.get_streak_keepers(self.daily_question_id)
+            streaks = {pid: s for pid, s in streaks.items() if pid in keepers}
 
         badge_map = self._build_daily_badges(self.daily_question_id, show_daily_bonuses)
 

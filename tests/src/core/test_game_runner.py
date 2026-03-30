@@ -473,6 +473,9 @@ class TestGameRunner(unittest.TestCase):
             },
         ]
         self.mock_data_manager.get_first_try_solvers.return_value = []
+        # Alice (id=1) and Charlie (id=3) answered correctly, so their streaks are kept.
+        # Bob (id=2) did not, so his streak (already 0) remains hidden.
+        self.mock_data_manager.get_streak_keepers.return_value = {"1", "3"}
 
         leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
 

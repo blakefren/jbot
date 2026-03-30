@@ -406,6 +406,21 @@ class DataManager:
         """
         return self._db.execute_query(query)
 
+    def get_streak_keepers(self, daily_question_id: int) -> set[str]:
+        """
+        Returns the set of player IDs that will retain their streak for today:
+        players who answered correctly or used the 'rest' power-up.
+        """
+        query = """
+            SELECT player_id AS id FROM guesses
+            WHERE daily_question_id = ? AND is_correct = 1
+            UNION
+            SELECT user_id AS id FROM powerup_usage
+            WHERE question_id = ? AND powerup_type = 'rest'
+        """
+        rows = self._db.execute_query(query, (daily_question_id, daily_question_id))
+        return {row["id"] for row in rows}
+
     def reset_unanswered_streaks(self, daily_question_id: int):
         """
         Resets the answer streak to 0 for all players who did not have a correct guess
