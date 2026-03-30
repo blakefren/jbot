@@ -511,5 +511,67 @@ class TestSimulatorJinxPreload(unittest.TestCase):
         self.assertEqual(sim.daily_state["T"].score_earned, 0)
 
 
+# ---------------------------------------------------------------------------
+# Simulator — REST event and rest_wakeup handling
+# ---------------------------------------------------------------------------
+
+
+class TestSimulatorRest(unittest.TestCase):
+    """Simulator dispatches rest events correctly and skips rest_wakeup."""
+
+    ANSWER = "correct"
+
+    def _make_sim(self, initial_states, events):
+        return DailyGameSimulator(
+            _make_question(),
+            [self.ANSWER],
+            None,
+            events,
+            initial_states,
+            _make_config(),
+        )
+
+    def test_rest_cancels_pending_jinx(self):
+        """When target rests after a forward jinx, jinxed_by is cleared."""
+        attacker = Player(id="A", name="A", score=0, answer_streak=2)
+        target = Player(id="T", name="T", score=0, answer_streak=5)
+        events = [
+            PowerUpEvent(_ts(8), "A", "jinx", "T"),
+            PowerUpEvent(_ts(9), "T", "rest", None),
+        ]
+        sim = self._make_sim({"A": attacker, "T": target}, events)
+        sim.run(apply_end_of_day=False)
+        self.assertIsNone(sim.daily_state["T"].jinxed_by)
+        self.assertTrue(sim.daily_state["T"].is_resting)
+
+    def test_rest_cancels_pending_steal(self):
+        """When target rests after a forward steal, steal_attempt_by is cleared."""
+        attacker = Player(id="A", name="A", score=0, answer_streak=4)
+        target = Player(id="T", name="T", score=0, answer_streak=5)
+        events = [
+            PowerUpEvent(_ts(8), "A", "steal", "T"),
+            PowerUpEvent(_ts(9), "T", "rest", None),
+        ]
+        sim = self._make_sim({"A": attacker, "T": target}, events)
+        sim.run(apply_end_of_day=False)
+        self.assertIsNone(sim.daily_state["T"].steal_attempt_by)
+        self.assertTrue(sim.daily_state["T"].is_resting)
+
+    def test_rest_wakeup_is_no_op(self):
+        """rest_wakeup events are skipped — no bonus applied inside the simulator."""
+        player = Player(id="P", name="P", score=0, answer_streak=2)
+        events = [
+            GuessEvent(_ts(9), "P", self.ANSWER),
+            # rest_wakeup logged by live game; simulator must ignore it
+            PowerUpEvent(_ts(9, 1), "P", "rest_wakeup", None),
+        ]
+        sim = self._make_sim({"P": player}, events)
+        sim.run(apply_end_of_day=False)
+        # No "rest" entry in simulator bonuses — multiplier is a DB concern, not replay
+        self.assertNotIn("rest", sim.daily_state["P"].bonuses)
+        # Score is correct (no double-application of any multiplier)
+        self.assertTrue(sim.daily_state["P"].is_correct)
+
+
 if __name__ == "__main__":
     unittest.main()

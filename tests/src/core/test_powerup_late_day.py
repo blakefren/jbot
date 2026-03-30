@@ -207,6 +207,20 @@ class TestJinxLateDay(unittest.TestCase):
         self.assertIsNone(manager._get_daily_state("target").jinxed_by)
         self.assertEqual(players["attacker"].score, score_after_jinx)
 
+    def test_late_jinx_forward_target_never_answers_cost_not_refunded(self):
+        """Late-day forward jinx where target never answers: stripped bonuses are forfeit."""
+        a_state = self._setup()
+        initial_attacker = self.players["attacker"].score  # 200
+        self.manager.jinx("attacker", "target", question_id=99)
+        score_after_jinx = self.players["attacker"].score  # 200 - 20 = 180
+
+        # Target never answers — no on_guess call for target
+        # Attacker's score must remain at the post-jinx value (cost is permanent)
+        self.assertEqual(self.players["attacker"].score, score_after_jinx)
+        self.assertLess(score_after_jinx, initial_attacker)
+        # Jinx flag stayed set on target (never resolved)
+        self.assertEqual(self.manager._get_daily_state("target").jinxed_by, "attacker")
+
 
 class TestStealLateDay(unittest.TestCase):
     """Late-day steal: thief already answered correctly today."""
@@ -578,6 +592,64 @@ class TestSimulatorStealLateDay(unittest.TestCase):
 
         # Final streak for thief: 5 (initial) + (-2) = 3
         self.assertEqual(results["thief"]["final_streak"], 3)
+
+    def test_steal_symmetry_early_vs_late_target_never_answers(self):
+        """Attacker-timing symmetry: early-forward and late-forward steal yield the same
+        net streak-related score when the target never answers.
+
+        Early path: thief steals (streak 5→2), then answers (streak_len=3, bonus=15).
+        Late path:  thief answers (streak_len=6, bonus=25), then steals (bonus revised to 15).
+        Both should produce score_earned = base + bonuses_with_streak_of_15.
+        """
+        ANSWER = self.ANSWER
+        # Both thieves answer after the hint (no before_hint bonus) and are first correct.
+        hint_ts = "2023-01-01 12:00:00"
+        answer_ts = "2023-01-01 13:00:00"  # after hint
+        steal_early_ts = "2023-01-01 09:00:00"  # before answer
+        steal_late_ts = "2023-01-01 14:00:00"  # after answer
+
+        question = Question(
+            question="Q?", answer=ANSWER, category="Test", clue_value=100
+        )
+        config = _make_config()
+
+        # --- Early steal path ---
+        early_initial = {
+            "thief": Player(id="thief", name="T", score=0, answer_streak=5),
+            "target": Player(id="target", name="V", score=0, answer_streak=3),
+        }
+        early_events = [
+            PowerUpEvent(steal_early_ts, "thief", "steal", "target"),
+            GuessEvent(answer_ts, "thief", ANSWER),
+            # target never answers
+        ]
+        early_sim = DailyGameSimulator(
+            question, [ANSWER], hint_ts, early_events, early_initial, config
+        )
+        early_results = early_sim.run(apply_end_of_day=False)
+
+        # --- Late steal path ---
+        late_initial = {
+            "thief": Player(id="thief", name="T", score=0, answer_streak=5),
+            "target": Player(id="target", name="V", score=0, answer_streak=3),
+        }
+        late_events = [
+            GuessEvent(answer_ts, "thief", ANSWER),
+            PowerUpEvent(steal_late_ts, "thief", "steal", "target"),
+            # target never answers
+        ]
+        late_sim = DailyGameSimulator(
+            question, [ANSWER], hint_ts, late_events, late_initial, config
+        )
+        late_results = late_sim.run(apply_end_of_day=False)
+
+        # Both paths must yield identical thief score_earned (symmetry principle)
+        self.assertEqual(
+            early_results["thief"]["score_earned"],
+            late_results["thief"]["score_earned"],
+            f"Symmetry broken: early={early_results['thief']['score_earned']} "
+            f"late={late_results['thief']['score_earned']}",
+        )
 
     def test_steal_late_forward_recalculates_streak_bonus(self):
         """Late-day forward steal recalculates streak bonus for thief.

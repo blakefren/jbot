@@ -22,6 +22,7 @@ from src.core.events import GuessContext
 from src.core.player import Player
 from src.core.powerup import PowerUpError, PowerUpManager
 from src.core.state import DailyPlayerState
+from tests.src.core._powerup_helpers import make_config as _make_config
 
 # ---------------------------------------------------------------------------
 # Shared fixture
@@ -222,6 +223,15 @@ class TestJinxBehavior(_PowerUpManagerTests):
             self.manager.jinx("3", "2", "q1")
         self.assertIn("already been jinxed", str(cm.exception))
         self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)
+
+    def test_jinx_early_forward_target_never_answers(self):
+        """Early-forward jinx: target never answers. Attacker silenced, no transfer."""
+        self.manager.jinx("1", "2", "q1")
+        # Attacker is silenced; power-up slot consumed
+        self.assertTrue(self.manager._get_daily_state("1").silenced)
+        # Day ends without target answering — no score changes for either player
+        self.assertEqual(self.players["1"].score, 100)
+        self.assertEqual(self.players["2"].score, 100)
 
 
 # ---------------------------------------------------------------------------
@@ -859,6 +869,148 @@ class TestInteractionMatrix(unittest.TestCase):
 
         self.assertEqual(self.players["A"].score, 115)  # 100 + 15 streak
         self.assertEqual(self.players["B"].score, 85)  # 100 - 15 (keeps fastest)
+
+    # --- Row 7: A forward-steals B → B answers → B late-jinxes C ---
+
+    def test_row7_forward_steal_then_late_jinx_no_cost(self):
+        """Row 7: A forward-steals B → B answers → B late-jinxes C.
+        Steal resolution takes B's non-streak bonuses; B pays 0 jinx-late cost.
+        """
+        # A steals B forward: streak 3-3=0
+        self.manager.steal("A", "B", "q1")
+
+        # B answers; steal resolves (A gets before_hint+fastest=20; B keeps streak)
+        ctx = GuessContext(
+            "B",
+            "PlayerB",
+            "ans",
+            True,
+            points_earned=145,
+            bonus_values={"before_hint": 10, "fastest_1": 10, "streak": 25},
+        )
+        self.manager.on_guess(ctx)
+        b_score_after_answer = self.players["B"].score  # 100 - 20 = 80
+
+        # B is now late-day
+        self.data_manager.get_last_correct_guess_date.side_effect = lambda pid: (
+            date.today() if pid == "B" else date.today() - timedelta(days=1)
+        )
+        # B late-jinxes C: before_hint and fastest already stolen — nothing to strip
+        self.manager.jinx("B", "C", "q1")
+        # B's score unchanged (jinx cost = 0)
+        self.assertEqual(self.players["B"].score, b_score_after_answer)
+
+    # --- Row 11: A forward-jinxes B → B answers → B late-steals C ---
+
+    def test_row11_forward_jinx_target_answers_late_steals(self):
+        """Row 11: A forward-jinxes B → B answers → B late-steals C.
+        Jinx transfers B's streak to A. Late steal finds no streak to revise.
+
+        Uses explicit steal_cost=3 to make arithmetic self-contained.
+        """
+        # Use an explicit config so the test isn't sensitive to .env cost values.
+        cfg = _make_config(steal_cost=3)
+        manager = PowerUpManager(self.player_manager, self.data_manager, cfg)
+
+        # A jinxes B forward
+        manager.jinx("A", "B", "q1")
+
+        # B answers: resolve_jinx transfers B's streak (25) to A
+        ctx = GuessContext(
+            "B",
+            "PlayerB",
+            "ans",
+            True,
+            points_earned=120,
+            bonus_values={"before_hint": 10, "fastest_1": 10, "streak": 25},
+        )
+        manager.on_guess(ctx)
+        self.assertEqual(self.players["A"].score, 125)  # 100 + 25
+        self.assertEqual(self.players["B"].score, 75)  # 100 - 25
+
+        # B is now late-day
+        self.data_manager.get_last_correct_guess_date.side_effect = lambda pid: (
+            date.today() if pid == "B" else date.today() - timedelta(days=1)
+        )
+        b_score_before_steal = self.players["B"].score  # 75
+
+        # B late-steals C (C hasn't answered): no streak bonus in B.bonuses → no revision
+        manager.steal("B", "C", "q1")
+        # B's score unchanged (bonus_delta = 0; streak key was popped by jinx)
+        self.assertEqual(self.players["B"].score, b_score_before_steal)
+        self.player_manager.set_streak.assert_called_once_with("B", 2)  # 5 - 3
+
+    # --- Row 12: B early-steals C → B answers → A retro-jinxes B ---
+
+    def test_row12_early_steal_then_retro_jinx(self):
+        """Row 12: B early-steals C → B answers → A retro-jinxes B.
+        B pays steal cost (streak 5→2 with cost=3). B earns reduced streak bonus
+        (streak_len=3 → 15 pts). A retro-jinxes: half of 15 = 7 transferred.
+
+        Uses explicit steal_cost=3 to make arithmetic self-contained.
+        """
+        cfg = _make_config(steal_cost=3)
+        manager = PowerUpManager(self.player_manager, self.data_manager, cfg)
+
+        # B early-steals C (forward cost=3): streak 5→2
+        manager.steal("B", "C", "q1")
+        self.assertEqual(self.players["B"].answer_streak, 2)
+
+        # B answers with reduced streak bonus (streak_len=3 → 15 pts)
+        ctx = GuessContext(
+            "B",
+            "PlayerB",
+            "ans",
+            True,
+            points_earned=135,
+            bonus_values={"streak": 15, "try_1": 20, "before_hint": 10},
+        )
+        manager.on_guess(ctx)
+        b_score_after_answer = self.players["B"].score
+
+        # A retro-jinxes B (B already answered with streak=15)
+        a_initial = self.players["A"].score
+        manager.jinx("A", "B", "q1")
+        # transferred = int(15 * 0.5) = 7
+        self.assertEqual(self.players["A"].score, a_initial + 7)
+        self.assertEqual(self.players["B"].score, b_score_after_answer - 7)
+
+    # --- Row 13: B answers → B late-steals C → A retro-jinxes B ---
+
+    def test_row13_late_steal_then_retro_jinx(self):
+        """Row 13: B answers (late) → B late-steals C → A retro-jinxes B.
+        Full streak bonus (25) earned at answer. Steal (cost=3) revises to 15 (delta=-10).
+        Retro-jinx takes half of 15 = 7.
+
+        Uses explicit steal_cost=3 to make arithmetic self-contained.
+        """
+        cfg = _make_config(steal_cost=3)
+        manager = PowerUpManager(self.player_manager, self.data_manager, cfg)
+
+        # B is late-day (already answered correctly today)
+        self.data_manager.get_last_correct_guess_date.side_effect = lambda pid: (
+            date.today() if pid == "B" else date.today() - timedelta(days=1)
+        )
+        # Manually set B's in-memory state as if they already answered
+        b_state = manager._get_daily_state("B")
+        b_state.is_correct = True
+        b_state.score_earned = 145
+        b_state.bonuses = {"streak": 25, "before_hint": 10, "try_1": 20}
+
+        # B late-steals C (forward: C hasn't answered)
+        # effective=6, cost=3, new_bonus_streak=3, new_bonus=15, delta=-10
+        b_score_initial = self.players["B"].score  # 100
+        manager.steal("B", "C", "q1")
+        self.assertEqual(self.players["B"].score, b_score_initial - 10)
+        self.assertEqual(b_state.bonuses.get("streak"), 15)
+
+        # A retro-jinxes B (streak=15 now)
+        a_initial = self.players["A"].score  # 100
+        b_after_steal = self.players["B"].score  # 90
+        manager.jinx("A", "B", "q1")
+        # transferred = int(15 * 0.5) = 7
+        self.assertEqual(self.players["A"].score, a_initial + 7)
+        self.assertEqual(self.players["B"].score, b_after_steal - 7)
 
 
 if __name__ == "__main__":
