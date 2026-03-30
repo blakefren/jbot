@@ -192,7 +192,7 @@ class PowerUpManager(BaseManager):
         """
         Applies overnight pre-loaded powerups to the current day's daily_state.
         Called at the start of a new question day before the question is announced.
-        Streak costs for steal_preload were already deducted at pre-load time.
+        Streak costs for steal_preload are deducted here at hydration, not at pre-load time.
         """
         if not isinstance(question_id, int) or question_id <= 0:
             logging.warning(
@@ -277,10 +277,21 @@ class PowerUpManager(BaseManager):
 
         target_state = self._get_daily_state(target_id)
 
+        if target_state.is_resting:
+            raise PowerUpError(
+                f"<@{target_id}> is resting today — you can't jinx a resting player!"
+            )
+
         if target_state.jinxed_by:
             raise PowerUpError(f"<@{target_id}> has already been jinxed!")
 
-        # Attacker is silenced in all cases (moot if already answered, kept for consistency)
+        # Block retroactive jinx when the target has no streak bonus — the attacker
+        # would consume their power-up slot (and pay late costs) for zero gain.
+        if target_state.is_correct and not target_state.bonuses.get("streak", 0):
+            raise PowerUpError(
+                f"<@{target_id}> already answered but has no streak bonus — nothing to jinx!"
+            )
+
         attacker_state.silenced = True
 
         if is_late_day:
@@ -325,18 +336,12 @@ class PowerUpManager(BaseManager):
         transferred = self.engine.apply_jinx(self.daily_state, attacker_id, target_id)
 
         if self._get_daily_state(target_id).is_correct:
-            # Retroactive: target already answered
-            if transferred > 0:
-                self.player_manager.update_score(target_id, -transferred)
-                self.player_manager.update_score(attacker_id, transferred)
-                return (
-                    f"{self.emoji_jinxed} <@{target_id}> already answered \u2014 retroactive jinx! "
-                    f"You swiped half their streak bonus ({transferred} pts). "
-                    f"{self.emoji_silenced} You still can't answer until the hint is revealed."
-                )
+            # Retroactive: target already answered (no-streak case blocked above)
+            self.player_manager.update_score(target_id, -transferred)
+            self.player_manager.update_score(attacker_id, transferred)
             return (
-                f"{self.emoji_jinxed} <@{target_id}> already answered but had no streak bonus \u2014 "
-                f"nothing to steal! "
+                f"{self.emoji_jinxed} <@{target_id}> already answered \u2014 retroactive jinx! "
+                f"You swiped half their streak bonus ({transferred} pts). "
                 f"{self.emoji_silenced} You still can't answer until the hint is revealed."
             )
 
@@ -408,6 +413,11 @@ class PowerUpManager(BaseManager):
             raise PowerUpError("You have already used a power-up today.")
 
         target_state = self._get_daily_state(target_id)
+
+        if target_state.is_resting:
+            raise PowerUpError(
+                f"<@{target_id}> is resting today — you can't steal from a resting player!"
+            )
 
         if target_state.steal_attempt_by:
             raise PowerUpError(f"<@{target_id}> is already being targeted for theft!")

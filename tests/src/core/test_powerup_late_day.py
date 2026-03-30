@@ -186,17 +186,18 @@ class TestJinxLateDay(unittest.TestCase):
         self.assertEqual(self.players["attacker"].score, expected_attacker)
         self.assertEqual(self.players["target"].score, initial_target - 10)
 
-    def test_late_jinx_retro_no_streak_no_transfer(self):
-        """When target answered but has no streak bonus, no transfer occurs."""
+    def test_late_jinx_retro_no_streak_blocked(self):
+        """When target answered but has no streak bonus, jinx is blocked entirely."""
         self._setup()
         t_state = self.manager._get_daily_state("target")
         t_state.is_correct = True
         t_state.bonuses = {}
 
         initial_attacker = self.players["attacker"].score
-        self.manager.jinx("attacker", "target", question_id=99)
-        # Only attacker pays the strip cost, no gain from target
-        self.assertEqual(self.players["attacker"].score, initial_attacker - 20)
+        with self.assertRaises(PowerUpError):
+            self.manager.jinx("attacker", "target", question_id=99)
+        # No costs paid, no changes
+        self.assertEqual(self.players["attacker"].score, initial_attacker)
 
     def test_powerup_used_today_blocks_second_jinx(self):
         """A second jinx attempt by the same attacker is blocked."""

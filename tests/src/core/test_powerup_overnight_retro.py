@@ -250,11 +250,11 @@ class TestRetroactiveJinx(unittest.TestCase):
         manager.jinx("attacker", "target", question_id=99)
         dm.log_powerup_usage.assert_called_once_with("attacker", "jinx", "target", 99)
 
-    def test_retro_jinx_no_streak_bonus_no_transfer(self):
+    def test_retro_jinx_no_streak_bonus_blocked(self):
         manager, pm, dm, players = self._setup_with_answered_target(streak_bonus=0)
-        result = manager.jinx("attacker", "target", question_id=99)
-        self.assertIn("no streak bonus", result)
-        # No score changes
+        with self.assertRaises(PowerUpError):
+            manager.jinx("attacker", "target", question_id=99)
+        # No score changes, power-up slot not consumed
         self.assertEqual(players["attacker"].score, 100)
         self.assertEqual(players["target"].score, 100)
 
