@@ -178,9 +178,13 @@ class PowerUpEngine:
             effective_streak = initial_streak + 1
             new_bonus_streak = max(0, effective_streak - cost)
             thief_state.streak_delta = new_bonus_streak - initial_streak
-            bonus_delta = self.recalculate_streak_bonus(
-                daily_state, thief_id, new_bonus_streak
-            )
+            # Only recalculate if the streak bonus is still present in state.
+            # If jinx already transferred it away, bonuses["streak"] is gone and there
+            # is nothing to revise — the streak bonus belongs to the jinxer.
+            if "streak" in thief_state.bonuses:
+                bonus_delta = self.recalculate_streak_bonus(
+                    daily_state, thief_id, new_bonus_streak
+                )
         else:
             thief_state.streak_delta = -streak_deducted
 
