@@ -309,7 +309,7 @@ class SeasonManager:
         return self.build_season_reminder(current_season, leaderboard, days_remaining)
 
     def get_season_leaderboard(
-        self, season_id: Optional[int] = None, limit: int = 10
+        self, season_id: Optional[int] = None, limit: int = 25
     ) -> list[tuple[SeasonScore, str]]:
         """
         Get the leaderboard for a season.
@@ -338,7 +338,7 @@ class SeasonManager:
 
         return leaderboard
 
-    def get_all_time_leaderboard(self, limit: int = 10) -> list[tuple[dict, str]]:
+    def get_all_time_leaderboard(self, limit: int = 25) -> list[tuple[dict, str]]:
         """
         Get the all-time leaderboard based on lifetime scores.
 
