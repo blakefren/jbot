@@ -64,7 +64,7 @@ class Power(commands.Cog):
                     self.bot.game.daily_q.answer,
                 )
                 # Send public announcement to the channel
-                await self.bot.send_message(public_msg, interaction=ctx.interaction)
+                await ctx.channel.send(public_msg)
                 # Send private answer disclosure (ephemeral for slash, DM for text)
                 if ctx.interaction:
                     await self.bot.send_message(
