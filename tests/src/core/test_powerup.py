@@ -682,6 +682,28 @@ class TestStealEnforcementAndScaling(unittest.TestCase):
         self.assertEqual(self.players["partial"].score, 100 + expected_stolen)
         self.assertEqual(self.players["target"].score, 100 - expected_stolen)
 
+    def test_partial_steal_forward_resolution_note(self):
+        """Forward steal resolution message includes '(partial steal)' when streak < cost."""
+        m = self._make_manager()
+        cost = m.engine.steal_streak_cost
+        # Force streak=1 which is always below any valid cost (minimum cost is 2).
+        self.players["partial"].answer_streak = 1
+        m.steal("partial", "target", "q1")
+        self.assertLess(m._get_daily_state("partial").steal_ratio, 1.0)
+
+        ctx = GuessContext(
+            "target",
+            "Target",
+            "ans",
+            True,
+            points_earned=130,
+            bonus_values={"before_hint": 10, "fastest_1": 20},
+        )
+        msgs = m.on_guess(ctx)
+        expected_stolen = round(30 * (1 / cost))
+        self.assertTrue(any(f"stole {expected_stolen} pts" in msg for msg in msgs))
+        self.assertTrue(any("partial steal" in msg for msg in msgs))
+
     def test_partial_steal_forward_clears_target_bonuses(self):
         """After a partial forward steal resolves, the target's bonus dict is empty."""
         m = self._make_manager()
