@@ -112,6 +112,76 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
             "Retro steal!", interaction=self.ctx.interaction, ephemeral=False
         )
 
+    async def test_jinx_error_is_ephemeral(self):
+        """PowerUpError from jinx is sent back as an ephemeral reply."""
+        from src.core.powerup import PowerUpError
+
+        mock_manager = MagicMock()
+        mock_manager.jinx.side_effect = PowerUpError("already used a power-up today")
+        mock_manager.daily_state = {}
+        self.bot.game.managers.get.return_value = mock_manager
+
+        await self.cog.jinx.callback(self.cog, self.ctx, target=self.target_member)
+
+        self.bot.send_message.assert_awaited_once_with(
+            "already used a power-up today",
+            interaction=self.ctx.interaction,
+            ephemeral=True,
+        )
+
+    async def test_steal_error_is_ephemeral(self):
+        """PowerUpError from steal is sent back as an ephemeral reply."""
+        from src.core.powerup import PowerUpError
+
+        mock_manager = MagicMock()
+        mock_manager.steal.side_effect = PowerUpError("already used a power-up today")
+        mock_manager.daily_state = {}
+        self.bot.game.managers.get.return_value = mock_manager
+
+        await self.cog.steal.callback(self.cog, self.ctx, target=self.target_member)
+
+        self.bot.send_message.assert_awaited_once_with(
+            "already used a power-up today",
+            interaction=self.ctx.interaction,
+            ephemeral=True,
+        )
+
+    async def test_rest_error_is_ephemeral(self):
+        """Exception from rest (e.g. PowerUpError) is sent back as an ephemeral reply."""
+        from src.core.powerup import PowerUpError
+
+        self.bot.game.daily_q = MagicMock()
+        self.bot.game.daily_q.answer = "Test Answer"
+        mock_manager = MagicMock()
+        mock_manager.rest.side_effect = PowerUpError("already used a power-up today")
+        self.bot.game.managers.get.return_value = mock_manager
+
+        await self.cog.rest.callback(self.cog, self.ctx)
+
+        self.ctx.channel.send.assert_not_awaited()
+        self.bot.send_message.assert_awaited_once_with(
+            "already used a power-up today",
+            interaction=self.ctx.interaction,
+            ephemeral=True,
+        )
+
+    async def test_rest_text_command_sends_dm(self):
+        """When invoked as a text command (no interaction), private reveal goes to DM."""
+        self.bot.game.daily_q = MagicMock()
+        self.bot.game.daily_q.answer = "Test Answer"
+        mock_manager = MagicMock()
+        mock_manager.rest.return_value = ("public msg", "private msg")
+        self.bot.game.managers.get.return_value = mock_manager
+
+        # Simulate text command: no interaction
+        self.ctx.interaction = None
+
+        await self.cog.rest.callback(self.cog, self.ctx)
+
+        self.ctx.channel.send.assert_awaited_once_with("public msg")
+        self.ctx.author.send.assert_awaited_once_with("private msg")
+        self.bot.send_message.assert_not_awaited()
+
     async def test_power_group(self):
         """Test the power group command sends help."""
         self.ctx.invoked_subcommand = None
