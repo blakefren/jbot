@@ -304,6 +304,29 @@ class TestStealLateDay(unittest.TestCase):
         # No score change for streak delta (both bonuses 0)
         self.pm.update_score.assert_not_called()
 
+    def test_late_steal_after_jinx_took_streak_no_recalculation(self):
+        """When thief was jinxed and their streak bonus was already transferred away,
+        a subsequent late steal must NOT add a new streak bonus to the thief's score.
+
+        Regression: recalculate_streak_bonus previously read old_bonus=0 (key absent
+        because jinx popped it) and added new_bonus as a full positive delta.
+        """
+        # thief streak=5 → answered → streak bonus=25, then jinx popped it
+        t_state = self._setup(thief_streak=5, thief_bonuses={})
+        # Simulate jinx having already transferred the streak bonus away:
+        # bonuses dict has no "streak" key (popped), score_earned reflects the loss.
+        t_state.jinxed_by = "jinxer"
+        initial_score = self.players["thief"].score
+
+        self.manager.steal("thief", "target", question_id=1)
+
+        # Streak days should still be deducted
+        self.pm.set_streak.assert_called_once_with("thief", 2)  # 5 - 3
+        # No score adjustment for streak bonus — jinx already owns it
+        self.pm.update_score.assert_not_called()
+        self.assertEqual(self.players["thief"].score, initial_score)
+        self.assertNotIn("streak", t_state.bonuses)
+
 
 # ---------------------------------------------------------------------------
 # Simulator tests — DailyGameSimulator
