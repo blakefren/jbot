@@ -180,16 +180,16 @@ The doc defines 13 multi-player combination scenarios. Current coverage per row:
 
 | Gap | Description | Priority | Done? |
 |-----|-------------|----------|-------|
-| 1.1 | Self-targeting blocked (jinx + steal) | H | [ ] |
-| 1.2 | One-per-day: jinx→rest, steal→rest | L | [ ] |
-| 2.1 | Resting player cannot be targeted | H | [ ] |
-| 2.2 | Attacker silence not lifted on target rest | M | [ ] |
-| 2.3 | Steal streak cost forfeit on target rest | M | [ ] |
-| 2.4 | Late-jinx bonuses not refunded on target rest | M | [ ] |
-| 4.1 | Steal attacker timing symmetry assertion | M | [ ] |
-| 5.1 | Simultaneous jinx + steal on same target | H | [ ] |
-| 5.2 | Forward steal target early-jinxes | L | [ ] |
-| 5.3 | Retro steal target had jinxed | L | [ ] |
-| 5.4 | Jinx target also steals | L | [ ] |
-| 6.1 | Simulator: `jinx_preload` dispatch | M | [ ] |
-| 6.2 | Simulator: `rest_wakeup` skipped | M | [ ] |
+| 1.1 | Self-targeting blocked (jinx + steal) | H | [x] |
+| 1.2 | One-per-day: jinx→rest, steal→rest | L | [x] |
+| 2.1 | Resting player cannot be targeted | H | [x] |
+| 2.2 | Attacker silence not lifted on target rest | M | [x] |
+| 2.3 | Steal streak cost forfeit on target rest | M | [x] |
+| 2.4 | Late-jinx bonuses not refunded on target rest | M | [x] |
+| 4.1 | Steal attacker timing symmetry assertion | M | [x] |
+| 5.1 | Simultaneous jinx + steal on same target | H | [x] |
+| 5.2 | Forward steal target early-jinxes | L | [x] |
+| 5.3 | Retro steal target had jinxed | L | [x] |
+| 5.4 | Jinx target also steals | L | [x] |
+| 6.1 | Simulator: `jinx_preload` dispatch | M | [x] |
+| 6.2 | Simulator: `rest_wakeup` skipped | M | [x] |

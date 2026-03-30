@@ -175,3 +175,33 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
         results = simulator.run(apply_end_of_day=False)
         # Guess is before the datetime hint_timestamp, so before-hint bonus applies
         self.assertIn("🧠", results["p1"]["badges"])
+
+    def test_simulator_rest_wakeup_is_noop(self):
+        """rest_wakeup events are silently skipped — identical output as a run without them."""
+        base_events = [GuessEvent("2023-01-01 10:00:00", "p1", "4")]
+        wakeup_events = base_events + [
+            PowerUpEvent("2023-01-01 10:01:00", "p1", "rest_wakeup", None)
+        ]
+
+        def fresh_states():
+            return {"p1": Player(id="p1", name="Player 1", score=100, answer_streak=2)}
+
+        sim_a = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            base_events,
+            fresh_states(),
+            self.config,
+        )
+        sim_b = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            wakeup_events,
+            fresh_states(),
+            self.config,
+        )
+        score_a = sim_a.run(apply_end_of_day=False)["p1"]["score_earned"]
+        score_b = sim_b.run(apply_end_of_day=False)["p1"]["score_earned"]
+        self.assertEqual(score_a, score_b)

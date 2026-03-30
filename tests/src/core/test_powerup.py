@@ -133,6 +133,20 @@ class TestRestBehavior(_PowerUpManagerTests):
         self.assertEqual(self.players["1"].score, 120)
         self.data_manager.clear_pending_multiplier.assert_called_once_with("1")
 
+    def test_rest_does_not_lift_attacker_silence(self):
+        """When a jinx is cancelled by the target resting, the attacker remains silenced."""
+        self.manager.jinx("1", "2", "q1")
+        self.manager.rest("2", "q1", "Ans")
+        self.assertIsNone(self.manager._get_daily_state("2").jinxed_by)
+        self.assertTrue(self.manager._get_daily_state("1").silenced)
+
+    def test_rest_steal_cost_not_refunded(self):
+        """When a steal is cancelled by the target resting, the thief's streak is not restored."""
+        self.manager.steal("1", "2", "q1")
+        post_steal_streak = self.players["1"].answer_streak
+        self.manager.rest("2", "q1", "Ans")
+        self.assertEqual(self.players["1"].answer_streak, post_steal_streak)
+
 
 # ---------------------------------------------------------------------------
 # JINX
@@ -383,6 +397,52 @@ class TestGuards(_PowerUpManagerTests):
             self.manager.rest("1", None, "Ans")
         self.assertEqual(str(cm.exception), "There is no active question right now.")
 
+    # --- self-targeting ---
+
+    def test_jinx_self_target_blocked(self):
+        """Jinx raises PowerUpError when attacker and target are the same player."""
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.jinx("1", "1", "q1")
+        self.assertIn("yourself", str(cm.exception))
+
+    def test_steal_self_target_blocked(self):
+        """Steal raises PowerUpError when thief and target are the same player."""
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.steal("1", "1", "q1")
+        self.assertIn("yourself", str(cm.exception))
+
+    # --- one-per-day: missing permutations ---
+
+    def test_rest_blocked_after_jinx(self):
+        """A player who already jinxed cannot then rest."""
+        self.manager.jinx("1", "2", "q1")
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.rest("1", "q1", "Ans")
+        self.assertIn("already used a power-up today", str(cm.exception))
+
+    def test_rest_blocked_after_steal(self):
+        """A player who already stole cannot then rest."""
+        self.manager.steal("1", "2", "q1")
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.rest("1", "q1", "Ans")
+        self.assertIn("already used a power-up today", str(cm.exception))
+
+    # --- resting target cannot be attacked ---
+
+    def test_jinx_blocked_when_target_is_resting(self):
+        """Jinx raises PowerUpError when the target is currently resting."""
+        self.manager._get_daily_state("2").is_resting = True
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.jinx("1", "2", "q1")
+        self.assertIn("resting", str(cm.exception))
+
+    def test_steal_blocked_when_target_is_resting(self):
+        """Steal raises PowerUpError when the target is currently resting."""
+        self.manager._get_daily_state("2").is_resting = True
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.steal("1", "2", "q1")
+        self.assertIn("resting", str(cm.exception))
+
 
 # ---------------------------------------------------------------------------
 # Can-answer / silence gating
@@ -616,6 +676,189 @@ class TestStealEnforcementAndScaling(unittest.TestCase):
         tgt.bonuses = {"before_hint": 10}
         m.steal("partial", "target", "q1")
         self.assertEqual(m._get_daily_state("target").bonuses, {})
+
+
+# ---------------------------------------------------------------------------
+# Interaction matrix
+# ---------------------------------------------------------------------------
+
+
+class TestInteractionMatrix(unittest.TestCase):
+    """
+    Multi-player combination tests from the interaction matrix in the spec.
+
+    Players:
+      "A" — jinxer / retro-jinxer, streak=3
+      "B" — primary target,        streak=5
+      "C" — thief,                  streak=6
+      "D" — secondary target for C, streak=4
+    """
+
+    def setUp(self):
+        self.player_manager = MagicMock()
+        self.data_manager = MagicMock()
+        self.players = {
+            "A": Player(id="A", name="PlayerA", score=100, answer_streak=3),
+            "B": Player(id="B", name="PlayerB", score=100, answer_streak=5),
+            "C": Player(id="C", name="PlayerC", score=100, answer_streak=6),
+            "D": Player(id="D", name="PlayerD", score=100, answer_streak=4),
+        }
+        self.player_manager.get_player.side_effect = lambda pid: self.players.get(pid)
+        self.data_manager.get_last_correct_guess_date.return_value = (
+            date.today() - timedelta(days=1)
+        )
+        self.data_manager.get_today.return_value = date.today()
+
+        def update_score(pid, amount):
+            if pid in self.players:
+                self.players[pid].score += amount
+
+        def set_streak(pid, value):
+            if pid in self.players:
+                self.players[pid].answer_streak = value
+
+        self.player_manager.update_score.side_effect = update_score
+        self.player_manager.set_streak.side_effect = set_streak
+        self.data_manager.get_pending_multiplier.return_value = 0.0
+        self.data_manager.get_pending_powerup.return_value = None
+        self.data_manager.get_pending_powerup_for_target.return_value = None
+
+        self.manager = PowerUpManager(self.player_manager, self.data_manager)
+
+    # --- Gap 5.1: simultaneous jinx + steal on same target ---
+
+    def test_jinx_and_steal_coexist_on_same_target(self):
+        """A jinxes B (forward), C steals from B (forward).
+        When B answers: A gets streak bonus, C gets non-streak, B keeps base.
+        """
+        self.manager.jinx("A", "B", "q1")
+        self.manager.steal("C", "B", "q1")
+
+        ctx = GuessContext(
+            "B",
+            "PlayerB",
+            "ans",
+            True,
+            points_earned=130,
+            bonus_values={"streak": 25, "before_hint": 10},
+        )
+        self.manager.on_guess(ctx)
+
+        self.assertEqual(self.players["A"].score, 125)  # 100 + 25 streak
+        self.assertEqual(self.players["C"].score, 110)  # 100 + 10 non-streak
+        self.assertEqual(self.players["B"].score, 65)  # 100 - 25 - 10
+
+    def test_retro_jinx_and_steal_coexist_on_same_target(self):
+        """A retro-jinxes B, C retro-steals B. Bonus pools don't overlap.
+        A gets 50% of B's streak bonus; C gets all remaining non-streak bonuses.
+        """
+        b_state = self.manager._get_daily_state("B")
+        b_state.is_correct = True
+        b_state.score_earned = 130
+        b_state.bonuses = {"streak": 20, "before_hint": 10}
+
+        self.manager.jinx("A", "B", "q1")  # retro: int(20 * 0.5) = 10 transferred
+        self.manager.steal("C", "B", "q1")  # retro: "before_hint"=10 (streak gone)
+
+        self.assertEqual(self.players["A"].score, 110)  # 100 + 10
+        self.assertEqual(self.players["C"].score, 110)  # 100 + 10
+        self.assertEqual(self.players["B"].score, 80)  # 100 - 10 - 10
+
+    # --- Gap 5.2: A forward-steals B, B early-jinxes a third player ---
+
+    def test_forward_steal_target_jinxes_another_player(self):
+        """C steals from B (forward). B jinxes D (B silenced; won't earn before_hint).
+        B answers after the hint with limited bonuses; C only gets what B actually earned.
+        """
+        self.manager.steal("C", "B", "q1")
+        self.manager.jinx("B", "D", "q1")  # B silenced — can't earn before_hint
+
+        # B answers after hint: no before_hint bonus earned
+        ctx = GuessContext(
+            "B",
+            "PlayerB",
+            "ans",
+            True,
+            points_earned=110,
+            bonus_values={"fastest": 10},
+        )
+        msgs = self.manager.on_guess(ctx)
+
+        self.assertTrue(any("stole 10 pts" in m for m in msgs))
+        self.assertEqual(self.players["C"].score, 110)  # 100 + 10
+        self.assertEqual(self.players["B"].score, 90)  # 100 - 10
+
+    # --- Gap 5.3: A retro-steals B who had jinxed someone ---
+
+    def test_retro_steal_target_had_early_jinxed(self):
+        """B early-jinxes D (B silenced). B answers. C retro-steals B.
+        C gets B's non-streak bonuses. B's streak bonus is not stealable.
+        """
+        self.manager.jinx("B", "D", "q1")  # B jinxes D; B silenced
+
+        # B answers — bonuses set in DailyPlayerState via on_guess
+        ctx = GuessContext(
+            "B",
+            "PlayerB",
+            "ans",
+            True,
+            points_earned=125,
+            bonus_values={"fastest": 10, "streak": 15},
+        )
+        self.manager.on_guess(ctx)
+
+        # C retro-steals B (B already answered)
+        self.manager.steal("C", "B", "q1")
+
+        self.assertEqual(self.players["C"].score, 110)  # 100 + 10 fastest
+        self.assertEqual(self.players["B"].score, 90)  # 100 - 10
+
+    def test_retro_steal_target_had_late_jinxed(self):
+        """B answers (late-day) then late-jinxes D, stripping B's non-streak bonuses.
+        C retro-steals B: no non-streak bonuses remain — nothing stealable.
+        """
+        self.data_manager.get_last_correct_guess_date.side_effect = lambda pid: (
+            date.today() if pid == "B" else date.today() - timedelta(days=1)
+        )
+        b_state = self.manager._get_daily_state("B")
+        b_state.is_correct = True
+        b_state.score_earned = 140
+        b_state.bonuses = {"before_hint": 10, "fastest": 10, "streak": 15}
+
+        # B late-jinxes D: strips before_hint(10) + fastest(10) from B
+        self.manager.jinx("B", "D", "q1")
+        score_b_after_jinx = self.players["B"].score  # 100 - 20 = 80
+
+        # C retro-steals B: only "streak" remains — not stealable
+        result = self.manager.steal("C", "B", "q1")
+
+        self.assertIn("nothing to steal", result)
+        self.assertEqual(self.players["B"].score, score_b_after_jinx)
+        self.assertEqual(self.players["C"].score, 100)  # no points gained
+
+    # --- Gap 5.4: A jinxes B who also steals from someone ---
+
+    def test_forward_jinx_target_also_steals(self):
+        """A forward-jinxes B. B steals from C (paying streak cost, B streak 5→2).
+        B answers: streak bonus based on B's reduced streak.
+        A gets that reduced streak bonus.
+        """
+        self.manager.jinx("A", "B", "q1")  # A silenced; B will lose streak bonus
+        self.manager.steal("B", "C", "q1")  # B pays steal cost: streak 5→2
+
+        # B's streak is now 2. streak_length=3 on answer → bonus=15 (3*5).
+        ctx = GuessContext(
+            "B",
+            "PlayerB",
+            "ans",
+            True,
+            points_earned=115,
+            bonus_values={"streak": 15, "fastest": 10},
+        )
+        self.manager.on_guess(ctx)
+
+        self.assertEqual(self.players["A"].score, 115)  # 100 + 15 streak
+        self.assertEqual(self.players["B"].score, 85)  # 100 - 15 (keeps fastest)
 
 
 if __name__ == "__main__":

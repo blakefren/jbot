@@ -485,5 +485,31 @@ class TestSimulatorRetroactiveSteal(unittest.TestCase):
         self.assertGreater(attacker_state.score_earned, 0)
 
 
+class TestSimulatorJinxPreload(unittest.TestCase):
+    """jinx_preload simulator events: flags are set, no scores change."""
+
+    ANSWER = "correct"
+
+    def _make_simulator(self, initial_states, events):
+        q = MagicMock()
+        q.answer = self.ANSWER
+        q.clue_value = 100
+        return DailyGameSimulator(
+            q, [self.ANSWER], None, events, initial_states, _make_config()
+        )
+
+    def test_simulator_jinx_preload_sets_flags_only(self):
+        """jinx_preload sets silenced/jinxed_by flags but earns no score."""
+        attacker = Player(id="A", name="A", score=0, answer_streak=2)
+        target = Player(id="T", name="T", score=0, answer_streak=5)
+        events = [PowerUpEvent(_ts(2), "A", "jinx_preload", "T")]
+        sim = self._make_simulator({"A": attacker, "T": target}, events)
+        sim.run(apply_end_of_day=False)
+        self.assertTrue(sim.daily_state["A"].silenced)
+        self.assertEqual(sim.daily_state["T"].jinxed_by, "A")
+        self.assertEqual(sim.daily_state["A"].score_earned, 0)
+        self.assertEqual(sim.daily_state["T"].score_earned, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

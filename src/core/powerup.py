@@ -244,6 +244,9 @@ class PowerUpManager(BaseManager):
         if not attacker or not target:
             raise PowerUpError("Invalid player(s).")
 
+        if attacker_id == target_id:
+            raise PowerUpError("You cannot target yourself.")
+
         if question_id is None:
             # --- Overnight pre-load path ---
             if self.data_manager.get_pending_powerup(attacker_id):
@@ -366,6 +369,9 @@ class PowerUpManager(BaseManager):
 
         if not thief or not target:
             raise PowerUpError("Invalid player(s).")
+
+        if thief_id == target_id:
+            raise PowerUpError("You cannot target yourself.")
 
         current_streak = thief.answer_streak if thief else 0
 

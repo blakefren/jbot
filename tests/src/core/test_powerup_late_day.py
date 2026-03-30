@@ -186,6 +186,27 @@ class TestJinxLateDay(unittest.TestCase):
         )
         self.assertIn("hint", result)
 
+    def test_late_jinx_bonuses_not_refunded_when_target_rests(self):
+        """Bonuses stripped as the late-jinx cost are not restored when the target rests."""
+        today = date.today()
+        players = {
+            "attacker": Player(id="attacker", name="A", score=200, answer_streak=3),
+            "target": Player(id="target", name="T", score=150, answer_streak=5),
+        }
+        manager, _pm, dm = _make_manager(players, return_today=False)
+        dm.get_last_correct_guess_date.side_effect = lambda pid: (
+            today if pid == "attacker" else today - timedelta(days=1)
+        )
+        a_state = manager._get_daily_state("attacker")
+        a_state.is_correct = True
+        a_state.score_earned = 140
+        a_state.bonuses = {"before_hint": 10, "fastest_1": 10, "streak": 15}
+        manager.jinx("attacker", "target", question_id=99)
+        score_after_jinx = players["attacker"].score
+        manager.rest("target", 99, "Ans")
+        self.assertIsNone(manager._get_daily_state("target").jinxed_by)
+        self.assertEqual(players["attacker"].score, score_after_jinx)
+
 
 class TestStealLateDay(unittest.TestCase):
     """Late-day steal: thief already answered correctly today."""
@@ -677,6 +698,33 @@ class TestStealThenLateJinxNoDoubleDeduction(unittest.TestCase):
         # A's final score: 115 (after steal, no double-deduction from jinx cost).
         # Without the fix this would be 100 (jinx cost re-deducts already-stolen bonuses).
         self.assertEqual(results["A"]["score_earned"], 115)
+
+    def test_early_and_late_steal_same_net_cost(self):
+        """Early and late forward steal both result in the same thief streak after the steal."""
+        streak = 5
+        # Early steal: thief has NOT answered yet
+        early_players = {
+            "thief": Player(id="thief", name="T", score=300, answer_streak=streak),
+            "target": Player(id="target", name="V", score=200, answer_streak=4),
+        }
+        early_manager, _, _ = _make_manager(early_players, return_today=False)
+        early_manager.steal("thief", "target", question_id=1)
+        early_streak = early_players["thief"].answer_streak
+
+        # Late steal: thief HAS answered already today
+        late_players = {
+            "thief": Player(id="thief", name="T", score=300, answer_streak=streak),
+            "target": Player(id="target", name="V", score=200, answer_streak=4),
+        }
+        late_manager, _, _ = _make_manager(late_players, return_today=True)
+        thief_state = late_manager._get_daily_state("thief")
+        thief_state.is_correct = True
+        thief_state.score_earned = 200
+        thief_state.bonuses = {"streak": 25}
+        late_manager.steal("thief", "target", question_id=1)
+        late_streak = late_players["thief"].answer_streak
+
+        self.assertEqual(early_streak, late_streak)
 
 
 if __name__ == "__main__":
