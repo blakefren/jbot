@@ -272,11 +272,15 @@ class TestStealBehavior(_PowerUpManagerTests):
         """Forward steal: target answers with only a streak bonus (not stealable); no transfer occurs."""
         self.manager.steal("1", "2", "q1")
         msgs = self.manager.on_guess(
-            GuessContext("2", "P2", "ans", True, points_earned=115, bonus_values={"streak": 15})
+            GuessContext(
+                "2", "P2", "ans", True, points_earned=115, bonus_values={"streak": 15}
+            )
         )
         self.assertFalse(any("stole" in m for m in msgs))
         self.assertEqual(self.players["1"].score, 100)  # thief gains nothing
-        self.assertEqual(self.players["2"].score, 100)  # target keeps base (streak not stealable)
+        self.assertEqual(
+            self.players["2"].score, 100
+        )  # target keeps base (streak not stealable)
 
     def test_steal_first_try_bonus(self):
         """First-try bonus is included in the stealable pool."""
