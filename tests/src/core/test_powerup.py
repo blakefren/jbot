@@ -379,6 +379,13 @@ class TestGuards(_PowerUpManagerTests):
             self.manager.steal("1", "3", "q1")
         self.assertIn("already used a power-up today", str(cm.exception))
 
+    def test_jinx_blocked_after_steal(self):
+        """A player who already stole cannot then jinx."""
+        self.manager.steal("1", "2", "q1")
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.jinx("1", "3", "q1")
+        self.assertIn("already used a power-up today", str(cm.exception))
+
     def test_jinx_blocked_after_rest(self):
         """A player who already rested cannot then jinx."""
         self.manager.rest("1", "q1", "Ans")
@@ -404,6 +411,12 @@ class TestGuards(_PowerUpManagerTests):
         """Steal raises PowerUpError when the target is not a registered player."""
         with self.assertRaises(PowerUpError) as cm:
             self.manager.steal("1", "999", "q1")
+        self.assertIn("Invalid player", str(cm.exception))
+
+    def test_steal_invalid_attacker(self):
+        """Steal raises PowerUpError when the attacker is not a registered player."""
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.steal("999", "1", "q1")
         self.assertIn("Invalid player", str(cm.exception))
 
     # --- overnight / no active question ---
@@ -452,6 +465,13 @@ class TestGuards(_PowerUpManagerTests):
         self.manager.steal("1", "2", "q1")
         with self.assertRaises(PowerUpError) as cm:
             self.manager.rest("1", "q1", "Ans")
+        self.assertIn("already used a power-up today", str(cm.exception))
+
+    def test_steal_blocked_after_rest(self):
+        """A player who already rested cannot then steal."""
+        self.manager.rest("1", "q1", "Ans")
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.steal("1", "2", "q1")
         self.assertIn("already used a power-up today", str(cm.exception))
 
     # --- resting target cannot be attacked ---
