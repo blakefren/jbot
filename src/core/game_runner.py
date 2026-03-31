@@ -462,19 +462,26 @@ class GameRunner:
         if not player_scores:
             return "No scores available yet."
 
-        streaks = {
+        all_streaks = {
             s["id"]: s["answer_streak"] for s in self.data_manager.get_player_streaks()
         }
+        broken_streaks: dict[str, int] = {}
         # Zero out streaks for players who won't keep them today (evening leaderboard).
         # This mirrors the reset_unanswered_streaks logic so the display is accurate
         # even before end_daily_game() runs.
         if self.daily_question_id:
             keepers = self.data_manager.get_streak_keepers(self.daily_question_id)
-            streaks = {pid: s for pid, s in streaks.items() if pid in keepers}
+            broken_streaks = {
+                pid: s for pid, s in all_streaks.items() if pid not in keepers
+            }
+            streaks = {pid: s for pid, s in all_streaks.items() if pid in keepers}
+        else:
+            streaks = all_streaks
 
         badge_map = self._build_daily_badges(self.daily_question_id, show_daily_bonuses)
 
         emoji_streak = self.config.get("JBOT_EMOJI_STREAK")
+        emoji_streak_broken = self.config.get("JBOT_EMOJI_STREAK_BROKEN", "💔")
 
         # Create a list of player data
         all_player_data = []
@@ -494,6 +501,7 @@ class GameRunner:
                     )
 
             streak = streaks.get(player_id, 0)
+            broken_streak = broken_streaks.get(player_id, 0)
             score = player["score"]
 
             badges = []
@@ -507,6 +515,7 @@ class GameRunner:
                     "name": player_name,
                     "score": score,
                     "streak": streak,
+                    "broken_streak": broken_streak,
                     "badges": badges_str,
                 }
             )
@@ -532,6 +541,7 @@ class GameRunner:
                 (len(str(p["streak"])) for p in all_player_data if p["streak"] >= 1),
                 default=0,
             ),
+            (2 if any(p["broken_streak"] >= 1 for p in all_player_data) else 0),
         )
         max_badges = max(
             6,  # Num chars in "Badges" header
@@ -570,13 +580,16 @@ class GameRunner:
             name = p_data["name"]
             score = p_data["score"]
             streak_val = p_data["streak"]
+            broken_streak_val = p_data["broken_streak"]
             badges = p_data["badges"]
 
-            streak_str = (
-                f"{streak_val:>{max_streak}}"
-                if streak_val >= 1
-                else f"{'':>{max_streak}}"
-            )
+            if streak_val >= 1:
+                streak_str = f"{streak_val:>{max_streak}}"
+            elif broken_streak_val >= 1:
+                pad = max(0, max_streak - wcwidth.wcswidth(emoji_streak_broken))
+                streak_str = " " * pad + emoji_streak_broken
+            else:
+                streak_str = f"{'':>{max_streak}}"
 
             # For ties, only show rank and score for the first player
             if p_data["score"] == last_score:

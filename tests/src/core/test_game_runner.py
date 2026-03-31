@@ -77,6 +77,7 @@ class TestGameRunner(unittest.TestCase):
             "JBOT_EMOJI_FIRST_TRY": "🎯",
             "JBOT_EMOJI_BEFORE_HINT": "🧠",
             "JBOT_EMOJI_STREAK": "🔥",
+            "JBOT_EMOJI_STREAK_BROKEN": "💔",
             "JBOT_EMOJI_JINXED": "🥶",
             "JBOT_EMOJI_SILENCED": "🤐",
             "JBOT_EMOJI_STOLEN_FROM": "💸",
@@ -498,7 +499,40 @@ class TestGameRunner(unittest.TestCase):
         # Bob has no streak — streak column should be blank for Bob
         self.assertNotIn(" 1 ", bob_line)  # streak of 0 not shown
 
-    def test_get_player_history(self):
+    def test_get_scores_leaderboard_broken_streak(self):
+        """Test that players who had a streak but missed today show a broken streak."""
+        self.mock_data_manager.get_player_scores.return_value = [
+            {"id": "1", "name": "Alice", "score": 100},
+            {"id": "2", "name": "Bob", "score": 90},
+        ]
+        # Bob had a streak of 4 but won't keep it
+        self.mock_data_manager.get_player_streaks.return_value = [
+            {"id": "1", "answer_streak": 3},
+            {"id": "2", "answer_streak": 4},
+        ]
+        self.game_runner.daily_question_id = 123
+        self.mock_data_manager.read_guess_history.return_value = []
+        self.mock_data_manager.get_first_try_solvers.return_value = []
+        # Only Alice keeps her streak; Bob does not
+        self.mock_data_manager.get_streak_keepers.return_value = {"1"}
+
+        leaderboard = self.game_runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        alice_line = next(
+            (line for line in leaderboard.split("\n") if "Alice" in line), None
+        )
+        bob_line = next(
+            (line for line in leaderboard.split("\n") if "Bob" in line), None
+        )
+        self.assertIsNotNone(alice_line)
+        self.assertIsNotNone(bob_line)
+        # Alice has an active streak — shown as a plain number
+        self.assertIn(" 3", alice_line)
+        # Bob's streak is broken — shown with just the broken emoji, no number
+        self.assertIn("💔", bob_line)
+        self.assertNotIn("4", bob_line)
+        # Alice's line should not have the broken emoji
+        self.assertNotIn("💔", alice_line)
         """Test generating a player's history."""
         self.mock_data_manager.read_guess_history.return_value = [
             {"is_correct": True},
@@ -1074,6 +1108,8 @@ class TestGameRunner(unittest.TestCase):
             }
         ]
         self.mock_data_manager.get_first_try_solvers.return_value = [{"id": "1"}]
+        # Alice answered correctly, so she keeps her streak
+        self.mock_data_manager.get_streak_keepers.return_value = {"1"}
 
         # Ensure no "before hint" bonus by setting hint timestamp before guess
         self.mock_data_manager.get_hint_sent_timestamp.return_value = (
