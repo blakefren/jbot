@@ -496,7 +496,7 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn(" 3 ", alice_line)  # streak column value
         self.assertIn(" 5 ", charlie_line)  # streak column value
         # Bob has no streak — streak column should be blank for Bob
-        self.assertNotIn(" 1 ", bob_line)  # streak of 1 not shown (< 2)
+        self.assertNotIn(" 1 ", bob_line)  # streak of 0 not shown
 
     def test_get_player_history(self):
         """Test generating a player's history."""

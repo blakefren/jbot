@@ -130,7 +130,7 @@ class Game(commands.Cog):
                 for i, (score, player_name) in enumerate(entries, start=1):
                     streak_str = (
                         f" {emoji_streak}{score.current_streak}"
-                        if score.current_streak >= 2
+                        if score.current_streak >= 1
                         else ""
                     )
                     lines.append(

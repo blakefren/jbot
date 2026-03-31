@@ -529,7 +529,7 @@ class GameRunner:
         max_streak = max(
             2,  # display width of streak emoji header
             max(
-                (len(str(p["streak"])) for p in all_player_data if p["streak"] >= 2),
+                (len(str(p["streak"])) for p in all_player_data if p["streak"] >= 1),
                 default=0,
             ),
         )
@@ -574,7 +574,7 @@ class GameRunner:
 
             streak_str = (
                 f"{streak_val:>{max_streak}}"
-                if streak_val >= 2
+                if streak_val >= 1
                 else f"{'':>{max_streak}}"
             )
 
