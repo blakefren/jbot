@@ -243,6 +243,21 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         mock_roles_game_mode_cls.assert_called_once()
         self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
         # The final error should be logged
+
+    @patch("src.core.discord.RolesGameMode")
+    async def test_evening_task_calls_backup(self, mock_roles_cls):
+        """Verify the evening task calls _backup_database after ending the game."""
+        await self.evening_task_coro(self.bot, silent=True)
+        self.bot._backup_database.assert_called_once()
+
+    @patch("src.core.discord.RolesGameMode")
+    async def test_evening_task_backup_failure_is_logged(self, mock_roles_cls):
+        """Verify a backup failure is logged but does not crash the task."""
+        self.bot._backup_database.side_effect = Exception("disk full")
+        await self.evening_task_coro(self.bot, silent=True)
+        self.bot._log_task_error.assert_called()
+        call_args = self.bot._log_task_error.call_args[0]
+        self.assertIn("backup", call_args[1])
         self.bot._log_task_error.assert_called_once()
 
 
@@ -516,6 +531,72 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
         await self.bot.on_command_error(ctx, error)
 
         self.bot.send_message.assert_not_awaited()
+
+
+class TestDiscordBotBackup(unittest.TestCase):
+    """Tests for the _backup_database() helper on DiscordBot."""
+
+    def setUp(self):
+        self.bot = MagicMock(spec=DiscordBot)
+        self.bot.config = MagicMock()
+        self.bot.data_manager = MagicMock()
+
+    def test_creates_backup_dir_and_calls_backup_with_dated_filename(self):
+        """_backup_database() creates db/backups/ and passes a dated path to data_manager."""
+        import datetime
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("src.core.discord.project_root", tmpdir):
+                self.bot.config.get.return_value = "30"
+                DiscordBot._backup_database(self.bot)
+
+            backup_dir = os.path.join(tmpdir, "db", "backups")
+            self.assertTrue(os.path.isdir(backup_dir))
+            self.bot.data_manager.backup_database.assert_called_once()
+            call_path = self.bot.data_manager.backup_database.call_args[0][0]
+            today_str = datetime.date.today().strftime("%Y-%m-%d")
+            self.assertEqual(
+                call_path, os.path.join(backup_dir, f"jbot_{today_str}.db")
+            )
+
+    def test_prunes_old_backup_files(self):
+        """_backup_database() removes backup files beyond the retention window."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backup_dir = os.path.join(tmpdir, "db", "backups")
+            os.makedirs(backup_dir)
+
+            # Create an ancient backup (should be pruned) and a future-dated one (keep)
+            old_file = os.path.join(backup_dir, "jbot_2020-01-01.db")
+            future_file = os.path.join(backup_dir, "jbot_2099-01-01.db")
+            open(old_file, "w").close()
+            open(future_file, "w").close()
+
+            with patch("src.core.discord.project_root", tmpdir):
+                self.bot.config.get.return_value = "30"
+                DiscordBot._backup_database(self.bot)
+
+            self.assertFalse(os.path.exists(old_file))
+            self.assertTrue(os.path.exists(future_file))
+
+    def test_non_backup_files_in_dir_are_not_touched(self):
+        """_backup_database() ignores files that don't match the backup naming pattern."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            backup_dir = os.path.join(tmpdir, "db", "backups")
+            os.makedirs(backup_dir)
+
+            other_file = os.path.join(backup_dir, "readme.txt")
+            open(other_file, "w").close()
+
+            with patch("src.core.discord.project_root", tmpdir):
+                self.bot.config.get.return_value = "30"
+                DiscordBot._backup_database(self.bot)
+
+            self.assertTrue(os.path.exists(other_file))
 
 
 if __name__ == "__main__":

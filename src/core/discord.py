@@ -348,6 +348,12 @@ class DiscordBot(commands.Bot):
         # 4. End the daily game (clear question, reset powerup states)
         self.game.end_daily_game()
 
+        # 5. Backup database
+        try:
+            self._backup_database()
+        except Exception as e:
+            self._log_task_error(e, "evening_message_task - backup_database")
+
     async def apply_discord_roles(self, guild: discord.Guild):
         """
         Efficiently applies the 'first place' role to the current winner(s).
@@ -476,6 +482,33 @@ class DiscordBot(commands.Bot):
                     target_id=sub.sub_id,
                     success_status=success_status,
                 )
+
+    def _backup_database(self):
+        """Creates a dated backup of the database and prunes old backups."""
+        backup_dir = os.path.join(project_root, "db", "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+
+        today = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
+        backup_path = os.path.join(backup_dir, f"jbot_{today}.db")
+        self.data_manager.backup_database(backup_path)
+
+        retention_days = int(self.config.get("JBOT_BACKUP_RETENTION_DAYS"))
+        cutoff = datetime.datetime.now(TIMEZONE) - datetime.timedelta(
+            days=retention_days
+        )
+        for filename in os.listdir(backup_dir):
+            if not (filename.startswith("jbot_") and filename.endswith(".db")):
+                continue
+            try:
+                date_str = filename[len("jbot_") : -len(".db")]
+                file_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").replace(
+                    tzinfo=TIMEZONE
+                )
+                if file_date < cutoff:
+                    os.remove(os.path.join(backup_dir, filename))
+                    logging.info(f"Pruned old backup: {filename}")
+            except (ValueError, OSError):
+                pass
 
     def _log_task_error(self, e: Exception, task_name: str):
         """Logs an error for a background task."""

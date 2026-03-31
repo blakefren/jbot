@@ -85,6 +85,24 @@ class Database:
                 f"Error: 'schema.sql' not found in '{os.path.dirname(__file__)}'."
             )
 
+    def backup(self, dest_path: str):
+        """
+        Creates a safe, consistent backup of the database to dest_path using
+        SQLite's built-in backup API. Safe to call while the DB is in use.
+
+        Args:
+            dest_path (str): Full path for the backup file.
+        """
+        if self.db_path == ":memory:":
+            logging.warning("Cannot backup an in-memory database, skipping.")
+            return
+        dest_conn = sqlite3.connect(dest_path)
+        try:
+            self.conn.backup(dest_conn)
+            logging.info(f"Database backed up to '{dest_path}'.")
+        finally:
+            dest_conn.close()
+
     def close(self):
         """
         Closes the database connection.

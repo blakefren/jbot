@@ -120,6 +120,12 @@ class TestDataManager(unittest.TestCase):
         """Clean up after tests."""
         self.db.close()
 
+    def test_backup_database_delegates_to_db(self):
+        """backup_database() delegates to Database.backup() with the given path."""
+        self.db.backup = MagicMock()
+        self.data_manager.backup_database("/some/path/backup.db")
+        self.db.backup.assert_called_once_with("/some/path/backup.db")
+
     def test_log_daily_question(self):
         question = Question(
             category="TESTING",

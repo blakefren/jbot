@@ -172,6 +172,39 @@ class TestDatabase(unittest.TestCase):
         self.db.close()
         self.assertIsNone(self.db.conn)
 
+    def test_backup_skips_in_memory(self):
+        """backup() on an :memory: database logs a warning and does not create a file."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dest = os.path.join(tmpdir, "backup.db")
+            with self.assertLogs(level="WARNING") as cm:
+                self.db.backup(dest)
+            self.assertFalse(os.path.exists(dest))
+            self.assertTrue(any("in-memory" in msg for msg in cm.output))
+
+    def test_backup_creates_valid_sqlite_file(self):
+        """backup() creates a readable backup containing the source data."""
+        import tempfile
+
+        self.db.execute_update(
+            "INSERT INTO players (id, name) VALUES ('backup_p1', 'BackupAlice')"
+        )
+        # Override db_path so the in-memory guard is bypassed while the live
+        # conn still points at our in-memory data.
+        self.db.db_path = "not_memory"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dest = os.path.join(tmpdir, "backup.db")
+            self.db.backup(dest)
+            self.assertTrue(os.path.exists(dest))
+            conn = sqlite3.connect(dest)
+            rows = conn.execute(
+                "SELECT name FROM players WHERE id='backup_p1'"
+            ).fetchall()
+            conn.close()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], "BackupAlice")
+
 
 class TestDatabaseFileBasedCreation(unittest.TestCase):
     """Tests for file-based database creation (non-memory path)."""

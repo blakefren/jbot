@@ -50,6 +50,15 @@ class DataManager:
             schema = f.read()
         self._db.execute_script(schema)
 
+    def backup_database(self, dest_path: str):
+        """
+        Creates a safe backup of the database to dest_path.
+
+        Args:
+            dest_path (str): Full path for the backup file.
+        """
+        self._db.backup(dest_path)
+
     def load_players(self) -> dict:
         """
         Reads the players table and returns a dictionary of Player objects keyed by discord_id.
