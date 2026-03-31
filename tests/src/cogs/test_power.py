@@ -73,8 +73,11 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
         mock_manager.rest.assert_called_once_with(
             "123", self.bot.game.daily_question_id, "Test Answer"
         )
-        self.ctx.channel.send.assert_awaited_once_with("public msg")
-        self.bot.send_message.assert_awaited_once_with(
+        self.assertEqual(self.bot.send_message.await_count, 2)
+        self.bot.send_message.assert_any_await(
+            "public msg", interaction=self.ctx.interaction
+        )
+        self.bot.send_message.assert_any_await(
             "private msg", interaction=self.ctx.interaction, ephemeral=True
         )
 
