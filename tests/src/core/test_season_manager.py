@@ -174,7 +174,7 @@ class TestSeasonManager(unittest.TestCase):
         # Result is list of tuples (SeasonScore, player_name)
         self.assertEqual(result[0][1], "Alice")  # player_name
         self.assertEqual(result[1][1], "Bob")
-        self.mock_data_manager.get_season_scores.assert_called_once_with(1, 10)
+        self.mock_data_manager.get_season_scores.assert_called_once_with(1, 25)
 
     def test_get_all_time_leaderboard(self):
         """Test all-time leaderboard retrieval."""
