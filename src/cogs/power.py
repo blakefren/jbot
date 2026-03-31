@@ -64,13 +64,13 @@ class Power(commands.Cog):
                     self.bot.game.daily_q.answer,
                 )
                 # Send public announcement to the channel
-                await self.bot.send_message(public_msg, interaction=ctx.interaction)
-                # Send private answer disclosure (ephemeral for slash, DM for text)
                 if ctx.interaction:
+                    await self.bot.send_message(public_msg, interaction=ctx.interaction)
                     await self.bot.send_message(
                         private_msg, interaction=ctx.interaction, ephemeral=True
                     )
                 else:
+                    await ctx.channel.send(public_msg)
                     await ctx.author.send(private_msg)
             except Exception as e:
                 await self.bot.send_message(
