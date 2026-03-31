@@ -17,6 +17,7 @@ from src.core.discord import (
     REMINDER_TIME,
     EVENING_TIME,
     PREP_TIME,
+    TIMEZONE,
 )
 from src.core.subscriber import Subscriber
 
@@ -555,7 +556,7 @@ class TestDiscordBotBackup(unittest.TestCase):
             self.assertTrue(os.path.isdir(backup_dir))
             self.bot.data_manager.backup_database.assert_called_once()
             call_path = self.bot.data_manager.backup_database.call_args[0][0]
-            today_str = datetime.date.today().strftime("%Y-%m-%d")
+            today_str = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")
             self.assertEqual(
                 call_path, os.path.join(backup_dir, f"jbot_{today_str}.db")
             )
