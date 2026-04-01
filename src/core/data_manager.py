@@ -386,17 +386,25 @@ class DataManager:
     def get_player_scores(self) -> list[dict]:
         """
         Retrieves player ids, names and scores from the database, ordered by score.
-        Excludes players who haven't guessed in the last 28 days.
+        Excludes players who haven't guessed or used a power-up in the last 28 days.
         """
         query = """
             SELECT p.id, p.name, p.score
             FROM players p
             WHERE p.score > 0
-            AND EXISTS (
-                SELECT 1
-                FROM guesses g
-                WHERE g.player_id = p.id
-                AND g.guessed_at >= datetime('now', '-28 days')
+            AND (
+                EXISTS (
+                    SELECT 1
+                    FROM guesses g
+                    WHERE g.player_id = p.id
+                    AND g.guessed_at >= datetime('now', '-28 days')
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM powerup_usage pu
+                    WHERE pu.user_id = p.id
+                    AND pu.used_at >= datetime('now', '-28 days')
+                )
             )
             ORDER BY p.score DESC
         """

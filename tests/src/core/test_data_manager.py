@@ -499,6 +499,41 @@ class TestDataManager(unittest.TestCase):
         self.assertIn("2", player_ids)  # Bob
         self.assertNotIn("3", player_ids)  # Charlie (inactive)
 
+    def test_get_player_scores_includes_powerup_only_player(self):
+        """A player with score who only used a power-up (no guesses) appears on the leaderboard."""
+        self.db.execute_update(
+            "INSERT INTO players (id, name, score) VALUES ('stealer', 'Stealer', 50)"
+        )
+        self.db.execute_update(
+            "INSERT INTO daily_questions (id, question_id, sent_at) VALUES (1, 1, date('now'))"
+        )
+        # No guess row — only a powerup_usage row
+        self.db.execute_update(
+            "INSERT INTO powerup_usage (user_id, powerup_type, question_id, used_at) "
+            "VALUES ('stealer', 'steal', 1, datetime('now'))"
+        )
+
+        scores = self.data_manager.get_player_scores()
+        player_ids = [s["id"] for s in scores]
+        self.assertIn("stealer", player_ids)
+
+    def test_get_player_scores_excludes_powerup_only_player_beyond_28_days(self):
+        """A player whose only activity is a powerup older than 28 days is excluded."""
+        self.db.execute_update(
+            "INSERT INTO players (id, name, score) VALUES ('old_stealer', 'OldStealer', 50)"
+        )
+        self.db.execute_update(
+            "INSERT INTO daily_questions (id, question_id, sent_at) VALUES (1, 1, date('now'))"
+        )
+        self.db.execute_update(
+            "INSERT INTO powerup_usage (user_id, powerup_type, question_id, used_at) "
+            "VALUES ('old_stealer', 'steal', 1, datetime('now', '-30 days'))"
+        )
+
+        scores = self.data_manager.get_player_scores()
+        player_ids = [s["id"] for s in scores]
+        self.assertNotIn("old_stealer", player_ids)
+
     def test_get_player_streaks(self):
         """Test retrieving player streaks ordered by streak."""
         self.data_manager._db.execute_query = MagicMock(
