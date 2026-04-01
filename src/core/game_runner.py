@@ -135,14 +135,17 @@ class GameRunner:
         # Check for season transition (end old season, create new one if needed).
         # Must run before the question is set so scores are attributed to the
         # correct season from the start of the day.
-        transitioned, season_msgs = self.season_manager.check_season_transition()
-        self.pending_season_announcements.extend(season_msgs)
+        try:
+            transitioned, season_msgs = self.season_manager.check_season_transition()
+            self.pending_season_announcements.extend(season_msgs)
 
-        # Check for season ending soon reminder (only when no transition today)
-        if not transitioned:
-            reminder = self.season_manager.get_reminder_announcement()
-            if reminder:
-                self.pending_season_announcements.append(reminder)
+            # Check for season ending soon reminder (only when no transition today)
+            if not transitioned:
+                reminder = self.season_manager.get_reminder_announcement()
+                if reminder:
+                    self.pending_season_announcements.append(reminder)
+        except Exception as e:
+            logging.warning(f"Season transition check failed, skipping: {e}")
 
         # Check for an existing daily question ID for today
         daily_question_data = self.data_manager.get_todays_daily_question()
@@ -606,6 +609,33 @@ class GameRunner:
 
             last_score = p_data["score"]
         return f"```{header}{divider}{body}```"
+
+    def format_season_leaderboard(self, season) -> str:
+        """Format a season's leaderboard as a display string."""
+        current_day, total_days = self.season_manager.get_season_progress(season)
+        entries = self.season_manager.get_season_leaderboard(season.season_id)
+        emoji_streak = self.config.get("JBOT_EMOJI_STREAK")
+        header = f"**-- {season.season_name} (Day {current_day}/{total_days}) --**"
+        if not entries:
+            return f"{header}\nNo scores this season yet."
+        lines = [header + "\n```"]
+        for i, (score, player_name) in enumerate(entries, start=1):
+            streak_str = (
+                f" {emoji_streak}{score.current_streak}"
+                if score.current_streak >= 1
+                else ""
+            )
+            lines.append(f"{i:>2}. {player_name:<16} {score.points:>6} pts{streak_str}")
+        lines.append("```")
+        return "\n".join(lines)
+
+    def get_active_leaderboard(self, guild=None, show_daily_bonuses=False) -> str:
+        """Return the season leaderboard when seasons are active, otherwise all-time."""
+        if self.season_manager.enabled:
+            current_season = self.season_manager.get_or_create_current_season()
+            if current_season:
+                return self.format_season_leaderboard(current_season)
+        return self.get_scores_leaderboard(guild, show_daily_bonuses=show_daily_bonuses)
 
     def get_player_history(self, player_id: int, player_name: str) -> str:
         """Computes and formats the history/metrics string for a given player."""

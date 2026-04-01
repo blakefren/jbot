@@ -47,7 +47,11 @@ class SeasonManager:
         if not self.enabled:
             return None
 
-        self.check_season_transition()
+        try:
+            self.check_season_transition()
+        except Exception as e:
+            self.logger.warning(f"Season transition check failed in get_or_create: {e}")
+
         return self.data_manager.get_current_season()
 
     def check_season_transition(

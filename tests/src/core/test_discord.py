@@ -436,11 +436,11 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_send_daily_message_with_leaderboard(self):
-        """Test sending daily message with leaderboard."""
+        """Test sending daily message with leaderboard; uses get_active_leaderboard."""
         sub1 = Subscriber(sub_id=1, is_channel=False, display_name="User1")
         self.bot.game.get_subscribed_users.return_value = {sub1}
         self.bot.game.daily_q = MagicMock()
-        self.bot.game.get_scores_leaderboard.return_value = "Leaderboard Content"
+        self.bot.game.get_active_leaderboard.return_value = "Leaderboard Content"
 
         self.bot.send_message = AsyncMock()
         content_getter = MagicMock(return_value="Daily Content")
@@ -466,6 +466,25 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
                 ),
             ]
         )
+
+    async def test_send_daily_message_leaderboard_is_season_aware_when_seasons_enabled(
+        self,
+    ):
+        """When seasons are enabled the broadcast calls get_active_leaderboard, not get_scores_leaderboard."""
+        sub1 = Subscriber(sub_id=1, is_channel=False, display_name="User1")
+        self.bot.game.get_subscribed_users.return_value = {sub1}
+        self.bot.game.daily_q = MagicMock()
+        self.bot.game.get_active_leaderboard.return_value = "Season LB"
+
+        self.bot.send_message = AsyncMock()
+        content_getter = MagicMock(return_value="Content")
+
+        await self.bot._send_daily_message_to_all_subscribers(
+            content_getter, "morning_message", send_leaderboard=True
+        )
+
+        self.bot.game.get_active_leaderboard.assert_called_once()
+        self.bot.game.get_scores_leaderboard.assert_not_called()
 
     async def test_on_message_ignore_bot(self):
         """Test that on_message ignores messages from the bot itself."""

@@ -465,7 +465,7 @@ class DiscordBot(commands.Bot):
             # Generate leaderboard if needed
             leaderboard = None
             if send_leaderboard:
-                leaderboard = self.game.get_scores_leaderboard(
+                leaderboard = self.game.get_active_leaderboard(
                     guild, show_daily_bonuses=show_daily_bonuses
                 )
 
