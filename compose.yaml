@@ -6,7 +6,7 @@ services:
     env_file:
       - .env
     environment:
-      - TZ=US/Pacific
+      - TZ=America/Los_Angeles
       - DEBIAN_FRONTEND=noninteractive
     volumes:
       - ./db/jbot.db:/app/db/jbot.db
