@@ -59,6 +59,17 @@ class PlayerManager:
         """Sets a player's answer streak to a specific value and persists."""
         self.data_manager.set_streak(self._normalize_id(player_id), streak)
 
+    def adjust_season_score(self, player_id: str, amount: int):
+        """Adjusts a player's season score, if an active season exists."""
+        pid = self._normalize_id(player_id)
+        current_season = self.data_manager.get_current_season()
+        if not current_season:
+            return
+        self.data_manager.increment_lifetime_stat(pid, "season_score", amount)
+        self.data_manager.increment_season_stat(
+            pid, current_season.season_id, "points", amount
+        )
+
     # TODO: Implement player creation and refund logic from admin cog
     def get_or_create_player(self, player_id: str, player_name: str) -> Player:
         pid = self._normalize_id(player_id)

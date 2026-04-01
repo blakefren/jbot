@@ -34,6 +34,7 @@ class Admin(commands.Cog):
         )
 
         player_manager.update_score(str(member.id), amount)
+        player_manager.adjust_season_score(str(member.id), amount)
 
         if streak is not None:
             player_manager.set_streak(str(member.id), streak)

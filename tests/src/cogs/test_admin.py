@@ -301,6 +301,9 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
 
         # Assertions
         player_manager.update_score.assert_called_once_with(str(member.id), amount)
+        player_manager.adjust_season_score.assert_called_once_with(
+            str(member.id), amount
+        )
         self.bot.data_manager.log_score_adjustment.assert_called_once_with(
             player_id=str(member.id),
             admin_id=str(self.ctx.author.id),
@@ -334,6 +337,9 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         )
 
         player_manager.update_score.assert_called_once_with(str(member.id), amount)
+        player_manager.adjust_season_score.assert_called_once_with(
+            str(member.id), amount
+        )
         self.ctx.send.assert_called_once_with(
             f"Could not find player {member.display_name} after refund."
         )

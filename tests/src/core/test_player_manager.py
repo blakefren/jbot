@@ -130,6 +130,48 @@ class TestPlayerManager(unittest.TestCase):
         self.manager.set_streak("123", 10)
         self.mock_data_manager.set_streak.assert_called_with("123", 10)
 
+    def test_adjust_season_score_with_active_season(self):
+        """adjust_season_score updates both players.season_score and season_scores.points."""
+        from src.core.season import Season
+        from datetime import date
+
+        active_season = Season(
+            7, "April 2026", date(2026, 4, 1), date(2026, 4, 30), True
+        )
+        self.mock_data_manager.get_current_season.return_value = active_season
+
+        self.manager.adjust_season_score("123", 50)
+
+        self.mock_data_manager.increment_lifetime_stat.assert_called_once_with(
+            "123", "season_score", 50
+        )
+        self.mock_data_manager.increment_season_stat.assert_called_once_with(
+            "123", 7, "points", 50
+        )
+
+    def test_adjust_season_score_no_active_season(self):
+        """adjust_season_score is a no-op when no season is active."""
+        self.mock_data_manager.get_current_season.return_value = None
+
+        self.manager.adjust_season_score("123", 50)
+
+        self.mock_data_manager.increment_lifetime_stat.assert_not_called()
+        self.mock_data_manager.increment_season_stat.assert_not_called()
+
+    def test_adjust_season_score_normalizes_id(self):
+        """adjust_season_score normalizes integer IDs to strings."""
+        from src.core.season import Season
+        from datetime import date
+
+        active_season = Season(3, "Test", date(2026, 1, 1), date(2026, 1, 31), True)
+        self.mock_data_manager.get_current_season.return_value = active_season
+
+        self.manager.adjust_season_score(123, 10)
+
+        self.mock_data_manager.increment_lifetime_stat.assert_called_once_with(
+            "123", "season_score", 10
+        )
+
     def test_normalize_id_with_none(self):
         """Test _normalize_id handles None gracefully."""
         result = self.manager._normalize_id(None)
