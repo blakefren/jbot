@@ -11,6 +11,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import Optional
 import calendar
+from zoneinfo import ZoneInfo
 
 from src.core.data_manager import DataManager
 from src.core.season import Season, SeasonScore
@@ -32,6 +33,11 @@ class SeasonManager:
         self.config = config
         self.enabled = config.is_seasons_enabled()
         self.logger = logging.getLogger(__name__)
+        self._timezone = ZoneInfo(config.get("JBOT_TIMEZONE", "UTC"))
+
+    def _today(self) -> date:
+        """Return today's date in the configured timezone."""
+        return datetime.now(self._timezone).date()
 
     def is_enabled(self) -> bool:
         """Check if seasons feature is enabled."""
@@ -72,7 +78,7 @@ class SeasonManager:
             return False, []
 
         if current_date is None:
-            current_date = date.today()
+            current_date = self._today()
 
         current_season = self.data_manager.get_current_season()
 
@@ -391,7 +397,7 @@ class SeasonManager:
         Returns:
             Number of days until season ends (inclusive)
         """
-        today = date.today()
+        today = self._today()
         days_remaining = (season.end_date - today).days
         return max(0, days_remaining)
 
@@ -405,7 +411,7 @@ class SeasonManager:
         Returns:
             Tuple of (current_day, total_days)
         """
-        today = date.today()
+        today = self._today()
         total_days = (season.end_date - season.start_date).days + 1
         current_day = (today - season.start_date).days + 1
 

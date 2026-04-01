@@ -87,7 +87,7 @@ class TestGameRunner(unittest.TestCase):
             "JBOT_FIRST_PLACE_ROLE_NAME": "First Place",
         }
         self.mock_config_instance.get.side_effect = lambda k, d=None: self.defaults.get(
-            k
+            k, d
         )
         self.mock_config_instance.get_bool.side_effect = lambda k, d=False: (
             str(self.defaults.get(k)).lower() == "true" if k in self.defaults else d

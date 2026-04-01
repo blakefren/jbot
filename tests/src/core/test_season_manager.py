@@ -20,6 +20,7 @@ class TestSeasonManager(unittest.TestCase):
         self.mock_config = MagicMock(spec=ConfigReader)
 
         # Default config values
+        self.mock_config.get.return_value = "UTC"
         self.mock_config.get_season_mode.return_value = "calendar"
         self.mock_config.get_season_duration_days.return_value = 30
         self.mock_config.get_season_auto_create.return_value = True
@@ -34,8 +35,7 @@ class TestSeasonManager(unittest.TestCase):
         )
         self.mock_data_manager.get_current_season.return_value = active_season
 
-        with patch("src.core.season_manager.date") as mock_date:
-            mock_date.today.return_value = date(2026, 1, 15)
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 15)):
             result = self.manager.get_or_create_current_season()
 
         self.assertEqual(result, active_season)
@@ -51,8 +51,7 @@ class TestSeasonManager(unittest.TestCase):
         self.mock_data_manager.get_current_season.side_effect = [None, new_season]
         self.mock_data_manager.get_season_by_id.return_value = new_season
 
-        with patch("src.core.season_manager.date") as mock_date:
-            mock_date.today.return_value = date(2026, 1, 15)
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 15)):
             result = self.manager.get_or_create_current_season()
 
         self.assertEqual(result, new_season)
@@ -63,8 +62,7 @@ class TestSeasonManager(unittest.TestCase):
         self.mock_config.get_season_auto_create.return_value = False
         self.mock_data_manager.get_current_season.return_value = None
 
-        with patch("src.core.season_manager.date") as mock_date:
-            mock_date.today.return_value = date(2026, 1, 15)
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 15)):
             result = self.manager.get_or_create_current_season()
 
         self.assertIsNone(result)
@@ -87,8 +85,7 @@ class TestSeasonManager(unittest.TestCase):
         self.mock_config.get_season_announce_end.return_value = False
         self.mock_config.get_season_announce_start.return_value = False
 
-        with patch("src.core.season_manager.date") as mock_date:
-            mock_date.today.return_value = date(2026, 1, 15)
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 15)):
             result = self.manager.get_or_create_current_season()
 
         # Should finalize old season and create new one via check_season_transition
@@ -104,8 +101,7 @@ class TestSeasonManager(unittest.TestCase):
         )
         self.mock_data_manager.get_current_season.return_value = current_season
 
-        with patch("src.core.season_manager.date") as mock_date:
-            mock_date.today.return_value = date(2026, 1, 15)
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 15)):
             transitioned, msgs = self.manager.check_season_transition()
 
         self.assertFalse(transitioned)
@@ -216,6 +212,7 @@ class TestSeasonManagerEdgeCases(unittest.TestCase):
         """Set up test fixtures."""
         self.mock_data_manager = MagicMock(spec=DataManager)
         self.mock_config = MagicMock(spec=ConfigReader)
+        self.mock_config.get.return_value = "UTC"
         self.mock_config.get_season_mode.return_value = "calendar"
         self.mock_config.get_season_auto_create.return_value = True
         self.mock_config.get_season_trophy_positions.return_value = 3
@@ -249,6 +246,7 @@ class TestSeasonManagerAnnouncements(unittest.TestCase):
     def setUp(self):
         self.mock_data_manager = MagicMock(spec=DataManager)
         self.mock_config = MagicMock(spec=ConfigReader)
+        self.mock_config.get.return_value = "UTC"
         self.mock_config.is_seasons_enabled.return_value = True
         self.mock_config.get_season_mode.return_value = "calendar"
         self.mock_config.get_season_trophy_positions.return_value = 3
@@ -364,8 +362,7 @@ class TestSeasonManagerAnnouncements(unittest.TestCase):
         self.mock_config.get_season_announce_end.return_value = True
         self.mock_config.get_season_reminder_days.return_value = 5
 
-        with patch("src.core.season_manager.date") as mock_date:
-            mock_date.today.return_value = date(2026, 1, 15)  # 16 days left, not 5
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 15)):
             result = self.manager.get_reminder_announcement()
 
         self.assertIsNone(result)
@@ -378,8 +375,7 @@ class TestSeasonManagerAnnouncements(unittest.TestCase):
         self.mock_config.get_season_announce_end.return_value = True
         self.mock_config.get_season_reminder_days.return_value = 5
 
-        with patch("src.core.season_manager.date") as mock_date:
-            mock_date.today.return_value = date(2026, 1, 26)  # exactly 5 days left
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 26)):
             result = self.manager.get_reminder_announcement()
 
         self.assertIsNotNone(result)
