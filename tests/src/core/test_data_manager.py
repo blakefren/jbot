@@ -1515,5 +1515,259 @@ class TestPendingPowerupDataManager(unittest.TestCase):
         self.assertEqual(usages[0]["target_user_id"], "target")
 
 
+class TestRollbackQuestionDay(unittest.TestCase):
+    """Integration tests for DataManager.rollback_question_day using a real :memory: DB."""
+
+    def setUp(self):
+        self.db = Database(":memory:")
+        self.dm = DataManager(self.db)
+        self.dm.initialize_database()
+
+        # Create two players.
+        self.dm.create_player("alice", "Alice")
+        self.dm.create_player("bob", "Bob")
+
+        # Give them some baseline stats.
+        self.dm.adjust_player_score("alice", 200)
+        self.dm.set_streak("alice", 7)
+        self.dm.adjust_player_score("bob", 100)
+        self.dm.set_streak("bob", 3)
+
+        # Log a daily question (triggers create_daily_snapshot automatically).
+        q = Question("What?", "42", "Math", 10, "test", "Hint")
+        self.dq_id = self.dm.log_daily_question(q)
+        self.assertIsNotNone(self.dq_id)
+
+    def tearDown(self):
+        self.db.close()
+
+    def _simulate_daytime_activity(self):
+        """Mutate player state to simulate answer scoring during the question."""
+        self.dm.adjust_player_score("alice", 50)  # alice earns 50 pts
+        self.dm.increment_streak("alice")
+        self.dm.adjust_player_score("bob", 30)
+        self.dm.increment_streak("bob")
+
+    def test_rollback_restores_player_score_and_streak(self):
+        self._simulate_daytime_activity()
+
+        # Sanity-check mutations happened.
+        self.assertEqual(self.dm.get_player("alice").score, 250)
+        self.assertEqual(self.dm.get_player("alice").answer_streak, 8)
+
+        self.dm.rollback_question_day(self.dq_id)
+
+        alice = self.dm.get_player("alice")
+        self.assertEqual(alice.score, 200)
+        self.assertEqual(alice.answer_streak, 7)
+
+        bob = self.dm.get_player("bob")
+        self.assertEqual(bob.score, 100)
+        self.assertEqual(bob.answer_streak, 3)
+
+    def test_rollback_re_nulls_hydrated_preloads(self):
+        # Log an overnight preload, then hydrate it (simulates morning flow).
+        self.dm.log_powerup_usage("alice", "jinx_preload", "bob", None)
+        pending = self.dm.apply_pending_powerups(self.dq_id)
+        self.assertEqual(len(pending), 1)
+
+        # Confirm the row now has a non-NULL question_id.
+        rows = self.db.execute_query(
+            "SELECT question_id FROM powerup_usage WHERE powerup_type = 'jinx_preload'"
+        )
+        self.assertEqual(rows[0]["question_id"], self.dq_id)
+
+        # Roll back — should re-NULL the preload so it can be re-hydrated.
+        self.dm.rollback_question_day(self.dq_id)
+
+        rows = self.db.execute_query(
+            "SELECT question_id FROM powerup_usage WHERE powerup_type = 'jinx_preload'"
+        )
+        self.assertIsNone(rows[0]["question_id"])
+
+    def test_rollback_does_not_re_null_non_preload_powerups(self):
+        # Normal daytime powerup (e.g. steal with a real question_id) should NOT
+        # be re-nulled by rollback.
+        self.dm.log_powerup_usage("alice", "jinx", "bob", self.dq_id)
+
+        self.dm.rollback_question_day(self.dq_id)
+
+        rows = self.db.execute_query(
+            "SELECT question_id FROM powerup_usage WHERE powerup_type = 'jinx'"
+        )
+        # question_id should still point to the original question, not NULL.
+        self.assertEqual(rows[0]["question_id"], self.dq_id)
+
+    def test_rollback_with_season_restores_season_scores(self):
+        # Create a season and give players season points.
+        season_id = self.dm.create_season("April 2026", "2026-04-01", "2026-04-30")
+        self.dm.initialize_player_season_score("alice", season_id)
+        self.dm.initialize_player_season_score("bob", season_id)
+        self.dm.increment_season_stat("alice", season_id, "points", 50)
+        self.dm.increment_season_stat("alice", season_id, "correct_answers", 1)
+        self.dm.increment_season_stat("alice", season_id, "questions_answered", 1)
+        self.dm.increment_season_stat("bob", season_id, "points", 30)
+
+        # Take a fresh snapshot AFTER season is active (re-log a new question).
+        q2 = Question("Q2?", "B", "Cat", 10, "test", "H2")
+        dq2_id = self.dm.log_daily_question(q2, force_new=True)
+
+        # Simulate scoring on that question.
+        self.dm.increment_season_stat("alice", season_id, "points", 20)
+        self.dm.increment_season_stat("alice", season_id, "correct_answers", 1)
+        self.dm.increment_season_stat("alice", season_id, "questions_answered", 1)
+
+        # Roll back — season points and questions_answered should return to
+        # what was snapshotted.
+        self.dm.rollback_question_day(dq2_id)
+
+        ss = self.dm.get_player_season_score("alice", season_id)
+        self.assertEqual(ss.points, 50)
+        self.assertEqual(ss.correct_answers, 1)
+        self.assertEqual(ss.questions_answered, 1)
+
+    def test_rollback_no_snapshot_is_graceful(self):
+        # Calling rollback for a question_id with no snapshot should not raise.
+        try:
+            self.dm.rollback_question_day(9999)
+        except Exception:
+            self.fail("rollback_question_day raised unexpectedly with missing snapshot")
+
+    def test_snapshot_captures_pending_rest_multiplier(self):
+        # Give alice a pending rest multiplier before the snapshot is taken.
+        self.dm.set_pending_multiplier("alice", 1.2)
+
+        q2 = Question("Q2?", "B", "Cat", 10, "test", "H2")
+        dq2_id = self.dm.log_daily_question(q2, force_new=True)
+
+        # Consume the multiplier (simulate rest_wakeup clearing it).
+        self.dm.clear_pending_multiplier("alice")
+        self.assertEqual(self.dm.get_pending_multiplier("alice"), 0.0)
+
+        # Rollback should restore the 1.2 multiplier.
+        self.dm.rollback_question_day(dq2_id)
+        self.assertAlmostEqual(self.dm.get_pending_multiplier("alice"), 1.2)
+
+    def test_rollback_clears_rest_multiplier_set_during_question(self):
+        # Player rests during the active question (multiplier set to 1.2).
+        self.dm.set_pending_multiplier("alice", 1.2)
+
+        # Snapshot was taken BEFORE rest, so pending_rest_multiplier was 0.
+        # That's already snapshotted in setUp (snapshot taken with 0.0).
+        self.dm.rollback_question_day(self.dq_id)
+
+        # Snapshot had 0.0, so the multiplier should be cleared.
+        self.assertAlmostEqual(self.dm.get_pending_multiplier("alice"), 0.0)
+
+
+class TestPowerUpManagerRollback(unittest.TestCase):
+    """Unit tests for PowerUpManager.rollback_to_snapshot."""
+
+    def setUp(self):
+        self.mock_player_manager = MagicMock()
+        self.mock_data_manager = MagicMock()
+
+        with patch("src.core.powerup.ConfigReader"):
+            from src.core.powerup import PowerUpManager
+
+            self.powerup_manager = PowerUpManager(
+                self.mock_player_manager, self.mock_data_manager
+            )
+
+    def test_rollback_calls_data_manager_rollback(self):
+        self.powerup_manager.rollback_to_snapshot(42)
+        self.mock_data_manager.rollback_question_day.assert_called_once_with(42)
+
+    def test_rollback_clears_in_memory_daily_state(self):
+        from src.core.state import DailyPlayerState
+
+        self.powerup_manager.daily_state["player1"] = DailyPlayerState()
+        self.powerup_manager.daily_state["player2"] = DailyPlayerState()
+
+        self.powerup_manager.rollback_to_snapshot(42)
+
+        self.assertEqual(self.powerup_manager.daily_state, {})
+
+
+class TestGameRunnerRollbackOnSkip(unittest.TestCase):
+    """Tests that _setup_new_question triggers rollback when force_new=True."""
+
+    def setUp(self):
+        self.config_patcher = patch("src.core.game_runner.ConfigReader")
+        MockConfig = self.config_patcher.start()
+        self.addCleanup(self.config_patcher.stop)
+
+        cfg = MockConfig.return_value
+        defaults = {
+            "JBOT_RIDDLE_HISTORY_DAYS": "30",
+            "JBOT_QUESTION_RETRIES": "10",
+            "JBOT_EMOJI_FASTEST": "🥇",
+            "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
+            "JBOT_BONUS_FASTEST_CSV": "10,5,1",
+            "JBOT_BONUS_TRY_CSV": "20,10,5",
+            "JBOT_BONUS_BEFORE_HINT": "10",
+            "JBOT_BONUS_STREAK_PER_DAY": "5",
+            "JBOT_BONUS_STREAK_CAP": "25",
+            "JBOT_EMOJI_FIRST_TRY": "🎯",
+            "JBOT_EMOJI_BEFORE_HINT": "🧠",
+            "JBOT_EMOJI_STREAK": "🔥",
+            "JBOT_EMOJI_STREAK_BROKEN": "💔",
+            "JBOT_EMOJI_JINXED": "🥶",
+            "JBOT_EMOJI_SILENCED": "🤐",
+            "JBOT_EMOJI_STOLEN_FROM": "💸",
+            "JBOT_EMOJI_STEALING": "💰",
+            "JBOT_EMOJI_REST": "😴",
+            "JBOT_EMOJI_REST_WAKEUP": "⏰",
+        }
+        cfg.get.side_effect = lambda k, d=None: defaults.get(k, d)
+        cfg.get_bool.side_effect = lambda k, d=False: False
+
+        self.mock_dm = MagicMock()
+        self.mock_qs = MagicMock()
+        from src.core.game_runner import GameRunner
+
+        self.gr = GameRunner(self.mock_qs, self.mock_dm)
+
+        # Replace the automatically-created PowerUpManager with a mock.
+        self.mock_powerup = MagicMock()
+        self.gr.managers["powerup"] = self.mock_powerup
+
+    def _wire_new_question(self, new_id=2):
+        from data.readers.question import Question
+
+        q = Question("Q?", "A", "C", 10, "s", "h")
+        q._is_valid = True
+        self.mock_qs.get_random_question.return_value = q
+        self.mock_dm.get_used_question_hashes.return_value = set()
+        self.mock_dm.log_daily_question.return_value = new_id
+        self.mock_dm.get_todays_daily_question.return_value = (q, new_id, new_id)
+        return q
+
+    def test_skip_calls_rollback_with_old_question_id(self):
+        self.gr.daily_question_id = 1  # Existing active question.
+        self._wire_new_question(new_id=2)
+
+        self.gr._setup_new_question(force_new=True)
+
+        self.mock_powerup.rollback_to_snapshot.assert_called_once_with(1)
+
+    def test_fresh_day_does_not_call_rollback(self):
+        self.gr.daily_question_id = None  # No active question (fresh day).
+        self._wire_new_question(new_id=1)
+
+        self.gr._setup_new_question(force_new=False)
+
+        self.mock_powerup.rollback_to_snapshot.assert_not_called()
+
+    def test_force_new_without_existing_question_skips_rollback(self):
+        """force_new=True but daily_question_id is None — rollback is a no-op."""
+        self.gr.daily_question_id = None
+        self._wire_new_question(new_id=1)
+
+        self.gr._setup_new_question(force_new=True)
+
+        self.mock_powerup.rollback_to_snapshot.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -286,37 +286,78 @@ class DataManager:
 
     def create_daily_snapshot(self, daily_question_id: int):
         """
-        Creates a snapshot of all players' current state (score, streak)
-        associated with the given daily_question_id.
+        Creates a snapshot of all players' current state (score, streak, season stats)
+        associated with the given daily_question_id.  The extra columns allow a full
+        rollback if an admin skips the question mid-day.
         """
-        # Get all current players
         players = self.load_players()
-
         if not players:
             return
 
+        # Capture the active season so rollback can target the right season_scores row.
+        current_season = self.get_current_season()
+        season_id = current_season.season_id if current_season else None
+
+        # Bulk-load season data for every player in one query.
+        season_data: dict[str, dict] = {}
+        if season_id:
+            rows = self._db.execute_query(
+                "SELECT player_id, points, questions_answered, correct_answers, "
+                "first_answers, current_streak, best_streak "
+                "FROM season_scores WHERE season_id = ?",
+                (season_id,),
+            )
+            for row in rows:
+                season_data[row["player_id"]] = row
+
         query = """
-            INSERT INTO daily_player_states (daily_question_id, player_id, score, answer_streak)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO daily_player_states (
+                daily_question_id, player_id, score, answer_streak,
+                season_id, season_points, season_questions_answered,
+                season_correct_answers, season_first_answers,
+                season_current_streak, season_best_streak,
+                pending_rest_multiplier
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         for player in players.values():
+            ss = season_data.get(player.id, {})
             try:
                 self._db.execute_update(
                     query,
-                    (daily_question_id, player.id, player.score, player.answer_streak),
+                    (
+                        daily_question_id,
+                        player.id,
+                        player.score,
+                        player.answer_streak,
+                        season_id,
+                        ss.get("points", 0),
+                        ss.get("questions_answered", 0),
+                        ss.get("correct_answers", 0),
+                        ss.get("first_answers", 0),
+                        ss.get("current_streak", 0),
+                        ss.get("best_streak", 0),
+                        player.pending_rest_multiplier,
+                    ),
                 )
             except Exception as e:
-                # Log error but continue for other players
                 logging.error(f"Failed to snapshot player {player.id}: {e}")
 
     def get_daily_snapshot(self, daily_question_id: int) -> dict[str, Player]:
         """
         Retrieves the player state snapshot for a specific daily question.
         Returns a dictionary of Player objects keyed by player_id.
+
+        Note: season stat columns (points, correct_answers, etc.) are NOT
+        included here because they are not Player dataclass fields and the
+        only caller (recalculate_scores / DailyGameSimulator) only reads
+        score and answer_streak.  Rollback reads the snapshot directly via
+        rollback_question_day() and does not go through this method.
         """
         query = """
-            SELECT dps.player_id, dps.score, dps.answer_streak, p.name
+            SELECT dps.player_id, dps.score, dps.answer_streak,
+                   dps.season_points, dps.pending_rest_multiplier, p.name
             FROM daily_player_states dps
             LEFT JOIN players p ON dps.player_id = p.id
             WHERE dps.daily_question_id = ?
@@ -333,9 +374,104 @@ class DataManager:
                 name=name,
                 score=record["score"],
                 answer_streak=record["answer_streak"],
+                # season_points mirrors players.season_score (same value, two tables)
+                season_score=record.get("season_points", 0) or 0,
+                pending_rest_multiplier=float(
+                    record.get("pending_rest_multiplier", 0.0) or 0.0
+                ),
             )
 
         return snapshot
+
+    def rollback_question_day(self, daily_question_id: int):
+        """
+        Rolls back all player state to the snapshot taken at the start of
+        daily_question_id.  Used when an admin skips a question mid-day.
+
+        Actions performed (all in one transaction-equivalent batch):
+        1. Restore players.score / season_score / answer_streak /
+           pending_rest_multiplier for every snapshotted player.
+        2. Restore season_scores stats when a season was active at snapshot time.
+        3. Re-NULL any preload powerup rows that were hydrated to this question
+           so they can be re-applied to the replacement question.
+        """
+        rows = self._db.execute_query(
+            """
+            SELECT player_id, score, answer_streak, season_id,
+                   season_points, season_questions_answered, season_correct_answers,
+                   season_first_answers, season_current_streak, season_best_streak,
+                   pending_rest_multiplier
+            FROM daily_player_states
+            WHERE daily_question_id = ?
+            """,
+            (daily_question_id,),
+        )
+
+        if not rows:
+            logging.warning(
+                "rollback_question_day: no snapshot found for daily_question_id=%d",
+                daily_question_id,
+            )
+            return
+
+        for row in rows:
+            pid = row["player_id"]
+            season_points = row.get("season_points", 0) or 0
+
+            # 1. Restore players table.
+            # season_points is authoritative for both players.season_score and
+            # season_scores.points — they are the same value kept in sync.
+            self._db.execute_update(
+                """
+                UPDATE players
+                SET score = ?, answer_streak = ?,
+                    season_score = ?, pending_rest_multiplier = ?
+                WHERE id = ?
+                """,
+                (
+                    row["score"],
+                    row["answer_streak"],
+                    season_points,
+                    row.get("pending_rest_multiplier") or 0.0,
+                    pid,
+                ),
+            )
+
+            # 2. Restore season_scores (only when a season was active at snapshot time).
+            sid = row.get("season_id")
+            if sid is not None:
+                self._db.execute_update(
+                    """
+                    UPDATE season_scores
+                    SET points = ?, questions_answered = ?, correct_answers = ?,
+                        first_answers = ?, current_streak = ?, best_streak = ?
+                    WHERE player_id = ? AND season_id = ?
+                    """,
+                    (
+                        season_points,
+                        row.get("season_questions_answered", 0),
+                        row.get("season_correct_answers", 0),
+                        row.get("season_first_answers", 0),
+                        row.get("season_current_streak", 0),
+                        row.get("season_best_streak", 0),
+                        pid,
+                        sid,
+                    ),
+                )
+
+        # 3. Re-NULL preload rows so they get re-hydrated with the new question.
+        self._db.execute_update(
+            "UPDATE powerup_usage SET question_id = NULL "
+            "WHERE question_id = ? AND powerup_type IN ('jinx_preload', 'steal_preload')",
+            (daily_question_id,),
+        )
+
+        logging.info(
+            "rollback_question_day: restored %d players from snapshot "
+            "(daily_question_id=%d)",
+            len(rows),
+            daily_question_id,
+        )
 
     def log_player_guess(
         self,

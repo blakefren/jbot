@@ -98,30 +98,100 @@ class GameRunner:
         logging.warning(f"Could not find a valid question after {retries} attempts.")
         return None
 
-    def reset_daily_question(self):
+    def _setup_new_question(self, force_new: bool = False) -> bool:
+        """
+        Selects a question, generates a hint, logs it, and wires up game state.
+        Shared by set_daily_question (fresh day) and reset_daily_question (skip).
+
+        When force_new=True (skip scenario) and a question is already active,
+        rolls back all DB-persisted state (scores, streaks, season stats,
+        pending_rest_multiplier) to the snapshot taken at the start of that
+        question, then re-queues any hydrated overnight preloads so they
+        transfer to the replacement question.
+
+        Returns True on success, False if no valid question or logging fails.
+        """
+        # --- Rollback (skip path only) ---
+        # Capture before anything overwrites self.daily_question_id.
+        old_question_id = self.daily_question_id if force_new else None
+        if old_question_id is not None:
+            powerup_manager = self.managers.get("powerup")
+            if powerup_manager:
+                powerup_manager.rollback_to_snapshot(old_question_id)
+
+        self.daily_q = self._get_valid_question()
+        if not (self.daily_q and self.daily_q.is_valid):
+            return False
+
+        original_hint = self.daily_q.hint
+        logging.info(f"Generating hint for question {self.daily_q.id}...")
+        try:
+            new_hint = self.question_selector.get_hint_from_gemini(self.daily_q)
+            if new_hint:
+                self.daily_q.hint = new_hint
+                logging.info(
+                    f"Successfully generated hint for question {self.daily_q.id}."
+                )
+            elif original_hint:
+                logging.warning(
+                    f"Hint generation returned empty result for question {self.daily_q.id}. Using original hint."
+                )
+            else:
+                logging.warning(
+                    f"Hint generation returned empty result for question {self.daily_q.id} and no original hint available."
+                )
+        except Exception as e:
+            if original_hint:
+                logging.error(
+                    f"Error generating hint for question {self.daily_q.id}: {e}. Using original hint."
+                )
+            else:
+                logging.error(
+                    f"Error generating hint for question {self.daily_q.id}: {e}. No original hint available."
+                )
+
+        self.daily_question_id = self.data_manager.log_daily_question(
+            self.daily_q, force_new=force_new
+        )
+
+        # Refresh from DB — recovers the canonical daily_question_id and
+        # question_db_id, and handles race conditions where log returns None
+        # but the record was already inserted.
+        daily_question_data = self.data_manager.get_todays_daily_question()
+        if daily_question_data:
+            self.daily_q, self.daily_question_id, self.question_db_id = (
+                daily_question_data
+            )
+
+        if self.daily_question_id is None:
+            logging.error("Failed to log new daily question.")
+            return False
+
+        logging.info(f"Daily question set with ID: {self.daily_question_id}")
+
+        # Clear any in-memory powerup state from the previous (or skipped) question,
+        # then promote overnight pre-loads to the new question ID.
+        for manager in self.managers.values():
+            if hasattr(manager, "reset_daily_state"):
+                manager.reset_daily_state()
+        powerup_manager = self.managers.get("powerup")
+        if powerup_manager:
+            powerup_manager.hydrate_pending_powerups(self.daily_question_id)
+
+        self._build_guess_handler()
+        return True
+
+    def reset_daily_question(self) -> bool:
         """
         Resets the daily question by selecting a new one.
         This is intended for admin use to skip a problematic or unwanted question.
+        Prior guesses/powerup state for the skipped question are not carried over.
         """
         logging.info("Admin triggered reset of daily question.")
-
-        self.daily_q = self._get_valid_question()
-
-        if self.daily_q and self.daily_q.is_valid:
-            # Invalidate the old question by logging the new one for today.
-            # The DB schema ensures only one question per day, so this will either
-            # fail if not set up correctly, or overwrite/ignore.
-            # `log_daily_question` should ideally handle this.
-            # For now, we assume it replaces or the logic inside handles it.
-            self.daily_question_id = self.data_manager.log_daily_question(
-                self.daily_q, force_new=True
-            )
-            if self.daily_question_id is None:
-                logging.error("Failed to log new daily question during reset.")
-                return False
+        result = self._setup_new_question(force_new=True)
+        if result:
             logging.info(f"Daily question reset to new ID: {self.daily_question_id}")
-            return True
-        return False
+        return result
 
     def set_daily_question(self):
         """
@@ -167,54 +237,7 @@ class GameRunner:
             self._build_guess_handler()
             return
 
-        # Otherwise, select a new question
-        self.daily_q = self._get_valid_question()
-
-        if self.daily_q and self.daily_q.is_valid:
-            # Always try to generate a hint using Gemini, falling back to provided hint if generation fails.
-            original_hint = self.daily_q.hint
-            logging.info(f"Generating hint for question {self.daily_q.id}...")
-            try:
-                new_hint = self.question_selector.get_hint_from_gemini(self.daily_q)
-                if new_hint:
-                    self.daily_q.hint = new_hint
-                    logging.info(
-                        f"Successfully generated hint for question {self.daily_q.id}."
-                    )
-                elif original_hint:
-                    logging.warning(
-                        f"Hint generation returned empty result for question {self.daily_q.id}. Using original hint."
-                    )
-                else:
-                    logging.warning(
-                        f"Hint generation returned empty result for question {self.daily_q.id} and no original hint available."
-                    )
-            except Exception as e:
-                if original_hint:
-                    logging.error(
-                        f"Error generating hint for question {self.daily_q.id}: {e}. Using original hint."
-                    )
-                else:
-                    logging.error(
-                        f"Error generating hint for question {self.daily_q.id}: {e}. No original hint available."
-                    )
-
-            self.daily_question_id = self.data_manager.log_daily_question(self.daily_q)
-
-            # Get the complete question data (handles both new and existing questions)
-            daily_question_data = self.data_manager.get_todays_daily_question()
-            if daily_question_data:
-                self.daily_q, self.daily_question_id, self.question_db_id = (
-                    daily_question_data
-                )
-
-            logging.info(f"Daily question set with ID: {self.daily_question_id}")
-
-            powerup_manager = self.managers.get("powerup")
-            if powerup_manager:
-                powerup_manager.hydrate_pending_powerups(self.daily_question_id)
-
-            self._build_guess_handler()
+        self._setup_new_question()
 
     def end_daily_game(self):
         """

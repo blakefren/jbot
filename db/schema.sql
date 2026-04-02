@@ -126,6 +126,18 @@ CREATE TABLE IF NOT EXISTS daily_player_states (
     player_id TEXT NOT NULL,
     score INTEGER NOT NULL,
     answer_streak INTEGER NOT NULL,
+    -- Seasonal state (NULL season_id means no active season at snapshot time)
+    -- season_points mirrors season_scores.points and is also used to restore
+    -- players.season_score on rollback (both columns track the same value).
+    season_id INTEGER DEFAULT NULL,
+    season_points INTEGER DEFAULT 0,
+    season_questions_answered INTEGER DEFAULT 0,
+    season_correct_answers INTEGER DEFAULT 0,
+    season_first_answers INTEGER DEFAULT 0,
+    season_current_streak INTEGER DEFAULT 0,
+    season_best_streak INTEGER DEFAULT 0,
+    -- Carry-over rest multiplier at snapshot time (needed for accurate rollback)
+    pending_rest_multiplier REAL DEFAULT 0.0,
     snapshot_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (daily_question_id) REFERENCES daily_questions (id),
     FOREIGN KEY (player_id) REFERENCES players (id),

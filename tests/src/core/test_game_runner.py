@@ -594,7 +594,7 @@ class TestGameRunner(unittest.TestCase):
         )
         self.assertEqual(self.game_runner.daily_q.hint, "Generated Hint")
         self.mock_data_manager.log_daily_question.assert_called_once_with(
-            self.game_runner.daily_q
+            self.game_runner.daily_q, force_new=False
         )
 
     def test_set_daily_question_hint_generation_fails_gracefully(self):
@@ -654,6 +654,11 @@ class TestGameRunner(unittest.TestCase):
         }
         self.mock_question_selector.get_random_question.return_value = new_question
         self.mock_data_manager.log_daily_question.return_value = 999
+        self.mock_data_manager.get_todays_daily_question.return_value = (
+            new_question,
+            999,
+            1,
+        )
 
         result = self.game_runner.reset_daily_question()
 
@@ -683,6 +688,7 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.get_used_question_hashes.return_value = set()
         self.mock_question_selector.get_random_question.return_value = new_question
         self.mock_data_manager.log_daily_question.return_value = None
+        self.mock_data_manager.get_todays_daily_question.return_value = None
 
         result = self.game_runner.reset_daily_question()
 

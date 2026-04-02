@@ -68,6 +68,26 @@ class PowerUpManager(BaseManager):
         self.daily_state.clear()
         logging.info("PowerUpManager daily state reset.")
 
+    def rollback_to_snapshot(self, old_question_id: int):
+        """
+        Rolls back DB-persisted state to the snapshot for old_question_id, then
+        clears the in-memory daily state.
+
+        Called by GameRunner._setup_new_question when force_new=True so that
+        skipping a question leaves players in their pre-question state (scores,
+        streaks, season stats all restored) and overnight preloads are re-queued
+        for the replacement question.
+
+        Args:
+            old_question_id: The daily_question_id of the question being replaced.
+        """
+        self.data_manager.rollback_question_day(old_question_id)
+        self.reset_daily_state()
+        logging.info(
+            "PowerUpManager: rolled back to snapshot for question_id=%d",
+            old_question_id,
+        )
+
     def restore_daily_state(self, player_id: str, simulated_state: DailyPlayerState):
         """
         Restores the daily state for a player from the simulator.
