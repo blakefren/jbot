@@ -21,7 +21,7 @@ def get_db_tables(db_path: str) -> dict[str, set[str]]:
         table_names = [row["name"] for row in cursor.fetchall()]
         for name in table_names:
             cursor.execute(f"PRAGMA table_info({name})")
-            tables[name] = {row["name"].lower() for row in cursor.fetchall()}
+            tables[name.lower()] = {row["name"].lower() for row in cursor.fetchall()}
     return tables
 
 
