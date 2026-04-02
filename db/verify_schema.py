@@ -2,51 +2,71 @@ import sqlite3
 import argparse
 import os
 import re
+import sys
 
 
-def get_db_schema(db_path):
-    """Extracts the schema from the SQLite database."""
+def get_db_tables(db_path: str) -> dict[str, set[str]]:
+    """
+    Returns a dict of {table_name: {column_name, ...}} for every table in the DB,
+    using PRAGMA table_info which gives reliable per-column metadata regardless of
+    how the table was migrated (ADD COLUMN always appends; DDL strings diverge).
+    """
+    tables = {}
     with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
         )
-        # Fetch all results and clean up the SQL
-        return [normalize_sql(row[0]) for row in cursor.fetchall()]
+        table_names = [row["name"] for row in cursor.fetchall()]
+        for name in table_names:
+            cursor.execute(f"PRAGMA table_info({name})")
+            tables[name] = {row["name"].lower() for row in cursor.fetchall()}
+    return tables
 
 
-def get_sql_file_schema(sql_path):
-    """Reads the schema from the .sql file."""
+def parse_schema_file(sql_path: str) -> dict[str, set[str]]:
+    """
+    Parses CREATE TABLE statements from a .sql file.
+    Returns {table_name: {column_name, ...}}.
+    Constraint lines (PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK) are excluded.
+    """
     with open(sql_path, "r") as f:
         content = f.read()
-    # Split statements by semicolon and clean them up
-    statements = [normalize_sql(s) for s in content.split(";") if s.strip()]
-    # Filter out empty strings that can result from splitting
-    return [s for s in statements if s]
 
+    # Strip line comments
+    content = re.sub(r"--[^\n]*", "", content)
 
-def normalize_sql(sql_text):
-    """Normalizes SQL text to make it comparable."""
-    # Remove comments
-    sql_text = re.sub(r"--.*", "", sql_text)
-    # Replace newlines and tabs with spaces, and collapse multiple spaces
-    sql_text = re.sub(r"[\s\n\t]+", " ", sql_text)
-    # Remove spaces around commas, parentheses, and equals signs
-    sql_text = re.sub(r"\s*([,()=])\s*", r"\1", sql_text)
-    # Standardize CREATE TABLE IF NOT EXISTS to CREATE TABLE
-    sql_text = sql_text.replace("IF NOT EXISTS ", "")
-    return sql_text.strip()
+    tables = {}
+    # Match CREATE TABLE [IF NOT EXISTS] name ( ... )
+    for match in re.finditer(
+        r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[\"']?(\w+)[\"']?\s*\((.+?)\)",
+        content,
+        re.IGNORECASE | re.DOTALL,
+    ):
+        table_name = match.group(1).lower()
+        body = match.group(2)
 
+        columns = set()
+        for line in body.split(","):
+            line = line.strip()
+            if not line:
+                continue
+            upper = line.upper()
+            # Skip table-level constraints
+            if any(
+                upper.startswith(kw)
+                for kw in ("PRIMARY KEY", "FOREIGN KEY", "UNIQUE", "CHECK")
+            ):
+                continue
+            # First token is the column name (strip any quoting)
+            col_name = re.split(r"\s+", line)[0].strip("\"'`").lower()
+            if col_name:
+                columns.add(col_name)
 
-def compare_schemas(db_schema, sql_schema):
-    """Compares the two schemas and returns the differences."""
-    db_set = set(db_schema)
-    sql_set = set(sql_schema)
+        tables[table_name] = columns
 
-    missing_in_db = sql_set - db_set
-    extra_in_db = db_set - sql_set
-
-    return missing_in_db, extra_in_db
+    return tables
 
 
 def main():
@@ -65,22 +85,54 @@ def main():
     )
     args = parser.parse_args()
 
-    db_schema = get_db_schema(args.db_path)
-    sql_schema = get_sql_file_schema(args.sql_path)
+    db_tables = get_db_tables(args.db_path)
+    schema_tables = parse_schema_file(args.sql_path)
 
-    missing, extra = compare_schemas(db_schema, sql_schema)
+    errors: list[str] = []
+    info: list[str] = []
 
-    if not missing and not extra:
+    # --- Check everything schema.sql requires is present in the DB ---
+    for table, schema_cols in schema_tables.items():
+        if table not in db_tables:
+            errors.append(f"  [MISSING TABLE]  {table}")
+            continue
+        db_cols = db_tables[table]
+        for col in sorted(schema_cols):
+            if col not in db_cols:
+                errors.append(f"  [MISSING COLUMN] {table}.{col}")
+
+    # --- Report extra things in DB (informational only) ---
+    extra_tables = set(db_tables) - set(schema_tables)
+    for table in sorted(extra_tables):
+        info.append(
+            f"  [EXTRA TABLE]    {table}  (not in schema.sql — possibly legacy)"
+        )
+
+    for table, schema_cols in schema_tables.items():
+        if table not in db_tables:
+            continue
+        extra_cols = db_tables[table] - schema_cols
+        for col in sorted(extra_cols):
+            info.append(
+                f"  [EXTRA COLUMN]   {table}.{col}  (not in schema.sql — possibly legacy)"
+            )
+
+    # --- Output ---
+    if errors:
+        print("ERRORS — schema.sql requirements not met in database:")
+        for e in errors:
+            print(e)
+    if info:
+        print("\nINFO — extra items in database not defined in schema.sql:")
+        for i in info:
+            print(i)
+
+    if not errors and not info:
         print("Schema is up to date.")
-    else:
-        if missing:
-            print("Tables/schema definitions missing from the database:")
-            for item in missing:
-                print(f"  - {item}")
-        if extra:
-            print("\nTables/schema definitions in the database but not in schema.sql:")
-            for item in extra:
-                print(f"  - {item}")
+    elif not errors:
+        print("\nSchema requirements satisfied (extra items are informational only).")
+
+    sys.exit(1 if errors else 0)
 
 
 if __name__ == "__main__":
