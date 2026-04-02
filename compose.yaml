@@ -10,4 +10,5 @@ services:
       - DEBIAN_FRONTEND=noninteractive
     volumes:
       - ./db/jbot.db:/app/db/jbot.db
+      - ./db/backups:/app/db/backups
     restart: unless-stopped
