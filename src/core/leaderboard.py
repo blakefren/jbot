@@ -17,7 +17,9 @@ class LeaderboardRow:
     display_name: str
     score: int
     streak: int = 0  # 0 → blank column
-    broken_streak: int = 0  # >0 → show broken-streak emoji (evening only, any leaderboard path)
+    broken_streak: int = (
+        0  # >0 → show broken-streak emoji (evening only, any leaderboard path)
+    )
     badges: str = ""  # pre-joined emoji string; "" → no badges column entry
 
 
