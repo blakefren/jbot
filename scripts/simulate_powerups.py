@@ -378,7 +378,7 @@ class GameState:
 # --- Simulation Engine ---
 
 
-def run_simulation(return_data=False, seed=None, on_day_complete=None):
+def run_simulation(return_data=False, seed=None, on_day_complete=None, days=None):
     """
     Run the powerup simulation.
 
@@ -386,11 +386,16 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None):
         return_data: If True, returns (players, player_strategies) dict
         seed: Random seed for reproducibility. If None, uses system randomness.
         on_day_complete: Optional callable invoked after each day completes.
+        days: Number of days to simulate. Defaults to the module-level SIMULATION_DAYS.
     """
+    if days is None:
+        days = SIMULATION_DAYS
+    # Sample every day for short runs; every 3rd day for long runs to keep records manageable.
+    sample_every = 1 if days <= 60 else 3
     if seed is not None:
         random.seed(seed)
 
-    print(f"Starting simulation for {SIMULATION_DAYS} days...")
+    print(f"Starting simulation for {days} days...")
 
     players = {}
     player_strategies = {}
@@ -467,7 +472,7 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None):
     current_date = datetime.date(2024, 1, 1)
     daily_records = []  # Per-day observations for difficulty analysis
     prev_resting_pids: set = set()  # Players who rested yesterday (waking up today)
-    for day in range(SIMULATION_DAYS):
+    for day in range(days):
         # New Day Setup
         base_time = datetime.datetime.combine(
             current_date, datetime.time(12, 0)
@@ -550,7 +555,7 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None):
         prev_resting_pids = resting_pids
 
         # Record per-day stats for difficulty analysis (sampled every 3rd day)
-        if day % 3 == 0:
+        if day % sample_every == 0:
             for pid, result in daily_results.items():
                 strat = player_strategies[pid]
                 core = getattr(strat, "core_strategy", strat.name)
