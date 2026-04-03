@@ -31,7 +31,7 @@ These decisions create engagement beyond the question itself.
 
 ### 4. Maximize player agency
 
-Players have as much control as possible within each day. Guesses are unlimited — the only penalty for wrong answers is a smaller try bonus. The hint is designed to get players one step away from the right answer, not just to confirm they already know it. Power-ups can target any registered player, including those who have already answered. Players can even preload power-ups overnight, locking in their strategy before the next question is revealed.
+Players have as much control as possible within each day. Guesses are unlimited — the only penalty for wrong answers is a smaller try bonus. Power-ups can target any registered player, including those who have already answered. Players can even preload power-ups overnight, locking in their strategy before the next question is revealed.
 
 ### 5. The game is social and competitive
 
@@ -39,7 +39,7 @@ All gameplay happens in a single public channel by design. Players see each othe
 
 ### 6. Fun for players who are bad at trivia
 
-Speed and knowledge aren't everything. The fastest, most knowledgeable players are also the biggest targets for power-ups — their large streaks and bonuses make them attractive marks for steal and jinx. Season resets level the playing field periodically, giving less consistent or frankly weaker trivia players a fresh shot at the top. A player doesn't need to be brilliant to be competitive; they need to be consistent and strategic.
+Speed and knowledge aren't everything. The fastest, most knowledgeable players are also the biggest targets for power-ups — their large streaks and bonuses make them attractive marks for steal and jinx. The hint is designed to get players one step away from the right answer, not just to confirm they already know it. Season resets level the playing field periodically, giving less consistent or frankly weaker trivia players a fresh shot at the top. A player doesn't need to be brilliant to be competitive; they need to be consistent and strategic.
 
 ### 7. Power-ups have meaningful costs
 
