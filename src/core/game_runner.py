@@ -459,9 +459,7 @@ class GameRunner:
                 target_id = p["target_user_id"]
 
                 if p_type in ("jinx", "jinx_late", "jinx_preload"):
-                    # Attacker (jinxer) is silenced until the hint is revealed.
                     result[user_id].append(emoji_silenced)
-                    # Target is jinxed (loses streak bonus).
                     if target_id:
                         if show_daily_bonuses:
                             if target_id in players_answered_correctly_today:
@@ -503,8 +501,10 @@ class GameRunner:
         all_streaks = {
             s["id"]: s["answer_streak"] for s in self.data_manager.get_player_streaks()
         }
-        # Zero out streaks for players who won't keep them tonight (evening display).
-        if self.daily_question_id:
+        # Only show broken-streak indicator in the evening (show_daily_bonuses).
+        # In the morning nobody has answered yet, so keepers would be empty and
+        # every player would incorrectly appear to have a broken streak.
+        if show_daily_bonuses and self.daily_question_id:
             keepers = self.data_manager.get_streak_keepers(self.daily_question_id)
             broken_streaks = {
                 pid: s for pid, s in all_streaks.items() if pid not in keepers
@@ -552,9 +552,9 @@ class GameRunner:
         if not entries:
             return f"{season_header}\nNo scores this season yet."
 
-        # Players who answered today keep their streak; others show 💔.
+        # Only show broken-streak indicator in the evening (show_daily_bonuses).
         keepers: set[str] = set()
-        if self.daily_question_id:
+        if show_daily_bonuses and self.daily_question_id:
             keepers = self.data_manager.get_streak_keepers(self.daily_question_id)
 
         badge_map = self._build_daily_badges(self.daily_question_id, show_daily_bonuses)
@@ -562,7 +562,7 @@ class GameRunner:
         rows = []
         for score_entry, player_name in entries:
             name = self._resolve_guild_name(score_entry.player_id, player_name, guild)
-            in_keepers = score_entry.player_id in keepers or not self.daily_question_id
+            in_keepers = score_entry.player_id in keepers or not show_daily_bonuses
             streak = score_entry.current_streak if in_keepers else 0
             broken = (
                 score_entry.current_streak
