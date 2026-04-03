@@ -61,6 +61,7 @@ class TestGetActiveLeaderboard(unittest.TestCase):
         self.runner.season_manager.get_or_create_current_season.return_value = season
         self.runner.season_manager.get_season_progress.return_value = (2, 31)
         score = MagicMock(spec=SeasonScore)
+        score.player_id = "p1"
         score.points = 150
         score.current_streak = 3
         self.runner.season_manager.get_season_leaderboard.return_value = [

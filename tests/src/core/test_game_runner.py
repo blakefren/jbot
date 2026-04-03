@@ -390,7 +390,7 @@ class TestGameRunner(unittest.TestCase):
         leaderboard = self.game_runner.get_scores_leaderboard()
         self.assertIn("🏆", leaderboard)
         self.assertIn("Player", leaderboard)
-        self.assertIn("Pts", leaderboard)
+        self.assertIn("pts", leaderboard)
         # Streak emoji is now its own column header
         self.assertIn("🔥", leaderboard)
         self.assertIn("Alice", leaderboard)

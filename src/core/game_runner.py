@@ -1,7 +1,6 @@
 import csv
 import os
 import re
-import wcwidth
 
 from collections import defaultdict
 from datetime import date, datetime
@@ -20,6 +19,7 @@ from src.core.events import GuessEvent, PowerUpEvent
 from src.core.answer_checker import AnswerChecker
 from src.core.utils import parse_timestamp
 from src.core.season_manager import SeasonManager
+from src.core.leaderboard import LeaderboardRow, LeaderboardRenderer
 
 
 class GameRunner:
@@ -459,7 +459,9 @@ class GameRunner:
                 target_id = p["target_user_id"]
 
                 if p_type in ("jinx", "jinx_late", "jinx_preload"):
+                    # Attacker (jinxer) is silenced until the hint is revealed.
                     result[user_id].append(emoji_silenced)
+                    # Target is jinxed (loses streak bonus).
                     if target_id:
                         if show_daily_bonuses:
                             if target_id in players_answered_correctly_today:
@@ -481,20 +483,27 @@ class GameRunner:
 
         return dict(result)
 
-    def get_scores_leaderboard(self, guild=None, show_daily_bonuses=False) -> str:
-        """Computes and formats the leaderboard string."""
-        player_scores = self.data_manager.get_player_scores()
+    def _resolve_guild_name(self, player_id: str, fallback: str, guild) -> str:
+        """Return the guild display name for player_id, or fallback if unavailable."""
+        if guild:
+            try:
+                member = guild.get_member(int(player_id))
+                if member:
+                    return member.nick if member.nick else member.display_name
+            except Exception as e:
+                logging.warning(f"Could not resolve player name for {player_id}: {e}")
+        return fallback
 
+    def get_scores_leaderboard(self, guild=None, show_daily_bonuses=False) -> str:
+        """Returns the all-time leaderboard as a formatted code-block string."""
+        player_scores = self.data_manager.get_player_scores()
         if not player_scores:
             return "No scores available yet."
 
         all_streaks = {
             s["id"]: s["answer_streak"] for s in self.data_manager.get_player_streaks()
         }
-        broken_streaks: dict[str, int] = {}
-        # Zero out streaks for players who won't keep them today (evening leaderboard).
-        # This mirrors the reset_unanswered_streaks logic so the display is accurate
-        # even before end_daily_game() runs.
+        # Zero out streaks for players who won't keep them tonight (evening display).
         if self.daily_question_id:
             keepers = self.data_manager.get_streak_keepers(self.daily_question_id)
             broken_streaks = {
@@ -503,161 +512,142 @@ class GameRunner:
             streaks = {pid: s for pid, s in all_streaks.items() if pid in keepers}
         else:
             streaks = all_streaks
+            broken_streaks = {}
 
         badge_map = self._build_daily_badges(self.daily_question_id, show_daily_bonuses)
 
-        emoji_streak = self.config.get("JBOT_EMOJI_STREAK")
-        emoji_streak_broken = self.config.get("JBOT_EMOJI_STREAK_BROKEN", "💔")
-
-        # Create a list of player data
-        all_player_data = []
+        rows = []
         for player in player_scores:
-            player_id = player["id"]
-            player_name = player["name"]
-            if guild:
-                try:
-                    member = guild.get_member(int(player_id))
-                    if member:
-                        player_name = (
-                            member.nick if member.nick else member.display_name
-                        )
-                except Exception as e:
-                    logging.warning(
-                        f"Could not resolve player name for {player_id}: {e}"
-                    )
-
-            streak = streaks.get(player_id, 0)
-            broken_streak = broken_streaks.get(player_id, 0)
-            score = player["score"]
-
-            badges = []
-            if show_daily_bonuses:
-                badges.extend(badge_map.get(player_id, []))
-
-            badges_str = "".join(badges)
-
-            all_player_data.append(
-                {
-                    "name": player_name,
-                    "score": score,
-                    "streak": streak,
-                    "broken_streak": broken_streak,
-                    "badges": badges_str,
-                }
+            pid = player["id"]
+            name = self._resolve_guild_name(pid, player["name"], guild)
+            badges = "".join(badge_map.get(pid, [])) if show_daily_bonuses else ""
+            rows.append(
+                LeaderboardRow(
+                    display_name=name,
+                    score=player["score"],
+                    streak=streaks.get(pid, 0),
+                    broken_streak=broken_streaks.get(pid, 0),
+                    badges=badges,
+                )
             )
 
-        # Sort players by score (desc), then by name (asc)
-        all_player_data.sort(key=lambda p: (-p["score"], p["name"]))
-
-        # Determine column widths
-        max_name = (
-            max(len(p["name"]) for p in all_player_data) if all_player_data else 10
-        )
-        max_score = max(
-            3,  # Num chars in "Pts" header
-            (
-                max(len(str(p["score"])) for p in all_player_data)
-                if all_player_data
-                else 0
-            ),
-        )
-        max_streak = max(
-            2,  # display width of streak emoji header
-            max(
-                (len(str(p["streak"])) for p in all_player_data if p["streak"] >= 1),
-                default=0,
-            ),
-            (2 if any(p["broken_streak"] >= 1 for p in all_player_data) else 0),
-        )
-        max_badges = max(
-            6,  # Num chars in "Badges" header
-            (
-                max(wcwidth.wcswidth(p["badges"]) for p in all_player_data)
-                if all_player_data
-                else 0
-            ),
+        rows.sort(key=lambda r: (-r.score, r.display_name))
+        renderer = LeaderboardRenderer()
+        return renderer.render(
+            rows,
+            show_badges=show_daily_bonuses,
+            streak_emoji=self.config.get("JBOT_EMOJI_STREAK"),
+            broken_streak_emoji=self.config.get("JBOT_EMOJI_STREAK_BROKEN", "💔"),
         )
 
-        # Streak emoji header: emoji is 2 display-chars wide, so pad with spaces if column is wider
-        streak_header = " " * max(0, max_streak - 2) + emoji_streak
-
-        # Header
-        header = f"🏆 {'Player':<{max_name}} {'Pts':<{max_score}} {streak_header}"
-        if show_daily_bonuses:
-            header += " Badges"
-        header += "\n"
-
-        divider = f"{'-'*2} {'-'*max_name} {'-'*max_score} {'-'*max_streak}"
-        if show_daily_bonuses:
-            divider += f" {'-'*max_badges}"
-        divider += "\n"
-
-        # Body
-        body = ""
-        rank = 0
-        last_score = -1
-        for i, p_data in enumerate(all_player_data):
-            # Handle rank ties
-            if p_data["score"] < last_score:
-                rank = i + 1
-            elif last_score == -1:
-                rank = 1
-
-            name = p_data["name"]
-            score = p_data["score"]
-            streak_val = p_data["streak"]
-            broken_streak_val = p_data["broken_streak"]
-            badges = p_data["badges"]
-
-            if streak_val >= 1:
-                streak_str = f"{streak_val:>{max_streak}}"
-            elif broken_streak_val >= 1:
-                pad = max(0, max_streak - wcwidth.wcswidth(emoji_streak_broken))
-                streak_str = " " * pad + emoji_streak_broken
-            else:
-                streak_str = f"{'':>{max_streak}}"
-
-            # For ties, only show rank and score for the first player
-            if p_data["score"] == last_score:
-                body += f"{'':>2} {name:<{max_name}} {'':>{max_score}} {streak_str}"
-            else:
-                body += (
-                    f"{rank:>2} {name:<{max_name}} {score:>{max_score}} {streak_str}"
-                )
-
-            if show_daily_bonuses:
-                body += f" {badges}"
-
-            body += "\n"
-
-            last_score = p_data["score"]
-        return f"```{header}{divider}{body}```"
-
-    def format_season_leaderboard(self, season) -> str:
+    def format_season_leaderboard(
+        self, season, guild=None, show_daily_bonuses=False
+    ) -> str:
         """Format a season's leaderboard as a display string."""
         current_day, total_days = self.season_manager.get_season_progress(season)
         entries = self.season_manager.get_season_leaderboard(season.season_id)
-        emoji_streak = self.config.get("JBOT_EMOJI_STREAK")
-        header = f"**-- {season.season_name} (Day {current_day}/{total_days}) --**"
+        season_header = (
+            f"**-- {season.season_name} (Day {current_day}/{total_days}) --**"
+        )
         if not entries:
-            return f"{header}\nNo scores this season yet."
-        lines = [header + "\n```"]
-        for i, (score, player_name) in enumerate(entries, start=1):
-            streak_str = (
-                f" {emoji_streak}{score.current_streak}"
-                if score.current_streak >= 1
+            return f"{season_header}\nNo scores this season yet."
+
+        # Players who answered today keep their streak; others show 💔.
+        keepers: set[str] = set()
+        if self.daily_question_id:
+            keepers = self.data_manager.get_streak_keepers(self.daily_question_id)
+
+        badge_map = self._build_daily_badges(self.daily_question_id, show_daily_bonuses)
+
+        rows = []
+        for score_entry, player_name in entries:
+            name = self._resolve_guild_name(score_entry.player_id, player_name, guild)
+            in_keepers = score_entry.player_id in keepers or not self.daily_question_id
+            streak = score_entry.current_streak if in_keepers else 0
+            broken = (
+                score_entry.current_streak
+                if not in_keepers and score_entry.current_streak > 0
+                else 0
+            )
+            badges = (
+                "".join(badge_map.get(score_entry.player_id, []))
+                if show_daily_bonuses
                 else ""
             )
-            lines.append(f"{i:>2}. {player_name:<16} {score.points:>6} pts{streak_str}")
-        lines.append("```")
-        return "\n".join(lines)
+            rows.append(
+                LeaderboardRow(
+                    display_name=name,
+                    score=score_entry.points,
+                    streak=streak,
+                    broken_streak=broken,
+                    badges=badges,
+                )
+            )
 
-    def get_active_leaderboard(self, guild=None, show_daily_bonuses=False) -> str:
-        """Return the season leaderboard when seasons are active, otherwise all-time."""
+        renderer = LeaderboardRenderer()
+        lb_table = renderer.render(
+            rows,
+            show_badges=show_daily_bonuses,
+            streak_emoji=self.config.get("JBOT_EMOJI_STREAK"),
+            broken_streak_emoji=self.config.get("JBOT_EMOJI_STREAK_BROKEN", "💔"),
+        )
+        return f"{season_header}\n{lb_table}"
+
+    def get_alltime_season_leaderboard(self, guild=None) -> str:
+        """Returns the all-time leaderboard (seasons enabled) with trophy badges."""
+        entries = self.season_manager.get_all_time_leaderboard()
+        if not entries:
+            return "No scores yet."
+
+        all_streaks = {
+            s["id"]: s["answer_streak"] for s in self.data_manager.get_player_streaks()
+        }
+
+        rows = []
+        for player_dict, player_name in entries:
+            pid = player_dict["player_id"]
+            name = self._resolve_guild_name(pid, player_name, guild)
+            streak = all_streaks.get(pid, 0)
+
+            counts = self.data_manager.get_trophy_counts(pid)
+            trophy_parts = []
+            if counts.get("gold"):
+                trophy_parts.append(f"🥇×{counts['gold']}")
+            if counts.get("silver"):
+                trophy_parts.append(f"🥈×{counts['silver']}")
+            if counts.get("bronze"):
+                trophy_parts.append(f"🥉×{counts['bronze']}")
+
+            rows.append(
+                LeaderboardRow(
+                    display_name=name,
+                    score=player_dict["score"],
+                    streak=streak,
+                    badges=" ".join(trophy_parts),
+                )
+            )
+
+        show_badges = any(r.badges for r in rows)
+        renderer = LeaderboardRenderer()
+        lb_table = renderer.render(
+            rows,
+            show_badges=show_badges,
+            streak_emoji=self.config.get("JBOT_EMOJI_STREAK"),
+        )
+        return f"**-- All-Time Leaderboard --**\n{lb_table}"
+
+    def get_active_leaderboard(
+        self, guild=None, show_daily_bonuses=False, all_time=False
+    ) -> str:
+        """Return the appropriate leaderboard string based on season state and flags."""
         if self.season_manager.enabled:
+            if all_time:
+                return self.get_alltime_season_leaderboard(guild)
             current_season = self.season_manager.get_or_create_current_season()
             if current_season:
-                return self.format_season_leaderboard(current_season)
+                return self.format_season_leaderboard(
+                    current_season, guild, show_daily_bonuses
+                )
         return self.get_scores_leaderboard(guild, show_daily_bonuses=show_daily_bonuses)
 
     def get_player_history(self, player_id: int, player_name: str) -> str:

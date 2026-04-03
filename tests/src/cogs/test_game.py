@@ -188,61 +188,45 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Reminder", args[0])
 
     async def test_leaderboard_seasons_disabled(self):
-        """When seasons are disabled, leaderboard calls get_scores_leaderboard."""
-        self.bot.game.season_manager.enabled = False
-        self.bot.game.get_scores_leaderboard.return_value = "All-Time LB"
+        """Cog delegates to get_active_leaderboard and sends the result."""
+        self.bot.game.get_active_leaderboard.return_value = "All-Time LB"
         await self.cog.leaderboard.callback(self.cog, self.ctx)
-        self.bot.game.get_scores_leaderboard.assert_called_once()
+        self.bot.game.get_active_leaderboard.assert_called_once_with(
+            self.ctx.guild, show_daily_bonuses=False, all_time=False
+        )
         self.bot.send_message.assert_awaited_once_with(
             "All-Time LB", interaction=self.ctx.interaction
         )
 
     async def test_leaderboard_seasons_enabled_shows_season(self):
-        """When seasons are enabled (no all_time flag), returns season leaderboard."""
-        from src.core.season import Season, SeasonScore
-        from datetime import date
-
-        self.bot.game.season_manager.enabled = True
-        season = Season(1, "March 2026", date(2026, 3, 1), date(2026, 3, 31), True)
-        self.bot.game.data_manager.get_current_season.return_value = season
-        self.bot.game.season_manager.get_season_progress.return_value = (2, 31)
-        mock_score = MagicMock(spec=SeasonScore)
-        mock_score.points = 150
-        mock_score.current_streak = 3
-        self.bot.game.season_manager.get_season_leaderboard.return_value = [
-            (mock_score, "Alice")
-        ]
-        self.bot.game.config.get.return_value = "🔥"
+        """Cog passes show_daily_bonuses=False and all_time=False to get_active_leaderboard."""
+        self.bot.game.get_active_leaderboard.return_value = "March 2026 LB"
         await self.cog.leaderboard.callback(self.cog, self.ctx)
+        self.bot.game.get_active_leaderboard.assert_called_once_with(
+            self.ctx.guild, show_daily_bonuses=False, all_time=False
+        )
         args, kwargs = self.bot.send_message.await_args
         self.assertIn("March 2026", args[0])
         self.assertNotIn("All-Time", args[0])
 
     async def test_leaderboard_seasons_enabled_no_season_falls_back(self):
-        """When seasons are enabled but no active season, falls back to all-time."""
-        self.bot.game.season_manager.enabled = True
-        self.bot.game.data_manager.get_current_season.return_value = None
-        self.bot.game.get_scores_leaderboard.return_value = "All-Time LB"
+        """Cog delegates fallback to get_active_leaderboard (no-season case)."""
+        self.bot.game.get_active_leaderboard.return_value = "All-Time LB"
         await self.cog.leaderboard.callback(self.cog, self.ctx)
-        self.bot.game.get_scores_leaderboard.assert_called_once()
+        self.bot.game.get_active_leaderboard.assert_called_once()
         self.bot.send_message.assert_awaited_once_with(
             "All-Time LB", interaction=self.ctx.interaction
         )
 
     async def test_leaderboard_seasons_enabled_all_time_flag(self):
-        """When seasons are enabled and all_time=True, shows all-time leaderboard with trophies."""
-        self.bot.game.season_manager.enabled = True
-        mock_entries = [
-            ({"player_id": "1", "score": 500}, "Alice"),
-        ]
-        self.bot.game.season_manager.get_all_time_leaderboard.return_value = (
-            mock_entries
-        )
-        self.bot.game.data_manager.get_trophy_counts.return_value = {"gold": 1}
+        """Cog passes all_time=True to get_active_leaderboard when flag is set."""
+        self.bot.game.get_active_leaderboard.return_value = "All-Time Leaderboard"
         await self.cog.leaderboard.callback(self.cog, self.ctx, all_time=True)
+        self.bot.game.get_active_leaderboard.assert_called_once_with(
+            self.ctx.guild, show_daily_bonuses=False, all_time=True
+        )
         args, kwargs = self.bot.send_message.await_args
         self.assertIn("All-Time", args[0])
-        self.assertIn("Alice", args[0])
 
     async def test_profile(self):
         self.bot.game.season_manager.enabled = False
