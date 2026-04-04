@@ -12,7 +12,6 @@ import pytz
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
-# TEST
 # TODO: review for SQL injection risks.
 class DataManager:
     """
