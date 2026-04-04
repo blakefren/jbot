@@ -248,6 +248,13 @@ class GameRunner:
         # Reset streaks for players who didn't answer correctly
         if self.daily_question_id:
             self.player_manager.reset_unanswered_streaks(self.daily_question_id)
+            # Also reset season_scores.current_streak for the same players
+            if self.season_manager.enabled:
+                current_season = self.season_manager.get_or_create_current_season()
+                if current_season:
+                    self.data_manager.reset_unanswered_season_streaks(
+                        self.daily_question_id, current_season.season_id
+                    )
             # Expire rest multipliers that weren't consumed today
             self.data_manager.clear_stale_rest_multipliers(self.daily_question_id)
 

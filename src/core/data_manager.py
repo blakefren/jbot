@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Optional
 from db.database import Database
 from data.readers.question import Question
 from src.core.player import Player
@@ -596,6 +597,34 @@ class DataManager:
             AND answer_streak > 0
         """
         self._db.execute_update(query, (daily_question_id, daily_question_id))
+
+    def reset_unanswered_season_streaks(
+        self, daily_question_id: int, season_id: int
+    ):
+        """
+        Resets the current_streak in season_scores to 0 for all players who did not
+        have a correct guess for the specified daily question. Players who used the
+        'rest' power-up are excluded so their streak is preserved.
+        """
+        query = """
+            UPDATE season_scores
+            SET current_streak = 0
+            WHERE season_id = ?
+            AND player_id NOT IN (
+                SELECT player_id
+                FROM guesses
+                WHERE daily_question_id = ? AND is_correct = 1
+            )
+            AND player_id NOT IN (
+                SELECT user_id
+                FROM powerup_usage
+                WHERE question_id = ? AND powerup_type = 'rest'
+            )
+            AND current_streak > 0
+        """
+        self._db.execute_update(
+            query, (season_id, daily_question_id, daily_question_id)
+        )
 
     def get_player_ids_with_role(self, role_name: str) -> set[int]:
         """
