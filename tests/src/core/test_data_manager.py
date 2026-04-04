@@ -1275,7 +1275,7 @@ class TestDataManagerIntegration(unittest.TestCase):
         ss2 = self.data_manager.get_player_season_score("p2", season_id)
         self.assertEqual(ss2.current_streak, 3)
 
-
+    def test_get_guesses_for_daily_question(self):
         """Test retrieving all guesses for a daily question."""
         # Create question
         q = Question("Q?", "A", "Cat", 100, "test", "Hint")
