@@ -24,9 +24,28 @@ class RolesGameMode(BaseManager):
     def assign_roles(self):
         """
         Assigns roles to players based on their scores.
+        Uses season scores when a season is active, falls back to all-time scores.
         """
-        # The list is already sorted by score descending.
-        player_scores = self.data_manager.get_player_scores()
+        # Use season scores if seasons are enabled and a season is active
+        player_scores = None
+        if self.config.is_seasons_enabled():
+            current_season = self.data_manager.get_current_season()
+            if current_season:
+                season_scores = self.data_manager.get_season_scores(
+                    current_season.season_id, limit=1000
+                )
+                if season_scores:
+                    # Normalize to {"id", "score"} dicts matching the all-time format.
+                    # "score" here represents season points (SeasonScore.points).
+                    player_scores = [
+                        {"id": s.player_id, "score": s.points}
+                        for s in season_scores
+                    ]
+
+        if player_scores is None:
+            # Fall back to all-time scores
+            player_scores = self.data_manager.get_player_scores()
+
         if not player_scores:
             return
 
@@ -34,17 +53,16 @@ class RolesGameMode(BaseManager):
         self.data_manager.clear_player_roles()
 
         # Assign 'first place' role to all players tied for first
-        if player_scores:
-            top_score = player_scores[0]["score"]
-            for player in player_scores:
-                if player["score"] == top_score:
-                    self.assign_role_to_player(
-                        player["id"],
-                        self.config.get("JBOT_FIRST_PLACE_ROLE_NAME"),
-                    )
-                else:
-                    # Players are sorted, so we can break early
-                    break
+        top_score = player_scores[0]["score"]
+        for player in player_scores:
+            if player["score"] == top_score:
+                self.assign_role_to_player(
+                    player["id"],
+                    self.config.get("JBOT_FIRST_PLACE_ROLE_NAME"),
+                )
+            else:
+                # Players are sorted, so we can break early
+                break
 
     def assign_role_to_player(self, player_id, role_name):
         """
