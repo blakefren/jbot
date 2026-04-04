@@ -1208,6 +1208,73 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.assertEqual(p1.answer_streak, 0)  # Reset (didn't answer or rest)
         self.assertEqual(p2.answer_streak, 3)  # Preserved (resting)
 
+    def test_reset_unanswered_season_streaks(self):
+        """Test resetting season_scores.current_streak for players who didn't answer."""
+        # Create season and players
+        season_id = self.data_manager.create_season(
+            "April 2026", "2026-04-01", "2026-04-30"
+        )
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+        self.data_manager.create_player("p3", "Player3")
+
+        self.data_manager.initialize_player_season_score("p1", season_id)
+        self.data_manager.initialize_player_season_score("p2", season_id)
+        self.data_manager.initialize_player_season_score("p3", season_id)
+
+        # Give players season streaks
+        self.data_manager.update_season_score("p1", season_id, current_streak=5)
+        self.data_manager.update_season_score("p2", season_id, current_streak=3)
+        self.data_manager.update_season_score("p3", season_id, current_streak=0)
+
+        # Create a question; only p1 answers correctly
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "A", True)
+        self.data_manager.log_player_guess("p2", "Player2", dq_id, "B", False)
+
+        # Reset unanswered season streaks
+        self.data_manager.reset_unanswered_season_streaks(dq_id, season_id)
+
+        # p1 answered correctly — streak preserved
+        ss1 = self.data_manager.get_player_season_score("p1", season_id)
+        self.assertEqual(ss1.current_streak, 5)
+        # p2 didn't answer correctly — streak reset
+        ss2 = self.data_manager.get_player_season_score("p2", season_id)
+        self.assertEqual(ss2.current_streak, 0)
+        # p3 already had 0 — no change
+        ss3 = self.data_manager.get_player_season_score("p3", season_id)
+        self.assertEqual(ss3.current_streak, 0)
+
+    def test_reset_unanswered_season_streaks_excludes_resting_players(self):
+        """Test that resting players keep their season streak."""
+        season_id = self.data_manager.create_season(
+            "April 2026", "2026-04-01", "2026-04-30"
+        )
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.create_player("p2", "Player2")
+
+        self.data_manager.initialize_player_season_score("p1", season_id)
+        self.data_manager.initialize_player_season_score("p2", season_id)
+
+        self.data_manager.update_season_score("p1", season_id, current_streak=5)
+        self.data_manager.update_season_score("p2", season_id, current_streak=3)
+
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        # p2 uses rest — neither player answers correctly
+        self.data_manager.log_powerup_usage("p2", "rest", None, dq_id)
+
+        self.data_manager.reset_unanswered_season_streaks(dq_id, season_id)
+
+        # p1: didn't answer or rest — streak reset
+        ss1 = self.data_manager.get_player_season_score("p1", season_id)
+        self.assertEqual(ss1.current_streak, 0)
+        # p2: resting — streak preserved
+        ss2 = self.data_manager.get_player_season_score("p2", season_id)
+        self.assertEqual(ss2.current_streak, 3)
+
     def test_get_guesses_for_daily_question(self):
         """Test retrieving all guesses for a daily question."""
         # Create question
