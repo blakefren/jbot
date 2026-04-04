@@ -12,6 +12,7 @@ import pytz
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
+# TEST
 # TODO: review for SQL injection risks.
 class DataManager:
     """
@@ -598,9 +599,7 @@ class DataManager:
         """
         self._db.execute_update(query, (daily_question_id, daily_question_id))
 
-    def reset_unanswered_season_streaks(
-        self, daily_question_id: int, season_id: int
-    ):
+    def reset_unanswered_season_streaks(self, daily_question_id: int, season_id: int):
         """
         Resets the current_streak in season_scores to 0 for all players who did not
         have a correct guess for the specified daily question. Players who used the
