@@ -197,7 +197,8 @@ class ConfigReader:
             )
 
         relative_path = datasets[dataset_name]
-        return os.path.join(BASE_DIR, relative_path)
+        datasets_dir = os.environ.get("JBOT_DATASETS_DIR", BASE_DIR)
+        return os.path.join(datasets_dir, relative_path)
 
     def parse_question_sources(self, gemini_manager=None):
         """

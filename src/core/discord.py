@@ -485,7 +485,8 @@ class DiscordBot(commands.Bot):
 
     def _backup_database(self):
         """Creates a dated backup of the database and prunes old backups."""
-        backup_dir = os.path.join(project_root, "db", "backups")
+        db_dir = os.path.dirname(self.data_manager.db.db_path)
+        backup_dir = os.path.join(db_dir, "backups")
         os.makedirs(backup_dir, exist_ok=True)
 
         today = datetime.datetime.now(TIMEZONE).strftime("%Y-%m-%d")

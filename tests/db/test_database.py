@@ -210,20 +210,16 @@ class TestDatabaseFileBasedCreation(unittest.TestCase):
     """Tests for file-based database creation (non-memory path)."""
 
     def test_file_based_initialization(self):
-        """Test that a file-based database uses the correct path in the db directory."""
-        # When passing a non-memory path, the Database class uses the db directory
-        db = Database(db_path="test.db")
+        """Test that a file-based database resolves relative paths from the project root."""
+        db = Database(db_path="db/test.db")
         try:
-            # The db_path should be in the db directory, not the passed path
-            expected_dir = os.path.dirname(
-                os.path.abspath(os.path.join(project_root, "db", "database.py"))
-            )
-            self.assertTrue(
-                db.db_path.startswith(expected_dir) or "jbot.db" in db.db_path
-            )
+            expected_path = os.path.abspath(os.path.join(project_root, "db", "test.db"))
+            self.assertEqual(db.db_path, expected_path)
             self.assertIsNotNone(db.conn)
         finally:
             db.close()
+            if os.path.exists(db.db_path):
+                os.remove(db.db_path)
 
 
 class TestDatabaseConnectionError(unittest.TestCase):

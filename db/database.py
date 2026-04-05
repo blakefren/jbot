@@ -45,10 +45,10 @@ class Database:
         Args:
             db_path (str): The path to the SQLite database file.
         """
-        # If db_path is not in memory, join with the directory of this file
-        if db_path != ":memory:":
-            # Go up one level from `core` to `src`. Then join with the provided db_path.
-            db_path = os.path.join(os.path.dirname(__file__), "jbot.db")
+        if db_path != ":memory:" and not os.path.isabs(db_path):
+            # Resolve relative paths from the project root (parent of db/)
+            project_root = os.path.join(os.path.dirname(__file__), "..")
+            db_path = os.path.abspath(os.path.join(project_root, db_path))
 
         self.db_path = db_path
         self.conn = None

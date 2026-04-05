@@ -562,16 +562,17 @@ class TestDiscordBotBackup(unittest.TestCase):
         self.bot.data_manager = MagicMock()
 
     def test_creates_backup_dir_and_calls_backup_with_dated_filename(self):
-        """_backup_database() creates db/backups/ and passes a dated path to data_manager."""
+        """_backup_database() creates backups/ next to the DB and passes a dated path to data_manager."""
         import datetime
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("src.core.discord.project_root", tmpdir):
-                self.bot.config.get.return_value = "30"
-                DiscordBot._backup_database(self.bot)
+            db_path = os.path.join(tmpdir, "jbot.db")
+            self.bot.data_manager.db.db_path = db_path
+            self.bot.config.get.return_value = "30"
+            DiscordBot._backup_database(self.bot)
 
-            backup_dir = os.path.join(tmpdir, "db", "backups")
+            backup_dir = os.path.join(tmpdir, "backups")
             self.assertTrue(os.path.isdir(backup_dir))
             self.bot.data_manager.backup_database.assert_called_once()
             call_path = self.bot.data_manager.backup_database.call_args[0][0]
@@ -585,7 +586,7 @@ class TestDiscordBotBackup(unittest.TestCase):
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            backup_dir = os.path.join(tmpdir, "db", "backups")
+            backup_dir = os.path.join(tmpdir, "backups")
             os.makedirs(backup_dir)
 
             # Create an ancient backup (should be pruned) and a future-dated one (keep)
@@ -594,9 +595,9 @@ class TestDiscordBotBackup(unittest.TestCase):
             open(old_file, "w").close()
             open(future_file, "w").close()
 
-            with patch("src.core.discord.project_root", tmpdir):
-                self.bot.config.get.return_value = "30"
-                DiscordBot._backup_database(self.bot)
+            self.bot.data_manager.db.db_path = os.path.join(tmpdir, "jbot.db")
+            self.bot.config.get.return_value = "30"
+            DiscordBot._backup_database(self.bot)
 
             self.assertFalse(os.path.exists(old_file))
             self.assertTrue(os.path.exists(future_file))
@@ -606,15 +607,15 @@ class TestDiscordBotBackup(unittest.TestCase):
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            backup_dir = os.path.join(tmpdir, "db", "backups")
+            backup_dir = os.path.join(tmpdir, "backups")
             os.makedirs(backup_dir)
 
             other_file = os.path.join(backup_dir, "readme.txt")
             open(other_file, "w").close()
 
-            with patch("src.core.discord.project_root", tmpdir):
-                self.bot.config.get.return_value = "30"
-                DiscordBot._backup_database(self.bot)
+            self.bot.data_manager.db.db_path = os.path.join(tmpdir, "jbot.db")
+            self.bot.config.get.return_value = "30"
+            DiscordBot._backup_database(self.bot)
 
             self.assertTrue(os.path.exists(other_file))
 
