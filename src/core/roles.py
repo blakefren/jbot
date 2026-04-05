@@ -38,8 +38,7 @@ class RolesGameMode(BaseManager):
                     # Normalize to {"id", "score"} dicts matching the all-time format.
                     # "score" here represents season points (SeasonScore.points).
                     player_scores = [
-                        {"id": s.player_id, "score": s.points}
-                        for s in season_scores
+                        {"id": s.player_id, "score": s.points} for s in season_scores
                     ]
 
         if player_scores is None:
