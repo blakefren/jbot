@@ -104,6 +104,7 @@ As your partner, I will adhere to the following principles:
 *   **Entry Point**: The bot is started via `python run.py`.
     - Local: Run `python run.py` directly (adds `src` to path).
     - Docker: Run `docker compose up -d` (uses `compose.yaml` to mount `.env` and `jbot.db`).
+    - Railway: Auto-deploys from GitHub. Uses Dockerfile with a volume at `/data` for persistent storage.
 *   **Configuration**: Configuration uses both `.env` and `sources.toml`:
     - **`.env`**: For environment-specific settings (tokens, scheduling, feature flags)
         - Always add new config keys to `.env.template` with descriptive comments
@@ -123,6 +124,7 @@ As your partner, I will adhere to the following principles:
         - **Behavior**: `JBOT_TAG_UNANSWERED_PLAYERS` — whether to @-mention players who haven't answered in the reminder message
         - **Emojis**: `JBOT_EMOJI_*` keys for all in-game emoji (fastest, streak, before-hint, jinxed, silenced, rest, etc.)
         - **Discord**: Bot tokens, role names (in `.env`)
+        - **Infrastructure**: `JBOT_DB_PATH` (database file path), `JBOT_DATASETS_DIR` (base directory for dataset resolution, defaults to project root), `JBOT_BACKUP_RETENTION_DAYS` (in `.env`)
 *   **Database Management**: The database schema is defined in `db/schema.sql`. To modify the database, I will update `db/schema.sql` and run `python db/update_schema.py` to apply the changes to the local `jbot.db`. The update script performs intelligent diffing and migration of schema changes.
     - **Migration Safety**: `update_schema.py` compares current database against `schema.sql`, applies changes incrementally
     - **Verification**: After migration, run `python db/verify_schema.py` to ensure schema matches expectations
@@ -139,6 +141,28 @@ As your partner, I will adhere to the following principles:
     - Runs `python -m unittest discover` to execute the test suite
     - **Important**: The hook uses `python -m black` (not just `black`) to ensure it uses the Black version from the active Python environment (jbot conda env), not a potentially outdated system installation
     - If modifying the hook, always ensure it uses the correct Python environment to avoid formatting inconsistencies
+
+## Production (Railway)
+
+The bot is deployed to [Railway](https://railway.app) with GitHub auto-deploys.
+
+*   **Architecture**: Railway builds the Docker image from GitHub on each push to `main`. A persistent volume at `/data` stores the SQLite database and dataset files (which are gitignored).
+*   **Volume Layout**:
+    ```
+    /data/
+      jbot.db              # Database
+      backups/             # Daily DB backups (auto-managed)
+      datasets/            # Question datasets (CSV/TSV)
+    ```
+*   **Key Environment Variables** (set in Railway dashboard):
+    - `JBOT_DB_PATH=/data/jbot.db` — points Database class to the volume
+    - `JBOT_DATASETS_DIR=/data` — base directory for resolving dataset paths from `sources.toml`
+*   **Path Resolution**:
+    - `Database.__init__` uses the `db_path` parameter directly if absolute, otherwise resolves relative to project root
+    - `ConfigReader.get_dataset_path()` resolves dataset paths from `sources.toml` relative to `JBOT_DATASETS_DIR` (or project root if unset)
+    - Backups are stored in a `backups/` directory next to the database file
+*   **Data Migration**: Use `python scripts/railway_upload.py` to transfer datasets and/or the database to the Railway volume via SSH. Requires Railway CLI (`scoop install railway`, `railway login`, `railway link`).
+*   **Monitoring**: `railway logs` for live logs, `railway ssh` for shell access.
 
 ## Testing Strategy
 

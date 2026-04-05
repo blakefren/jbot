@@ -37,6 +37,50 @@ You can also run the bot using Docker, which simplifies dependency management.
     *   **View Logs**: `docker compose logs -f`
     *   **Rebuild**: `docker compose up -d --build` (Run this after changing code or requirements)
 
+## Deploying to Railway
+
+The bot can be deployed to [Railway](https://railway.app) with persistent storage for the database and datasets.
+
+### Initial Setup
+
+1.  **Create a Railway project** and connect your GitHub repo.
+2.  **Add a Volume** to your service (Settings → Volumes), mounted at `/data`.
+3.  **Set environment variables** in Railway (Variables tab). Copy all keys from `.env.template` and set:
+    ```
+    JBOT_DB_PATH=/data/jbot.db
+    JBOT_DATASETS_DIR=/data
+    ```
+
+### Uploading Data
+
+Datasets and the database are not in the GitHub repo, so they must be uploaded to the Railway volume separately. A migration script automates this via the Railway CLI.
+
+1.  **Install & authenticate the CLI**:
+    ```bash
+    scoop install railway     # Windows (via Scoop)
+    railway login
+    railway link              # Run in the jbot directory, select your project/service
+    ```
+
+2.  **Upload data to the volume**:
+    ```bash
+    python scripts/railway_upload.py                # Upload datasets + database
+    python scripts/railway_upload.py --db-only      # Database only
+    python scripts/railway_upload.py --datasets-only # Datasets only
+    ```
+
+3.  **Redeploy** to pick up the new data:
+    ```bash
+    railway redeploy
+    ```
+
+### Ongoing Management
+
+*   **View logs**: `railway logs`
+*   **SSH into container**: `railway ssh`
+*   **Re-upload database** (e.g. after local corrections): `python scripts/railway_upload.py --db-only`
+*   Railway auto-deploys on push to `main`.
+
 ## Daily format
 
 Every day, one trivia question is messaged to the group in the morning, and the answer
