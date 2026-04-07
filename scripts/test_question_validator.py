@@ -69,6 +69,12 @@ async def main():
             "expected_valid": False,
             "description": "Answer doesn't make sense for the question",
         },
+        {
+            "question": "I am a pen for bulls, though I hold no livestock and draw no lines.",
+            "answer": "Bullpen",
+            "expected_valid": False,
+            "description": "Question contains the answer (pen + bulls = bullpen)",
+        },
     ]
 
     print("\n--- Starting Question Validator Test ---\n")

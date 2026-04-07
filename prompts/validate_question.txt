@@ -4,6 +4,7 @@ A broken question is one that:
 1. Asks "Which of the following..." or implies a list of options, but does not provide the options in the question text.
 2. Is nonsensical, incomplete, or clearly malformed.
 3. Has an answer that doesn't make sense for the question.
+4. The question text contains or directly reveals the answer. This includes cases where the answer's words or components appear in the question, making it trivially solvable (e.g., if the answer is "Bullpen", a question containing both "pen" and "bulls" would be invalid because the answer can be directly derived from the question text).
 
 Question:
 [Insert Question Here]
