@@ -3,8 +3,11 @@
 
 Railway SSH doesn't support SCP/SFTP, so this script transfers files by:
 1. Creating a tar.gz archive of all data files
-2. Base64-encoding it and sending in chunks via `railway ssh`
+2. Piping it through a single ``railway ssh`` connection (base64-encoded)
 3. Decoding and extracting on the remote side
+
+If stdin piping is not supported by the Railway CLI version, the script
+falls back to sending base64 chunks via individual SSH commands.
 
 Prerequisites:
     1. Install Railway CLI: scoop install railway
@@ -16,6 +19,7 @@ Usage:
     python scripts/railway_upload.py                # Upload datasets + database
     python scripts/railway_upload.py --db-only      # Upload database only
     python scripts/railway_upload.py --datasets-only # Upload datasets only
+    python scripts/railway_upload.py --chunked       # Force chunked upload mode
 """
 
 import argparse
@@ -27,9 +31,9 @@ import sys
 import tarfile
 
 VOLUME_MOUNT = "/data"
-REMOTE_TMP = "/tmp/jbot_upload.b64"
-# 64KB of base64 text per SSH command — well within command-line limits
-CHUNK_SIZE = 64 * 1024
+REMOTE_TMP = "/tmp/jbot_upload.tar.gz"
+# 512KB of base64 text per SSH command for chunked fallback
+CHUNK_SIZE = 512 * 1024
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DB_PATH = os.path.join(PROJECT_ROOT, "db", "jbot.db")
@@ -72,7 +76,7 @@ def run_ssh(command: str, check: bool = True) -> subprocess.CompletedProcess:
 
 
 def check_prerequisites():
-    """Verify Railway CLI is installed, logged in, and linked."""
+    """Verify Railway CLI is installed, logged in, linked, and SSH reachable."""
     global RAILWAY_BIN
     RAILWAY_BIN = _find_railway_bin()
 
@@ -98,6 +102,21 @@ def check_prerequisites():
         print("ERROR: No project linked. Run: railway link")
         sys.exit(1)
     print(f"  Project status OK")
+
+    # Check SSH connectivity
+    print("  Testing SSH connection...")
+    result = run_ssh("echo SSH_OK", check=False)
+    if result.returncode != 0 or "SSH_OK" not in result.stdout:
+        stderr = result.stderr.strip() if result.stderr else ""
+        print("ERROR: Cannot SSH into the service.")
+        print("  The service may be crash-looping or not yet deployed.")
+        if stderr:
+            print(f"  stderr: {stderr}")
+        print("\n  Tips:")
+        print("  - Check service logs: railway logs")
+        print("  - Ensure the service has at least one successful deploy")
+        sys.exit(1)
+    print("  SSH connection OK")
 
 
 def collect_files(include_db: bool, include_datasets: bool) -> list[tuple[str, str]]:
@@ -135,37 +154,34 @@ def create_archive(files: list[tuple[str, str]]) -> bytes:
     return buf.getvalue()
 
 
-def upload_archive(archive_data: bytes):
-    """Upload the archive to the Railway volume via SSH."""
-    encoded = base64.b64encode(archive_data).decode("ascii")
-    total_chunks = (len(encoded) + CHUNK_SIZE - 1) // CHUNK_SIZE
+def upload_archive(archive_data: bytes, force_chunked: bool = False):
+    """Upload the archive to the Railway volume via SSH.
+
+    Primary approach: pipe base64-encoded data through stdin of a single
+    ``railway ssh`` connection.  If that fails (or --chunked is set),
+    falls back to sending base64 text via individual SSH echo commands.
+    """
+    encoded = base64.b64encode(archive_data)
 
     print(
         f"\n  Archive size: {len(archive_data) / (1024 * 1024):.1f} MB "
         f"({len(encoded) / (1024 * 1024):.1f} MB base64)"
     )
-    print(f"  Sending in {total_chunks} chunks...")
 
-    # Clear any previous upload
-    run_ssh(f"rm -f {REMOTE_TMP}")
-
-    for i in range(total_chunks):
-        chunk = encoded[i * CHUNK_SIZE : (i + 1) * CHUNK_SIZE]
-        # Single-quote the chunk — base64 is [A-Za-z0-9+/=\n], safe in single quotes
-        run_ssh(f"echo '{chunk}' >> {REMOTE_TMP}")
-        progress = (i + 1) / total_chunks * 100
-        print(
-            f"\r  Progress: {i + 1}/{total_chunks} ({progress:.0f}%)",
-            end="",
-            flush=True,
-        )
-
-    print()  # newline after progress
-
-    # Decode and extract
-    print("  Extracting on remote...")
+    # Ensure target directories exist
     run_ssh(f"mkdir -p {VOLUME_MOUNT}/datasets")
-    run_ssh(f"base64 -d {REMOTE_TMP} | tar xzf - -C {VOLUME_MOUNT}")
+
+    if not force_chunked:
+        ok = _upload_stdin_pipe(archive_data, encoded)
+        if not ok:
+            print("\n  Falling back to chunked upload...")
+            _upload_chunked(encoded)
+    else:
+        _upload_chunked(encoded)
+
+    # Extract
+    print("  Extracting on remote...")
+    run_ssh(f"tar xzf {REMOTE_TMP} -C {VOLUME_MOUNT}")
     run_ssh(f"rm -f {REMOTE_TMP}")
 
     # Verify
@@ -179,12 +195,92 @@ def upload_archive(archive_data: bytes):
     print(result.stdout)
 
 
+def _upload_stdin_pipe(archive_data: bytes, encoded: bytes) -> bool:
+    """Try piping base64 data through stdin of a single SSH connection.
+
+    Returns True on success, False if piping is not supported.
+    """
+    print("  Uploading via stdin pipe (single connection)...")
+    try:
+        result = subprocess.run(
+            [
+                RAILWAY_BIN,
+                "ssh",
+                "--",
+                "sh",
+                "-c",
+                f"base64 -d > {REMOTE_TMP}",
+            ],
+            input=encoded + b"\n",
+            capture_output=True,
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired:
+        print("  ERROR: stdin pipe timed out after 600s")
+        return False
+
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        print(f"  stdin pipe returned exit {result.returncode}")
+        if stderr:
+            print(f"  stderr: {stderr}")
+        return False
+
+    # Verify transferred size matches
+    result = run_ssh(f"wc -c < {REMOTE_TMP}", check=False)
+    if result.returncode != 0:
+        print("  Could not verify remote file size")
+        return False
+
+    remote_size = int(result.stdout.strip())
+    if remote_size != len(archive_data):
+        print(f"  Size mismatch: local={len(archive_data)}, remote={remote_size}")
+        run_ssh(f"rm -f {REMOTE_TMP}", check=False)
+        return False
+
+    print(f"  Transfer verified ({remote_size:,} bytes)")
+    return True
+
+
+def _upload_chunked(encoded: bytes):
+    """Upload by sending base64 chunks via individual SSH commands."""
+    encoded_str = encoded.decode("ascii")
+    total_chunks = (len(encoded_str) + CHUNK_SIZE - 1) // CHUNK_SIZE
+
+    print(f"  Sending in {total_chunks} chunks...")
+
+    # Clear any previous partial upload
+    run_ssh(f"rm -f /tmp/jbot_upload.b64")
+
+    for i in range(total_chunks):
+        chunk = encoded_str[i * CHUNK_SIZE : (i + 1) * CHUNK_SIZE]
+        # Base64 alphabet is [A-Za-z0-9+/=], safe inside single quotes
+        run_ssh(f"printf '%s' '{chunk}' >> /tmp/jbot_upload.b64")
+        progress = (i + 1) / total_chunks * 100
+        print(
+            f"\r  Progress: {i + 1}/{total_chunks} ({progress:.0f}%)",
+            end="",
+            flush=True,
+        )
+
+    print()  # newline after progress
+
+    # Decode base64 to tar.gz
+    run_ssh(f"base64 -d /tmp/jbot_upload.b64 > {REMOTE_TMP}")
+    run_ssh("rm -f /tmp/jbot_upload.b64")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Upload data files to Railway volume")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--db-only", action="store_true", help="Upload database only")
     group.add_argument(
         "--datasets-only", action="store_true", help="Upload datasets only"
+    )
+    parser.add_argument(
+        "--chunked",
+        action="store_true",
+        help="Force chunked upload mode (slower but more compatible)",
     )
     args = parser.parse_args()
 
@@ -206,7 +302,7 @@ def main():
     archive_data = create_archive(files)
 
     print("Uploading to Railway volume...")
-    upload_archive(archive_data)
+    upload_archive(archive_data, force_chunked=args.chunked)
 
     print("=== Upload complete ===")
     print(f"\nEnsure these Railway env vars are set:")

@@ -264,7 +264,13 @@ class ConfigReader:
                     dataset_path = self.get_dataset_path(dataset_name)
                 except KeyError as e:
                     logging.error(f"Failed to load file source {s_name}: {e}")
-                    raise  # Crash on missing dataset reference as specified
+                    continue
+
+                if not os.path.isfile(dataset_path):
+                    logging.warning(
+                        f"Skipping file source {s_name}: dataset file not found at {dataset_path}"
+                    )
+                    continue
 
                 reader_type = source_config.get("reader", "")
                 questions = []
@@ -302,9 +308,9 @@ class ConfigReader:
                     logging.warning(f"No questions loaded for file source: {s_name}")
 
         if not sources:
-            raise RuntimeError(
-                f"Failed to load any valid question sources from {SOURCES_TOML_PATH}.\n"
-                f"Check your configuration and ensure at least one source is properly configured."
+            logging.warning(
+                f"No valid question sources loaded from {SOURCES_TOML_PATH}. "
+                f"The bot will start but cannot serve questions until datasets are available."
             )
 
         return sources

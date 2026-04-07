@@ -176,7 +176,7 @@ points = 100
     def test_parse_question_sources_no_gemini_manager(
         self, mock_validate, mock_base_dir, mock_toml_path
     ):
-        """Test that parse_question_sources raises error when no valid sources load."""
+        """Test that parse_question_sources returns empty list when no valid sources load."""
         mock_toml_path.__str__ = lambda _: self.sources_toml
         mock_toml_path.__fspath__ = lambda _: self.sources_toml
 
@@ -184,13 +184,9 @@ points = 100
             config = ConfigReader()
 
             # No gemini_manager and no actual files means no sources will load
-            # Should raise RuntimeError
-            with self.assertRaises(RuntimeError) as context:
-                config.parse_question_sources(None)
-
-            self.assertIn(
-                "Failed to load any valid question sources", str(context.exception)
-            )
+            # Should return empty list with a warning (not crash)
+            sources = config.parse_question_sources(None)
+            self.assertEqual(sources, [])
 
     @patch("src.cfg.main.SOURCES_TOML_PATH")
     @patch("src.cfg.main.BASE_DIR")
@@ -252,6 +248,12 @@ points = 200
         mock_questions = [Question("Q1", "A1", "Test Category", 100)]
         mock_read_simple.return_value = mock_questions
 
+        # Create dummy dataset file so os.path.isfile check passes
+        dataset_file = os.path.join(self.temp_dir, "datasets", "test.csv")
+        os.makedirs(os.path.dirname(dataset_file), exist_ok=True)
+        with open(dataset_file, "w") as f:
+            f.write("")
+
         with patch("src.cfg.main.SOURCES_TOML_PATH", toml_path):
             with patch("src.cfg.main.BASE_DIR", self.temp_dir):
                 config = ConfigReader()
@@ -301,6 +303,12 @@ points = 150
 
         mock_questions = [Question("Q1", "A1", "Jeopardy", 200)]
         mock_read_jeopardy.return_value = mock_questions
+
+        # Create dummy dataset file so os.path.isfile check passes
+        dataset_file = os.path.join(self.temp_dir, "datasets", "jeopardy.tsv")
+        os.makedirs(os.path.dirname(dataset_file), exist_ok=True)
+        with open(dataset_file, "w") as f:
+            f.write("")
 
         with patch("src.cfg.main.SOURCES_TOML_PATH", toml_path):
             with patch("src.cfg.main.BASE_DIR", self.temp_dir):
@@ -359,6 +367,13 @@ category = "Simple"
         mock_kb.return_value = [Question("KB1", "A1", "KB", 100)]
         mock_simple.return_value = [Question("S1", "A1", "Simple", 100)]
 
+        # Create dummy dataset files so os.path.isfile check passes
+        for fname in ["kb.csv", "simple.csv"]:
+            fpath = os.path.join(self.temp_dir, "datasets", fname)
+            os.makedirs(os.path.dirname(fpath), exist_ok=True)
+            with open(fpath, "w") as f:
+                f.write("")
+
         with patch("src.cfg.main.SOURCES_TOML_PATH", toml_path):
             with patch("src.cfg.main.BASE_DIR", self.temp_dir):
                 config = ConfigReader()
@@ -398,17 +413,19 @@ reader = "nonexistent_reader"
         mock_toml_path.__str__ = lambda _: toml_path
         mock_toml_path.__fspath__ = lambda _: toml_path
 
+        # Create dummy dataset file so os.path.isfile check passes
+        dataset_file = os.path.join(self.temp_dir, "datasets", "test.csv")
+        os.makedirs(os.path.dirname(dataset_file), exist_ok=True)
+        with open(dataset_file, "w") as f:
+            f.write("")
+
         with patch("src.cfg.main.SOURCES_TOML_PATH", toml_path):
             with patch("src.cfg.main.BASE_DIR", self.temp_dir):
                 config = ConfigReader()
 
-                # Should raise RuntimeError since no valid sources load
-                with self.assertRaises(RuntimeError) as context:
-                    config.parse_question_sources(None)
-
-                self.assertIn(
-                    "Failed to load any valid question sources", str(context.exception)
-                )
+                # Unknown reader type is skipped; no valid sources returns empty list
+                sources = config.parse_question_sources(None)
+                self.assertEqual(sources, [])
 
 
 if __name__ == "__main__":
