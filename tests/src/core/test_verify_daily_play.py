@@ -47,7 +47,9 @@ class TestVerifyDailyPlay(unittest.TestCase):
         }
         self.game_runner.config.get.side_effect = lambda k, d=None: defaults.get(k, d)
 
-    def _setup_common_mocks(self, snapshot, guess_events, powerup_events, season_id=None):
+    def _setup_common_mocks(
+        self, snapshot, guess_events, powerup_events, season_id=None
+    ):
         """Helper to configure DataManager mocks for a verification run."""
         self.mock_data_manager.get_daily_snapshot.return_value = snapshot
         self.mock_data_manager.get_daily_question_by_id.return_value = (
@@ -149,7 +151,9 @@ class TestVerifyDailyPlay(unittest.TestCase):
 
     def test_season_score_mismatch_detected(self):
         """When the season score doesn't match, a diff is returned."""
-        snapshot = {"p1": self._make_player("p1", 100, 0, season_score=50, name="Carol")}
+        snapshot = {
+            "p1": self._make_player("p1", 100, 0, season_score=50, name="Carol")
+        }
         guesses = [
             {
                 "player_id": "p1",

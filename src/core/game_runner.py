@@ -1106,9 +1106,7 @@ class GameRunner:
                     }
 
             if player_diffs:
-                player_name = (
-                    snapshot[user_id].name if user_id in snapshot else user_id
-                )
+                player_name = snapshot[user_id].name if user_id in snapshot else user_id
                 diffs.append(
                     {
                         "player_id": user_id,
@@ -1141,4 +1139,3 @@ class GameRunner:
                     f"  {field}: expected {exp}, actual {act} (diff: {sign}{diff})"
                 )
         return "\n".join(lines)
-
