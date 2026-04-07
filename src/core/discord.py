@@ -556,13 +556,10 @@ class DiscordBot(commands.Bot):
         Sends a DM to each admin user listed in JBOT_ADMIN_USER_IDS.
         Silently skips if the config key is empty or not set.
         """
-        try:
-            raw = self.config.get("JBOT_ADMIN_USER_IDS", "")
-        except Exception:
-            raw = ""
+        raw = self.config.get("JBOT_ADMIN_USER_IDS", "")
         if not raw or not raw.strip():
-            logging.warning(
-                "_notify_admins: JBOT_ADMIN_USER_IDS is not set; admin alert not sent."
+            logging.debug(
+                "_notify_admins: JBOT_ADMIN_USER_IDS not configured, skipping admin notification."
             )
             return
         for part in raw.split(","):
