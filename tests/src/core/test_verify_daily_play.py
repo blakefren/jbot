@@ -47,7 +47,7 @@ class TestVerifyDailyPlay(unittest.TestCase):
         }
         self.game_runner.config.get.side_effect = lambda k, d=None: defaults.get(k, d)
 
-    def _setup_common_mocks(self, snapshot, events_guesses, events_powerups, season_id=None):
+    def _setup_common_mocks(self, snapshot, guess_events, powerup_events, season_id=None):
         """Helper to configure DataManager mocks for a verification run."""
         self.mock_data_manager.get_daily_snapshot.return_value = snapshot
         self.mock_data_manager.get_daily_question_by_id.return_value = (
@@ -57,10 +57,10 @@ class TestVerifyDailyPlay(unittest.TestCase):
         self.mock_data_manager.get_alternative_answers.return_value = []
         self.mock_data_manager.get_hint_sent_timestamp.return_value = None
         self.mock_data_manager.get_guesses_for_daily_question.return_value = (
-            events_guesses
+            guess_events
         )
         self.mock_data_manager.get_powerup_usages_for_question.return_value = (
-            events_powerups
+            powerup_events
         )
         self.mock_data_manager.get_snapshot_season_id.return_value = season_id
 

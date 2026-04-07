@@ -347,16 +347,16 @@ class DiscordBot(commands.Bot):
 
         # 4. End the daily game (clear question, reset powerup states)
         # Save question ID before clearing, needed for post-game verification.
-        question_id_for_verify = self.game.daily_question_id
+        daily_question_id = self.game.daily_question_id
         self.game.end_daily_game()
 
         # 5. Verify daily play — compare simulator-expected state against DB
         try:
-            if question_id_for_verify:
-                diffs = self.game.verify_daily_play(question_id_for_verify)
+            if daily_question_id:
+                diffs = self.game.verify_daily_play(daily_question_id)
                 if diffs:
                     report = self.game.format_verify_report(
-                        question_id_for_verify, diffs
+                        daily_question_id, diffs
                     )
                     logging.warning(
                         "verify_daily_play: discrepancies found:\n%s", report
