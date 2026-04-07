@@ -1,5 +1,6 @@
 import datetime
 import random
+from typing import Optional
 from data.readers.question import Question
 from data.readers.question_source import QuestionSource, StaticQuestionSource
 from zoneinfo import ZoneInfo

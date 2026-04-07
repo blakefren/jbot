@@ -1016,3 +1016,129 @@ class GameRunner:
             "age_warning": age_warning,
             "rest_cleared_players": rest_cleared_players,
         }
+
+    def verify_daily_play(self, daily_question_id: int) -> list[dict]:
+        """
+        Verifies that the database end state for a completed day matches what the
+        DailyGameSimulator would predict from the recorded events and the start-of-day
+        snapshot.
+
+        Should be called AFTER end_daily_game() so that streak resets have been applied
+        to the database.
+
+        Returns:
+            A list of dicts, one per player with discrepancies.  Each dict has:
+                player_id, player_name, diffs (dict of field → {expected, actual})
+            Returns an empty list when everything matches or verification cannot run.
+        """
+        snapshot = self.data_manager.get_daily_snapshot(daily_question_id)
+        if not snapshot:
+            logging.warning(
+                "verify_daily_play: no snapshot found for daily_question_id=%d, skipping.",
+                daily_question_id,
+            )
+            return []
+
+        question_info = self.data_manager.get_daily_question_by_id(daily_question_id)
+        if not question_info:
+            logging.warning(
+                "verify_daily_play: daily question %d not found in DB, skipping.",
+                daily_question_id,
+            )
+            return []
+        daily_q, _ = question_info
+
+        answers = [daily_q.answer] + self.data_manager.get_alternative_answers(
+            daily_question_id
+        )
+        hint_ts = self.data_manager.get_hint_sent_timestamp(daily_question_id)
+        events = self._fetch_daily_events(daily_question_id)
+
+        simulator = DailyGameSimulator(
+            daily_q,
+            answers,
+            hint_ts,
+            events,
+            snapshot,
+            self.config,
+            answer_checker=self.answer_checker,
+        )
+        sim_results = simulator.run(apply_end_of_day=True)
+
+        season_id = self.data_manager.get_snapshot_season_id(daily_question_id)
+
+        all_players = self.data_manager.get_all_players()
+
+        diffs = []
+        for user_id, expected in sim_results.items():
+            actual_player = all_players.get(user_id)
+            if not actual_player:
+                continue
+
+            player_diffs = {}
+
+            if expected["final_score"] != actual_player.score:
+                player_diffs["score"] = {
+                    "expected": expected["final_score"],
+                    "actual": actual_player.score,
+                }
+
+            if expected["final_streak"] != actual_player.answer_streak:
+                player_diffs["streak"] = {
+                    "expected": expected["final_streak"],
+                    "actual": actual_player.answer_streak,
+                }
+
+            if season_id is not None:
+                snapshot_player = snapshot.get(user_id)
+                initial_season_score = (
+                    snapshot_player.season_score if snapshot_player else 0
+                )
+                expected_season_score = initial_season_score + expected["score_earned"]
+                season_entry = self.data_manager.get_player_season_score(
+                    user_id, season_id
+                )
+                actual_season_score = season_entry.points if season_entry else 0
+                if expected_season_score != actual_season_score:
+                    player_diffs["season_score"] = {
+                        "expected": expected_season_score,
+                        "actual": actual_season_score,
+                    }
+
+            if player_diffs:
+                player_name = (
+                    snapshot[user_id].name if user_id in snapshot else user_id
+                )
+                diffs.append(
+                    {
+                        "player_id": user_id,
+                        "player_name": player_name,
+                        "diffs": player_diffs,
+                    }
+                )
+
+        return diffs
+
+    @staticmethod
+    def format_verify_report(daily_question_id: int, diffs: list[dict]) -> str:
+        """
+        Formats a list of verification diffs (from verify_daily_play) into a
+        human-readable admin alert message.
+        """
+        lines = [
+            f"⚠️ **Score Verification Alert** (question ID: {daily_question_id})",
+            f"Discrepancies found for {len(diffs)} player(s):",
+        ]
+        for entry in diffs:
+            name = entry["player_name"]
+            lines.append(f"\n**{name}** (ID: {entry['player_id']})")
+            for field, vals in entry["diffs"].items():
+                exp = vals["expected"]
+                act = vals["actual"]
+                diff = exp - act
+                sign = "+" if diff > 0 else ""
+                lines.append(
+                    f"  {field}: expected {exp}, actual {act} (diff: {sign}{diff})"
+                )
+        return "\n".join(lines)
+

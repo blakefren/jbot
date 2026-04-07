@@ -722,6 +722,40 @@ class DataManager:
 
         return question, daily_question_id, question_id
 
+    def get_daily_question_by_id(
+        self, daily_question_id: int
+    ) -> Optional[tuple[Question, int]]:
+        """
+        Retrieves a daily question by its daily_question_id.
+
+        Returns:
+            Optional[tuple[Question, int]]: (Question object, question_id) or None
+        """
+        row = self._db.execute_query(
+            "SELECT question_id FROM daily_questions WHERE id = ?",
+            (daily_question_id,),
+        )
+        if not row:
+            return None
+        question_id = row[0]["question_id"]
+        question = self.get_question_by_id(question_id)
+        if not question:
+            return None
+        return question, question_id
+
+    def get_snapshot_season_id(self, daily_question_id: int) -> Optional[int]:
+        """
+        Returns the season_id that was active when the snapshot for this daily question
+        was created, or None if no season was active (or no snapshot exists).
+        """
+        rows = self._db.execute_query(
+            "SELECT season_id FROM daily_player_states WHERE daily_question_id = ? LIMIT 1",
+            (daily_question_id,),
+        )
+        if rows and rows[0]["season_id"] is not None:
+            return rows[0]["season_id"]
+        return None
+
     def get_most_recent_daily_question(self) -> Optional[tuple[Question, int, date]]:
         """
         Retrieves the most recent daily question from the database, regardless of date.
