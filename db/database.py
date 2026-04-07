@@ -50,6 +50,9 @@ class Database:
             project_root = os.path.join(os.path.dirname(__file__), "..")
             db_path = os.path.abspath(os.path.join(project_root, db_path))
 
+        if db_path != ":memory:":
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
         self.db_path = db_path
         self.conn = None
         self._connect()
