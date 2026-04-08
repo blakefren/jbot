@@ -456,6 +456,10 @@ class PowerUpManager(BaseManager):
                 "Keep your streak going before stealing!"
             )
 
+        # The engine expects the pre-answer streak (it adds +1 internally for late-day).
+        # When the thief has already answered today, subtract the +1 that was just earned.
+        engine_streak = max(0, current_streak - 1) if is_late_day else current_streak
+
         if target_state.is_correct:
             # --- Retroactive: target already answered — higher cost, immediate resolution ---
             self.data_manager.log_powerup_usage(
@@ -463,7 +467,7 @@ class PowerUpManager(BaseManager):
             )
             # Engine: sets state flags, streak_delta, bonus recalc (if late-day), score transfer.
             deducted, stealable_amount, bonus_delta = self.engine.apply_steal(
-                self.daily_state, thief_id, target_id, current_streak
+                self.daily_state, thief_id, target_id, engine_streak
             )
             new_streak = max(0, current_streak - deducted)
             actual_lost = deducted
@@ -494,7 +498,7 @@ class PowerUpManager(BaseManager):
         self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
         # Engine: sets state flags, streak_delta, bonus recalc (if late-day).
         deducted, _, bonus_delta = self.engine.apply_steal(
-            self.daily_state, thief_id, target_id, current_streak
+            self.daily_state, thief_id, target_id, engine_streak
         )
         new_streak = max(0, current_streak - deducted)
         actual_lost = deducted

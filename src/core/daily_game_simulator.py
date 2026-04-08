@@ -104,8 +104,8 @@ class DailyGameSimulator:
                 )
 
         elif ptype == "rest_wakeup":
-            # Bonus from a previous day's rest was already applied live to the DB.
-            # No simulator state change needed.
+            # Rest bonus was already applied during handle_guess (before jinx resolution)
+            # to match live play order in PowerUpManager.on_guess. No-op here.
             pass
 
         else:
@@ -173,6 +173,17 @@ class DailyGameSimulator:
             answer_rank=answer_rank,
             streak_length=streak_length,
         )
+
+        # Apply rest multiplier BEFORE jinx, matching the live on_guess order:
+        # PowerUpManager.on_guess applies rest bonus to ctx.points_earned (full score)
+        # then resolves jinx, so the multiplier never touches the stolen streak portion.
+        player = self.initial_player_states.get(user_id)
+        pending_mult = float(player.pending_rest_multiplier or 0.0) if player else 0.0
+        if pending_mult > 1.0:
+            rest_bonus = round(points * (pending_mult - 1.0))
+            if rest_bonus > 0:
+                points += rest_bonus
+                bonuses["rest"] = rest_bonus
 
         # Apply Jinx/Silence Logic (Remove Streak Bonus, Transfer to Attacker)
         if state.jinxed_by or state.silenced:

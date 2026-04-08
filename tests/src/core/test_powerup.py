@@ -1047,6 +1047,8 @@ class TestInteractionMatrix(unittest.TestCase):
         manager = PowerUpManager(self.player_manager, self.data_manager, cfg)
 
         # B is late-day (already answered correctly today)
+        # Set answer_streak=6 to reflect that increment_streak has already run today
+        self.players["B"].answer_streak = 6
         self.data_manager.get_last_correct_guess_date.side_effect = lambda pid: (
             date.today() if pid == "B" else date.today() - timedelta(days=1)
         )

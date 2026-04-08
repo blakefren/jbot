@@ -250,17 +250,19 @@ class TestStealLateDay(unittest.TestCase):
     def test_late_steal_forward_recalculates_streak_bonus(self):
         """Forward steal (target not yet answered) recalculates thief's streak bonus.
 
-        thief streak=5 → effective streak after answering=6, bonus=25 (capped).
-        Forward cost=3 → effective-cost=3, new_bonus=15. Delta=10 deducted.
-        set_streak uses initial-cost=2 (stored value for future days).
+        thief pre-day streak=5, DB streak after answering=6, bonus=25 (capped).
+        Forward cost=3 → effective=6, new_bonus_streak=3, new_bonus=15. Delta=10 deducted.
+        set_streak stores max(0, 6-3)=3.
         """
-        t_state = self._setup(thief_streak=5, thief_bonuses={"streak": 25})
+        # Use answer_streak=6 to reflect reality: thief already answered today,
+        # so increment_streak has already run and DB value is pre_day+1=6.
+        t_state = self._setup(thief_streak=6, thief_bonuses={"streak": 25})
         initial_score = self.players["thief"].score  # 300
 
         self.manager.steal("thief", "target", question_id=1)
 
-        # streak cost: new stored = max(0, 5 - 3) = 2, set_streak called with 2
-        self.pm.set_streak.assert_called_once_with("thief", 2)
+        # streak cost: new stored = max(0, 6 - 3) = 3, set_streak called with 3
+        self.pm.set_streak.assert_called_once_with("thief", 3)
         # bonus uses effective-cost formula: effective=6, new_bonus_streak=6-3=3, bonus=15
         new_bonus = 15  # min(3*5, 25)
         expected_score = initial_score - (25 - new_bonus)

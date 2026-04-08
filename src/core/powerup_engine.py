@@ -164,18 +164,15 @@ class PowerUpEngine:
         else:
             cost = self.steal_streak_cost
 
-        # Enforce: player must have at least 1 streak day to steal
-        if initial_streak == 0:
-            return 0, 0, 0
-
-        streak_deducted = min(cost, initial_streak)
-        steal_ratio = min(1.0, initial_streak / cost)
-
         bonus_delta = 0
         if thief_state.is_correct:
-            # Thief already answered — adjust streak_delta and recalculate streak bonus.
-            # Use effective streak (initial+1) so the penalty reflects this day's scoring.
+            # Thief already answered — use effective streak (initial+1) for ratio,
+            # deduction, and bonus recalculation so everything reflects this day.
+            # A thief who just started their streak (initial=0) has effective=1 and
+            # CAN still steal, so the guard is skipped for this branch.
             effective_streak = initial_streak + 1
+            streak_deducted = min(cost, effective_streak)
+            steal_ratio = min(1.0, effective_streak / cost)
             new_bonus_streak = max(0, effective_streak - cost)
             thief_state.streak_delta = new_bonus_streak - initial_streak
             # Only recalculate if the streak bonus is still present in state.
@@ -186,6 +183,11 @@ class PowerUpEngine:
                     daily_state, thief_id, new_bonus_streak
                 )
         else:
+            # Enforce: player must have at least 1 streak day to steal
+            if initial_streak == 0:
+                return 0, 0, 0
+            streak_deducted = min(cost, initial_streak)
+            steal_ratio = min(1.0, initial_streak / cost)
             thief_state.streak_delta = -streak_deducted
 
         thief_state.steal_ratio = steal_ratio
