@@ -165,11 +165,10 @@ class GuessHandler:
             guesses_count = len(previous_guesses) + 1
 
             # Check Before Hint (before logging this guess)
-            is_before_hint = False
-            if self.reminder_time:
-                now = datetime.now(self.reminder_time.tzinfo)
-                if now.timetz() < self.reminder_time:
-                    is_before_hint = True
+            # Use the actual hint-sent timestamp from the DB (same as the simulator)
+            # rather than the scheduled reminder_time, so scoring is consistent
+            # even if the reminder task fires slightly late.
+            is_before_hint = hint_timestamp is None
 
             # Determine Streak details
             player = self.player_manager.get_player(str_pid)
@@ -203,14 +202,11 @@ class GuessHandler:
 
             # Record season and lifetime stats
             # Season stats (only when seasons feature is active)
+            # Note: season points and streak are handled by update_score/increment_streak
             if self.season_manager is not None and self.season_manager.enabled:
                 current_season = self.data_manager.get_current_season()
                 if current_season:
                     sid = current_season.season_id
-                    self.data_manager.initialize_player_season_score(str_pid, sid)
-                    self.data_manager.increment_season_stat(
-                        str_pid, sid, "points", points_earned
-                    )
                     self.data_manager.increment_season_stat(
                         str_pid, sid, "correct_answers"
                     )
@@ -218,18 +214,6 @@ class GuessHandler:
                         self.data_manager.increment_season_stat(
                             str_pid, sid, "first_answers"
                         )
-                    self.data_manager.increment_lifetime_stat(
-                        str_pid, "season_score", points_earned
-                    )
-                    existing_ss = self.data_manager.get_player_season_score(
-                        str_pid, sid
-                    )
-                    streak_updates = {"current_streak": new_streak}
-                    if existing_ss is None or new_streak > existing_ss.best_streak:
-                        streak_updates["best_streak"] = new_streak
-                    self.data_manager.update_season_score(
-                        str_pid, sid, **streak_updates
-                    )
 
             # Lifetime stats (always, regardless of seasons flag)
             self.data_manager.increment_lifetime_stat(str_pid, "lifetime_correct")

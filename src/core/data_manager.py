@@ -952,17 +952,18 @@ class DataManager:
         """
         query = """
             SELECT m.timestamp
-            FROM messages m
-            WHERE m.status = 'reminder_message'
+            FROM messages m, daily_questions dq
+            WHERE dq.id = ?
+              AND m.status = 'reminder_message'
               AND m.timestamp > (
                   SELECT MIN(m2.timestamp)
                   FROM messages m2
-                  JOIN daily_questions dq ON dq.id = ?
                   WHERE m2.status = 'morning_message'
                     AND m2.timestamp >= dq.sent_at
                     AND m2.timestamp < date(dq.sent_at, '+2 days')
               )
-            ORDER BY m.timestamp DESC
+              AND m.timestamp < date(dq.sent_at, '+2 days')
+            ORDER BY m.timestamp ASC
             LIMIT 1
         """
         result = self._db.execute_query(query, (daily_question_id,))

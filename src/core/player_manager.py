@@ -25,9 +25,11 @@ class PlayerManager:
 
     def update_score(self, player_id: str, amount: int):
         """
-        Updates a player's score by a given amount.
+        Updates a player's score and season score by a given amount.
         """
-        self.data_manager.adjust_player_score(self._normalize_id(player_id), amount)
+        pid = self._normalize_id(player_id)
+        self.data_manager.adjust_player_score(pid, amount)
+        self.adjust_season_score(pid, amount)
 
     def set_name(self, player_id: str, name: str):
         """Updates a player's display name and persists it."""
@@ -39,25 +41,36 @@ class PlayerManager:
             self.data_manager.create_player(pid, name)
 
     def increment_streak(self, player_id: str, player_name: str | None = None):
-        """Increments a player's answer streak and immediately persists to DB."""
+        """Increments a player's answer streak and syncs season streak."""
         pid = self._normalize_id(player_id)
         player = self.data_manager.get_player(pid)
         if not player:
             self.data_manager.create_player(pid, player_name or pid)
         self.data_manager.increment_streak(pid)
+        new_streak = (player.answer_streak if player else 0) + 1
+        self._set_season_streak(pid, new_streak)
 
     def reset_streak(self, player_id: str):
-        """Resets a player's answer streak to zero and persists."""
-        self.data_manager.reset_streak(self._normalize_id(player_id))
+        """Resets a player's answer streak to zero and syncs season streak."""
+        pid = self._normalize_id(player_id)
+        self.data_manager.reset_streak(pid)
+        self._set_season_streak(pid, 0)
 
     def reset_unanswered_streaks(self, daily_question_id: int):
         """Resets streaks for all players who didn't answer correctly today."""
         if daily_question_id:
             self.data_manager.reset_unanswered_streaks(daily_question_id)
+            current_season = self.data_manager.get_current_season()
+            if current_season:
+                self.data_manager.reset_unanswered_season_streaks(
+                    daily_question_id, current_season.season_id
+                )
 
     def set_streak(self, player_id: str, streak: int):
-        """Sets a player's answer streak to a specific value and persists."""
-        self.data_manager.set_streak(self._normalize_id(player_id), streak)
+        """Sets a player's answer streak to a specific value and syncs season streak."""
+        pid = self._normalize_id(player_id)
+        self.data_manager.set_streak(pid, streak)
+        self._set_season_streak(pid, streak)
 
     def adjust_season_score(self, player_id: str, amount: int):
         """Adjusts a player's season score, if an active season exists."""
@@ -69,6 +82,19 @@ class PlayerManager:
         self.data_manager.increment_season_stat(
             pid, current_season.season_id, "points", amount
         )
+
+    def _set_season_streak(self, player_id: str, streak: int):
+        """Sync season current_streak (and best_streak if higher)."""
+        current_season = self.data_manager.get_current_season()
+        if not current_season:
+            return
+        sid = current_season.season_id
+        self.data_manager.initialize_player_season_score(player_id, sid)
+        updates = {"current_streak": streak}
+        existing = self.data_manager.get_player_season_score(player_id, sid)
+        if existing is None or streak > existing.best_streak:
+            updates["best_streak"] = streak
+        self.data_manager.update_season_score(player_id, sid, **updates)
 
     # TODO: Implement player creation and refund logic from admin cog
     def get_or_create_player(self, player_id: str, player_name: str) -> Player:

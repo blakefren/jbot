@@ -8,6 +8,8 @@ from src.core.data_manager import DataManager
 class TestPlayerManager(unittest.TestCase):
     def setUp(self):
         self.mock_data_manager = MagicMock(spec=DataManager)
+        # Default: no active season (season calls are no-ops)
+        self.mock_data_manager.get_current_season.return_value = None
         self.manager = PlayerManager(self.mock_data_manager)
 
     def test_get_player(self):

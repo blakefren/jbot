@@ -317,6 +317,8 @@ class TestGuessHandler(unittest.TestCase):
             self.player_manager.get_player.return_value = None
             self.data_manager.get_correct_guess_count.return_value = 1
             self.data_manager.read_guess_history.return_value = []
+            # No hint sent yet — player should get before-hint bonus
+            self.data_manager.get_hint_sent_timestamp.return_value = None
 
             is_correct, num_guesses, points, bonuses = handler.handle_guess(
                 1, "Player", "Test Answer"
@@ -352,10 +354,6 @@ class TestGuessHandler(unittest.TestCase):
         mock_season.season_id = 42
         self.data_manager.get_current_season.return_value = mock_season
 
-        mock_existing_ss = MagicMock()
-        mock_existing_ss.best_streak = 0
-        self.data_manager.get_player_season_score.return_value = mock_existing_ss
-
         mock_season_manager = MagicMock()
         mock_season_manager.enabled = True
 
@@ -371,23 +369,16 @@ class TestGuessHandler(unittest.TestCase):
         is_correct, _, points, _ = handler.handle_guess(1, "Alice", "Test Answer")
 
         self.assertTrue(is_correct)
-        self.data_manager.initialize_player_season_score.assert_called_once_with(
-            "1", 42
-        )
-        # points, correct_answers, questions_answered incremented
-        self.assertGreaterEqual(self.data_manager.increment_season_stat.call_count, 3)
-        # first_answers incremented (answer_rank == 1)
+        # correct_answers, first_answers, questions_answered incremented
+        self.assertGreaterEqual(self.data_manager.increment_season_stat.call_count, 2)
         stat_names = [
             call.args[2]
             for call in self.data_manager.increment_season_stat.call_args_list
         ]
+        self.assertIn("correct_answers", stat_names)
         self.assertIn("first_answers", stat_names)
-        # season_score cache updated atomically
-        self.data_manager.increment_lifetime_stat.assert_any_call(
-            "1", "season_score", points
-        )
-        # streak written back to season_scores
-        self.data_manager.update_season_score.assert_called_once()
+        # Note: season points and streak are now handled internally by
+        # player_manager.update_score() and player_manager.increment_streak()
 
     def test_season_stats_not_updated_when_seasons_disabled(self):
         """Season stat methods are NOT called when the seasons flag is off."""
@@ -408,9 +399,7 @@ class TestGuessHandler(unittest.TestCase):
         is_correct, _, _, _ = handler.handle_guess(1, "Alice", "Test Answer")
 
         self.assertTrue(is_correct)
-        self.data_manager.initialize_player_season_score.assert_not_called()
         self.data_manager.increment_season_stat.assert_not_called()
-        self.data_manager.update_season_score.assert_not_called()
 
     def test_lifetime_stats_always_updated_on_correct_answer(self):
         """Lifetime stat increments fire on a correct answer regardless of seasons flag."""
