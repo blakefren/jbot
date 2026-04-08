@@ -1450,6 +1450,69 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.assertEqual(self.data_manager.get_pending_multiplier("p3"), 0.0)
 
 
+class TestGetDailyQuestionById(unittest.TestCase):
+    """Integration tests for DataManager.get_daily_question_by_id."""
+
+    def setUp(self):
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+        self.data_manager.initialize_database()
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_returns_question_and_id_for_existing_daily_question(self):
+        q = Question("What is 2+2?", "4", "Math", 100, "test", "Hint")
+        dq_id = self.data_manager.log_daily_question(q)
+        self.assertIsNotNone(dq_id)
+
+        result = self.data_manager.get_daily_question_by_id(dq_id)
+        self.assertIsNotNone(result)
+        question, question_id = result
+        self.assertEqual(question.answer, "4")
+        self.assertIsInstance(question_id, int)
+
+    def test_returns_none_for_nonexistent_daily_question(self):
+        result = self.data_manager.get_daily_question_by_id(99999)
+        self.assertIsNone(result)
+
+
+class TestGetSnapshotSeasonId(unittest.TestCase):
+    """Integration tests for DataManager.get_snapshot_season_id."""
+
+    def setUp(self):
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+        self.data_manager.initialize_database()
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_returns_none_when_no_snapshot(self):
+        result = self.data_manager.get_snapshot_season_id(99999)
+        self.assertIsNone(result)
+
+    def test_returns_none_when_no_active_season(self):
+        # No season created → snapshot season_id should be NULL
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        self.data_manager.create_player("p1", "Player1")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        result = self.data_manager.get_snapshot_season_id(dq_id)
+        self.assertIsNone(result)
+
+    def test_returns_season_id_when_season_active(self):
+        season_id = self.data_manager.create_season(
+            "Test Season", "2024-01-01", "2024-01-31"
+        )
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        self.data_manager.create_player("p1", "Player1")
+        dq_id = self.data_manager.log_daily_question(q)
+
+        result = self.data_manager.get_snapshot_season_id(dq_id)
+        self.assertEqual(result, season_id)
+
+
 class TestPendingPowerupDataManager(unittest.TestCase):
     """Integration tests for overnight preload DataManager methods."""
 

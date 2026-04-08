@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 from data.readers.question import Question
 import random
 import logging

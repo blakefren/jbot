@@ -346,9 +346,26 @@ class DiscordBot(commands.Bot):
                 self._log_task_error(e, "evening_message_task - send_message")
 
         # 4. End the daily game (clear question, reset powerup states)
+        # Save question ID before clearing, needed for post-game verification.
+        daily_question_id = self.game.daily_question_id
         self.game.end_daily_game()
 
-        # 5. Backup database
+        # 5. Verify daily play — compare simulator-expected state against DB
+        try:
+            if daily_question_id:
+                diffs = self.game.verify_daily_play(daily_question_id)
+                if diffs:
+                    report = self.game.format_verify_report(daily_question_id, diffs)
+                    logging.warning(
+                        "verify_daily_play: discrepancies found:\n%s", report
+                    )
+                    await self._notify_admins(report)
+                else:
+                    logging.info("verify_daily_play: all scores verified OK.")
+        except Exception as e:
+            self._log_task_error(e, "evening_message_task - verify_daily_play")
+
+        # 6. Backup database
         try:
             self._backup_database()
         except Exception as e:
@@ -530,6 +547,36 @@ class DiscordBot(commands.Bot):
                 is_channel=sub.is_channel,
                 target_id=sub.sub_id,
                 success_status="season_announcement",
+            )
+
+    async def _notify_admins(self, message: str):
+        """
+        Sends a DM to each admin user listed in JBOT_ADMIN_USER_IDS.
+        Silently skips if the config key is empty or not set.
+        """
+        raw = self.config.get("JBOT_ADMIN_USER_IDS", "")
+        if not raw or not raw.strip():
+            logging.debug(
+                "_notify_admins: JBOT_ADMIN_USER_IDS not configured, skipping admin notification."
+            )
+            return
+        for part in raw.split(","):
+            user_id_str = part.strip()
+            if not user_id_str:
+                continue
+            try:
+                user_id = int(user_id_str)
+            except ValueError:
+                logging.warning(
+                    "_notify_admins: invalid user ID %r in JBOT_ADMIN_USER_IDS, skipping.",
+                    user_id_str,
+                )
+                continue
+            await self.send_message(
+                message,
+                is_channel=False,
+                target_id=user_id,
+                success_status="admin_alert",
             )
 
     async def send_message(
