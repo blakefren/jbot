@@ -4,5 +4,7 @@ secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
 dbs:
   - path: ${JBOT_DB_PATH}
     replicas:
-      - url: ${REPLICA_URL}
+      - type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: jbot.db
         endpoint: ${LITESTREAM_ENDPOINT}
