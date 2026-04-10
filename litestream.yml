@@ -1,0 +1,8 @@
+access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+
+dbs:
+  - path: ${JBOT_DB_PATH}
+    replicas:
+      - url: ${REPLICA_URL}
+        endpoint: ${LITESTREAM_ENDPOINT}
