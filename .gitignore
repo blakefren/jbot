@@ -4,7 +4,7 @@
 *.tsv
 *.prompt
 *.log
-*.db
+/db/backups/*.db
 ./datasets/
 *.sqbpro
 *.db-journal

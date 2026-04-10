@@ -65,6 +65,8 @@ class Database:
         try:
             self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self.conn.row_factory = sqlite3.Row  # Access columns by name
+            if self.db_path != ":memory:":
+                self.conn.execute("PRAGMA journal_mode=WAL;")
             logging.info(f"Successfully connected to the database at '{self.db_path}'.")
         except sqlite3.Error as e:
             logging.error(f"Error connecting to the database: {e}")
