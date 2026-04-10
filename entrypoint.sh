@@ -11,9 +11,9 @@ if litestream restore -if-db-not-exists -config /app/litestream.yml "$JBOT_DB_PA
 else
     echo "No remote backup found. Looking for local seed..."
     # 2. If no cloud backup exists, look for a seed file
-    if [ -f "/app/jbot.db" ]; then
+    if [ -f "/app/db/jbot.db" ]; then
         echo "Seeding cloud with local jbot.db..."
-        cp /app/jbot.db "$JBOT_DB_PATH"
+        cp /app/db/jbot.db "$JBOT_DB_PATH"
     fi
 fi
 
