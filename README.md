@@ -39,47 +39,57 @@ You can also run the bot using Docker, which simplifies dependency management.
 
 ## Deploying to Railway
 
-The bot can be deployed to [Railway](https://railway.app) with persistent storage for the database and datasets.
+The bot is deployed to [Railway](https://railway.app) with GitHub auto-deploys. The database is persisted on a Railway volume and continuously replicated to a Railway Bucket via [Litestream](https://litestream.io/).
+
+### Architecture
+
+- **Code**: Railway builds the Docker image from the `main` branch on each push.
+- **Database**: Stored on a Railway volume at `/data/jbot.db`. On startup, `entrypoint.sh` restores the latest replica from the bucket; on shutdown/crash, Litestream has already been streaming WAL changes continuously.
+- **Datasets**: TODO — not yet available in the image or volume. Need to implement S3-based dataset upload/download (see [Datasets](#datasets)).
+- **Replication**: Litestream streams WAL changes to a Railway Bucket (S3-compatible) in real time.
 
 ### Initial Setup
 
-1.  **Create a Railway project** and connect your GitHub repo.
-2.  **Add a Volume** to your service (Settings → Volumes), mounted at `/data`.
-3.  **Set environment variables** in Railway (Variables tab). Copy all keys from `.env.template` and set:
-    ```
-    JBOT_DB_PATH=/data/jbot.db
-    JBOT_DATASETS_DIR=/data
-    ```
+1. **Create a Railway project** and connect your GitHub repo.
+2. **Add a Railway Bucket** to your project. Note the bucket name and endpoint from its Variables tab.
+3. **Add a Volume** to your bot service (Settings → Volumes), mounted at `/data`.
+4. **Set environment variables** in the service's Variables tab. Copy all keys from `.env.template` and set values appropriately, plus these additional Railway-specific vars:
 
-### Uploading Data
+| Variable | Value |
+|---|---|
+| `JBOT_DB_PATH` | `/data/jbot.db` |
+| `JBOT_DATASETS_DIR` | `/app` |
+| `LITESTREAM_ACCESS_KEY_ID` | From the Railway Bucket's Variables tab |
+| `LITESTREAM_SECRET_ACCESS_KEY` | From the Railway Bucket's Variables tab |
+| `LITESTREAM_BUCKET` | Bucket name (from Railway Bucket's Variables tab) |
+| `LITESTREAM_ENDPOINT` | Bucket endpoint URL (from Railway Bucket's Variables tab) |
 
-Datasets and the database are not in the GitHub repo, so they must be uploaded to the Railway volume separately. A migration script automates this via the Railway CLI.
+### Bootstrapping the Database
 
-1.  **Install & authenticate the CLI**:
+On the very first deploy, there is no replica in the bucket yet. `entrypoint.sh` handles this:
+
+1. Litestream tries to restore from the bucket — fails (empty bucket).
+2. Falls back to seeding from `/app/db/jbot.db` if present in the image.
+3. Litestream starts replicating from that seed going forward.
+
+`db/jbot.db` is **not** committed to the repo under normal circumstances. To bootstrap a new deployment, upload your local database to the bucket first using an S3-compatible tool (e.g. `boto3`, `awscli` pointed at the `LITESTREAM_ENDPOINT`), then deploy. Litestream will restore from the bucket on startup and the seed fallback will not be needed.
+
+**If you need to re-bootstrap** (e.g. the volume was wiped or the bucket has a corrupt/empty replica):
+
+1. Delete the file from the volume:
     ```bash
-    scoop install railway     # Windows (via Scoop)
-    railway login
-    railway link              # Run in the jbot directory, select your project/service
+    railway ssh
+    rm /data/jbot.db
+    exit
     ```
-
-2.  **Upload data to the volume**:
-    ```bash
-    python scripts/railway_upload.py                # Upload datasets + database
-    python scripts/railway_upload.py --db-only      # Database only
-    python scripts/railway_upload.py --datasets-only # Datasets only
-    ```
-
-3.  **Redeploy** to pick up the new data:
-    ```bash
-    railway redeploy
-    ```
+2. Delete all objects from the bucket (via Railway UI or AWS CLI pointing at the bucket endpoint).
+3. Redeploy — the seed logic will run again.
 
 ### Ongoing Management
 
-*   **View logs**: `railway logs`
-*   **SSH into container**: `railway ssh`
-*   **Re-upload database** (e.g. after local corrections): `python scripts/railway_upload.py --db-only`
-*   Railway auto-deploys on push to `main`.
+- **View logs**: `railway logs`
+- **SSH into container**: `railway ssh`
+- Railway auto-deploys on push to `main`.
 
 ## Daily format
 
