@@ -198,3 +198,61 @@ class TestDailyGameSimulator(unittest.TestCase):
 
         # P1 streak cost: deducted=min(3,2)=2, handle_guess +1 → net -1
         self.assertEqual(results["p1"]["streak_delta"], -1)
+
+    def test_wrong_guess_resets_streak(self):
+        """A player who submits guesses but never gets the correct answer should
+        have their streak reset to 0, not preserved."""
+        events = [
+            # p3 has streak=5 and submits a wrong answer
+            GuessEvent(
+                timestamp="2023-01-01 10:00:00",
+                user_id="p3",
+                guess_text="wrong answer",
+            ),
+        ]
+
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+        )
+        results = simulator.run()
+
+        # p3 guessed wrong: no points, streak must be reset
+        self.assertEqual(results["p3"]["score_earned"], 0)
+        self.assertEqual(results["p3"]["streak_delta"], -5)
+        self.assertEqual(results["p3"]["final_streak"], 0)
+
+    def test_wrong_guess_streak_reset_matches_no_guess(self):
+        """A player who submits wrong guesses should have the same streak outcome
+        as a player who didn't guess at all — both reset to 0."""
+        events = [
+            # p1 (streak=2) guesses wrong
+            GuessEvent(
+                timestamp="2023-01-01 10:00:00",
+                user_id="p1",
+                guess_text="wrong",
+            ),
+            # p3 (streak=5) doesn't guess at all
+        ]
+
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+        )
+        results = simulator.run()
+
+        # p1 guessed wrong → streak reset
+        self.assertEqual(results["p1"]["final_streak"], 0)
+        self.assertEqual(results["p1"]["streak_delta"], -2)
+
+        # p3 didn't guess → streak reset (same outcome)
+        self.assertEqual(results["p3"]["final_streak"], 0)
+        self.assertEqual(results["p3"]["streak_delta"], -5)

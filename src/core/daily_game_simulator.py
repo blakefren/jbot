@@ -202,14 +202,15 @@ class DailyGameSimulator:
             self.engine.resolve_steal_on_correct(self.daily_state, user_id)
 
     def end_of_day(self):
-        # Ensure all players are processed for streak resets if they didn't answer
+        # Reset streaks for all players who didn't answer correctly and aren't resting.
+        # This covers both players who submitted wrong guesses (in daily_state with
+        # is_correct=False) and players who didn't guess at all (not in daily_state).
         for user_id, player in self.initial_player_states.items():
-            if user_id not in self.daily_state:
-                # Player did nothing. Check if they should have answered.
-                # If they didn't answer, reset streak.
-                # Assuming standard rules: No answer = Streak Reset.
-                if player.answer_streak > 0:
-                    self.daily_state[user_id].streak_delta = -player.answer_streak
+            state = self.daily_state.get(user_id)
+            is_correct = state is not None and state.is_correct
+            is_resting = state is not None and state.is_resting
+            if not is_correct and not is_resting and player.answer_streak > 0:
+                self.daily_state[user_id].streak_delta = -player.answer_streak
 
     def calculate_final_results(self):
         results = {}
