@@ -1,5 +1,5 @@
 # Pull Litestream binary from official image
-FROM litestream/litestream:0.3.13 AS litestream
+FROM litestream/litestream:0.5.11 AS litestream
 
 # Use Python 3.14 slim image
 FROM python:3.14-slim
