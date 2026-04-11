@@ -17,6 +17,15 @@ else
     fi
 fi
 
-# 3. Start replication and the bot
+# 3. Sync question datasets from S3 (skips files that already exist locally)
+echo "Syncing datasets from S3..."
+if python /app/scripts/sync_datasets.py; then
+    echo "Dataset sync complete."
+else
+    echo "Dataset sync failed — bot may be missing question files." >&2
+    exit 1
+fi
+
+# 4. Start replication and the bot
 echo "Starting Litestream replication and Bot..."
 exec litestream replicate -config /app/litestream.yml -exec "python run.py"
