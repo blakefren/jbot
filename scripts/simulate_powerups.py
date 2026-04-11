@@ -14,7 +14,7 @@ from src.core.player import Player
 from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 
 # --- Configuration ---
-SIMULATION_DAYS = 365  # 1 year for tighter CIs
+SIMULATION_DAYS = 28  # 1 month for seasonal + quicker simulations
 PLAYERS_PER_CATEGORY = 10  # Number of players per category
 VERBOSE = False
 GUESS_ACCURACY = 0.90
