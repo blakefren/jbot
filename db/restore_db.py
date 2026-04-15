@@ -6,7 +6,7 @@ Reads credentials from .env, deletes any existing output file, then invokes
 the litestream binary to restore the latest DB snapshot.
 
 Usage:
-    python scripts/restore_db.py [output_path]
+    python db/restore_db.py [output_path]
 
     output_path  — where to write the restored DB (default: ./jbot_restore.db)
 
@@ -27,7 +27,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load .env from project root (two levels up from scripts/)
+# Load .env from project root (two levels up from db/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
