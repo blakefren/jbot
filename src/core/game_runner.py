@@ -316,7 +316,13 @@ class GameRunner:
         # 1. Fetch all events for the day
         events = self._fetch_daily_events(self.daily_question_id)
 
-        initial_players = self.data_manager.get_all_players()
+        # Use the pre-hydration snapshot so that steal_preload events are replayed
+        # with the original (pre-cost-deduction) streak.  If no snapshot exists
+        # (e.g. very old session), fall back to current player state.
+        snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
+        initial_players = (
+            snapshot if snapshot is not None else self.data_manager.get_all_players()
+        )
 
         answers = [self.daily_q.answer] + self.data_manager.get_alternative_answers(
             self.question_db_id
@@ -889,6 +895,13 @@ class GameRunner:
             players = self.player_manager.get_all_players()
             initial_states = players
 
+        # For an active (today's) question, skip end-of-day logic in the simulation.
+        # With apply_end_of_day=True, the old sim resets non-answerers' streaks (-N)
+        # and the new sim increments newly-correct players' streaks (+1), making the
+        # diff N+1 instead of 1 and over-crediting streaks in the DB.
+        is_active_question = daily_question_id == self.daily_question_id
+        apply_eod = not is_active_question
+
         # 2. Run Scorer (Old)
         scorer_old = DailyGameSimulator(
             daily_q,
@@ -899,7 +912,7 @@ class GameRunner:
             self.config,
             answer_checker=self.answer_checker,
         )
-        results_old = scorer_old.run()
+        results_old = scorer_old.run(apply_end_of_day=apply_eod)
 
         # 3. Run Scorer (New)
         scorer_new = DailyGameSimulator(
@@ -911,7 +924,7 @@ class GameRunner:
             self.config,
             answer_checker=self.answer_checker,
         )
-        results_new = scorer_new.run()
+        results_new = scorer_new.run(apply_end_of_day=apply_eod)
 
         # 4. Diff and Apply
         updated_players = 0

@@ -537,3 +537,109 @@ class TestRecalculateScores(unittest.TestCase):
         )
 
         self.assertEqual(result["rest_cleared_players"], [])
+
+    # ------------------------------------------------------------------
+    # Regression: Bug B — apply_end_of_day inflates streak for mid-day corrections
+    # ------------------------------------------------------------------
+
+    def test_streak_not_inflated_for_newly_correct_player_on_active_question(self):
+        """
+        Regression: When add_answer is called while the question is still active,
+        a newly-correct player's streak should be incremented by exactly 1.
+
+        With apply_end_of_day=True (old behaviour):
+          - old sim: player wrong, end_of_day resets streak → streak_delta = -N
+          - new sim: player correct → streak_delta = +1
+          - diff = 1 - (-N) = N+1  ← WRONG: streak over-credited by N
+
+        With apply_end_of_day=False (fixed):
+          - old sim: player wrong, no reset → streak_delta = 0
+          - new sim: player correct → streak_delta = +1
+          - diff = 1 ← CORRECT
+        """
+        from src.core.player import Player
+
+        # Player p1 has a 5-day streak and guesses an answer that only matches
+        # the new alt answer (not the primary). Game is still active (daily_question_id matches).
+        snapshot = {
+            "p1": Player(id="p1", name="P1", score=500, answer_streak=5),
+        }
+        self.mock_data_manager.get_daily_snapshot.return_value = snapshot
+        mock_player = MagicMock()
+        mock_player.answer_streak = 5
+        mock_player.score = 500
+        self.game_runner.player_manager.get_player.return_value = mock_player
+
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = [
+            {
+                "id": 1,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "alt_answer",
+                "is_correct": 0,
+                "guessed_at": "2023-01-01 10:00:00",
+            }
+        ]
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        self.mock_data_manager.get_alternative_answers.return_value = []
+        self.mock_data_manager.get_powerup_usages_for_question.return_value = []
+
+        # daily_question_id == 1 == active question (self.game_runner.daily_question_id)
+        result = self.game_runner.recalculate_scores_for_new_answer(
+            "alt_answer", "admin1"
+        )
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["updated_players"], 1)
+
+        # streak_diff must be exactly +1, so set_streak(5 + 1 = 6)
+        self.game_runner.player_manager.set_streak.assert_called_with("p1", 6)
+
+    def test_streak_unchanged_for_non_answering_player_on_active_question(self):
+        """
+        Regression: A player who didn't answer should have streak_diff=0 even when
+        add_answer is called mid-day (apply_end_of_day would otherwise reset them
+        in both sims and cancel out correctly, but this verifies they're excluded).
+        """
+        from src.core.player import Player
+
+        snapshot = {
+            "p1": Player(id="p1", name="P1", score=500, answer_streak=3),
+            "p2": Player(id="p2", name="P2", score=1000, answer_streak=7),
+        }
+        self.mock_data_manager.get_daily_snapshot.return_value = snapshot
+        mock_player = MagicMock()
+        mock_player.answer_streak = 7
+        mock_player.score = 1000
+        self.game_runner.player_manager.get_player.return_value = mock_player
+
+        # Only p1 answers (newly correct); p2 doesn't answer at all
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = [
+            {
+                "id": 1,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "alt_answer",
+                "is_correct": 0,
+                "guessed_at": "2023-01-01 10:00:00",
+            }
+        ]
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        self.mock_data_manager.get_alternative_answers.return_value = []
+        self.mock_data_manager.get_powerup_usages_for_question.return_value = []
+
+        result = self.game_runner.recalculate_scores_for_new_answer(
+            "alt_answer", "admin1"
+        )
+
+        # p2 should NOT appear in details (no score diff, no streak diff)
+        p2_in_details = any(d["user_id"] == "p2" for d in result.get("details", []))
+        self.assertFalse(
+            p2_in_details,
+            "p2 did not answer and should not appear in score adjustment details",
+        )
+        # set_streak should only be called for p1
+        for call in self.game_runner.player_manager.set_streak.call_args_list:
+            self.assertEqual(
+                call[0][0], "p1", "set_streak should only be called for p1"
+            )

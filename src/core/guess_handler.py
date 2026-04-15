@@ -134,9 +134,14 @@ class GuessHandler:
         a = str(self.daily_q.answer).strip().lower()
         is_correct = self._checker.is_correct(g, a)
 
-        # Check alternative answers if primary answer is incorrect
+        # Check alternative answers if primary answer is incorrect.
+        # Always reload from DB so answers added via /admin add_answer mid-day
+        # are recognized without requiring a bot restart.
         if not is_correct:
-            for alt_answer in self.alternative_answers:
+            current_alts = self.data_manager.get_alternative_answers(
+                self.daily_question_id
+            )
+            for alt_answer in current_alts:
                 alt_a = str(alt_answer).strip().lower()
                 if self._checker.is_correct(g, alt_a):
                     is_correct = True
