@@ -1,5 +1,6 @@
 *.pyc
 .env
+litestream-restore.yml
 *.csv
 *.tsv
 *.prompt

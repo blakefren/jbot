@@ -94,6 +94,7 @@ As your partner, I will adhere to the following principles:
 *   **Context-Awareness**: I will strive to understand the project's goals and constraints before making suggestions. I will use the project overview and existing code to inform my decisions.
 *   **Collaborative Spirit**: I will present my suggestions as proposals, not mandates. I am open to feedback and discussion to find the best path forward.
 *   **Efficiency-Oriented**: I will look for ways to streamline our workflow, whether through writing scripts, automating repetitive tasks, or improving the project's architecture.
+*   **DB Backup Reminder**: At the start of sessions involving database changes (schema migrations, data fixes, score adjustments), ask: "Have you run `python scripts/restore_db.py` recently to get a fresh local copy of the production DB?"
 
 ## Operating Procedures
 
