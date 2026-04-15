@@ -61,8 +61,8 @@ def main():
 
     # Archive existing output file (litestream refuses to overwrite)
     if output.exists():
-        backups_dir = output.parent / "backups"
-        backups_dir.mkdir(exist_ok=True)
+        backups_dir = output.parent / "db" / "backups"
+        backups_dir.mkdir(parents=True, exist_ok=True)
         timestamp = __import__("datetime").datetime.now().strftime("%Y%m%d_%H%M%S")
         archived = backups_dir / f"{output.stem}_{timestamp}{output.suffix}"
         print(f"Archiving existing file to: {archived}")
