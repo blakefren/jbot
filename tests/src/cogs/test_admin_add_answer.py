@@ -18,6 +18,7 @@ class TestAdminAddAnswer(unittest.IsolatedAsyncioTestCase):
         self.bot.evening_message_task.is_running.return_value = False
 
         self.bot.game = MagicMock()
+        self.bot.game.season_manager.enabled = False
 
         # Mocks for managers
         self.bot.player_manager = MagicMock(spec=PlayerManager)
@@ -57,6 +58,8 @@ class TestAdminAddAnswer(unittest.IsolatedAsyncioTestCase):
                     "name": "Player1",
                     "score_before": 100,
                     "score_after": 300,
+                    "season_score_before": 50,
+                    "season_score_after": 250,
                     "diff": 200,
                     "badges": ["BADGE"],
                 },
@@ -65,6 +68,8 @@ class TestAdminAddAnswer(unittest.IsolatedAsyncioTestCase):
                     "name": "Player2",
                     "score_before": 200,
                     "score_after": 500,
+                    "season_score_before": 80,
+                    "season_score_after": 380,
                     "diff": 300,
                     "badges": [],
                 },
@@ -110,6 +115,8 @@ class TestAdminAddAnswer(unittest.IsolatedAsyncioTestCase):
                     "name": "Player1",
                     "score_before": 100,
                     "score_after": 200,
+                    "season_score_before": 40,
+                    "season_score_after": 140,
                     "diff": 100,
                     "badges": [],
                 }
@@ -170,6 +177,8 @@ class TestAdminAddAnswer(unittest.IsolatedAsyncioTestCase):
                     "name": "Player1",
                     "score_before": 100,
                     "score_after": 200,
+                    "season_score_before": 40,
+                    "season_score_after": 140,
                     "diff": 100,
                     "badges": [],
                 }

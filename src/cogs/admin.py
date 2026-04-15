@@ -141,6 +141,8 @@ class Admin(commands.Cog):
         if result.get("age_warning"):
             summary = result["age_warning"] + "\n" + summary
 
+        use_season = self.bot.game.season_manager.enabled
+
         if apply:
             # Public message only — tag affected players
             public_msg = f"**Score Adjustment:**\n{header}{summary}"
@@ -148,7 +150,11 @@ class Admin(commands.Cog):
                 public_msg += "\n\n**Details:**\n"
                 for d in result["details"]:
                     badges = "".join(d["badges"])
-                    public_msg += f"<@{d['user_id']}>: {d['score_before']} -> {d['score_after']} ({d['diff']:+}) {badges}\n"
+                    sb = d["season_score_before"] if use_season else d["score_before"]
+                    sa = d["season_score_after"] if use_season else d["score_after"]
+                    public_msg += (
+                        f"<@{d['user_id']}>: {sb} -> {sa} ({d['diff']:+}) {badges}\n"
+                    )
             if result.get("rest_cleared_players"):
                 mentions = " ".join(
                     f"<@{r['user_id']}>" for r in result["rest_cleared_players"]
@@ -165,7 +171,9 @@ class Admin(commands.Cog):
                 dry_msg += "\n\n**Details:**\n"
                 for d in result["details"]:
                     badges = "".join(d["badges"])
-                    dry_msg += f"{d['name']}: {d['score_before']} -> {d['score_after']} ({d['diff']:+}) {badges}\n"
+                    sb = d["season_score_before"] if use_season else d["score_before"]
+                    sa = d["season_score_after"] if use_season else d["score_after"]
+                    dry_msg += f"{d['name']}: {sb} -> {sa} ({d['diff']:+}) {badges}\n"
             if result.get("rest_cleared_players"):
                 names = ", ".join(r["name"] for r in result["rest_cleared_players"])
                 dry_msg += f"\nRest revoked (newly correct with new answer): {names}"

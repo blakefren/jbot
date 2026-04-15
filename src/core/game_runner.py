@@ -974,6 +974,9 @@ class GameRunner:
                         "score_before": new_res["initial_score"]
                         + old_res["score_earned"],
                         "score_after": new_res["final_score"],
+                        "season_score_before": new_res["initial_season_score"]
+                        + old_res["score_earned"],
+                        "season_score_after": new_res["final_season_score"],
                         "diff": score_diff,
                         "badges": scorer_new._get_badges(newly_gained_keys),
                     }

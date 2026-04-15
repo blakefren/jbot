@@ -224,9 +224,14 @@ class DailyGameSimulator:
             if final_streak < 0:
                 final_streak = 0
 
+            initial_season_score = player.season_score if player else 0
+            final_season_score = initial_season_score + state.score_earned
+
             results[user_id] = {
                 "initial_score": initial_score,
                 "final_score": final_score,
+                "initial_season_score": initial_season_score,
+                "final_season_score": final_season_score,
                 "score_earned": state.score_earned,
                 "initial_streak": initial_streak,
                 "final_streak": final_streak,
