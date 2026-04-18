@@ -1063,6 +1063,11 @@ class GameRunner:
         hint_ts = self.data_manager.get_hint_sent_timestamp(daily_question_id)
         events = self._fetch_daily_events(daily_question_id)
 
+        prev_dq_id = self.data_manager.get_previous_daily_question_id(daily_question_id)
+        prev_streak_keepers = (
+            self.data_manager.get_streak_keepers(prev_dq_id) if prev_dq_id else set()
+        )
+
         simulator = DailyGameSimulator(
             daily_q,
             answers,
@@ -1071,6 +1076,7 @@ class GameRunner:
             snapshot,
             self.config,
             answer_checker=self.answer_checker,
+            prev_streak_keepers=prev_streak_keepers,
         )
         sim_results = simulator.run(apply_end_of_day=True)
 

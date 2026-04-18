@@ -575,53 +575,87 @@ class DataManager:
         rows = self._db.execute_query(query, (daily_question_id, daily_question_id))
         return {row["id"] for row in rows}
 
+    def get_previous_daily_question_id(
+        self, daily_question_id: int
+    ) -> Optional[int]:
+        """
+        Returns the daily_question_id of the question that immediately preceded
+        the given one (by insertion order), or None if there is no previous question.
+        """
+        rows = self._db.execute_query(
+            "SELECT id FROM daily_questions WHERE id < ? ORDER BY id DESC LIMIT 1",
+            (daily_question_id,),
+        )
+        if rows:
+            return rows[0]["id"]
+        return None
+
     def reset_unanswered_streaks(self, daily_question_id: int):
         """
         Resets the answer streak to 0 for all players who did not have a correct guess
-        for the specified daily question. Players who used the 'rest' power-up are
-        excluded so their streak is preserved.
+        for the specified daily question AND also missed the previous day's question.
+        Players who used the 'rest' power-up are excluded so their streak is preserved.
+        A single-day grace period is applied: missing one day does not break the streak
+        as long as the player answered correctly (or rested) the day before.
         """
         query = """
+            WITH prev_q AS (
+                SELECT id FROM daily_questions WHERE id < ? ORDER BY id DESC LIMIT 1
+            )
             UPDATE players
             SET answer_streak = 0
             WHERE id NOT IN (
-                SELECT player_id
-                FROM guesses
-                WHERE daily_question_id = ? AND is_correct = 1
-            )
-            AND id NOT IN (
-                SELECT user_id
-                FROM powerup_usage
-                WHERE question_id = ? AND powerup_type = 'rest'
+                SELECT player_id FROM guesses
+                    WHERE daily_question_id = ? AND is_correct = 1
+                UNION
+                SELECT user_id FROM powerup_usage
+                    WHERE question_id = ? AND powerup_type = 'rest'
+                UNION
+                SELECT player_id FROM guesses
+                    WHERE daily_question_id = (SELECT id FROM prev_q) AND is_correct = 1
+                UNION
+                SELECT user_id FROM powerup_usage
+                    WHERE question_id = (SELECT id FROM prev_q) AND powerup_type = 'rest'
             )
             AND answer_streak > 0
         """
-        self._db.execute_update(query, (daily_question_id, daily_question_id))
+        self._db.execute_update(
+            query, (daily_question_id, daily_question_id, daily_question_id)
+        )
 
     def reset_unanswered_season_streaks(self, daily_question_id: int, season_id: int):
         """
         Resets the current_streak in season_scores to 0 for all players who did not
-        have a correct guess for the specified daily question. Players who used the
-        'rest' power-up are excluded so their streak is preserved.
+        have a correct guess for the specified daily question AND also missed the
+        previous day's question. Players who used the 'rest' power-up are excluded so
+        their streak is preserved. A single-day grace period is applied: missing one
+        day does not break the streak as long as the player answered correctly (or
+        rested) the day before.
         """
         query = """
+            WITH prev_q AS (
+                SELECT id FROM daily_questions WHERE id < ? ORDER BY id DESC LIMIT 1
+            )
             UPDATE season_scores
             SET current_streak = 0
             WHERE season_id = ?
             AND player_id NOT IN (
-                SELECT player_id
-                FROM guesses
-                WHERE daily_question_id = ? AND is_correct = 1
-            )
-            AND player_id NOT IN (
-                SELECT user_id
-                FROM powerup_usage
-                WHERE question_id = ? AND powerup_type = 'rest'
+                SELECT player_id FROM guesses
+                    WHERE daily_question_id = ? AND is_correct = 1
+                UNION
+                SELECT user_id FROM powerup_usage
+                    WHERE question_id = ? AND powerup_type = 'rest'
+                UNION
+                SELECT player_id FROM guesses
+                    WHERE daily_question_id = (SELECT id FROM prev_q) AND is_correct = 1
+                UNION
+                SELECT user_id FROM powerup_usage
+                    WHERE question_id = (SELECT id FROM prev_q) AND powerup_type = 'rest'
             )
             AND current_streak > 0
         """
         self._db.execute_update(
-            query, (season_id, daily_question_id, daily_question_id)
+            query, (daily_question_id, season_id, daily_question_id, daily_question_id)
         )
 
     def get_player_ids_with_role(self, role_name: str) -> set[int]:
