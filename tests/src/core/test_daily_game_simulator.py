@@ -276,7 +276,9 @@ class TestDailyGameSimulator(unittest.TestCase):
         # since no state was recorded for them; streak_delta implicitly 0)
         p3_result = results.get("p3", {})
         self.assertEqual(p3_result.get("streak_delta", 0), 0)
-        self.assertEqual(p3_result.get("final_streak", self.initial_states["p3"].answer_streak), 5)
+        self.assertEqual(
+            p3_result.get("final_streak", self.initial_states["p3"].answer_streak), 5
+        )
 
     def test_grace_period_resets_streak_when_not_in_keepers(self):
         """A player who missed today and was not in prev_streak_keepers gets reset."""

@@ -215,7 +215,12 @@ class DailyGameSimulator:
             is_correct = state is not None and state.is_correct
             is_resting = state is not None and state.is_resting
             has_grace = user_id in self.prev_streak_keepers
-            if not is_correct and not is_resting and not has_grace and player.answer_streak > 0:
+            if (
+                not is_correct
+                and not is_resting
+                and not has_grace
+                and player.answer_streak > 0
+            ):
                 self.daily_state[user_id].streak_delta = -player.answer_streak
 
     def calculate_final_results(self):

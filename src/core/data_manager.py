@@ -575,9 +575,7 @@ class DataManager:
         rows = self._db.execute_query(query, (daily_question_id, daily_question_id))
         return {row["id"] for row in rows}
 
-    def get_previous_daily_question_id(
-        self, daily_question_id: int
-    ) -> Optional[int]:
+    def get_previous_daily_question_id(self, daily_question_id: int) -> Optional[int]:
         """
         Returns the daily_question_id of the question that immediately preceded
         the given one (by insertion order), or None if there is no previous question.
