@@ -507,18 +507,27 @@ class GameRunner:
         all_streaks = {
             s["id"]: s["answer_streak"] for s in self.data_manager.get_player_streaks()
         }
-        # Only show broken-streak indicator in the evening (show_daily_bonuses).
+        # Only show broken-streak / grace indicators in the evening (show_daily_bonuses).
         # In the morning nobody has answered yet, so keepers would be empty and
         # every player would incorrectly appear to have a broken streak.
         if show_daily_bonuses and self.daily_question_id:
             keepers = self.data_manager.get_streak_keepers(self.daily_question_id)
+            grace_players = self.data_manager.get_grace_period_players(
+                self.daily_question_id
+            )
             broken_streaks = {
-                pid: s for pid, s in all_streaks.items() if pid not in keepers
+                pid: s
+                for pid, s in all_streaks.items()
+                if pid not in keepers and pid not in grace_players
+            }
+            grace_streaks = {
+                pid: s for pid, s in all_streaks.items() if pid in grace_players
             }
             streaks = {pid: s for pid, s in all_streaks.items() if pid in keepers}
         else:
             streaks = all_streaks
             broken_streaks = {}
+            grace_streaks = {}
 
         badge_map = self._build_daily_badges(self.daily_question_id, show_daily_bonuses)
 
@@ -533,6 +542,7 @@ class GameRunner:
                     score=player["score"],
                     streak=streaks.get(pid, 0),
                     broken_streak=broken_streaks.get(pid, 0),
+                    grace_streak=grace_streaks.get(pid, 0),
                     badges=badges,
                 )
             )
@@ -544,6 +554,7 @@ class GameRunner:
             show_badges=show_daily_bonuses,
             streak_emoji=self.config.get("JBOT_EMOJI_STREAK"),
             broken_streak_emoji=self.config.get("JBOT_EMOJI_STREAK_BROKEN", "💔"),
+            grace_streak_emoji=self.config.get("JBOT_EMOJI_STREAK_GRACE", "🧊"),
         )
 
     def format_season_leaderboard(
@@ -558,34 +569,38 @@ class GameRunner:
         if not entries:
             return f"{season_header}\nNo scores this season yet."
 
-        # Only show broken-streak indicator in the evening (show_daily_bonuses).
+        # Only show broken-streak / grace indicators in the evening (show_daily_bonuses).
         keepers: set[str] = set()
+        grace_players: set[str] = set()
         if show_daily_bonuses and self.daily_question_id:
             keepers = self.data_manager.get_streak_keepers(self.daily_question_id)
+            grace_players = self.data_manager.get_grace_period_players(
+                self.daily_question_id
+            )
 
         badge_map = self._build_daily_badges(self.daily_question_id, show_daily_bonuses)
 
         rows = []
         for score_entry, player_name in entries:
             name = self._resolve_guild_name(score_entry.player_id, player_name, guild)
-            in_keepers = score_entry.player_id in keepers or not show_daily_bonuses
+            pid = score_entry.player_id
+            in_keepers = pid in keepers or not show_daily_bonuses
+            in_grace = pid in grace_players and show_daily_bonuses
             streak = score_entry.current_streak if in_keepers else 0
+            grace = score_entry.current_streak if in_grace else 0
             broken = (
                 score_entry.current_streak
-                if not in_keepers and score_entry.current_streak > 0
+                if not in_keepers and not in_grace and score_entry.current_streak > 0
                 else 0
             )
-            badges = (
-                "".join(badge_map.get(score_entry.player_id, []))
-                if show_daily_bonuses
-                else ""
-            )
+            badges = "".join(badge_map.get(pid, [])) if show_daily_bonuses else ""
             rows.append(
                 LeaderboardRow(
                     display_name=name,
                     score=score_entry.points,
                     streak=streak,
                     broken_streak=broken,
+                    grace_streak=grace,
                     badges=badges,
                 )
             )
@@ -596,6 +611,7 @@ class GameRunner:
             show_badges=show_daily_bonuses,
             streak_emoji=self.config.get("JBOT_EMOJI_STREAK"),
             broken_streak_emoji=self.config.get("JBOT_EMOJI_STREAK_BROKEN", "💔"),
+            grace_streak_emoji=self.config.get("JBOT_EMOJI_STREAK_GRACE", "🧊"),
         )
         return f"{season_header}\n{lb_table}"
 
@@ -1063,6 +1079,11 @@ class GameRunner:
         hint_ts = self.data_manager.get_hint_sent_timestamp(daily_question_id)
         events = self._fetch_daily_events(daily_question_id)
 
+        prev_dq_id = self.data_manager.get_previous_daily_question_id(daily_question_id)
+        prev_streak_keepers = (
+            self.data_manager.get_streak_keepers(prev_dq_id) if prev_dq_id else set()
+        )
+
         simulator = DailyGameSimulator(
             daily_q,
             answers,
@@ -1071,6 +1092,7 @@ class GameRunner:
             snapshot,
             self.config,
             answer_checker=self.answer_checker,
+            prev_streak_keepers=prev_streak_keepers,
         )
         sim_results = simulator.run(apply_end_of_day=True)
 

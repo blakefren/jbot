@@ -256,3 +256,70 @@ class TestDailyGameSimulator(unittest.TestCase):
         # p3 didn't guess → streak reset (same outcome)
         self.assertEqual(results["p3"]["final_streak"], 0)
         self.assertEqual(results["p3"]["streak_delta"], -5)
+
+    def test_grace_period_preserves_streak_for_prev_day_keeper(self):
+        """A player who missed today but is in prev_streak_keepers keeps their streak."""
+        events = []  # p3 (streak=5) doesn't answer today
+
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+            prev_streak_keepers={"p3"},
+        )
+        results = simulator.run()
+
+        # p3 missed today but answered yesterday → streak preserved (not in results
+        # since no state was recorded for them; streak_delta implicitly 0)
+        p3_result = results.get("p3", {})
+        self.assertEqual(p3_result.get("streak_delta", 0), 0)
+        self.assertEqual(
+            p3_result.get("final_streak", self.initial_states["p3"].answer_streak), 5
+        )
+
+    def test_grace_period_resets_streak_when_not_in_keepers(self):
+        """A player who missed today and was not in prev_streak_keepers gets reset."""
+        events = []  # p3 (streak=5) doesn't answer today
+
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+            prev_streak_keepers=set(),  # p3 not in keepers
+        )
+        results = simulator.run()
+
+        # p3 missed both days → streak reset
+        self.assertEqual(results["p3"]["streak_delta"], -5)
+        self.assertEqual(results["p3"]["final_streak"], 0)
+
+    def test_grace_period_does_not_affect_correct_answerer(self):
+        """A player who answers correctly today still increments their streak."""
+        events = [
+            GuessEvent(
+                timestamp="2023-01-01 10:00:00",
+                user_id="p3",
+                guess_text="4",
+            ),
+        ]
+
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+            prev_streak_keepers={"p3"},
+        )
+        results = simulator.run()
+
+        # p3 answered correctly — streak increments regardless
+        self.assertEqual(results["p3"]["streak_delta"], 1)
+        self.assertEqual(results["p3"]["final_streak"], 6)

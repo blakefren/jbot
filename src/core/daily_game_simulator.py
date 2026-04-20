@@ -24,6 +24,7 @@ class DailyGameSimulator:
         initial_player_states: dict[str, Player],
         config,
         answer_checker: AnswerChecker = None,
+        prev_streak_keepers: set[str] | None = None,
     ):
         self.question = question
         self.answers = answers  # List of valid answer strings (standard + corrections)
@@ -34,6 +35,8 @@ class DailyGameSimulator:
         self.config = config
         self.score_calculator = ScoreCalculator(self.config)
         self.engine = PowerUpEngine(self.config)
+        # Players who kept their streak yesterday (grace period: one missed day allowed)
+        self.prev_streak_keepers: set[str] = prev_streak_keepers or set()
 
         # Daily State per player
         self.daily_state = defaultdict(DailyPlayerState)
@@ -203,13 +206,21 @@ class DailyGameSimulator:
 
     def end_of_day(self):
         # Reset streaks for all players who didn't answer correctly and aren't resting.
+        # Grace period: if a player answered correctly (or rested) on the previous day,
+        # their streak is preserved even if they missed today.
         # This covers both players who submitted wrong guesses (in daily_state with
         # is_correct=False) and players who didn't guess at all (not in daily_state).
         for user_id, player in self.initial_player_states.items():
             state = self.daily_state.get(user_id)
             is_correct = state is not None and state.is_correct
             is_resting = state is not None and state.is_resting
-            if not is_correct and not is_resting and player.answer_streak > 0:
+            has_grace = user_id in self.prev_streak_keepers
+            if (
+                not is_correct
+                and not is_resting
+                and not has_grace
+                and player.answer_streak > 0
+            ):
                 self.daily_state[user_id].streak_delta = -player.answer_streak
 
     def calculate_final_results(self):
