@@ -593,11 +593,7 @@ class GameRunner:
                 if not in_keepers and not in_grace and score_entry.current_streak > 0
                 else 0
             )
-            badges = (
-                "".join(badge_map.get(pid, []))
-                if show_daily_bonuses
-                else ""
-            )
+            badges = "".join(badge_map.get(pid, [])) if show_daily_bonuses else ""
             rows.append(
                 LeaderboardRow(
                     display_name=name,

@@ -1456,7 +1456,9 @@ class TestDataManagerIntegration(unittest.TestCase):
 
     def test_get_grace_period_players(self):
         """get_grace_period_players returns players who missed today but answered yesterday."""
-        self.data_manager.create_player("p1", "Player1")  # answered yesterday, missing today
+        self.data_manager.create_player(
+            "p1", "Player1"
+        )  # answered yesterday, missing today
         self.data_manager.create_player("p2", "Player2")  # answered both days
         self.data_manager.create_player("p3", "Player3")  # missed both days
 
@@ -1480,9 +1482,9 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.data_manager.log_player_guess("p2", "Player2", dq2, "A", True)
 
         grace = self.data_manager.get_grace_period_players(dq2)
-        self.assertIn("p1", grace)      # missed today, answered yesterday → grace
-        self.assertNotIn("p2", grace)   # answered today → not grace
-        self.assertNotIn("p3", grace)   # missed both → no grace
+        self.assertIn("p1", grace)  # missed today, answered yesterday → grace
+        self.assertNotIn("p2", grace)  # answered today → not grace
+        self.assertNotIn("p3", grace)  # missed both → no grace
 
     def test_get_guesses_for_daily_question(self):
         """Test retrieving all guesses for a daily question."""
