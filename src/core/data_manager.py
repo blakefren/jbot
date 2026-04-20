@@ -577,28 +577,90 @@ class DataManager:
 
     def get_previous_daily_question_id(self, daily_question_id: int) -> Optional[int]:
         """
-        Returns the daily_question_id of the question that immediately preceded
-        the given one (by insertion order), or None if there is no previous question.
+        Returns the daily_question_id of the most recent question from the calendar
+        day immediately before the given question's day, or None if there is no such
+        question.
+
+        Uses date-based comparison (sent_at) rather than raw ID ordering so that
+        questions skipped and replaced on the same calendar day are not mistakenly
+        treated as 'yesterday'.
         """
         rows = self._db.execute_query(
-            "SELECT id FROM daily_questions WHERE id < ? ORDER BY id DESC LIMIT 1",
+            """
+            WITH today_date AS (
+                SELECT sent_at FROM daily_questions WHERE id = ?
+            )
+            SELECT id FROM daily_questions
+            WHERE sent_at < (SELECT sent_at FROM today_date)
+            ORDER BY sent_at DESC, id DESC
+            LIMIT 1
+            """,
             (daily_question_id,),
         )
         if rows:
             return rows[0]["id"]
         return None
 
+    def get_grace_period_players(self, daily_question_id: int) -> set[str]:
+        """
+        Returns the set of player IDs whose streak will be protected tonight by the
+        grace period: they missed today's question but answered correctly (or rested)
+        on the most recent previous calendar day.
+
+        This is used to display a grace-streak indicator on the evening leaderboard.
+        """
+        query = """
+            WITH today_date AS (
+                SELECT sent_at FROM daily_questions WHERE id = ?
+            ),
+            prev_q AS (
+                SELECT id FROM daily_questions
+                WHERE sent_at < (SELECT sent_at FROM today_date)
+                ORDER BY sent_at DESC, id DESC
+                LIMIT 1
+            )
+            SELECT p.id FROM players p
+            WHERE p.answer_streak > 0
+            AND p.id NOT IN (
+                SELECT player_id FROM guesses
+                    WHERE daily_question_id = ? AND is_correct = 1
+                UNION
+                SELECT user_id FROM powerup_usage
+                    WHERE question_id = ? AND powerup_type = 'rest'
+            )
+            AND p.id IN (
+                SELECT player_id FROM guesses
+                    WHERE daily_question_id = (SELECT id FROM prev_q) AND is_correct = 1
+                UNION
+                SELECT user_id FROM powerup_usage
+                    WHERE question_id = (SELECT id FROM prev_q) AND powerup_type = 'rest'
+            )
+        """
+        rows = self._db.execute_query(
+            query, (daily_question_id, daily_question_id, daily_question_id)
+        )
+        return {row["id"] for row in rows}
+
     def reset_unanswered_streaks(self, daily_question_id: int):
         """
         Resets the answer streak to 0 for all players who did not have a correct guess
-        for the specified daily question AND also missed the previous day's question.
-        Players who used the 'rest' power-up are excluded so their streak is preserved.
-        A single-day grace period is applied: missing one day does not break the streak
-        as long as the player answered correctly (or rested) the day before.
+        for the specified daily question AND also missed the previous calendar day's
+        question. Players who used the 'rest' power-up are excluded so their streak is
+        preserved. A single-day grace period is applied: missing one day does not break
+        the streak as long as the player answered correctly (or rested) the day before.
+
+        Uses date-based comparison to ensure same-day skipped questions are not treated
+        as 'yesterday' for grace-period purposes.
         """
         query = """
-            WITH prev_q AS (
-                SELECT id FROM daily_questions WHERE id < ? ORDER BY id DESC LIMIT 1
+            WITH today_date AS (
+                SELECT sent_at FROM daily_questions WHERE id = ?
+            ),
+            prev_q AS (
+                SELECT id FROM daily_questions
+                WHERE sent_at < (SELECT sent_at FROM today_date)
+                ORDER BY sent_at DESC, id DESC
+                LIMIT 1
             )
             UPDATE players
             SET answer_streak = 0
@@ -625,14 +687,23 @@ class DataManager:
         """
         Resets the current_streak in season_scores to 0 for all players who did not
         have a correct guess for the specified daily question AND also missed the
-        previous day's question. Players who used the 'rest' power-up are excluded so
-        their streak is preserved. A single-day grace period is applied: missing one
-        day does not break the streak as long as the player answered correctly (or
-        rested) the day before.
+        previous calendar day's question. Players who used the 'rest' power-up are
+        excluded so their streak is preserved. A single-day grace period is applied:
+        missing one day does not break the streak as long as the player answered
+        correctly (or rested) the day before.
+
+        Uses date-based comparison to ensure same-day skipped questions are not treated
+        as 'yesterday' for grace-period purposes.
         """
         query = """
-            WITH prev_q AS (
-                SELECT id FROM daily_questions WHERE id < ? ORDER BY id DESC LIMIT 1
+            WITH today_date AS (
+                SELECT sent_at FROM daily_questions WHERE id = ?
+            ),
+            prev_q AS (
+                SELECT id FROM daily_questions
+                WHERE sent_at < (SELECT sent_at FROM today_date)
+                ORDER BY sent_at DESC, id DESC
+                LIMIT 1
             )
             UPDATE season_scores
             SET current_streak = 0

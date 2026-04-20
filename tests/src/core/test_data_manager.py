@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from datetime import date
+from datetime import date, timedelta
 
 from src.core.data_manager import DataManager
 from src.core.player import Player
@@ -1276,13 +1276,38 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.assertEqual(ss2.current_streak, 3)
 
     def test_get_previous_daily_question_id(self):
-        """Test retrieving the previous daily question ID."""
+        """Test retrieving the previous daily question ID using date-based lookup."""
         q = Question("Q?", "A", "Cat", 100, "test", "Hint")
-        dq1 = self.data_manager.log_daily_question(q)
-        dq2 = self.data_manager.log_daily_question(q, force_new=True)
+        # Create question on a past date
+        dq_yesterday = self.data_manager.log_daily_question(q)
+        yesterday = self.data_manager.get_today() - timedelta(days=1)
+        self.data_manager._db.execute_update(
+            "UPDATE daily_questions SET sent_at = ? WHERE id = ?",
+            (yesterday.isoformat(), dq_yesterday),
+        )
+        # Create question for today
+        dq_today = self.data_manager.log_daily_question(q, force_new=True)
 
-        self.assertIsNone(self.data_manager.get_previous_daily_question_id(dq1))
-        self.assertEqual(self.data_manager.get_previous_daily_question_id(dq2), dq1)
+        # First-ever question has no previous
+        self.assertIsNone(
+            self.data_manager.get_previous_daily_question_id(dq_yesterday)
+        )
+        # Today's question finds yesterday's
+        self.assertEqual(
+            self.data_manager.get_previous_daily_question_id(dq_today), dq_yesterday
+        )
+
+    def test_get_previous_daily_question_id_ignores_same_day_skip(self):
+        """Same-day skip replacement should not be treated as yesterday's question."""
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        # Two questions on the same calendar day (original + skip replacement)
+        dq_original = self.data_manager.log_daily_question(q)
+        dq_replacement = self.data_manager.log_daily_question(q, force_new=True)
+
+        # No previous calendar-day question exists for either
+        self.assertIsNone(
+            self.data_manager.get_previous_daily_question_id(dq_replacement)
+        )
 
     def test_reset_unanswered_streaks_grace_period(self):
         """Grace period: a player who missed today but answered yesterday keeps their streak."""
@@ -1293,12 +1318,17 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.data_manager.set_streak("p2", 3)
 
         q = Question("Q?", "A", "Cat", 100, "test", "Hint")
-        # Day 1: both players answer correctly
+        # Day 1: both players answer correctly; set to yesterday
         dq1 = self.data_manager.log_daily_question(q)
+        yesterday = self.data_manager.get_today() - timedelta(days=1)
+        self.data_manager._db.execute_update(
+            "UPDATE daily_questions SET sent_at = ? WHERE id = ?",
+            (yesterday.isoformat(), dq1),
+        )
         self.data_manager.log_player_guess("p1", "Player1", dq1, "A", True)
         self.data_manager.log_player_guess("p2", "Player2", dq1, "A", True)
 
-        # Day 2: neither player answers
+        # Day 2 (today): neither player answers
         dq2 = self.data_manager.log_daily_question(q, force_new=True)
 
         # Reset unanswered streaks for day 2 — grace period should protect both
@@ -1309,16 +1339,40 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.assertEqual(p1.answer_streak, 5)  # Protected by grace period
         self.assertEqual(p2.answer_streak, 3)  # Protected by grace period
 
-    def test_reset_unanswered_streaks_grace_period_no_second_miss(self):
-        """Two consecutive missed days still resets the streak."""
+    def test_reset_unanswered_streaks_grace_ignores_same_day_skip(self):
+        """A same-day skip (prev question on same calendar day) does not grant grace."""
         self.data_manager.create_player("p1", "Player1")
         self.data_manager.set_streak("p1", 5)
 
         q = Question("Q?", "A", "Cat", 100, "test", "Hint")
-        # Day 1: p1 does NOT answer
-        dq1 = self.data_manager.log_daily_question(q)
+        # Original question (same day, will be skipped)
+        dq_original = self.data_manager.log_daily_question(q)
+        self.data_manager.log_player_guess("p1", "Player1", dq_original, "A", True)
 
-        # Day 2: p1 also does NOT answer
+        # Replacement on the same calendar day — p1 does not answer this one
+        dq_replacement = self.data_manager.log_daily_question(q, force_new=True)
+
+        # Reset for replacement — no grace because dq_original is same-day
+        self.data_manager.reset_unanswered_streaks(dq_replacement)
+
+        p1 = self.data_manager.get_player("p1")
+        self.assertEqual(p1.answer_streak, 0)
+
+    def test_reset_unanswered_streaks_grace_period_no_second_miss(self):
+        """Two consecutive missed calendar days still resets the streak."""
+        self.data_manager.create_player("p1", "Player1")
+        self.data_manager.set_streak("p1", 5)
+
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        # Day 1 (yesterday): p1 does NOT answer
+        dq1 = self.data_manager.log_daily_question(q)
+        yesterday = self.data_manager.get_today() - timedelta(days=1)
+        self.data_manager._db.execute_update(
+            "UPDATE daily_questions SET sent_at = ? WHERE id = ?",
+            (yesterday.isoformat(), dq1),
+        )
+
+        # Day 2 (today): p1 also does NOT answer
         dq2 = self.data_manager.log_daily_question(q, force_new=True)
 
         # Reset for day 2 — no grace because p1 missed day 1 too
@@ -1355,12 +1409,17 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.data_manager.update_season_score("p2", season_id, current_streak=3)
 
         q = Question("Q?", "A", "Cat", 100, "test", "Hint")
-        # Day 1: both players answer correctly
+        # Day 1 (yesterday): both players answer correctly
         dq1 = self.data_manager.log_daily_question(q)
+        yesterday = self.data_manager.get_today() - timedelta(days=1)
+        self.data_manager._db.execute_update(
+            "UPDATE daily_questions SET sent_at = ? WHERE id = ?",
+            (yesterday.isoformat(), dq1),
+        )
         self.data_manager.log_player_guess("p1", "Player1", dq1, "A", True)
         self.data_manager.log_player_guess("p2", "Player2", dq1, "A", True)
 
-        # Day 2: neither player answers
+        # Day 2 (today): neither player answers
         dq2 = self.data_manager.log_daily_question(q, force_new=True)
 
         self.data_manager.reset_unanswered_season_streaks(dq2, season_id)
@@ -1371,7 +1430,7 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.assertEqual(ss2.current_streak, 3)  # Protected by grace period
 
     def test_reset_unanswered_season_streaks_grace_two_misses(self):
-        """Two consecutive missed days resets the season streak."""
+        """Two consecutive missed calendar days resets the season streak."""
         season_id = self.data_manager.create_season(
             "April 2026", "2026-04-01", "2026-04-30"
         )
@@ -1380,15 +1439,50 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.data_manager.update_season_score("p1", season_id, current_streak=5)
 
         q = Question("Q?", "A", "Cat", 100, "test", "Hint")
-        # Day 1: p1 does NOT answer
+        # Day 1 (yesterday): p1 does NOT answer
         dq1 = self.data_manager.log_daily_question(q)
-        # Day 2: p1 also does NOT answer
+        yesterday = self.data_manager.get_today() - timedelta(days=1)
+        self.data_manager._db.execute_update(
+            "UPDATE daily_questions SET sent_at = ? WHERE id = ?",
+            (yesterday.isoformat(), dq1),
+        )
+        # Day 2 (today): p1 also does NOT answer
         dq2 = self.data_manager.log_daily_question(q, force_new=True)
 
         self.data_manager.reset_unanswered_season_streaks(dq2, season_id)
 
         ss1 = self.data_manager.get_player_season_score("p1", season_id)
         self.assertEqual(ss1.current_streak, 0)
+
+    def test_get_grace_period_players(self):
+        """get_grace_period_players returns players who missed today but answered yesterday."""
+        self.data_manager.create_player("p1", "Player1")  # answered yesterday, missing today
+        self.data_manager.create_player("p2", "Player2")  # answered both days
+        self.data_manager.create_player("p3", "Player3")  # missed both days
+
+        self.data_manager.set_streak("p1", 5)
+        self.data_manager.set_streak("p2", 3)
+        self.data_manager.set_streak("p3", 7)
+
+        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        # Yesterday: p1 and p2 answer correctly
+        dq1 = self.data_manager.log_daily_question(q)
+        yesterday = self.data_manager.get_today() - timedelta(days=1)
+        self.data_manager._db.execute_update(
+            "UPDATE daily_questions SET sent_at = ? WHERE id = ?",
+            (yesterday.isoformat(), dq1),
+        )
+        self.data_manager.log_player_guess("p1", "Player1", dq1, "A", True)
+        self.data_manager.log_player_guess("p2", "Player2", dq1, "A", True)
+
+        # Today: only p2 answers
+        dq2 = self.data_manager.log_daily_question(q, force_new=True)
+        self.data_manager.log_player_guess("p2", "Player2", dq2, "A", True)
+
+        grace = self.data_manager.get_grace_period_players(dq2)
+        self.assertIn("p1", grace)      # missed today, answered yesterday → grace
+        self.assertNotIn("p2", grace)   # answered today → not grace
+        self.assertNotIn("p3", grace)   # missed both → no grace
 
     def test_get_guesses_for_daily_question(self):
         """Test retrieving all guesses for a daily question."""

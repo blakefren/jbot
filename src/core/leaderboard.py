@@ -20,6 +20,9 @@ class LeaderboardRow:
     broken_streak: int = (
         0  # >0 → show broken-streak emoji; only populated on evening leaderboard
     )
+    grace_streak: int = (
+        0  # >0 → show grace emoji; streak safe tonight due to grace period
+    )
     badges: str = ""  # pre-joined emoji string; "" → no badges column entry
 
 
@@ -44,6 +47,7 @@ class LeaderboardRenderer:
         show_badges: bool = False,
         streak_emoji: str = "🔥",
         broken_streak_emoji: str = "💔",
+        grace_streak_emoji: str = "🧊",
     ) -> str:
         if not rows:
             return "No scores available yet."
@@ -59,10 +63,12 @@ class LeaderboardRenderer:
             default=0,
         )
         has_broken = any(r.broken_streak > 0 for r in rows)
+        has_grace = any(r.grace_streak > 0 for r in rows)
         streak_width = max(
             EMOJI_DISPLAY_WIDTH,
             streak_digits,
             EMOJI_DISPLAY_WIDTH if has_broken else 0,
+            EMOJI_DISPLAY_WIDTH if has_grace else 0,
         )
 
         # --- header ---
@@ -90,6 +96,9 @@ class LeaderboardRenderer:
 
             if row.streak > 0:
                 streak_str = f"{row.streak:>{streak_width}}"
+            elif row.grace_streak > 0:
+                pad = max(0, streak_width - EMOJI_DISPLAY_WIDTH)
+                streak_str = " " * pad + grace_streak_emoji
             elif row.broken_streak > 0:
                 pad = max(0, streak_width - EMOJI_DISPLAY_WIDTH)
                 streak_str = " " * pad + broken_streak_emoji
