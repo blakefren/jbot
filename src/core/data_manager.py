@@ -601,6 +601,25 @@ class DataManager:
             return rows[0]["id"]
         return None
 
+    def _get_all_streak_keeper_ids(self, daily_question_id: int) -> set[str]:
+        """
+        Returns the set of player IDs that should NOT have their streak reset
+        tonight: the union of today's and yesterday's streak keepers.
+
+        A player keeps their streak if they answered correctly (or used rest) on
+        today's question OR on the most recent previous calendar-day question (the
+        grace period).
+
+        Note: this returns *all* safe players, not just grace candidates.
+        get_grace_period_players subtracts today_keepers to find the grace-only
+        subset for leaderboard display.
+        """
+        today_keepers = self.get_streak_keepers(daily_question_id)
+        prev_dq_id = self.get_previous_daily_question_id(daily_question_id)
+        if prev_dq_id is not None:
+            return today_keepers | self.get_streak_keepers(prev_dq_id)
+        return today_keepers
+
     def get_grace_period_players(self, daily_question_id: int) -> set[str]:
         """
         Returns the set of player IDs whose streak will be protected tonight by the
@@ -609,35 +628,19 @@ class DataManager:
 
         This is used to display a grace-streak indicator on the evening leaderboard.
         """
-        query = """
-            WITH today_date AS (
-                SELECT sent_at FROM daily_questions WHERE id = ?
-            ),
-            prev_q AS (
-                SELECT id FROM daily_questions
-                WHERE sent_at < (SELECT sent_at FROM today_date)
-                ORDER BY sent_at DESC, id DESC
-                LIMIT 1
-            )
-            SELECT p.id FROM players p
-            WHERE p.answer_streak > 0
-            AND p.id NOT IN (
-                SELECT player_id FROM guesses
-                    WHERE daily_question_id = ? AND is_correct = 1
-                UNION
-                SELECT user_id FROM powerup_usage
-                    WHERE question_id = ? AND powerup_type = 'rest'
-            )
-            AND p.id IN (
-                SELECT player_id FROM guesses
-                    WHERE daily_question_id = (SELECT id FROM prev_q) AND is_correct = 1
-                UNION
-                SELECT user_id FROM powerup_usage
-                    WHERE question_id = (SELECT id FROM prev_q) AND powerup_type = 'rest'
-            )
-        """
+        prev_dq_id = self.get_previous_daily_question_id(daily_question_id)
+        if prev_dq_id is None:
+            return set()
+        today_keepers = self.get_streak_keepers(daily_question_id)
+        yesterday_keepers = self.get_streak_keepers(prev_dq_id)
+        # Grace players: kept yesterday but NOT today
+        grace_candidates = yesterday_keepers - today_keepers
+        if not grace_candidates:
+            return set()
+        placeholders = ",".join("?" * len(grace_candidates))
         rows = self._db.execute_query(
-            query, (daily_question_id, daily_question_id, daily_question_id)
+            f"SELECT id FROM players WHERE id IN ({placeholders}) AND answer_streak > 0",
+            tuple(grace_candidates),
         )
         return {row["id"] for row in rows}
 
@@ -649,39 +652,20 @@ class DataManager:
         preserved. A single-day grace period is applied: missing one day does not break
         the streak as long as the player answered correctly (or rested) the day before.
 
-        Uses date-based comparison to ensure same-day skipped questions are not treated
-        as 'yesterday' for grace-period purposes.
+        Uses date-based comparison (via get_previous_daily_question_id) to ensure
+        same-day skipped questions are not treated as 'yesterday'.
         """
-        query = """
-            WITH today_date AS (
-                SELECT sent_at FROM daily_questions WHERE id = ?
-            ),
-            prev_q AS (
-                SELECT id FROM daily_questions
-                WHERE sent_at < (SELECT sent_at FROM today_date)
-                ORDER BY sent_at DESC, id DESC
-                LIMIT 1
+        keepers = self._get_all_streak_keeper_ids(daily_question_id)
+        if keepers:
+            placeholders = ",".join("?" * len(keepers))
+            self._db.execute_update(
+                f"UPDATE players SET answer_streak = 0 WHERE id NOT IN ({placeholders}) AND answer_streak > 0",
+                tuple(keepers),
             )
-            UPDATE players
-            SET answer_streak = 0
-            WHERE id NOT IN (
-                SELECT player_id FROM guesses
-                    WHERE daily_question_id = ? AND is_correct = 1
-                UNION
-                SELECT user_id FROM powerup_usage
-                    WHERE question_id = ? AND powerup_type = 'rest'
-                UNION
-                SELECT player_id FROM guesses
-                    WHERE daily_question_id = (SELECT id FROM prev_q) AND is_correct = 1
-                UNION
-                SELECT user_id FROM powerup_usage
-                    WHERE question_id = (SELECT id FROM prev_q) AND powerup_type = 'rest'
+        else:
+            self._db.execute_update(
+                "UPDATE players SET answer_streak = 0 WHERE answer_streak > 0"
             )
-            AND answer_streak > 0
-        """
-        self._db.execute_update(
-            query, (daily_question_id, daily_question_id, daily_question_id)
-        )
 
     def reset_unanswered_season_streaks(self, daily_question_id: int, season_id: int):
         """
@@ -692,40 +676,21 @@ class DataManager:
         missing one day does not break the streak as long as the player answered
         correctly (or rested) the day before.
 
-        Uses date-based comparison to ensure same-day skipped questions are not treated
-        as 'yesterday' for grace-period purposes.
+        Uses date-based comparison (via get_previous_daily_question_id) to ensure
+        same-day skipped questions are not treated as 'yesterday'.
         """
-        query = """
-            WITH today_date AS (
-                SELECT sent_at FROM daily_questions WHERE id = ?
-            ),
-            prev_q AS (
-                SELECT id FROM daily_questions
-                WHERE sent_at < (SELECT sent_at FROM today_date)
-                ORDER BY sent_at DESC, id DESC
-                LIMIT 1
+        keepers = self._get_all_streak_keeper_ids(daily_question_id)
+        if keepers:
+            placeholders = ",".join("?" * len(keepers))
+            self._db.execute_update(
+                f"UPDATE season_scores SET current_streak = 0 WHERE season_id = ? AND player_id NOT IN ({placeholders}) AND current_streak > 0",
+                (season_id,) + tuple(keepers),
             )
-            UPDATE season_scores
-            SET current_streak = 0
-            WHERE season_id = ?
-            AND player_id NOT IN (
-                SELECT player_id FROM guesses
-                    WHERE daily_question_id = ? AND is_correct = 1
-                UNION
-                SELECT user_id FROM powerup_usage
-                    WHERE question_id = ? AND powerup_type = 'rest'
-                UNION
-                SELECT player_id FROM guesses
-                    WHERE daily_question_id = (SELECT id FROM prev_q) AND is_correct = 1
-                UNION
-                SELECT user_id FROM powerup_usage
-                    WHERE question_id = (SELECT id FROM prev_q) AND powerup_type = 'rest'
+        else:
+            self._db.execute_update(
+                "UPDATE season_scores SET current_streak = 0 WHERE season_id = ? AND current_streak > 0",
+                (season_id,),
             )
-            AND current_streak > 0
-        """
-        self._db.execute_update(
-            query, (daily_question_id, season_id, daily_question_id, daily_question_id)
-        )
 
     def get_player_ids_with_role(self, role_name: str) -> set[int]:
         """
