@@ -204,10 +204,13 @@ class ConfigReader:
         """
         Parses question sources from the TOML configuration and returns QuestionSource objects.
         Raises RuntimeError if no valid sources are found.
+
+        File-based sources are wrapped in LazyFileQuestionSource so that dataset files
+        are loaded on demand (at question-selection time) rather than held in memory.
         """
         from data.readers.question_source import (
             GeminiQuestionSource,
-            StaticQuestionSource,
+            LazyFileQuestionSource,
         )
         from data.readers.tsv import read_jeopardy_questions
         from data.readers.csv_reader import (
@@ -273,39 +276,38 @@ class ConfigReader:
                     continue
 
                 reader_type = source_config.get("reader", "")
-                questions = []
 
-                # Load questions based on reader type
+                # Build a lazy loader so datasets are loaded on demand and not held in memory.
                 if reader_type == "jeopardy":
                     difficulty = source_config.get("difficulty", "easy")
                     final_jeopardy_score = default_points if default_points else 300
-                    questions = read_jeopardy_questions(
-                        dataset_path,
-                        difficulty=difficulty,
-                        final_jeopardy_score=final_jeopardy_score,
-                    )
+                    loader = read_jeopardy_questions
+                    loader_kwargs = {
+                        "file_path": dataset_path,
+                        "difficulty": difficulty,
+                        "final_jeopardy_score": final_jeopardy_score,
+                    }
                 elif reader_type == "knowledge_bowl":
-                    questions = read_knowledge_bowl_questions(dataset_path)
+                    loader = read_knowledge_bowl_questions
+                    loader_kwargs = {"file_path": dataset_path}
                 elif reader_type == "simple":
                     category = source_config.get("category", dataset_name)
-                    questions = read_simple_questions(dataset_path, category)
+                    loader = read_simple_questions
+                    loader_kwargs = {"file_path": dataset_path, "source": category}
                 else:
                     logging.error(
                         f"File source {s_name} has unknown reader type: {reader_type}"
                     )
                     continue
 
-                if questions:
-                    sources.append(
-                        StaticQuestionSource(
-                            s_name, s_weight, questions, default_points
-                        )
+                sources.append(
+                    LazyFileQuestionSource(
+                        s_name, s_weight, loader, loader_kwargs, default_points
                     )
-                    logging.info(
-                        f"Added file source: {s_name} (weight={s_weight}, questions={len(questions)})"
-                    )
-                else:
-                    logging.warning(f"No questions loaded for file source: {s_name}")
+                )
+                logging.info(
+                    f"Added file source: {s_name} (weight={s_weight}, lazy=True)"
+                )
 
         if not sources:
             logging.warning(

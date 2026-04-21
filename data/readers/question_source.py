@@ -66,6 +66,51 @@ class StaticQuestionSource(QuestionSource):
         return question
 
 
+class LazyFileQuestionSource(QuestionSource):
+    """
+    A source that loads questions from a file on demand and discards them after selection.
+
+    Unlike StaticQuestionSource, this class stores only the loader callable and its
+    arguments. The dataset is loaded each time get_question() is called, then
+    immediately released, keeping memory usage low.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        weight: float,
+        loader: callable,
+        loader_kwargs: dict = None,
+        default_points: int | None = None,
+    ):
+        super().__init__(name, weight, default_points)
+        self._loader = loader
+        self._loader_kwargs = loader_kwargs or {}
+
+    def get_question(
+        self, exclude_hashes: set[str] = None, previous_answers: list[str] = None
+    ) -> Question | None:
+        questions = self._loader(**self._loader_kwargs)
+
+        if not questions:
+            logging.warning(f"LazyFileQuestionSource '{self.name}' loaded no questions.")
+            return None
+
+        available = questions
+        if exclude_hashes:
+            available = [q for q in questions if str(q.id) not in exclude_hashes]
+            if not available:
+                logging.warning(
+                    f"Source '{self.name}' exhausted (all excluded). Using full pool."
+                )
+                available = questions
+
+        question = random.choice(available)
+        if self.default_points is not None:
+            question.clue_value = self.default_points
+        return question
+
+
 class GeminiQuestionSource(QuestionSource):
     """
     A source that generates questions using Gemini.

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch, mock_open
 from data.readers.question import Question
-from data.readers.question_source import StaticQuestionSource, GeminiQuestionSource
+from data.readers.question_source import StaticQuestionSource, GeminiQuestionSource, LazyFileQuestionSource
 import os
 
 
@@ -90,3 +90,62 @@ class TestGeminiQuestionSource(unittest.TestCase):
     def test_get_question_parse_error(self, mock_file):
         self.mock_gemini.generate_content.return_value = "Invalid format"
         self.assertIsNone(self.source.get_question())
+
+
+class TestLazyFileQuestionSource(unittest.TestCase):
+    def setUp(self):
+        self.questions = [
+            Question("Q1", "A1", "C1", 100),
+            Question("Q2", "A2", "C2", 200),
+        ]
+        self.mock_loader = MagicMock(return_value=self.questions)
+        self.source = LazyFileQuestionSource(
+            "test_lazy", 50.0, self.mock_loader, {"file_path": "/fake/path.csv"}
+        )
+
+    def test_loader_not_called_at_init(self):
+        """Dataset should not be loaded at construction time."""
+        self.mock_loader.assert_not_called()
+
+    def test_get_question_calls_loader(self):
+        """get_question() should invoke the loader exactly once per call."""
+        self.source.get_question()
+        self.mock_loader.assert_called_once_with(file_path="/fake/path.csv")
+
+    def test_loader_called_each_time(self):
+        """Each call to get_question() reloads the dataset (no caching)."""
+        self.source.get_question()
+        self.source.get_question()
+        self.assertEqual(self.mock_loader.call_count, 2)
+
+    def test_get_question_returns_question_from_loaded_data(self):
+        question = self.source.get_question()
+        self.assertIn(question, self.questions)
+
+    def test_get_question_excludes_hashes(self):
+        exclude = {str(self.questions[0].id)}
+        for _ in range(10):
+            question = self.source.get_question(exclude_hashes=exclude)
+            self.assertEqual(question, self.questions[1])
+
+    def test_get_question_exhausted_uses_full_pool(self):
+        exclude = {str(q.id) for q in self.questions}
+        question = self.source.get_question(exclude_hashes=exclude)
+        self.assertIn(question, self.questions)
+
+    def test_get_question_empty_loader_returns_none(self):
+        source = LazyFileQuestionSource("empty", 50.0, MagicMock(return_value=[]), {})
+        self.assertIsNone(source.get_question())
+
+    def test_default_points_override(self):
+        source = LazyFileQuestionSource(
+            "points", 50.0, self.mock_loader, {}, default_points=999
+        )
+        question = source.get_question()
+        self.assertEqual(question.clue_value, 999)
+
+    def test_loader_kwargs_passed_correctly(self):
+        kwargs = {"file_path": "/data/test.tsv", "difficulty": "medium", "final_jeopardy_score": 300}
+        source = LazyFileQuestionSource("jeopardy", 75.0, self.mock_loader, kwargs)
+        source.get_question()
+        self.mock_loader.assert_called_once_with(**kwargs)
