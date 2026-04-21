@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Optional
 from data.readers.question import Question
 import random
@@ -79,7 +80,7 @@ class LazyFileQuestionSource(QuestionSource):
         self,
         name: str,
         weight: float,
-        loader: callable,
+        loader: Callable[..., list[Question]],
         loader_kwargs: dict = None,
         default_points: int | None = None,
     ):

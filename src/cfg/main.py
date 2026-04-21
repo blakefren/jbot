@@ -306,7 +306,7 @@ class ConfigReader:
                     )
                 )
                 logging.info(
-                    f"Added file source: {s_name} (weight={s_weight}, lazy=True)"
+                    f"Added file source: {s_name} (weight={s_weight}, reader={reader_type})"
                 )
 
         if not sources:
