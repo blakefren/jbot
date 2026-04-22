@@ -3,6 +3,7 @@ import os
 import tempfile
 from unittest.mock import patch, MagicMock
 from src.cfg.main import ConfigReader
+from data.readers.question_source import LazyFileQuestionSource
 
 
 class TestTomlConfiguration(unittest.TestCase):
@@ -221,7 +222,7 @@ jeopardy = "datasets/jeopardy.tsv"
     def test_parse_question_sources_file_simple(
         self, mock_read_simple, mock_validate, mock_base_dir, mock_toml_path
     ):
-        """Test parsing file-based source with simple reader."""
+        """Test parsing file-based source with simple reader creates a LazyFileQuestionSource."""
         # Create a TOML with a simple reader source
         toml_path = os.path.join(self.config_dir, "simple.toml")
         with open(toml_path, "w") as f:
@@ -260,17 +261,25 @@ points = 200
                 sources = config.parse_question_sources(None)
 
                 self.assertEqual(len(sources), 1)
+                self.assertIsInstance(sources[0], LazyFileQuestionSource)
                 self.assertEqual(sources[0].name, "test_simple")
                 self.assertEqual(sources[0].weight, 50.0)
                 self.assertEqual(sources[0].default_points, 200)
 
-                # Verify the reader was called with correct args
+                # Reader is NOT called at parse time (lazy loading)
+                mock_read_simple.assert_not_called()
+
+                # Reader IS called when get_question() is invoked
+                question = sources[0].get_question()
+                mock_read_simple.assert_called_once()
                 expected_path = os.path.normpath(
                     os.path.join(self.temp_dir, "datasets", "test.csv")
                 )
-                actual_call = mock_read_simple.call_args[0]
-                self.assertEqual(os.path.normpath(actual_call[0]), expected_path)
-                self.assertEqual(actual_call[1], "Test Category")
+                actual_kwargs = mock_read_simple.call_args[1]
+                self.assertEqual(
+                    os.path.normpath(actual_kwargs["file_path"]), expected_path
+                )
+                self.assertEqual(actual_kwargs["source"], "Test Category")
 
     @patch("src.cfg.main.SOURCES_TOML_PATH")
     @patch("src.cfg.main.BASE_DIR")
@@ -279,7 +288,7 @@ points = 200
     def test_parse_question_sources_file_jeopardy_with_settings(
         self, mock_read_jeopardy, mock_validate, mock_base_dir, mock_toml_path
     ):
-        """Test parsing Jeopardy source with difficulty-based settings."""
+        """Test parsing Jeopardy source with difficulty-based settings creates a LazyFileQuestionSource."""
         toml_path = os.path.join(self.config_dir, "jeopardy.toml")
         with open(toml_path, "w") as f:
             f.write("""
@@ -316,16 +325,26 @@ points = 150
                 sources = config.parse_question_sources(None)
 
                 self.assertEqual(len(sources), 1)
+                self.assertIsInstance(sources[0], LazyFileQuestionSource)
                 self.assertEqual(sources[0].name, "jeopardy_test")
+
+                # Reader is NOT called at parse time (lazy loading)
+                mock_read_jeopardy.assert_not_called()
+
+                # Reader IS called when get_question() is invoked
+                sources[0].get_question()
+                mock_read_jeopardy.assert_called_once()
 
                 # Verify difficulty-based settings were passed
                 expected_path = os.path.normpath(
                     os.path.join(self.temp_dir, "datasets", "jeopardy.tsv")
                 )
-                actual_call = mock_read_jeopardy.call_args
-                self.assertEqual(os.path.normpath(actual_call[0][0]), expected_path)
-                self.assertEqual(actual_call[1]["difficulty"], "medium")
-                self.assertEqual(actual_call[1]["final_jeopardy_score"], 150)
+                actual_kwargs = mock_read_jeopardy.call_args[1]
+                self.assertEqual(
+                    os.path.normpath(actual_kwargs["file_path"]), expected_path
+                )
+                self.assertEqual(actual_kwargs["difficulty"], "medium")
+                self.assertEqual(actual_kwargs["final_jeopardy_score"], 150)
 
     @patch("src.cfg.main.SOURCES_TOML_PATH")
     @patch("src.cfg.main.BASE_DIR")
@@ -335,7 +354,7 @@ points = 150
     def test_parse_question_sources_multiple_file_sources(
         self, mock_simple, mock_kb, mock_validate, mock_base_dir, mock_toml_path
     ):
-        """Test parsing multiple file sources with different reader types."""
+        """Test parsing multiple file sources creates LazyFileQuestionSource instances."""
         toml_path = os.path.join(self.config_dir, "multi.toml")
         with open(toml_path, "w") as f:
             f.write("""
@@ -385,9 +404,13 @@ category = "Simple"
                 self.assertIn("kb_source", source_names)
                 self.assertIn("simple_source", source_names)
 
-                # Verify both readers were called
-                self.assertTrue(mock_kb.called)
-                self.assertTrue(mock_simple.called)
+                # Readers are NOT called at parse time (lazy loading)
+                mock_kb.assert_not_called()
+                mock_simple.assert_not_called()
+
+                # Both sources should be lazy
+                for s in sources:
+                    self.assertIsInstance(s, LazyFileQuestionSource)
 
     @patch("src.cfg.main.SOURCES_TOML_PATH")
     @patch("src.cfg.main.BASE_DIR")
