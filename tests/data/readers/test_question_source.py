@@ -1,7 +1,11 @@
 import unittest
 from unittest.mock import MagicMock, patch, mock_open
 from data.readers.question import Question
-from data.readers.question_source import StaticQuestionSource, GeminiQuestionSource, LazyFileQuestionSource
+from data.readers.question_source import (
+    StaticQuestionSource,
+    GeminiQuestionSource,
+    LazyFileQuestionSource,
+)
 import os
 
 
@@ -145,7 +149,11 @@ class TestLazyFileQuestionSource(unittest.TestCase):
         self.assertEqual(question.clue_value, 999)
 
     def test_loader_kwargs_passed_correctly(self):
-        kwargs = {"file_path": "/data/test.tsv", "difficulty": "medium", "final_jeopardy_score": 300}
+        kwargs = {
+            "file_path": "/data/test.tsv",
+            "difficulty": "medium",
+            "final_jeopardy_score": 300,
+        }
         source = LazyFileQuestionSource("jeopardy", 75.0, self.mock_loader, kwargs)
         source.get_question()
         self.mock_loader.assert_called_once_with(**kwargs)

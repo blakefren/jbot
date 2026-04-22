@@ -94,7 +94,9 @@ class LazyFileQuestionSource(QuestionSource):
         questions = self._loader(**self._loader_kwargs)
 
         if not questions:
-            logging.warning(f"LazyFileQuestionSource '{self.name}' loaded no questions.")
+            logging.warning(
+                f"LazyFileQuestionSource '{self.name}' loaded no questions."
+            )
             return None
 
         available = questions

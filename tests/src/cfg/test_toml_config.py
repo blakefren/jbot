@@ -276,7 +276,9 @@ points = 200
                     os.path.join(self.temp_dir, "datasets", "test.csv")
                 )
                 actual_kwargs = mock_read_simple.call_args[1]
-                self.assertEqual(os.path.normpath(actual_kwargs["file_path"]), expected_path)
+                self.assertEqual(
+                    os.path.normpath(actual_kwargs["file_path"]), expected_path
+                )
                 self.assertEqual(actual_kwargs["source"], "Test Category")
 
     @patch("src.cfg.main.SOURCES_TOML_PATH")
@@ -338,7 +340,9 @@ points = 150
                     os.path.join(self.temp_dir, "datasets", "jeopardy.tsv")
                 )
                 actual_kwargs = mock_read_jeopardy.call_args[1]
-                self.assertEqual(os.path.normpath(actual_kwargs["file_path"]), expected_path)
+                self.assertEqual(
+                    os.path.normpath(actual_kwargs["file_path"]), expected_path
+                )
                 self.assertEqual(actual_kwargs["difficulty"], "medium")
                 self.assertEqual(actual_kwargs["final_jeopardy_score"], 150)
 
