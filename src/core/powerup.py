@@ -137,7 +137,7 @@ class PowerUpManager(BaseManager):
                     ctx.points_earned += bonus_amount
                     state.bonuses["rest"] = bonus_amount
                     messages.append(
-                        f"{self.emoji_rest_wakeup} Rest bonus! ×{pending_mult} on today's score (+{bonus_amount} pts)!"
+                        f"{self.emoji_rest_wakeup} Rest bonus! ×{pending_mult} (+{bonus_amount})"
                     )
                     self.data_manager.log_powerup_usage(
                         pid, "rest_wakeup", None, ctx.question_id
