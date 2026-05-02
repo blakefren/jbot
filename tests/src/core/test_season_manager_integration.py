@@ -336,15 +336,13 @@ class TestSeasonManagerIntegrationAnnouncements(unittest.TestCase):
 
     def test_build_season_reminder(self):
         season = self.dm.get_season_by_id(self.season_id)
-        self.dm.update_season_score("p1", self.season_id, points=100)
-        leaderboard = self.sm.get_season_leaderboard(self.season_id)
-        msg = self.sm.build_season_reminder(season, leaderboard, days_remaining=3)
+        msg = self.sm.build_season_reminder(season, days_remaining=3)
         self.assertIn("3 days", msg)
-        self.assertIn("Alice", msg)
+        self.assertIn("Jan 2026", msg)
 
     def test_build_season_reminder_one_day(self):
         season = self.dm.get_season_by_id(self.season_id)
-        msg = self.sm.build_season_reminder(season, [], days_remaining=1)
+        msg = self.sm.build_season_reminder(season, days_remaining=1)
         self.assertIn("1 day", msg)
         self.assertNotIn("1 days", msg)
 

@@ -272,8 +272,17 @@ class DiscordBot(commands.Bot):
                     )
 
             try:
+                morning_note = self.game.pending_morning_note
+                self.game.pending_morning_note = None
+                if morning_note:
+                    original_getter = self.game.get_morning_message_content
+                    morning_content_getter = (
+                        lambda note=morning_note: f"{note}\n\n{original_getter()}"
+                    )
+                else:
+                    morning_content_getter = self.game.get_morning_message_content
                 await self._send_daily_message_to_all_subscribers(
-                    self.game.get_morning_message_content,
+                    morning_content_getter,
                     "morning_message",
                     send_leaderboard=True,
                 )

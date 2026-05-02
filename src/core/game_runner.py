@@ -5,6 +5,7 @@ import re
 from collections import defaultdict
 from datetime import date, datetime
 from enum import Enum
+from typing import Optional
 from src.core.player_manager import PlayerManager
 from src.core.subscriber import Subscriber
 import logging
@@ -62,6 +63,8 @@ class GameRunner:
 
         # Pending season announcements to be broadcast on next morning message
         self.pending_season_announcements: list[str] = []
+        # Short note to prepend to the morning message (e.g. season ending reminder)
+        self.pending_morning_note: Optional[str] = None
 
     def _get_valid_question(self) -> Question:
         """
@@ -213,7 +216,7 @@ class GameRunner:
             if not transitioned:
                 reminder = self.season_manager.get_reminder_announcement()
                 if reminder:
-                    self.pending_season_announcements.append(reminder)
+                    self.pending_morning_note = reminder
         except Exception as e:
             logging.warning(f"Season transition check failed, skipping: {e}")
 

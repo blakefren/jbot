@@ -323,33 +323,27 @@ class TestSeasonManagerAnnouncements(unittest.TestCase):
     def test_build_season_reminder_singular_day(self):
         """Uses 'day' (not 'days') when days_remaining == 1."""
         season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
-        msg = self.manager.build_season_reminder(season, [], days_remaining=1)
+        msg = self.manager.build_season_reminder(season, days_remaining=1)
         self.assertIn("1 day left", msg)
         self.assertNotIn("1 days", msg)
 
     def test_build_season_reminder_plural_days(self):
         """Uses 'days' when days_remaining > 1."""
         season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
-        msg = self.manager.build_season_reminder(season, [], days_remaining=5)
+        msg = self.manager.build_season_reminder(season, days_remaining=5)
         self.assertIn("5 days left", msg)
 
-    def test_build_season_reminder_shows_top_5(self):
-        """Top 5 standings appear, extras are omitted."""
+    def test_build_season_reminder_shows_season_name(self):
+        """Reminder includes the season name and day count."""
         season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
-        leaderboard = [
-            (SeasonScore(str(i), 1, points=1000 - i * 100), f"Player{i}")
-            for i in range(1, 8)  # 7 players
-        ]
-        msg = self.manager.build_season_reminder(season, leaderboard, days_remaining=3)
-        self.assertIn("Player1", msg)
-        self.assertIn("Player5", msg)
-        self.assertNotIn("Player6", msg)
-        self.assertNotIn("Player7", msg)
+        msg = self.manager.build_season_reminder(season, days_remaining=3)
+        self.assertIn("January 2026", msg)
+        self.assertIn("3 days left", msg)
 
-    def test_build_season_reminder_empty_leaderboard(self):
-        """Empty leaderboard omits standings section but still shows countdown."""
+    def test_build_season_reminder_no_leaderboard_section(self):
+        """Reminder no longer embeds standings (leaderboard is in the daily message)."""
         season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
-        msg = self.manager.build_season_reminder(season, [], days_remaining=3)
+        msg = self.manager.build_season_reminder(season, days_remaining=3)
         self.assertIn("3 days left", msg)
         self.assertNotIn("standings", msg)
 

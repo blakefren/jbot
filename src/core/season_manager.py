@@ -278,29 +278,19 @@ class SeasonManager:
             )
         return "\n".join(lines)
 
-    def build_season_reminder(
-        self, season: Season, leaderboard: list, days_remaining: int
-    ) -> str:
+    def build_season_reminder(self, season: Season, days_remaining: int) -> str:
         """
         Build the season-ending reminder message.
 
         Args:
             season: The current season
-            leaderboard: List of (SeasonScore, player_name) tuples
             days_remaining: Days left in the season
 
         Returns:
             Formatted reminder string
         """
         day_word = "day" if days_remaining == 1 else "days"
-        lines = [
-            f"⏰ **{days_remaining} {day_word} left in the {season.season_name} season!**"
-        ]
-        if leaderboard:
-            lines.append("\nCurrent standings:")
-            for i, (score, name) in enumerate(leaderboard[:5], start=1):
-                lines.append(f"{i}. **{name}** — {score.points:,} pts")
-        return "\n".join(lines)
+        return f"⏰ **{days_remaining} {day_word} left in the {season.season_name} season!**"
 
     def get_reminder_announcement(self) -> Optional[str]:
         """
@@ -315,8 +305,7 @@ class SeasonManager:
         if not self.should_send_season_reminder(current_season):
             return None
         days_remaining = self.get_days_until_season_end(current_season)
-        leaderboard = self.get_season_leaderboard(current_season.season_id)
-        return self.build_season_reminder(current_season, leaderboard, days_remaining)
+        return self.build_season_reminder(current_season, days_remaining)
 
     def get_season_leaderboard(
         self, season_id: Optional[int] = None, limit: int = 25
