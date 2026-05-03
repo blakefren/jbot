@@ -810,7 +810,8 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.create_season.assert_not_called()
 
     def test_pending_season_announcements_populated_on_transition(self):
-        """Announcements from a season transition are stored in pending list."""
+        """On a season transition only the start announcement is queued (end announcement
+        now fires via pending_evening_announcements on the last day)."""
         from src.core.season import Season
         from datetime import date
         from unittest.mock import patch
@@ -840,11 +841,9 @@ class TestGameRunner(unittest.TestCase):
             mock_date.today.return_value = date(2026, 2, 1)
             self.game_runner.set_daily_question()
 
-        # Both end and start messages should be queued
-        self.assertEqual(len(self.game_runner.pending_season_announcements), 2)
-        combined = " ".join(self.game_runner.pending_season_announcements)
-        self.assertIn("January 2026", combined)
-        self.assertIn("February 2026", combined)
+        # Only the new-season start message is queued; end announcement fires in evening
+        self.assertEqual(len(self.game_runner.pending_season_announcements), 1)
+        self.assertIn("February 2026", self.game_runner.pending_season_announcements[0])
 
     def test_pending_season_announcements_empty_when_no_transition(self):
         """No announcements queued when season is still active and no reminder fires."""

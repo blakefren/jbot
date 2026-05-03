@@ -97,12 +97,6 @@ class SeasonManager:
             self.finalize_season(current_season.season_id)
 
             msgs = []
-            if self.config.get_season_announce_end():
-                leaderboard = self.get_season_leaderboard(current_season.season_id)
-                msgs.append(
-                    self.build_season_end_announcement(current_season, leaderboard)
-                )
-
             new_season = self._create_new_season(current_date)
 
             if self.config.get_season_announce_start():
@@ -229,6 +223,25 @@ class SeasonManager:
         self.data_manager.end_season(season_id)
 
         self.logger.info(f"Season {season.season_name} finalized")
+
+    def get_season_end_announcement(self) -> Optional[str]:
+        """
+        Return the end-of-season announcement if today is the last day of the
+        current season, otherwise return None.  Intended to be called during
+        the evening task on the final day so the message fires at end-of-day
+        rather than the following morning.
+        """
+        if not self.enabled:
+            return None
+        if not self.config.get_season_announce_end():
+            return None
+        current_season = self.data_manager.get_current_season()
+        if not current_season:
+            return None
+        if self._today() != current_season.end_date:
+            return None
+        leaderboard = self.get_season_leaderboard(current_season.season_id)
+        return self.build_season_end_announcement(current_season, leaderboard)
 
     def build_season_end_announcement(self, season: Season, leaderboard: list) -> str:
         """

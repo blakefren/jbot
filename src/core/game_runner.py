@@ -65,6 +65,8 @@ class GameRunner:
         self.pending_season_announcements: list[str] = []
         # Short note to prepend to the morning message (e.g. season ending reminder)
         self.pending_morning_note: Optional[str] = None
+        # Season announcements to be broadcast after the evening message
+        self.pending_evening_announcements: list[str] = []
 
     def _get_valid_question(self) -> Question:
         """
@@ -247,6 +249,14 @@ class GameRunner:
         Ends the daily game by clearing the current question and resetting manager states.
         """
         logging.info("Ending daily game.")
+
+        # Check for end-of-season announcement (fires on the last day, evening)
+        try:
+            end_msg = self.season_manager.get_season_end_announcement()
+            if end_msg:
+                self.pending_evening_announcements.append(end_msg)
+        except Exception as e:
+            logging.warning(f"Season end announcement check failed: {e}")
 
         # Reset streaks for players who didn't answer correctly
         if self.daily_question_id:

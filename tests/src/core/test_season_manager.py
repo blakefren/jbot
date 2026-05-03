@@ -388,6 +388,43 @@ class TestSeasonManagerAnnouncements(unittest.TestCase):
         result = self.manager.get_reminder_announcement()
         self.assertIsNone(result)
 
+    # ── get_season_end_announcement ───────────────────────────────────────────
+
+    def test_get_season_end_announcement_on_last_day(self):
+        """Returns end announcement when today is the last day of the season."""
+        season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
+        self.mock_data_manager.get_current_season.return_value = season
+        self.mock_data_manager.get_season_scores.return_value = []
+        self.mock_config.get_season_announce_end.return_value = True
+
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 31)):
+            result = self.manager.get_season_end_announcement()
+
+        self.assertIsNotNone(result)
+        self.assertIn("January 2026", result)
+
+    def test_get_season_end_announcement_not_last_day(self):
+        """Returns None when today is not the last day of the season."""
+        season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
+        self.mock_data_manager.get_current_season.return_value = season
+        self.mock_config.get_season_announce_end.return_value = True
+
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 30)):
+            result = self.manager.get_season_end_announcement()
+
+        self.assertIsNone(result)
+
+    def test_get_season_end_announcement_disabled(self):
+        """Returns None when announce_end is False."""
+        season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
+        self.mock_data_manager.get_current_season.return_value = season
+        self.mock_config.get_season_announce_end.return_value = False
+
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 31)):
+            result = self.manager.get_season_end_announcement()
+
+        self.assertIsNone(result)
+
     # ── check_season_transition return shape ──────────────────────────────────
 
     def test_check_season_transition_returns_tuple_when_disabled(self):
@@ -398,8 +435,8 @@ class TestSeasonManagerAnnouncements(unittest.TestCase):
         self.assertFalse(transitioned)
         self.assertEqual(msgs, [])
 
-    def test_check_season_transition_includes_end_message_when_configured(self):
-        """Transition builds end announcement when JBOT_SEASON_ANNOUNCE_END=True."""
+    def test_check_season_transition_no_end_message_in_transition(self):
+        """Transition no longer includes end announcement (it fires via get_season_end_announcement on the last day instead)."""
         old_season = Season(
             1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True
         )
@@ -417,8 +454,8 @@ class TestSeasonManagerAnnouncements(unittest.TestCase):
         transitioned, msgs = self.manager.check_season_transition(date(2026, 2, 1))
 
         self.assertTrue(transitioned)
-        self.assertEqual(len(msgs), 1)
-        self.assertIn("January 2026", msgs[0])
+        # End announcement is no longer part of the transition msgs
+        self.assertEqual(msgs, [])
 
     def test_check_season_transition_includes_start_message_when_configured(self):
         """Transition builds new-season announcement when JBOT_SEASON_ANNOUNCE_START=True."""

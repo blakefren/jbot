@@ -359,6 +359,16 @@ class DiscordBot(commands.Bot):
         daily_question_id = self.game.daily_question_id
         self.game.end_daily_game()
 
+        # 4b. Send any season announcements queued during end_daily_game
+        # (e.g. end-of-season message on the last day of the season)
+        announcements = list(self.game.pending_evening_announcements)
+        self.game.pending_evening_announcements.clear()
+        for msg in announcements:
+            try:
+                await self._broadcast_announcement(msg)
+            except Exception as e:
+                self._log_task_error(e, "evening_message_task - season_announcement")
+
         # 5. Verify daily play — compare simulator-expected state against DB
         try:
             if daily_question_id:
