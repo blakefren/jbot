@@ -1288,3 +1288,83 @@ def test_handle_guess_no_question():
     game.daily_q = None
     result, num_guesses, points, bonuses = game.handle_guess(1, "Player1", "test")
     assert result is False
+
+
+class TestRegenerateHintIfMissing(unittest.TestCase):
+    """Tests for GameRunner.regenerate_hint_if_missing."""
+
+    def setUp(self):
+        self.config_patcher = patch("src.core.game_runner.ConfigReader")
+        self.MockConfigReader = self.config_patcher.start()
+        self.addCleanup(self.config_patcher.stop)
+        mock_config = self.MockConfigReader.return_value
+        mock_config.get.side_effect = lambda k, d=None: {
+            "JBOT_RIDDLE_HISTORY_DAYS": "30",
+            "JBOT_QUESTION_RETRIES": "10",
+            "JBOT_TIMEZONE": "UTC",
+        }.get(k, d)
+        mock_config.get_bool.return_value = False
+        mock_config.is_seasons_enabled.return_value = False
+
+        self.mock_question_selector = MagicMock()
+        self.mock_data_manager = MagicMock(spec=DataManager)
+        self.game_runner = GameRunner(
+            self.mock_question_selector, self.mock_data_manager
+        )
+        self.mock_question = Question(
+            question="What is 2+2?",
+            answer="4",
+            category="Math",
+            hint=None,
+        )
+        self.mock_question.id = "q_regen"
+
+    def test_returns_false_when_no_daily_question(self):
+        self.game_runner.daily_q = None
+        result = self.game_runner.regenerate_hint_if_missing()
+        self.assertFalse(result)
+        self.mock_question_selector.get_hint_from_gemini.assert_not_called()
+
+    def test_returns_true_when_hint_already_set(self):
+        self.mock_question.hint = "Existing hint"
+        self.game_runner.daily_q = self.mock_question
+        result = self.game_runner.regenerate_hint_if_missing()
+        self.assertTrue(result)
+        self.mock_question_selector.get_hint_from_gemini.assert_not_called()
+
+    def test_generates_and_persists_hint_when_missing(self):
+        self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 42
+        self.mock_question_selector.get_hint_from_gemini.return_value = "New hint"
+
+        result = self.game_runner.regenerate_hint_if_missing()
+
+        self.assertTrue(result)
+        self.assertEqual(self.mock_question.hint, "New hint")
+        self.mock_data_manager.update_daily_question_hint.assert_called_once_with(
+            42, "New hint"
+        )
+
+    def test_returns_false_when_gemini_returns_empty(self):
+        self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 42
+        self.mock_question_selector.get_hint_from_gemini.return_value = None
+
+        result = self.game_runner.regenerate_hint_if_missing()
+
+        self.assertFalse(result)
+        self.assertIsNone(self.mock_question.hint)
+        self.mock_data_manager.update_daily_question_hint.assert_not_called()
+
+    def test_returns_false_on_exception(self):
+        self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 42
+        self.mock_question_selector.get_hint_from_gemini.side_effect = Exception(
+            "API Error"
+        )
+
+        result = self.game_runner.regenerate_hint_if_missing()
+
+        self.assertFalse(result)
+        self.mock_data_manager.update_daily_question_hint.assert_not_called()
+

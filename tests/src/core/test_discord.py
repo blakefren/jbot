@@ -177,6 +177,45 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
         self.bot._log_task_error.assert_called_once()
 
+    async def test_reminder_message_task_regenerates_hint_when_missing(self):
+        """Verify the reminder task attempts hint regeneration when hint is None."""
+        mock_question = MagicMock()
+        mock_question.hint = None
+        self.bot.game.daily_q = mock_question
+        self.bot.game.regenerate_hint_if_missing = MagicMock(return_value=True)
+
+        await self.reminder_task_coro(self.bot, silent=False)
+
+        self.bot.game.regenerate_hint_if_missing.assert_called_once()
+        self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
+
+    async def test_reminder_message_task_skips_regen_when_hint_present(self):
+        """Verify the reminder task skips hint regeneration when hint is already set."""
+        mock_question = MagicMock()
+        mock_question.hint = "Existing hint"
+        self.bot.game.daily_q = mock_question
+        self.bot.game.regenerate_hint_if_missing = MagicMock()
+
+        await self.reminder_task_coro(self.bot, silent=False)
+
+        self.bot.game.regenerate_hint_if_missing.assert_not_called()
+        self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
+
+    async def test_reminder_message_task_regen_exception_logged(self):
+        """Verify that a failure in hint regeneration is logged and task continues."""
+        mock_question = MagicMock()
+        mock_question.hint = None
+        self.bot.game.daily_q = mock_question
+        self.bot.game.regenerate_hint_if_missing = MagicMock(
+            side_effect=Exception("Regen error")
+        )
+
+        await self.reminder_task_coro(self.bot, silent=False)
+
+        self.bot._log_task_error.assert_called_once()
+        # The reminder message should still be sent despite the regen failure
+        self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
+
     # --- Evening Task Tests ---
 
     @patch("src.core.discord.RolesGameMode")
