@@ -299,6 +299,13 @@ class DiscordBot(commands.Bot):
             logging.warning("Reminder task: No daily question set, skipping reminder.")
             return
 
+        # Attempt hint regeneration if it failed at morning/preload time
+        if not self.game.daily_q.hint:
+            try:
+                await asyncio.to_thread(self.game.regenerate_hint_if_missing)
+            except Exception as e:
+                self._log_task_error(e, "reminder_message_task - regenerate_hint")
+
         if not silent:
             try:
                 content_getter = lambda: self.game.get_reminder_message_content(
@@ -667,6 +674,7 @@ async def discord_bot_async(
             gemini_manager = GeminiManager(
                 api_key=gemini_api_key,
                 model=config.get("GEMINI_MODEL", "gemini-2.5-pro"),
+                fallback_model=config.get("GEMINI_FALLBACK_MODEL") or None,
             )
     except ValueError as e:
         logging.warning(f"Could not initialize GeminiManager: {e}")

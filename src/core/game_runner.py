@@ -198,6 +198,53 @@ class GameRunner:
             logging.info(f"Daily question reset to new ID: {self.daily_question_id}")
         return result
 
+    def regenerate_hint_if_missing(self) -> bool:
+        """
+        Tries to generate a hint if the current question has no hint set.
+
+        Used by the reminder task to recover from a hint generation failure that
+        occurred at morning/preload time. Persists the new hint to the DB on
+        success.
+
+        Note: This is a blocking call. Callers from async tasks should wrap it
+        via asyncio.to_thread().
+
+        Returns:
+            True if the question already had a hint or a new one was generated.
+            False if no hint could be generated.
+        """
+        if not self.daily_q:
+            return False
+        if self.daily_q.hint:
+            return True  # Nothing to do
+
+        logging.info(
+            f"Attempting to regenerate missing hint for question {self.daily_q.id} at reminder time..."
+        )
+        try:
+            new_hint = self.question_selector.get_hint_from_gemini(self.daily_q)
+            if new_hint:
+                self.daily_q.hint = new_hint
+                if self.daily_question_id:
+                    self.data_manager.update_daily_question_hint(
+                        self.daily_question_id, new_hint
+                    )
+                logging.info(
+                    f"Successfully regenerated hint for question {self.daily_q.id}."
+                )
+                return True
+            else:
+                logging.warning(
+                    f"Hint regeneration at reminder time returned empty result "
+                    f"for question {self.daily_q.id}."
+                )
+                return False
+        except Exception as e:
+            logging.error(
+                f"Error regenerating hint at reminder time for question {self.daily_q.id}: {e}"
+            )
+            return False
+
     def set_daily_question(self):
         """
         Sets the daily question for today, generating a hint if needed.
