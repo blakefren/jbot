@@ -344,6 +344,31 @@ class TestStealBehavior(_PowerUpManagerTests):
         self.assertIn("already being targeted for theft", str(cm.exception))
         self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)
 
+    def test_retro_steal_blocked_after_prior_steal_resolved(self):
+        """A retro steal on a player who was already stolen from (steal resolved) is blocked.
+
+        Regression: steal_attempt_by must NOT be cleared after resolution so it
+        continues to block second attackers, consistent with how jinxed_by works."""
+        # p2 answers with bonuses, resolving p1's steal
+        self.manager.steal("1", "2", "q1")
+        self.manager.on_guess(
+            GuessContext(
+                2,
+                "P2",
+                "ans",
+                True,
+                points_earned=100,
+                bonus_values={"fastest": 20},
+                question_id="q1",
+            )
+        )
+        # steal resolved — steal_attempt_by still set (not cleared), blocking further steals
+        self.assertEqual(self.manager._get_daily_state("2").steal_attempt_by, "1")
+        # p3 tries to retro steal from p2 — must be blocked
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.steal("3", "2", "q1")
+        self.assertIn("already being targeted for theft", str(cm.exception))
+
 
 # ---------------------------------------------------------------------------
 # Guards (blocking / enforcement)
@@ -719,7 +744,8 @@ class TestStealEnforcementAndScaling(unittest.TestCase):
             )
         )
         self.assertEqual(m._get_daily_state("target").bonuses, {})
-        self.assertIsNone(m._get_daily_state("target").steal_attempt_by)
+        # steal_attempt_by is NOT cleared after resolution — it permanently records the steal
+        self.assertEqual(m._get_daily_state("target").steal_attempt_by, "partial")
 
     # --- partial steal (retroactive) ---
 

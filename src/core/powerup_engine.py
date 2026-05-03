@@ -228,7 +228,9 @@ class PowerUpEngine:
             return 0
 
         stealable = self.score_calculator.pop_stealable_bonuses(target_state.bonuses)
-        target_state.steal_attempt_by = None  # consume the attempt regardless
+        # steal_attempt_by is intentionally kept set — it permanently records that this
+        # target was stolen from, preventing a second attacker from targeting them.
+        # pop_stealable_bonuses already empties the bonus dict, so re-invocation is a no-op.
 
         if stealable > 0:
             attacker_state = self._get_state(daily_state, attacker_id)

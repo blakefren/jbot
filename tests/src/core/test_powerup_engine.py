@@ -382,18 +382,20 @@ class TestResolveStealOnCorrect(unittest.TestCase):
         self.assertEqual(ds["tgt"].score_earned, 40)
         self.assertEqual(ds["thief"].score_earned, 10)
 
-    def test_clears_steal_attempt_by(self):
+    def test_steal_attempt_by_persists_after_resolution(self):
+        """steal_attempt_by is NOT cleared after resolution — it blocks a second attacker."""
         ds = {
             "tgt": _state(steal_attempt_by="thief", bonuses={"before_hint": 10}),
             "thief": _state(),
         }
         self.engine.resolve_steal_on_correct(ds, "tgt")
-        self.assertIsNone(ds["tgt"].steal_attempt_by)
+        self.assertEqual(ds["tgt"].steal_attempt_by, "thief")
 
-    def test_clears_attempt_even_when_nothing_stolen(self):
+    def test_steal_attempt_by_persists_even_when_nothing_stolen(self):
+        """steal_attempt_by is NOT cleared even when there was nothing to steal."""
         ds = {"tgt": _state(steal_attempt_by="thief", bonuses={})}
         self.engine.resolve_steal_on_correct(ds, "tgt")
-        self.assertIsNone(ds["tgt"].steal_attempt_by)
+        self.assertEqual(ds["tgt"].steal_attempt_by, "thief")
 
 
 # ---------------------------------------------------------------------------
