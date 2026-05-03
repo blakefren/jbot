@@ -1367,4 +1367,3 @@ class TestRegenerateHintIfMissing(unittest.TestCase):
 
         self.assertFalse(result)
         self.mock_data_manager.update_daily_question_hint.assert_not_called()
-

@@ -57,12 +57,16 @@ class TestGeminiManager(unittest.TestCase):
     def test_generate_content_exhausts_retries_returns_none(self, mock_sleep):
         """Verify that exhausting all retries with no fallback returns None."""
         max_attempts = len(_RETRY_DELAYS) + 1
-        self.mock_client.models.generate_content.side_effect = Exception("503 UNAVAILABLE")
+        self.mock_client.models.generate_content.side_effect = Exception(
+            "503 UNAVAILABLE"
+        )
 
         response = self.gemini_manager.generate_content("Hello")
 
         self.assertIsNone(response)
-        self.assertEqual(self.mock_client.models.generate_content.call_count, max_attempts)
+        self.assertEqual(
+            self.mock_client.models.generate_content.call_count, max_attempts
+        )
         self.assertEqual(mock_sleep.call_count, len(_RETRY_DELAYS))
 
     @patch("src.core.gemini_manager.time.sleep")
@@ -91,7 +95,9 @@ class TestGeminiManager(unittest.TestCase):
 
         self.assertEqual(response, "Fallback result")
         # Primary tried max_attempts times, fallback tried once
-        self.assertEqual(mock_client.models.generate_content.call_count, max_attempts + 1)
+        self.assertEqual(
+            mock_client.models.generate_content.call_count, max_attempts + 1
+        )
 
     @patch("src.core.gemini_manager.time.sleep")
     def test_generate_content_fallback_also_fails_returns_none(self, mock_sleep):

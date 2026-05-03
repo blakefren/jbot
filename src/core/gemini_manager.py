@@ -77,9 +77,7 @@ class GeminiManager:
 
         # Try fallback model if configured
         if self.fallback_model:
-            logging.info(
-                f"Attempting fallback model: {self.fallback_model}"
-            )
+            logging.info(f"Attempting fallback model: {self.fallback_model}")
             try:
                 response = self.client.models.generate_content(
                     model=self.fallback_model, contents=text, config=config
@@ -91,5 +89,7 @@ class GeminiManager:
                     f"Fallback model {self.fallback_model} also failed: {e}"
                 )
 
-        logging.error(f"An error occurred during Gemini content generation: {last_error}")
+        logging.error(
+            f"An error occurred during Gemini content generation: {last_error}"
+        )
         return None
