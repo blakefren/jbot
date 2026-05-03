@@ -1317,7 +1317,7 @@ class TestRegenerateHintIfMissing(unittest.TestCase):
             category="Math",
             hint=None,
         )
-        self.mock_question.id = "q_regen"
+        self.mock_question.id = 123
 
     def test_returns_false_when_no_daily_question(self):
         self.game_runner.daily_q = None

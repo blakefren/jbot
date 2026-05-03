@@ -674,7 +674,7 @@ async def discord_bot_async(
             gemini_manager = GeminiManager(
                 api_key=gemini_api_key,
                 model=config.get("GEMINI_MODEL", "gemini-2.5-pro"),
-                fallback_model=config.get("GEMINI_FALLBACK_MODEL", None) or None,
+                fallback_model=config.get("GEMINI_FALLBACK_MODEL") or None,
             )
     except ValueError as e:
         logging.warning(f"Could not initialize GeminiManager: {e}")
