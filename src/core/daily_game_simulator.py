@@ -66,6 +66,7 @@ class DailyGameSimulator:
                 self.handle_guess(event)
 
         if apply_end_of_day:
+            self.apply_crowd_wisdom_bonus()
             self.end_of_day()
 
         return self.calculate_final_results()
@@ -222,6 +223,38 @@ class DailyGameSimulator:
                 and player.answer_streak > 0
             ):
                 self.daily_state[user_id].streak_delta = -player.answer_streak
+
+    def apply_crowd_wisdom_bonus(self):
+        """Apply crowd wisdom bonus after all daily events are resolved."""
+        correct_solvers = sum(
+            1 for state in self.daily_state.values() if state.is_correct
+        )
+        # Keep participant criteria aligned with
+        # DataManager.get_daily_active_participant_count:
+        # guessed today (correct or incorrect) OR used rest today.
+        active_participants = sum(
+            1
+            for state in self.daily_state.values()
+            if state.is_correct or state.is_resting or state.guesses_count > 0
+        )
+        if active_participants <= 0:
+            return
+
+        multiplier = self.score_calculator.get_crowd_wisdom_multiplier(
+            correct_solvers, active_participants
+        )
+        if multiplier <= 0:
+            return
+
+        for state in self.daily_state.values():
+            if not state.is_correct:
+                continue
+            bonus = self.score_calculator.calculate_crowd_wisdom_bonus(
+                state.score_earned, correct_solvers, active_participants
+            )
+            if bonus > 0:
+                state.score_earned += bonus
+                state.bonuses[ScoreCalculator.KEY_CROWD_WISDOM] = bonus
 
     def calculate_final_results(self):
         results = {}

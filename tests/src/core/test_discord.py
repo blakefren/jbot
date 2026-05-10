@@ -232,6 +232,7 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
 
         await self.evening_task_coro(self.bot, silent=False)
 
+        self.bot.game.apply_crowd_wisdom_bonus.assert_called_once()
         mock_roles_game_mode_cls.assert_called_once_with(
             self.bot.data_manager, self.bot.config
         )

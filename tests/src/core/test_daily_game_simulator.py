@@ -75,10 +75,13 @@ class TestDailyGameSimulator(unittest.TestCase):
         # Before Hint: 10
         # Fastest: 10 (First correct)
         # Streak: 3 * 5 = 15 (Initial 2 + 1 = 3)
-        # Total: 155
-        self.assertEqual(results["p1"]["score_earned"], 155)
+        # Crowd Wisdom (x=1 correct solver out of N=2 active participants): multiplier is 1.0,
+        # so +100% of earned points = +155
+        # Total: 310
+        self.assertEqual(results["p1"]["score_earned"], 310)
+        self.assertEqual(results["p1"]["bonuses"]["crowd_wisdom"], 155)
         self.assertEqual(results["p1"]["streak_delta"], 1)
-        self.assertEqual(results["p1"]["final_score"], 255)
+        self.assertEqual(results["p1"]["final_score"], 410)
         self.assertEqual(results["p1"]["final_streak"], 3)
 
         # P2: Incorrect. 0 points.
