@@ -66,7 +66,6 @@ class DailyGameSimulator:
                 self.handle_guess(event)
 
         if apply_end_of_day:
-            self.apply_crowd_wisdom_bonus()
             self.end_of_day()
 
         return self.calculate_final_results()
@@ -206,6 +205,9 @@ class DailyGameSimulator:
             self.engine.resolve_steal_on_correct(self.daily_state, user_id)
 
     def end_of_day(self):
+        # Crowd Wisdom is an end-of-day/post-resolution bonus.
+        self.apply_crowd_wisdom_bonus()
+
         # Reset streaks for all players who didn't answer correctly and aren't resting.
         # Grace period: if a player answered correctly (or rested) on the previous day,
         # their streak is preserved even if they missed today.
@@ -224,19 +226,25 @@ class DailyGameSimulator:
             ):
                 self.daily_state[user_id].streak_delta = -player.answer_streak
 
+    def _get_crowd_wisdom_counts(self) -> tuple[int, int]:
+        """
+        Returns (correct_solvers, active_participants) from replay state.
+
+        Note: this mirrors DataManager.get_daily_active_participant_count() criteria
+        but lives here to keep the simulator free of DataManager/DB dependencies.
+        """
+        correct_solvers = 0
+        active_participants = 0
+        for state in self.daily_state.values():
+            if state.is_correct:
+                correct_solvers += 1
+            if state.is_correct or state.is_resting or state.guesses_count > 0:
+                active_participants += 1
+        return correct_solvers, active_participants
+
     def apply_crowd_wisdom_bonus(self):
         """Apply crowd wisdom bonus after all daily events are resolved."""
-        correct_solvers = sum(
-            1 for state in self.daily_state.values() if state.is_correct
-        )
-        # Keep participant criteria aligned with
-        # DataManager.get_daily_active_participant_count:
-        # guessed today (correct or incorrect) OR used rest today.
-        active_participants = sum(
-            1
-            for state in self.daily_state.values()
-            if state.is_correct or state.is_resting or state.guesses_count > 0
-        )
+        correct_solvers, active_participants = self._get_crowd_wisdom_counts()
         if active_participants <= 0:
             return
 
