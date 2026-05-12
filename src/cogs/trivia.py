@@ -71,7 +71,9 @@ class Trivia(commands.Cog):
 
             # Send the private confirmation
             await ctx.interaction.followup.send(
-                f"Correct! Nicely done.\n\nGuesses:\n{guesses_text}"
+                f"Correct! Nicely done.\n"
+                f"**Answer:** {self.bot.game.daily_q.answer}\n\n"
+                f"Guesses:\n{guesses_text}"
             )
             # Announce the correct answer publicly in the channel
             await ctx.channel.send(
