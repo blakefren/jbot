@@ -44,7 +44,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
 
         # Mock the return value of handle_guess to be (is_correct, num_guesses, points, bonuses)
         self.mock_game_runner.handle_guess.return_value = (True, 1, 100, [])
-        self.mock_game_runner.daily_q = MagicMock()
+        self.mock_game_runner.daily_q = MagicMock(answer="Test Answer")
         self.mock_game_runner.daily_question_id = 1
         self.mock_data_manager.read_guess_history.return_value = [
             {"guess_text": "test answer", "daily_question_id": 1}
@@ -60,7 +60,9 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
 
         # Check for the two calls to send_message
         mock_ctx.interaction.followup.send.assert_called_once_with(
-            "Correct! Nicely done.\n\nGuesses:\n1. test answer"
+            "Correct! Nicely done.\n"
+            "**Answer:** Test Answer\n\n"
+            "Guesses:\n1. test answer"
         )
         mock_ctx.channel.send.assert_called_once_with(
             f"{mock_ctx.author.mention} solved it in 1! (+**100** pts)"
@@ -153,6 +155,7 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
         mock_ctx.interaction.followup.send.assert_called_once()
         args = mock_ctx.interaction.followup.send.call_args[0][0]
         assert "Correct!" in args
+        assert "**Answer:**" in args
         assert "No guesses yet." in args
 
     async def test_answer_command_generic_exception(self):
