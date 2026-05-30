@@ -542,6 +542,119 @@ class TestRecalculateScores(unittest.TestCase):
     # Regression: Bug B — apply_end_of_day inflates streak for mid-day corrections
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Regression: multiple guesses by one player — first guess upgraded
+    # ------------------------------------------------------------------
+
+    def test_first_guess_bonus_when_new_alt_matches_multiple_guesses(self):
+        """
+        Regression: When the new alt answer matches MORE THAN ONE of a single
+        player's guesses (e.g. 'world war 1' matches both the literal guess
+        'world war 1' AND 'world war one' via the 'one'→'1' normalization),
+        the player should be scored on their FIRST guess (guesses_count=1)
+        and receive the first-try / first_try bonus — not a 2nd-try bonus.
+
+        Scenario
+        --------
+        Canonical answer : "world war i"   (neither guess matches)
+        New alt answer   : "world war 1"
+        Player guesses (in order):
+          1. "world war 1"   — wrong live, now matches new alt directly
+          2. "world war one" — wrong live, now matches new alt via normalization
+
+        OLD sim  → both guesses wrong → score_earned = 0
+        NEW sim  → guess 1 correct, guesses_count=1 → full first-try score
+        score_diff = full_first_try_score  ✓
+        """
+        self.game_runner.daily_q = Question(
+            question="Q", answer="world war i", category="C", clue_value=100
+        )
+        guesses = [
+            {
+                "id": 1,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "world war 1",
+                "is_correct": 0,
+                "guessed_at": "2024-01-01 10:00:00",
+            },
+            {
+                "id": 2,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "world war one",
+                "is_correct": 0,
+                "guessed_at": "2024-01-01 10:01:00",
+            },
+        ]
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = guesses
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        self.mock_data_manager.get_alternative_answers.return_value = []
+        self.mock_data_manager.get_powerup_usages_for_question.return_value = []
+
+        result = self.game_runner.recalculate_scores_for_new_answer(
+            "world war 1", "admin1", dry_run=True
+        )
+
+        self.assertEqual(result["status"], "success")
+        # Exactly one player affected
+        self.assertEqual(result["updated_players"], 1)
+        # Score should include first-try bonus (20) + before_hint (10) + fastest_1 (10) + base (100)
+        self.assertEqual(result["total_refunded"], 140)
+        # 🎯 badge must be present (first_try bonus gained)
+        self.assertIn("🎯", result["details"][0]["badges"])
+
+    def test_first_guess_bonus_not_blocked_by_normalisation_equivalent_existing_alt(
+        self,
+    ):
+        """
+        Edge-case: if an existing alt is the written-out equivalent of the new
+        alt (e.g. existing alt = "world war one", new alt = "world war 1"), they
+        normalise to the same string.  In the OLD sim the player's first guess
+        'world war 1' already matches the existing alt → old score_earned > 0.
+        The diff is therefore SMALLER than a full first-try award.
+
+        This test documents the correct, expected behaviour: the player was
+        already credited by the earlier add_answer call so the diff is 0 here.
+        (If the earlier call never ran, the player should have gotten the bonus
+        then — this second call is a no-op from a scoring perspective.)
+        """
+        self.game_runner.daily_q = Question(
+            question="Q", answer="world war i", category="C", clue_value=100
+        )
+        guesses = [
+            {
+                "id": 1,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "world war 1",
+                "is_correct": 0,
+                "guessed_at": "2024-01-01 10:00:00",
+            },
+            {
+                "id": 2,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "world war one",
+                "is_correct": 0,
+                "guessed_at": "2024-01-01 10:01:00",
+            },
+        ]
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = guesses
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        # Existing alt "world war one" normalises to "world war 1" — same as new alt
+        self.mock_data_manager.get_alternative_answers.return_value = ["world war one"]
+        self.mock_data_manager.get_powerup_usages_for_question.return_value = []
+
+        result = self.game_runner.recalculate_scores_for_new_answer(
+            "world war 1", "admin1", dry_run=True
+        )
+
+        self.assertEqual(result["status"], "success")
+        # OLD sim already gives the player first-try via the existing "world war one"
+        # alt, so NEW sim produces the same score → diff = 0 → no update needed.
+        self.assertEqual(result["updated_players"], 0)
+
     def test_streak_not_inflated_for_newly_correct_player_on_active_question(self):
         """
         Regression: When add_answer is called while the question is still active,
