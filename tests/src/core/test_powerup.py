@@ -300,12 +300,8 @@ class TestStealBehavior(_PowerUpManagerTests):
             1.2 if pid == "2" else 0.0
         )
         self.manager.steal("1", "2", "q1")
-        # Simulate GuessHandler pre-crediting P2's 110 pts before on_guess is called
-        self.players["2"].score += 110
         # base=100, before_hint=10 -> 110 pts; rest bonus = round(110x0.2) = 22
         # stealable = before_hint(10) only; rest(22) is protected
-        # P2 net: 100 (start) + 110 (base+before_hint) + 22 (rest) - 10 (stolen) = 222
-        # P1 net: 100 (start) + 10 (stolen) = 110
         msgs = self.manager.on_guess(
             GuessContext(
                 2,
@@ -322,7 +318,7 @@ class TestStealBehavior(_PowerUpManagerTests):
             f"Expected steal of 10 pts (before_hint only; rest is protected). Messages: {msgs}",
         )
         self.assertEqual(self.players["1"].score, 110)
-        self.assertEqual(self.players["2"].score, 222)
+        self.assertEqual(self.players["2"].score, 112)
 
     def test_steal_resolution_messages(self):
         """Resolution message reports the combined stolen amount."""
