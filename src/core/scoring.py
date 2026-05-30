@@ -33,7 +33,11 @@ class ScoreCalculator:
             "JBOT_CROWD_WISDOM_DECAY_K", str(self.DEFAULT_CROWD_WISDOM_DECAY_K)
         )
         try:
-            self.crowd_wisdom_decay_k = float(decay_raw)
+            decay_k = float(decay_raw)
+            if decay_k > 0:
+                self.crowd_wisdom_decay_k = decay_k
+            else:
+                self.crowd_wisdom_decay_k = self.DEFAULT_CROWD_WISDOM_DECAY_K
         except (TypeError, ValueError):
             self.crowd_wisdom_decay_k = self.DEFAULT_CROWD_WISDOM_DECAY_K
 
