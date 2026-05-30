@@ -115,7 +115,8 @@ class TestGeminiManager(unittest.TestCase):
 
         self.assertIsNone(response)
 
-    def test_generate_content_failure(self):
+    @patch("src.core.gemini_manager.time.sleep")
+    def test_generate_content_failure(self, mock_sleep):
         self.mock_client.models.generate_content.side_effect = Exception("API Error")
 
         response = self.gemini_manager.generate_content("Hello")
