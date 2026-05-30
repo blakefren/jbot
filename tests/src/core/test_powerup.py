@@ -294,14 +294,18 @@ class TestStealBehavior(_PowerUpManagerTests):
         self.assertEqual(self.players["1"].score, 120)
         self.assertEqual(self.players["2"].score, 80)
 
-    def test_steal_includes_rest_bonus(self):
-        """Rest multiplier bonus earned on the answer day is included in the stealable pool."""
+    def test_steal_excludes_rest_bonus(self):
+        """Rest multiplier bonus is not stealable — only other bonuses are stolen."""
         self.data_manager.get_pending_multiplier.side_effect = lambda pid: (
             1.2 if pid == "2" else 0.0
         )
         self.manager.steal("1", "2", "q1")
+        # Simulate GuessHandler pre-crediting P2's 110 pts before on_guess is called
+        self.players["2"].score += 110
         # base=100, before_hint=10 -> 110 pts; rest bonus = round(110x0.2) = 22
-        # stealable = before_hint(10) + rest(22) = 32
+        # stealable = before_hint(10) only; rest(22) is protected
+        # P2 net: 100 (start) + 110 (base+before_hint) + 22 (rest) - 10 (stolen) = 222
+        # P1 net: 100 (start) + 10 (stolen) = 110
         msgs = self.manager.on_guess(
             GuessContext(
                 2,
@@ -314,11 +318,11 @@ class TestStealBehavior(_PowerUpManagerTests):
             )
         )
         self.assertTrue(
-            any("stole 32 pts" in m for m in msgs),
-            f"Expected steal of 32 pts (10 before_hint + 22 rest). Messages: {msgs}",
+            any("stole 10 pts" in m for m in msgs),
+            f"Expected steal of 10 pts (before_hint only; rest is protected). Messages: {msgs}",
         )
-        self.assertEqual(self.players["1"].score, 132)
-        self.assertEqual(self.players["2"].score, 90)
+        self.assertEqual(self.players["1"].score, 110)
+        self.assertEqual(self.players["2"].score, 222)
 
     def test_steal_resolution_messages(self):
         """Resolution message reports the combined stolen amount."""

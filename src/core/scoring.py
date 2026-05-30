@@ -11,6 +11,7 @@ class ScoreCalculator:
     KEY_BEFORE_HINT = "before_hint"
     KEY_FASTEST = "fastest"
     KEY_STREAK = "streak"
+    KEY_REST = "rest"
 
     def __init__(self, config: ConfigReader = None):
         if config is None:
@@ -156,7 +157,7 @@ class ScoreCalculator:
         are removed but not counted when their canonical equivalents (try_1, fastest_1)
         are present, to avoid double-counting.
         """
-        NON_STEALABLE = {self.KEY_STREAK}
+        NON_STEALABLE = {self.KEY_STREAK, self.KEY_REST}
         stealable = 0
         to_remove = []
         for key, val in list(bonuses.items()):
