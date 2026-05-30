@@ -110,6 +110,10 @@ class DailyGameSimulator:
             # Rest bonus was already applied during handle_guess (before jinx resolution)
             # to match live play order in PowerUpManager.on_guess. No-op here.
             pass
+        elif ptype == "crowd_wisdom":
+            # Logged as a bookkeeping event by live flow; replay bonus is applied in
+            # end_of_day(), so this should be a no-op during event dispatch.
+            pass
 
         else:
             logging.warning(
