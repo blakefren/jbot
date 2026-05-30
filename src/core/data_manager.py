@@ -1224,6 +1224,16 @@ class DataManager:
         rows = self._db.execute_query(query, (daily_question_id,))
         return bool(rows)
 
+    def get_crowd_wisdom_awarded_user_ids(self, daily_question_id: int) -> set[str]:
+        """Returns user IDs that already received crowd wisdom for the day."""
+        query = """
+            SELECT DISTINCT user_id
+            FROM powerup_usage
+            WHERE question_id = ? AND powerup_type = 'crowd_wisdom'
+        """
+        rows = self._db.execute_query(query, (daily_question_id,))
+        return {row["user_id"] for row in rows}
+
     def get_last_correct_guess_date(self, player_id: str) -> Optional[date]:
         """
         Retrieves the date of the last correct guess for a player.

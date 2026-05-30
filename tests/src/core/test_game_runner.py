@@ -937,7 +937,7 @@ class TestGameRunner(unittest.TestCase):
 
     def test_apply_crowd_wisdom_bonus(self):
         self.game_runner.daily_question_id = 123
-        self.mock_data_manager.has_crowd_wisdom_awards.return_value = False
+        self.mock_data_manager.get_crowd_wisdom_awarded_user_ids.return_value = set()
         self.mock_data_manager.get_daily_correct_solver_ids.return_value = ["111"]
         self.mock_data_manager.get_daily_active_participant_count.return_value = 2
         self.mock_data_manager.get_daily_snapshot.return_value = {
@@ -955,6 +955,24 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.log_powerup_usage.assert_called_with(
             "111", "crowd_wisdom", None, 123
         )
+
+    def test_apply_crowd_wisdom_bonus_skips_already_awarded_users(self):
+        self.game_runner.daily_question_id = 123
+        self.mock_data_manager.get_crowd_wisdom_awarded_user_ids.return_value = {"111"}
+        self.mock_data_manager.get_daily_correct_solver_ids.return_value = ["111"]
+        self.mock_data_manager.get_daily_active_participant_count.return_value = 2
+        self.mock_data_manager.get_daily_snapshot.return_value = {
+            "111": Player(id="111", name="Alice", score=100)
+        }
+        self.mock_data_manager.get_player.return_value = Player(
+            id="111", name="Alice", score=220
+        )
+
+        summary = self.game_runner.apply_crowd_wisdom_bonus()
+
+        self.assertEqual(summary["multiplier"], 1.0)
+        self.mock_data_manager.adjust_player_score.assert_not_called()
+        self.mock_data_manager.log_powerup_usage.assert_not_called()
 
     def test_get_evening_message_content_includes_crowd_wisdom_line(self):
         self.game_runner.daily_q = self.mock_question

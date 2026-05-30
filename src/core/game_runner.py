@@ -890,10 +890,6 @@ class GameRunner:
             self._crowd_wisdom_summary = summary
             return summary
 
-        if self.data_manager.has_crowd_wisdom_awards(self.daily_question_id):
-            self._crowd_wisdom_summary = summary
-            return summary
-
         multiplier = summary["multiplier"]
         if multiplier <= 0:
             self._crowd_wisdom_summary = summary
@@ -902,11 +898,16 @@ class GameRunner:
         solver_ids = self.data_manager.get_daily_correct_solver_ids(
             self.daily_question_id
         )
+        already_awarded_user_ids = self.data_manager.get_crowd_wisdom_awarded_user_ids(
+            self.daily_question_id
+        )
         snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
         score_calculator = ScoreCalculator(self.config)
 
         total_bonus = 0
         for user_id in solver_ids:
+            if user_id in already_awarded_user_ids:
+                continue
             player = self.player_manager.get_player(user_id)
             if not player:
                 continue
