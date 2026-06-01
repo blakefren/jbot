@@ -24,6 +24,7 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
                 "JBOT_BONUS_BEFORE_HINT": 10,
                 "JBOT_BONUS_STREAK_PER_DAY": 5,
                 "JBOT_BONUS_STREAK_CAP": 25,
+                "JBOT_CROWD_WISDOM_DECAY_K": "1.15",
                 "JBOT_EMOJI_FIRST_TRY": "🎯",
                 "JBOT_EMOJI_BEFORE_HINT": "🧠",
                 "JBOT_EMOJI_FASTEST": "🥇",
@@ -205,3 +206,67 @@ class TestDailyGameSimulatorAdditions(unittest.TestCase):
         score_a = sim_a.run(apply_end_of_day=False)["p1"]["score_earned"]
         score_b = sim_b.run(apply_end_of_day=False)["p1"]["score_earned"]
         self.assertEqual(score_a, score_b)
+
+    def test_simulator_crowd_wisdom_powerup_event_is_noop(self):
+        """crowd_wisdom log rows replay as no-op powerup events."""
+        base_events = [GuessEvent("2023-01-01 10:00:00", "p1", "4")]
+        crowd_wisdom_event = base_events + [
+            PowerUpEvent("2023-01-01 10:01:00", "p1", "crowd_wisdom", None)
+        ]
+
+        def fresh_states():
+            return {"p1": Player(id="p1", name="Player 1", score=100, answer_streak=2)}
+
+        sim_a = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            base_events,
+            fresh_states(),
+            self.config,
+        )
+        sim_b = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            crowd_wisdom_event,
+            fresh_states(),
+            self.config,
+        )
+        score_a = sim_a.run(apply_end_of_day=False)["p1"]["score_earned"]
+        score_b = sim_b.run(apply_end_of_day=False)["p1"]["score_earned"]
+        self.assertEqual(score_a, score_b)
+
+    def test_crowd_wisdom_applies_for_sole_solver(self):
+        events = [
+            GuessEvent("2023-01-01 10:00:00", "p1", "4"),
+            GuessEvent("2023-01-01 10:05:00", "p2", "5"),
+        ]
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+        )
+        results = simulator.run(apply_end_of_day=True)
+        self.assertIn("crowd_wisdom", results["p1"]["bonuses"])
+        self.assertGreater(results["p1"]["bonuses"]["crowd_wisdom"], 0)
+
+    def test_crowd_wisdom_not_applied_when_everyone_solves(self):
+        events = [
+            GuessEvent("2023-01-01 10:00:00", "p1", "4"),
+            GuessEvent("2023-01-01 10:01:00", "p2", "4"),
+        ]
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            events,
+            {"p1": self.initial_states["p1"], "p2": self.initial_states["p2"]},
+            self.config,
+        )
+        results = simulator.run(apply_end_of_day=True)
+        self.assertNotIn("crowd_wisdom", results["p1"]["bonuses"])
+        self.assertNotIn("crowd_wisdom", results["p2"]["bonuses"])

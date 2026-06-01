@@ -74,6 +74,7 @@ class TestGameRunner(unittest.TestCase):
             "JBOT_BONUS_BEFORE_HINT": "10",
             "JBOT_BONUS_STREAK_PER_DAY": "5",
             "JBOT_BONUS_STREAK_CAP": "25",
+            "JBOT_CROWD_WISDOM_DECAY_K": "1.15",
             "JBOT_EMOJI_FIRST_TRY": "🎯",
             "JBOT_EMOJI_BEFORE_HINT": "🧠",
             "JBOT_EMOJI_STREAK": "🔥",
@@ -933,6 +934,58 @@ class TestGameRunner(unittest.TestCase):
     def test_update_scores_fallback_on_exception(self):
         """Test update_scores falls back to default score on exception."""
         pass
+
+    def test_apply_crowd_wisdom_bonus(self):
+        self.game_runner.daily_question_id = 123
+        self.mock_data_manager.get_crowd_wisdom_awarded_user_ids.return_value = set()
+        self.mock_data_manager.get_daily_correct_solver_ids.return_value = ["111"]
+        self.mock_data_manager.get_daily_active_participant_count.return_value = 2
+        self.mock_data_manager.get_daily_snapshot.return_value = {
+            "111": Player(id="111", name="Alice", score=100)
+        }
+        self.mock_data_manager.get_player.return_value = Player(
+            id="111", name="Alice", score=220
+        )
+        self.mock_data_manager.get_current_season.return_value = None
+
+        summary = self.game_runner.apply_crowd_wisdom_bonus()
+
+        self.assertEqual(summary["multiplier"], 1.0)
+        self.mock_data_manager.adjust_player_score.assert_called_with("111", 120)
+        self.mock_data_manager.log_powerup_usage.assert_called_with(
+            "111", "crowd_wisdom", None, 123
+        )
+
+    def test_apply_crowd_wisdom_bonus_skips_already_awarded_users(self):
+        self.game_runner.daily_question_id = 123
+        self.mock_data_manager.get_crowd_wisdom_awarded_user_ids.return_value = {"111"}
+        self.mock_data_manager.get_daily_correct_solver_ids.return_value = ["111"]
+        self.mock_data_manager.get_daily_active_participant_count.return_value = 2
+        self.mock_data_manager.get_daily_snapshot.return_value = {
+            "111": Player(id="111", name="Alice", score=100)
+        }
+        self.mock_data_manager.get_player.return_value = Player(
+            id="111", name="Alice", score=220
+        )
+
+        summary = self.game_runner.apply_crowd_wisdom_bonus()
+
+        self.assertEqual(summary["multiplier"], 1.0)
+        self.mock_data_manager.adjust_player_score.assert_not_called()
+        self.mock_data_manager.log_powerup_usage.assert_not_called()
+
+    def test_get_evening_message_content_includes_crowd_wisdom_line(self):
+        self.game_runner.daily_q = self.mock_question
+        self.game_runner.daily_question_id = 123
+        self.mock_data_manager.read_guess_history.return_value = []
+        self.game_runner._crowd_wisdom_summary = {
+            "multiplier": 0.316,
+            "correct_solvers": 2,
+            "active_participants": 5,
+        }
+
+        content = self.game_runner.get_evening_message_content()
+        self.assertIn("Crowd Wisdom Bonus: +32% (solvers 2/5)", content)
 
     def test_get_player_history_no_history(self):
         """Test get_player_history when player has no history."""

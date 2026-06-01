@@ -1183,6 +1183,57 @@ class DataManager:
         result = self._db.execute_query(query, (daily_question_id,))
         return result[0]["count"] if result else 0
 
+    def get_daily_correct_solver_ids(self, daily_question_id: int) -> list[str]:
+        """Returns unique player IDs with at least one correct guess for the day."""
+        query = """
+            SELECT DISTINCT player_id
+            FROM guesses
+            WHERE daily_question_id = ? AND is_correct = 1
+        """
+        rows = self._db.execute_query(query, (daily_question_id,))
+        return [row["player_id"] for row in rows]
+
+    def get_daily_active_participant_count(self, daily_question_id: int) -> int:
+        """
+        Returns count of active participants for the day:
+        anyone who guessed (correct or incorrect) or used rest.
+        """
+        query = """
+            SELECT COUNT(*) AS count
+            FROM (
+                SELECT DISTINCT player_id AS pid
+                FROM guesses
+                WHERE daily_question_id = ?
+                UNION
+                SELECT DISTINCT user_id AS pid
+                FROM powerup_usage
+                WHERE question_id = ? AND powerup_type = 'rest'
+            ) active
+        """
+        rows = self._db.execute_query(query, (daily_question_id, daily_question_id))
+        return rows[0]["count"] if rows else 0
+
+    def has_crowd_wisdom_awards(self, daily_question_id: int) -> bool:
+        """Returns True if crowd wisdom awards were already applied for the day."""
+        query = """
+            SELECT 1
+            FROM powerup_usage
+            WHERE question_id = ? AND powerup_type = 'crowd_wisdom'
+            LIMIT 1
+        """
+        rows = self._db.execute_query(query, (daily_question_id,))
+        return bool(rows)
+
+    def get_crowd_wisdom_awarded_user_ids(self, daily_question_id: int) -> set[str]:
+        """Returns user IDs that already received crowd wisdom for the day."""
+        query = """
+            SELECT DISTINCT user_id
+            FROM powerup_usage
+            WHERE question_id = ? AND powerup_type = 'crowd_wisdom'
+        """
+        rows = self._db.execute_query(query, (daily_question_id,))
+        return {row["user_id"] for row in rows}
+
     def get_last_correct_guess_date(self, player_id: str) -> Optional[date]:
         """
         Retrieves the date of the last correct guess for a player.

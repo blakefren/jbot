@@ -110,6 +110,10 @@ class DailyGameSimulator:
             # Rest bonus was already applied during handle_guess (before jinx resolution)
             # to match live play order in PowerUpManager.on_guess. No-op here.
             pass
+        elif ptype == "crowd_wisdom":
+            # Logged as a bookkeeping event by live flow; replay bonus is applied in
+            # end_of_day(), so this should be a no-op during event dispatch.
+            pass
 
         else:
             logging.warning(
@@ -205,6 +209,9 @@ class DailyGameSimulator:
             self.engine.resolve_steal_on_correct(self.daily_state, user_id)
 
     def end_of_day(self):
+        # Crowd Wisdom is an end-of-day/post-resolution bonus.
+        self.apply_crowd_wisdom_bonus()
+
         # Reset streaks for all players who didn't answer correctly and aren't resting.
         # Grace period: if a player answered correctly (or rested) on the previous day,
         # their streak is preserved even if they missed today.
@@ -222,6 +229,44 @@ class DailyGameSimulator:
                 and player.answer_streak > 0
             ):
                 self.daily_state[user_id].streak_delta = -player.answer_streak
+
+    def _get_crowd_wisdom_counts(self) -> tuple[int, int]:
+        """
+        Returns (correct_solvers, active_participants) from replay state.
+
+        Note: this mirrors DataManager.get_daily_active_participant_count() criteria
+        but lives here to keep the simulator free of DataManager/DB dependencies.
+        """
+        correct_solvers = 0
+        active_participants = 0
+        for state in self.daily_state.values():
+            if state.is_correct:
+                correct_solvers += 1
+            if state.is_correct or state.is_resting or state.guesses_count > 0:
+                active_participants += 1
+        return correct_solvers, active_participants
+
+    def apply_crowd_wisdom_bonus(self):
+        """Apply crowd wisdom bonus after all daily events are resolved."""
+        correct_solvers, active_participants = self._get_crowd_wisdom_counts()
+        if active_participants <= 0:
+            return
+
+        multiplier = self.score_calculator.get_crowd_wisdom_multiplier(
+            correct_solvers, active_participants
+        )
+        if multiplier <= 0:
+            return
+
+        for state in self.daily_state.values():
+            if not state.is_correct:
+                continue
+            bonus = self.score_calculator.calculate_crowd_wisdom_bonus(
+                state.score_earned, correct_solvers, active_participants
+            )
+            if bonus > 0:
+                state.score_earned += bonus
+                state.bonuses[ScoreCalculator.KEY_CROWD_WISDOM] = bonus
 
     def calculate_final_results(self):
         results = {}

@@ -41,9 +41,11 @@ Bonus              Pts      Condition
 🥈 Second correct   +5
 🥉 Third correct    +1
 🔥 Streak        +5–25      +5 per streak day, capped at +25 (5+ days)
+💡 Crowd Wisdom  +0–100%*   End-of-day multiplier on your daily points for niche solves
 ```
 
 A perfect round — first try, before the hint, first correct, with a 5+ day streak — adds **+65** on top of the base.
+* Crowd Wisdom only applies when not everyone solves (at least one wrong/rest), starts at +100% for a sole solver, and decays as more players solve.
 
 ---
 

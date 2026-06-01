@@ -15,6 +15,7 @@ from data.readers.question_selector import QuestionSelector
 from data.readers.question import Question
 from src.core.guess_handler import GuessHandler
 from src.cfg.main import ConfigReader
+from src.core.scoring import ScoreCalculator
 from src.core.daily_game_simulator import DailyGameSimulator
 from src.core.events import GuessEvent, PowerUpEvent
 from src.core.answer_checker import AnswerChecker
@@ -67,6 +68,7 @@ class GameRunner:
         self.pending_morning_note: Optional[str] = None
         # Season announcements to be broadcast after the evening message
         self.pending_evening_announcements: list[str] = []
+        self._crowd_wisdom_summary: dict | None = None
 
     def _get_valid_question(self) -> Question:
         """
@@ -158,6 +160,7 @@ class GameRunner:
         self.daily_question_id = self.data_manager.log_daily_question(
             self.daily_q, force_new=force_new
         )
+        self._crowd_wisdom_summary = None
 
         # Refresh from DB — recovers the canonical daily_question_id and
         # question_db_id, and handles race conditions where log returns None
@@ -315,6 +318,7 @@ class GameRunner:
         self.daily_question_id = None
         self.question_db_id = None
         self.guess_handler = None
+        self._crowd_wisdom_summary = None
 
         for manager in self.managers.values():
             if hasattr(manager, "reset_daily_state"):
@@ -855,6 +859,79 @@ class GameRunner:
             logging.error(f"Error generating reminder message content: {e}")
             return f"Friendly reminder to get your guesses in!\nQuestion: {self.daily_q.question}"
 
+    def _calculate_crowd_wisdom_summary(self) -> dict:
+        """Compute today's crowd wisdom context."""
+        if not self.daily_question_id:
+            return {"multiplier": 0.0, "correct_solvers": 0, "active_participants": 0}
+
+        score_calculator = ScoreCalculator(self.config)
+        correct_solvers = len(
+            self.data_manager.get_daily_correct_solver_ids(self.daily_question_id)
+        )
+        active_participants = self.data_manager.get_daily_active_participant_count(
+            self.daily_question_id
+        )
+        multiplier = score_calculator.get_crowd_wisdom_multiplier(
+            correct_solvers, active_participants
+        )
+        return {
+            "multiplier": multiplier,
+            "correct_solvers": correct_solvers,
+            "active_participants": active_participants,
+        }
+
+    def apply_crowd_wisdom_bonus(self) -> dict:
+        """
+        Apply non-stealable crowd wisdom bonuses for today's correct solvers.
+        Runs once per day at evening reveal time.
+        """
+        summary = self._calculate_crowd_wisdom_summary()
+        if not self.daily_question_id:
+            self._crowd_wisdom_summary = summary
+            return summary
+
+        multiplier = summary["multiplier"]
+        if multiplier <= 0:
+            self._crowd_wisdom_summary = summary
+            return summary
+
+        solver_ids = self.data_manager.get_daily_correct_solver_ids(
+            self.daily_question_id
+        )
+        already_awarded_user_ids = self.data_manager.get_crowd_wisdom_awarded_user_ids(
+            self.daily_question_id
+        )
+        snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
+        score_calculator = ScoreCalculator(self.config)
+
+        total_bonus = 0
+        for user_id in solver_ids:
+            if user_id in already_awarded_user_ids:
+                continue
+            player = self.player_manager.get_player(user_id)
+            if not player:
+                continue
+            snapshot_player = snapshot.get(user_id)
+            initial_score = getattr(snapshot_player, "score", 0)
+            points_earned_today = player.score - initial_score
+            bonus = score_calculator.calculate_crowd_wisdom_bonus(
+                points_earned_today,
+                summary["correct_solvers"],
+                summary["active_participants"],
+                multiplier=multiplier,
+            )
+            if bonus <= 0:
+                continue
+            self.player_manager.update_score(user_id, bonus)
+            self.data_manager.log_powerup_usage(
+                user_id, "crowd_wisdom", None, self.daily_question_id
+            )
+            total_bonus += bonus
+
+        summary["total_bonus_points"] = total_bonus
+        self._crowd_wisdom_summary = summary
+        return summary
+
     def get_evening_message_content(self, guild=None) -> str:
         """Generates the evening message with answer and summary."""
         if not self.daily_q:
@@ -868,6 +945,19 @@ class GameRunner:
         ]
 
         player_answers = ""
+        # Fallback calculation is used for preview/manual calls where evening-task
+        # bonus application has not run yet (e.g., tests or direct method use).
+        crowd_wisdom = (
+            self._crowd_wisdom_summary or self._calculate_crowd_wisdom_summary()
+        )
+        crowd_wisdom_multiplier = crowd_wisdom.get("multiplier", 0.0)
+        if crowd_wisdom_multiplier > 0:
+            percent = round(crowd_wisdom_multiplier * 100)
+            player_answers += (
+                f"Crowd Wisdom Bonus: +{percent}% "
+                f"(solvers {crowd_wisdom['correct_solvers']}/{crowd_wisdom['active_participants']})\n\n"
+            )
+
         if daily_guesses:
             player_guesses_map = defaultdict(list)
             for g in daily_guesses:

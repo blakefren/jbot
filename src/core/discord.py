@@ -331,7 +331,13 @@ class DiscordBot(commands.Bot):
             f"Evening message task running at {datetime.datetime.now(TIMEZONE)}..."
         )
 
-        # 1. Update roles
+        # 1. Apply end-of-day crowd wisdom bonus before leaderboard/roles.
+        try:
+            self.game.apply_crowd_wisdom_bonus()
+        except Exception as e:
+            self._log_task_error(e, "evening_message_task - apply_crowd_wisdom_bonus")
+
+        # 2. Update roles
         try:
             logging.info("Updating roles...")
             roles_manager = RolesGameMode(self.data_manager, self.config)
@@ -342,9 +348,9 @@ class DiscordBot(commands.Bot):
         except Exception as e:
             self._log_task_error(e, "evening_message_task - update_roles")
 
-        # 2. (Shield check removed — rest mechanic has no end-of-day penalty)
+        # 3. (Shield check removed — rest mechanic has no end-of-day penalty)
 
-        # 3. Send evening message
+        # 4. Send evening message
         if not silent:
             try:
 
@@ -361,12 +367,12 @@ class DiscordBot(commands.Bot):
             except Exception as e:
                 self._log_task_error(e, "evening_message_task - send_message")
 
-        # 4. End the daily game (clear question, reset powerup states)
+        # 5. End the daily game (clear question, reset powerup states)
         # Save question ID before clearing, needed for post-game verification.
         daily_question_id = self.game.daily_question_id
         self.game.end_daily_game()
 
-        # 4b. Send any season announcements queued during end_daily_game
+        # 5b. Send any season announcements queued during end_daily_game
         # (e.g. end-of-season message on the last day of the season)
         announcements = list(self.game.pending_evening_announcements)
         self.game.pending_evening_announcements.clear()
@@ -376,7 +382,7 @@ class DiscordBot(commands.Bot):
             except Exception as e:
                 self._log_task_error(e, "evening_message_task - season_announcement")
 
-        # 5. Verify daily play — compare simulator-expected state against DB
+        # 6. Verify daily play — compare simulator-expected state against DB
         try:
             if daily_question_id:
                 diffs = self.game.verify_daily_play(daily_question_id)
@@ -391,7 +397,7 @@ class DiscordBot(commands.Bot):
         except Exception as e:
             self._log_task_error(e, "evening_message_task - verify_daily_play")
 
-        # 6. Backup database
+        # 7. Backup database
         try:
             self._backup_database()
         except Exception as e:
