@@ -1,3 +1,5 @@
+import math
+
 from src.cfg.main import ConfigReader
 
 
@@ -12,6 +14,8 @@ class ScoreCalculator:
     KEY_FASTEST = "fastest"
     KEY_STREAK = "streak"
     KEY_REST = "rest"
+    KEY_CROWD_WISDOM = "crowd_wisdom"
+    DEFAULT_CROWD_WISDOM_DECAY_K = 1.15
 
     def __init__(self, config: ConfigReader = None):
         if config is None:
@@ -26,6 +30,17 @@ class ScoreCalculator:
 
         self.streak_per_day = int(self.config.get("JBOT_BONUS_STREAK_PER_DAY"))
         self.streak_cap = int(self.config.get("JBOT_BONUS_STREAK_CAP"))
+        decay_raw = self.config.get(
+            "JBOT_CROWD_WISDOM_DECAY_K", str(self.DEFAULT_CROWD_WISDOM_DECAY_K)
+        )
+        try:
+            decay_k = float(decay_raw)
+            if decay_k > 0:
+                self.crowd_wisdom_decay_k = decay_k
+            else:
+                self.crowd_wisdom_decay_k = self.DEFAULT_CROWD_WISDOM_DECAY_K
+        except (TypeError, ValueError):
+            self.crowd_wisdom_decay_k = self.DEFAULT_CROWD_WISDOM_DECAY_K
 
         # Emojis for display
         self.emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY")
@@ -157,7 +172,7 @@ class ScoreCalculator:
         are removed but not counted when their canonical equivalents (try_1, fastest_1)
         are present, to avoid double-counting.
         """
-        NON_STEALABLE = {self.KEY_STREAK, self.KEY_REST}
+        NON_STEALABLE = {self.KEY_STREAK, self.KEY_CROWD_WISDOM, self.KEY_REST}
         stealable = 0
         to_remove = []
         for key, val in list(bonuses.items()):
@@ -172,3 +187,42 @@ class ScoreCalculator:
         for key in to_remove:
             bonuses.pop(key, None)
         return stealable
+
+    def get_crowd_wisdom_multiplier(
+        self, correct_solvers: int, active_participants: int
+    ) -> float:
+        """
+        Return the crowd wisdom bonus multiplier for the day.
+
+        Rules:
+        - x=1 starts at 1.0 (100%)
+        - exponential decay by e^(-k * (x-1)), where k is JBOT_CROWD_WISDOM_DECAY_K
+        - x>=N yields 0.0 (no niche-knowledge bonus when everyone solved)
+        """
+        if correct_solvers <= 0 or active_participants <= 0:
+            return 0.0
+        if correct_solvers >= active_participants:
+            return 0.0
+
+        return math.exp(-self.crowd_wisdom_decay_k * (correct_solvers - 1))
+
+    def calculate_crowd_wisdom_bonus(
+        self,
+        points_earned: int,
+        correct_solvers: int,
+        active_participants: int,
+        multiplier: float | None = None,
+    ) -> int:
+        """
+        Calculate and round the crowd wisdom bonus points for a player.
+        """
+        if points_earned <= 0:
+            return 0
+
+        if multiplier is None:
+            multiplier = self.get_crowd_wisdom_multiplier(
+                correct_solvers, active_participants
+            )
+        if multiplier <= 0:
+            return 0
+        return round(points_earned * multiplier)

@@ -19,6 +19,8 @@ class TestScoreCalculator(unittest.TestCase):
                 return 5
             if key == "JBOT_BONUS_STREAK_CAP":
                 return 25
+            if key == "JBOT_CROWD_WISDOM_DECAY_K":
+                return "1.15"
 
             # Emoji defaults
             if key == "JBOT_EMOJI_FIRST_TRY":
@@ -183,3 +185,19 @@ class TestScoreCalculator(unittest.TestCase):
         stealable = self.calculator.pop_stealable_bonuses(bonuses)
         self.assertEqual(stealable, 10)
         self.assertEqual(bonuses, {})
+
+    def test_crowd_wisdom_multiplier_x1(self):
+        self.assertEqual(self.calculator.get_crowd_wisdom_multiplier(1, 5), 1.0)
+
+    def test_crowd_wisdom_multiplier_x2(self):
+        self.assertAlmostEqual(
+            self.calculator.get_crowd_wisdom_multiplier(2, 5), 0.3166, places=3
+        )
+
+    def test_crowd_wisdom_multiplier_x3(self):
+        self.assertAlmostEqual(
+            self.calculator.get_crowd_wisdom_multiplier(3, 5), 0.1003, places=3
+        )
+
+    def test_crowd_wisdom_multiplier_xn(self):
+        self.assertEqual(self.calculator.get_crowd_wisdom_multiplier(5, 5), 0.0)
