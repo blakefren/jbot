@@ -392,5 +392,82 @@ class TestSeasonManagerIntegrationSeasonProgress(unittest.TestCase):
         self.assertEqual(current_day, total_days)
 
 
+class TestSeasonManagerIntegrationEndAnnouncement(unittest.TestCase):
+    """
+    Integration tests for get_season_end_announcement.
+
+    These tests specifically guard against the regression where trophies were
+    absent from the end-of-season announcement because finalize_season was not
+    called before the leaderboard was fetched.
+    """
+
+    def setUp(self):
+        self.db, self.dm, self.sm, self.cfg = _make_stack(announce_end=True)
+        _create_player(self.dm, "p1", "Alice")
+        _create_player(self.dm, "p2", "Bob")
+        _create_player(self.dm, "p3", "Carol")
+        self.season_id = self.dm.create_season("May 2026", "2026-05-01", "2026-05-31")
+        self.dm.update_season_score("p1", self.season_id, points=300)
+        self.dm.update_season_score("p2", self.season_id, points=200)
+        self.dm.update_season_score("p3", self.season_id, points=100)
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_end_announcement_includes_trophies(self):
+        """Trophies appear in the announcement even though finalize hadn't been
+        called beforehand — the method now calls finalize_season internally."""
+        with unittest.mock.patch.object(
+            self.sm, "_today", return_value=date(2026, 5, 31)
+        ):
+            msg = self.sm.get_season_end_announcement()
+
+        self.assertIsNotNone(msg)
+        self.assertIn("🥇", msg)
+        self.assertIn("Alice", msg)
+
+    def test_end_announcement_season_is_finalized_after_call(self):
+        """The season is marked inactive after get_season_end_announcement fires."""
+        with unittest.mock.patch.object(
+            self.sm, "_today", return_value=date(2026, 5, 31)
+        ):
+            self.sm.get_season_end_announcement()
+
+        season = self.dm.get_season_by_id(self.season_id)
+        self.assertFalse(season.is_active)
+
+    def test_end_announcement_shows_player_count(self):
+        """The total number of participants appears in the announcement."""
+        with unittest.mock.patch.object(
+            self.sm, "_today", return_value=date(2026, 5, 31)
+        ):
+            msg = self.sm.get_season_end_announcement()
+
+        self.assertIn("3 player(s) competed", msg)
+
+    def test_end_announcement_not_last_day_returns_none(self):
+        """Returns None when today is not the last day of the season."""
+        with unittest.mock.patch.object(
+            self.sm, "_today", return_value=date(2026, 5, 30)
+        ):
+            msg = self.sm.get_season_end_announcement()
+
+        self.assertIsNone(msg)
+
+    def test_end_announcement_no_participants_shows_correct_message(self):
+        """Shows 'No players participated' when nobody scored this season."""
+        _, dm2, sm2, _ = _make_stack(announce_end=True)
+        sid = dm2.create_season("May 2026", "2026-05-01", "2026-05-31")
+        try:
+            with unittest.mock.patch.object(
+                sm2, "_today", return_value=date(2026, 5, 31)
+            ):
+                msg = sm2.get_season_end_announcement()
+            self.assertIn("No players participated", msg)
+            self.assertNotIn("player(s) competed", msg)
+        finally:
+            dm2._db.close()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -279,11 +279,12 @@ class TestSeasonManagerAnnouncements(unittest.TestCase):
         self.assertIn("No players participated", msg)
 
     def test_build_season_end_announcement_no_trophies(self):
-        """Leaderboard with no trophy winners shows 'No players participated'."""
+        """Leaderboard with players but no trophies shows competed count, not 'no participants'."""
         season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
         score = SeasonScore("1", 1, points=500, trophy=None)
         msg = self.manager.build_season_end_announcement(season, [(score, "Alice")])
-        self.assertIn("No players participated", msg)
+        self.assertIn("1 player(s) competed", msg)
+        self.assertNotIn("No players participated", msg)
 
     def test_build_season_end_announcement_shows_total_count(self):
         """Total participant count appears when leaderboard is non-empty."""
@@ -394,6 +395,7 @@ class TestSeasonManagerAnnouncements(unittest.TestCase):
         """Returns end announcement when today is the last day of the season."""
         season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
         self.mock_data_manager.get_current_season.return_value = season
+        self.mock_data_manager.get_season_by_id.return_value = season
         self.mock_data_manager.get_season_scores.return_value = []
         self.mock_config.get_season_announce_end.return_value = True
 
@@ -402,6 +404,33 @@ class TestSeasonManagerAnnouncements(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertIn("January 2026", result)
+
+    def test_get_season_end_announcement_calls_finalize_before_leaderboard(self):
+        """finalize_season_rankings is called before the leaderboard is fetched,
+        so trophies are present in the announcement."""
+        season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
+        self.mock_data_manager.get_current_season.return_value = season
+        self.mock_data_manager.get_season_by_id.return_value = season
+        self.mock_data_manager.get_season_scores.return_value = []
+        self.mock_config.get_season_announce_end.return_value = True
+        call_order = []
+        self.mock_data_manager.finalize_season_rankings.side_effect = (
+            lambda *a, **kw: call_order.append("finalize")
+        )
+        self.mock_data_manager.get_season_scores.side_effect = (
+            lambda *a, **kw: call_order.append("scores") or []
+        )
+
+        with patch.object(self.manager, "_today", return_value=date(2026, 1, 31)):
+            self.manager.get_season_end_announcement()
+
+        self.assertIn("finalize", call_order)
+        self.assertIn("scores", call_order)
+        self.assertLess(
+            call_order.index("finalize"),
+            call_order.index("scores"),
+            "finalize_season_rankings must be called before get_season_scores",
+        )
 
     def test_get_season_end_announcement_not_last_day(self):
         """Returns None when today is not the last day of the season."""

@@ -240,8 +240,13 @@ class SeasonManager:
             return None
         if self._today() != current_season.end_date:
             return None
+        self.finalize_season(current_season.season_id)
+        # Re-fetch the season after finalization (it's now marked inactive)
+        finalized_season = self.data_manager.get_season_by_id(current_season.season_id)
         leaderboard = self.get_season_leaderboard(current_season.season_id)
-        return self.build_season_end_announcement(current_season, leaderboard)
+        return self.build_season_end_announcement(
+            finalized_season or current_season, leaderboard
+        )
 
     def build_season_end_announcement(self, season: Season, leaderboard: list) -> str:
         """
@@ -256,17 +261,17 @@ class SeasonManager:
         """
         lines = [f"🏁 **{season.season_name} Season Complete!**"]
 
+        total = len(leaderboard)
+        if total:
+            lines.append(f"\n{total} player(s) competed this season.")
+        else:
+            lines.append("\nNo players participated this season.")
+
         trophy_entries = [(score, name) for score, name in leaderboard if score.trophy]
         if trophy_entries:
             lines.append("\nCongratulations to our top players:")
             for score, name in trophy_entries:
                 lines.append(f"{score.trophy_emoji} **{name}** — {score.points:,} pts")
-        else:
-            lines.append("\nNo players participated this season.")
-
-        total = len(leaderboard)
-        if total:
-            lines.append(f"\n{total} player(s) competed this season.")
 
         return "\n".join(lines)
 
