@@ -1583,8 +1583,11 @@ class DataManager:
     def reset_all_player_season_scores(self):
         """
         Reset all players' season_score and answer_streak to 0.
+        Also clears pending_rest_multiplier so a rest taken on the last day of the
+        previous season does not carry over and grant a bonus on the first day of
+        the new season.
         Called at the start of a new season.
         """
         self._db.execute_update(
-            "UPDATE players SET season_score = 0, answer_streak = 0"
+            "UPDATE players SET season_score = 0, answer_streak = 0, pending_rest_multiplier = 0.0"
         )

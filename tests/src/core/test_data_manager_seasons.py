@@ -217,6 +217,17 @@ class TestDataManagerSeasonScores(unittest.TestCase):
         self.assertEqual(rows[0]["season_score"], 0)
         self.assertEqual(rows[0]["answer_streak"], 0)
 
+    def test_reset_all_player_season_scores_clears_pending_rest_multiplier(self):
+        """A rest taken on the last day of a season must not carry over to the next."""
+        self.db.execute_update(
+            "UPDATE players SET pending_rest_multiplier = 1.2 WHERE id = 'p1'"
+        )
+        self.dm.reset_all_player_season_scores()
+        rows = self.db.execute_query(
+            "SELECT pending_rest_multiplier FROM players WHERE id = 'p1'"
+        )
+        self.assertEqual(rows[0]["pending_rest_multiplier"], 0.0)
+
 
 class TestDataManagerTrophies(unittest.TestCase):
     """Tests for trophy awarding and retrieval."""
