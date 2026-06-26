@@ -308,7 +308,9 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
 
         await self.evening_task_coro(self.bot, silent=True)
 
-        self.assertIn("crowd_wisdom", call_order, "apply_crowd_wisdom_bonus was not called")
+        self.assertIn(
+            "crowd_wisdom", call_order, "apply_crowd_wisdom_bonus was not called"
+        )
         self.assertIn("roles_run", call_order, "roles_manager.run() was not called")
         crowd_wisdom_idx = call_order.index("crowd_wisdom")
         roles_idx = call_order.index("roles_run")
