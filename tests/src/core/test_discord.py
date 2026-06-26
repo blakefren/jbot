@@ -286,6 +286,41 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         # The final error should be logged
 
     @patch("src.core.discord.RolesGameMode")
+    async def test_evening_task_crowd_wisdom_applied_before_roles(
+        self, mock_roles_game_mode_cls
+    ):
+        """Crowd wisdom bonus must be applied BEFORE role assignment.
+
+        Regression test for the bug where a sole correct solver moved from 2nd
+        to 1st place via the crowd wisdom bonus, but did not receive the first
+        place role because roles were evaluated before the bonus was added.
+        """
+        call_order = []
+
+        # Record when crowd wisdom bonus is applied
+        self.bot.game.apply_crowd_wisdom_bonus.side_effect = lambda: call_order.append(
+            "crowd_wisdom"
+        )
+
+        # Record when role DB update runs
+        mock_roles_instance = mock_roles_game_mode_cls.return_value
+        mock_roles_instance.run.side_effect = lambda: call_order.append("roles_run")
+
+        await self.evening_task_coro(self.bot, silent=True)
+
+        self.assertIn("crowd_wisdom", call_order, "apply_crowd_wisdom_bonus was not called")
+        self.assertIn("roles_run", call_order, "roles_manager.run() was not called")
+        crowd_wisdom_idx = call_order.index("crowd_wisdom")
+        roles_idx = call_order.index("roles_run")
+        self.assertLess(
+            crowd_wisdom_idx,
+            roles_idx,
+            "apply_crowd_wisdom_bonus must be called before roles_manager.run() "
+            "so that a player who moves to first place via the crowd wisdom bonus "
+            "is correctly assigned the first place role.",
+        )
+
+    @patch("src.core.discord.RolesGameMode")
     async def test_evening_task_calls_backup(self, mock_roles_cls):
         """Verify the evening task calls _backup_database after ending the game."""
         await self.evening_task_coro(self.bot, silent=True)
