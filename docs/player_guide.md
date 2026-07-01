@@ -76,12 +76,12 @@ You get **one power-up per day**. Power-ups can be used at any time **until the 
 ### 🤐 `/power jinx @player`
 
 **Cost:** You are **silenced until 7 PM** — you can't answer before the hint drops.
-**Effect:** Parasitically link yourself to your target. When you both answer correctly, you siphon **25%** of their total score earned for the day.
+**Effect:** Parasitically link yourself to your target. When your **target answers correctly**, you siphon **25%** of their total score earned for the day.
 
 **But beware:** Every time your target guesses **incorrectly**, you lose **5 points**. Jinxing a sloppy guesser can cost you.
 
 **Timing matters:**
-- **Target hasn't answered yet** — the transfer fires when *you* answer (after the hint).
+- **Target hasn't answered yet** — the transfer fires when *they* answer.
 - **Target already answered** — you immediately receive **25%** of their score earned.
 
 > Streak bonuses are **not** transferable by jinx — only the target's total earned score is shared.

@@ -422,9 +422,9 @@ class TestSimulatorRetroactiveJinx(unittest.TestCase):
         # Streak bonus is NOT stripped from target by the new jinx
         self.assertIn("streak", target_state.bonuses)
 
-    def test_forward_jinx_deferred_until_attacker_answers(self):
-        """Forward jinx (before target answers): transfer deferred until attacker answers.
-        If attacker never answers, no transfer occurs.
+    def test_forward_jinx_transfers_on_target_answer(self):
+        """Forward jinx: transfer fires when the target answers, regardless of whether
+        the attacker has answered. No dependency on attacker's answer.
         """
         config = _make_config()
         attacker = Player(id="A", name="A", score=0, answer_streak=1)
@@ -444,12 +444,14 @@ class TestSimulatorRetroactiveJinx(unittest.TestCase):
         attacker_state = sim.daily_state["A"]
         target_state = sim.daily_state["T"]
 
-        # No transfer yet (attacker hasn't answered)
-        self.assertEqual(attacker_state.score_earned, 0)
+        # T: base=100, try_1=20, before_hint=10, fastest_1=10, streak(6)=25 = 165
+        # Transfer: 25% of 165 = 41
+        self.assertEqual(attacker_state.score_earned, 41)
+        self.assertEqual(target_state.score_earned, 124)
         # Streak bonus stays with target (new jinx doesn't strip it)
         self.assertIn("streak", target_state.bonuses)
-        # Jinx link is still open (attacker has pending jinx_target)
-        self.assertEqual(attacker_state.jinx_target, "T")
+        # Jinx link is resolved (jinx_target cleared after transfer)
+        self.assertIsNone(attacker_state.jinx_target)
 
 
 class TestSimulatorRetroactiveSteal(unittest.TestCase):

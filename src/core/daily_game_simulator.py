@@ -200,16 +200,9 @@ class DailyGameSimulator:
         state.bonuses = bonuses
         state.streak_delta += 1
 
-        # Resolve Jinx — parasitic share transfer on correct answer.
-        # Case A: this player is the TARGET (jinxed_by is set):
-        #   If the attacker has already answered, transfer share now.
+        # Resolve Jinx — transfer attacker's share when target answers correctly.
         if state.jinxed_by:
             self.engine.resolve_jinx_on_correct(self.daily_state, user_id)
-
-        # Case B: this player is the ATTACKER (jinx_target is set):
-        #   If the target has already answered, transfer share now.
-        if state.jinx_target:
-            self.engine.resolve_attacker_jinx_on_correct(self.daily_state, user_id)
 
         # Resolve Steal
         if state.steal_attempt_by:

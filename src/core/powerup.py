@@ -156,15 +156,8 @@ class PowerUpManager(BaseManager):
                     f"<@{pid}> guessed wrong — {penalty} pts deducted from attacker."
                 )
 
-        # Resolve jinx: if target (pid) just answered correctly AND attacker already has too,
-        # transfer the share now. Otherwise the transfer waits for the attacker to answer.
+        # Resolve jinx: transfer the attacker's share when the target answers correctly.
         msg = self.resolve_jinx(pid, ctx)
-        if msg:
-            messages.append(msg)
-
-        # Resolve attacker jinx: if attacker (pid) just answered correctly AND their target
-        # has already answered, transfer the share now.
-        msg = self.resolve_attacker_jinx(pid, ctx)
         if msg:
             messages.append(msg)
 
@@ -178,9 +171,8 @@ class PowerUpManager(BaseManager):
         """
         Resolve the parasitic Jinx effect when the TARGET answers correctly.
 
-        If the attacker has also answered, transfer their share of the target's
-        points immediately.  If the attacker has not yet answered the transfer
-        is deferred — it will fire via resolve_attacker_jinx when they do.
+        Transfers the attacker's share of the target's points immediately,
+        regardless of whether the attacker has answered.
         """
         if not ctx.is_correct:
             return ""
@@ -191,7 +183,7 @@ class PowerUpManager(BaseManager):
         if not attacker_id:
             return ""
 
-        # Engine: transfer share if attacker already answered; clears jinx_target on attacker
+        # Engine: transfer share; clears jinx_target on attacker
         transferred = self.engine.resolve_jinx_on_correct(self.daily_state, player_id)
 
         if transferred > 0:
@@ -204,43 +196,7 @@ class PowerUpManager(BaseManager):
                 f"from <@{player_id}>."
             )
 
-        # Attacker hasn't answered yet — share is deferred until they do
-        return (
-            f"{self.emoji_jinxed} <@{player_id}> answered while Jinxed by <@{attacker_id}>! "
-            f"Their points are at risk once <@{attacker_id}> answers."
-        )
-
-    def resolve_attacker_jinx(self, player_id: str, ctx: GuessContext) -> str:
-        """
-        Resolve the parasitic Jinx effect when the ATTACKER answers correctly.
-
-        If the jinxed target has already answered, transfer the share now.
-        Otherwise nothing happens here — resolve_jinx will handle it when the
-        target eventually answers.
-        """
-        if not ctx.is_correct:
-            return ""
-
-        state = self._get_daily_state(player_id)
-        target_id = state.jinx_target  # None if no active jinx or already resolved
-
-        if not target_id:
-            return ""
-
-        # Engine: transfer share if target already answered; clears jinx_target
-        transferred = self.engine.resolve_attacker_jinx_on_correct(
-            self.daily_state, player_id
-        )
-
-        if transferred > 0:
-            self.player_manager.update_score(target_id, -transferred)
-            self.player_manager.update_score(player_id, transferred)
-            ctx.points_earned += transferred
-            return (
-                f"{self.emoji_jinxed} Your Jinx pays off! Siphoned {transferred} pts "
-                f"({int(self.jinx_share_ratio * 100)}%) from <@{target_id}>."
-            )
-
+        # No message if the link was already resolved (double-transfer guard in engine)
         return ""
 
     def resolve_steal(self, target_id: str, ctx: GuessContext) -> str:
@@ -432,7 +388,7 @@ class PowerUpManager(BaseManager):
         # Normal daytime path (target hasn't answered yet)
         return (
             f"{self.emoji_silenced} Jinx activated on {target.name}! "
-            f"You'll siphon {share_pct}% of their points when both of you answer. "
+            f"You'll siphon {share_pct}% of their points when they answer. "
             f"You lose {penalty} pts for each wrong guess they make. "
             f"You can't answer until the hint is revealed!"
         )

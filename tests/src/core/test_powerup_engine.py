@@ -200,7 +200,7 @@ class TestApplyLateJinx(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# resolve_jinx_on_correct  (target answers after attacker)
+# resolve_jinx_on_correct  (transfer fires when target answers)
 # ---------------------------------------------------------------------------
 
 
@@ -213,20 +213,11 @@ class TestResolveJinxOnCorrect(unittest.TestCase):
         result = self.engine.resolve_jinx_on_correct(ds, "tgt")
         self.assertEqual(result, 0)
 
-    def test_returns_zero_when_attacker_not_answered(self):
-        """Deferred: attacker hasn't answered yet — no transfer yet."""
+    def test_transfers_share_on_target_answer(self):
+        """Transfer fires when target answers, regardless of whether attacker has answered."""
         ds = {
             "tgt": _state(jinxed_by="att", score_earned=100),
-            "att": _state(is_correct=False, jinx_target="tgt"),
-        }
-        transferred = self.engine.resolve_jinx_on_correct(ds, "tgt")
-        self.assertEqual(transferred, 0)
-        self.assertEqual(ds["att"].score_earned, 0)
-
-    def test_transfers_share_when_attacker_already_answered(self):
-        ds = {
-            "tgt": _state(jinxed_by="att", score_earned=100),
-            "att": _state(is_correct=True, jinx_target="tgt", score_earned=50),
+            "att": _state(jinx_target="tgt", score_earned=50),
         }
         transferred = self.engine.resolve_jinx_on_correct(ds, "tgt")
         self.assertEqual(transferred, 25)  # int(100 * 0.25)
@@ -236,7 +227,7 @@ class TestResolveJinxOnCorrect(unittest.TestCase):
     def test_clears_jinx_target_after_transfer(self):
         ds = {
             "tgt": _state(jinxed_by="att", score_earned=100),
-            "att": _state(is_correct=True, jinx_target="tgt"),
+            "att": _state(jinx_target="tgt"),
         }
         self.engine.resolve_jinx_on_correct(ds, "tgt")
         self.assertIsNone(ds["att"].jinx_target)
@@ -245,62 +236,9 @@ class TestResolveJinxOnCorrect(unittest.TestCase):
         """If jinx_target is already None (resolved), no transfer occurs and scores unchanged."""
         ds = {
             "tgt": _state(jinxed_by="att", score_earned=100),
-            "att": _state(is_correct=True, jinx_target=None),
+            "att": _state(jinx_target=None),
         }
         transferred = self.engine.resolve_jinx_on_correct(ds, "tgt")
-        self.assertEqual(transferred, 0)
-        self.assertEqual(ds["tgt"].score_earned, 100)
-        self.assertEqual(ds["att"].score_earned, 0)
-
-
-# ---------------------------------------------------------------------------
-# resolve_attacker_jinx_on_correct  (attacker answers after target)
-# ---------------------------------------------------------------------------
-
-
-class TestResolveAttackerJinxOnCorrect(unittest.TestCase):
-    def setUp(self):
-        self.engine = _make_engine(jinx_share_ratio=0.25)
-
-    def test_returns_zero_when_no_jinx_target(self):
-        ds = {"att": _state(is_correct=True)}
-        result = self.engine.resolve_attacker_jinx_on_correct(ds, "att")
-        self.assertEqual(result, 0)
-
-    def test_returns_zero_when_target_not_answered(self):
-        ds = {
-            "att": _state(is_correct=True, jinx_target="tgt"),
-            "tgt": _state(is_correct=False, score_earned=0),
-        }
-        transferred = self.engine.resolve_attacker_jinx_on_correct(ds, "att")
-        self.assertEqual(transferred, 0)
-        self.assertEqual(ds["att"].jinx_target, "tgt")  # Still pending
-
-    def test_transfers_share_when_target_already_answered(self):
-        ds = {
-            "att": _state(is_correct=True, jinx_target="tgt", score_earned=50),
-            "tgt": _state(is_correct=True, jinxed_by="att", score_earned=100),
-        }
-        transferred = self.engine.resolve_attacker_jinx_on_correct(ds, "att")
-        self.assertEqual(transferred, 25)  # int(100 * 0.25)
-        self.assertEqual(ds["tgt"].score_earned, 75)
-        self.assertEqual(ds["att"].score_earned, 75)
-
-    def test_clears_jinx_target_after_transfer(self):
-        ds = {
-            "att": _state(is_correct=True, jinx_target="tgt"),
-            "tgt": _state(is_correct=True, score_earned=100),
-        }
-        self.engine.resolve_attacker_jinx_on_correct(ds, "att")
-        self.assertIsNone(ds["att"].jinx_target)
-
-    def test_no_double_transfer(self):
-        """Calling again after jinx_target is cleared returns 0 and scores remain unchanged."""
-        ds = {
-            "att": _state(is_correct=True, jinx_target=None),
-            "tgt": _state(is_correct=True, score_earned=100),
-        }
-        transferred = self.engine.resolve_attacker_jinx_on_correct(ds, "att")
         self.assertEqual(transferred, 0)
         self.assertEqual(ds["tgt"].score_earned, 100)
         self.assertEqual(ds["att"].score_earned, 0)

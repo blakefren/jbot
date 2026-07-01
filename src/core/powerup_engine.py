@@ -104,11 +104,8 @@ class PowerUpEngine:
     ) -> int:
         """Transfer share of target's points to attacker when the target answers correctly.
 
-        The transfer only occurs if the attacker has **already answered correctly**
-        (parasitic: both players must have earned points for the share to flow).
-        Clears ``attacker.jinx_target`` to prevent a double-transfer later.
-
-        Returns points transferred (0 if attacker has not yet answered or already resolved).
+        Clears ``attacker.jinx_target`` to prevent a double-transfer.
+        Returns points transferred (0 if no active link or already resolved).
         """
         target_state = self._get_state(daily_state, target_id)
         attacker_id = target_state.jinxed_by
@@ -116,38 +113,9 @@ class PowerUpEngine:
             return 0
 
         attacker_state = self._get_state(daily_state, attacker_id)
-        # Only resolve if attacker has answered AND the link is still pending
-        if not attacker_state.is_correct or attacker_state.jinx_target is None:
+        # Guard against double-transfer
+        if attacker_state.jinx_target is None:
             return 0
-
-        share = int(target_state.score_earned * self.jinx_share_ratio)
-        if share > 0:
-            target_state.score_earned -= share
-            attacker_state.score_earned += share
-        attacker_state.jinx_target = None  # Mark resolved
-        return share
-
-    def resolve_attacker_jinx_on_correct(
-        self,
-        daily_state: dict[str, DailyPlayerState],
-        attacker_id: str,
-    ) -> int:
-        """Transfer share of target's points when the attacker answers correctly.
-
-        The transfer only occurs if the target has **already answered correctly**
-        (parasitic: both players must have earned points for the share to flow).
-        Clears ``attacker.jinx_target`` to prevent a double-transfer later.
-
-        Returns points transferred (0 if target has not yet answered or already resolved).
-        """
-        attacker_state = self._get_state(daily_state, attacker_id)
-        target_id = attacker_state.jinx_target
-        if not target_id:
-            return 0  # No active link or already resolved
-
-        target_state = self._get_state(daily_state, target_id)
-        if not target_state.is_correct:
-            return 0  # Target hasn't answered yet; resolve when they do
 
         share = int(target_state.score_earned * self.jinx_share_ratio)
         if share > 0:

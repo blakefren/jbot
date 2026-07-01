@@ -120,8 +120,8 @@ class TestDailyGameSimulator(unittest.TestCase):
         self.assertEqual(results["p1"]["final_streak"], 2)  # unchanged
 
     def test_jinx_success(self):
-        """Forward jinx: attacker siphons 25% of target's score when both answer.
-        Transfer is deferred until the attacker answers (after hint, since silenced).
+        """Forward jinx: attacker siphons 25% of target's score when target answers.
+        Transfer fires immediately on target answer (no dependency on attacker answering).
         """
         events = [
             PowerUpEvent(
