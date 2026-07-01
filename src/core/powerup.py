@@ -145,16 +145,13 @@ class PowerUpManager(BaseManager):
                     )
                 self.data_manager.clear_pending_multiplier(pid)
 
-        # Wrong-guess penalty: each incorrect guess by a jinxed player costs their attacker points
+        # Wrong-guess penalty: each incorrect guess by a jinxed player costs their attacker points.
+        # No per-guess message — penalty is summarised in the resolution message when target answers.
         if not ctx.is_correct:
             penalty = self.engine.apply_jinx_wrong_guess_penalty(self.daily_state, pid)
             if penalty > 0:
                 attacker_id = self._get_daily_state(pid).jinxed_by
                 self.player_manager.update_score(attacker_id, -penalty)
-                messages.append(
-                    f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx backfired! "
-                    f"<@{pid}> guessed wrong — {penalty} pts deducted from attacker."
-                )
 
         # Resolve jinx: transfer the attacker's share when the target answers correctly.
         msg = self.resolve_jinx(pid, ctx)
@@ -172,7 +169,8 @@ class PowerUpManager(BaseManager):
         Resolve the parasitic Jinx effect when the TARGET answers correctly.
 
         Transfers the attacker's share of the target's points immediately,
-        regardless of whether the attacker has answered.
+        regardless of whether the attacker has answered. Includes a summary of
+        any wrong-guess penalties the attacker accumulated during the round.
         """
         if not ctx.is_correct:
             return ""
@@ -185,6 +183,16 @@ class PowerUpManager(BaseManager):
 
         # Engine: transfer share; clears jinx_target on attacker
         transferred = self.engine.resolve_jinx_on_correct(self.daily_state, player_id)
+        attacker_state = self._get_daily_state(attacker_id)
+        penalty_total = attacker_state.jinx_penalty_total
+
+        def _penalty_suffix(penalty: int) -> str:
+            if not penalty:
+                return ""
+            penalty_per_guess = self.engine.jinx_wrong_guess_penalty
+            count = penalty // penalty_per_guess if penalty_per_guess else 0
+            guesses_str = f"{count} wrong guess{'es' if count != 1 else ''}"
+            return f" (but lost {penalty} pts from {guesses_str} by target)"
 
         if transferred > 0:
             self.player_manager.update_score(player_id, -transferred)
@@ -194,6 +202,17 @@ class PowerUpManager(BaseManager):
                 f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx pays off! "
                 f"Siphoned {transferred} pts ({int(self.jinx_share_ratio * 100)}%) "
                 f"from <@{player_id}>."
+                f"{_penalty_suffix(penalty_total)}"
+            )
+
+        if penalty_total > 0:
+            penalty_per_guess = self.engine.jinx_wrong_guess_penalty
+            count = penalty_total // penalty_per_guess if penalty_per_guess else 0
+            guesses_str = f"{count} wrong guess{'es' if count != 1 else ''}"
+            return (
+                f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx on <@{player_id}> "
+                f"had nothing to siphon, but cost {penalty_total} pts from "
+                f"{guesses_str} by target."
             )
 
         # No message if the link was already resolved (double-transfer guard in engine)

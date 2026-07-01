@@ -84,9 +84,6 @@ class Trivia(commands.Cog):
             await ctx.interaction.followup.send(
                 f"Sorry, that was incorrect.\n\nGuesses:\n{guesses_text}"
             )
-            # Announce power-up effects triggered by this incorrect guess (e.g. jinx wrong-guess penalty)
-            if bonus_messages:
-                await ctx.channel.send("\n".join(bonus_messages))
 
 
 async def setup(bot):

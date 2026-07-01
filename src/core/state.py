@@ -28,6 +28,7 @@ class DailyPlayerState:
     jinx_target: str | None = (
         None  # User ID being jinxed (cleared once share is resolved)
     )
+    jinx_penalty_total: int = 0  # Cumulative wrong-guess penalty paid while jinx active
     stealing_from: str | None = None  # User ID
     steal_ratio: float = (
         1.0  # Fraction of stealable bonuses the thief receives (≤1.0 when partial)

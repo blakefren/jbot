@@ -212,14 +212,15 @@ class TestJinxBehavior(_PowerUpManagerTests):
         self.assertEqual(self.players["2"].score, 100)
 
     def test_jinx_wrong_guess_penalty(self):
-        """Each wrong guess by the target costs the attacker penalty points."""
+        """Each wrong guess by the target costs the attacker penalty points; no per-guess message."""
         self.manager.jinx("1", "2", "q1")
         wrong_ctx = GuessContext(2, "P2", "wrong", False, points_earned=0)
         msgs = self.manager.on_guess(wrong_ctx)
         self.assertEqual(self.players["1"].score, 95)  # -5 penalty
         # State mutation: score_earned on attacker's daily state also decremented
         self.assertEqual(self.manager._get_daily_state("1").score_earned, -5)
-        self.assertTrue(any("backfired" in m or "wrong" in m.lower() for m in msgs))
+        # No per-guess public message; penalty is summarised at resolution time
+        self.assertEqual(msgs, [])
 
     def test_jinx_wrong_guess_penalty_accumulates(self):
         """Multiple wrong guesses by the target accumulate penalty."""
@@ -229,6 +230,8 @@ class TestJinxBehavior(_PowerUpManagerTests):
                 GuessContext(2, "P2", "wrong", False, points_earned=0)
             )
         self.assertEqual(self.players["1"].score, 85)  # -5 * 3 = -15
+        # Penalty total tracked on attacker's state
+        self.assertEqual(self.manager._get_daily_state("1").jinx_penalty_total, 15)
 
     def test_jinx_streak_bonus_kept_by_target(self):
         """New jinx no longer steals the target's streak bonus — it stays with the target."""
@@ -254,6 +257,22 @@ class TestJinxBehavior(_PowerUpManagerTests):
             GuessContext(2, "P2", "ans", True, points_earned=100, bonus_values={})
         )
         self.assertTrue(any("25" in m for m in msgs))
+
+    def test_jinx_resolution_message_includes_penalty_summary(self):
+        """Resolution message includes a summary of wrong-guess penalties accumulated."""
+        self.manager.jinx("1", "2", "q1")
+        # Two wrong guesses by target (2 × 5 = 10 pts penalty)
+        for _ in range(2):
+            self.manager.on_guess(
+                GuessContext(2, "P2", "wrong", False, points_earned=0)
+            )
+        # Target answers correctly
+        msgs = self.manager.on_guess(
+            GuessContext(2, "P2", "ans", True, points_earned=100, bonus_values={})
+        )
+        resolution_msg = " ".join(msgs)
+        self.assertIn("10", resolution_msg)  # penalty total
+        self.assertIn("2 wrong guesses", resolution_msg)
 
     def test_duplicate_jinx_on_same_target_blocked(self):
         """A second jinx on the same target is blocked and the attempt is not logged."""

@@ -141,6 +141,7 @@ class PowerUpEngine:
         attacker_state = self._get_state(daily_state, attacker_id)
         penalty = self.jinx_wrong_guess_penalty
         attacker_state.score_earned -= penalty
+        attacker_state.jinx_penalty_total += penalty
         return penalty
 
     # ------------------------------------------------------------------

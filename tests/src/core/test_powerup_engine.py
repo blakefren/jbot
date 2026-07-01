@@ -261,6 +261,7 @@ class TestApplyJinxWrongGuessPenalty(unittest.TestCase):
         penalty = self.engine.apply_jinx_wrong_guess_penalty(ds, "tgt")
         self.assertEqual(penalty, 5)
         self.assertEqual(ds["att"].score_earned, 45)
+        self.assertEqual(ds["att"].jinx_penalty_total, 5)
 
     def test_returns_zero_when_not_jinxed(self):
         ds = {"tgt": _state()}
@@ -284,6 +285,7 @@ class TestApplyJinxWrongGuessPenalty(unittest.TestCase):
         self.engine.apply_jinx_wrong_guess_penalty(ds, "tgt")
         self.engine.apply_jinx_wrong_guess_penalty(ds, "tgt")
         self.assertEqual(ds["att"].score_earned, 40)
+        self.assertEqual(ds["att"].jinx_penalty_total, 10)
 
 
 # ---------------------------------------------------------------------------
