@@ -186,7 +186,7 @@ class TestJinxBehavior(_PowerUpManagerTests):
         msgs = self.manager.on_guess(ctx)
         # Transfer fires immediately: 25% of 100 = 25
         self.assertEqual(self.players["1"].score, 125)  # attacker gains 25
-        self.assertEqual(self.players["2"].score, 75)   # target loses 25
+        self.assertEqual(self.players["2"].score, 75)  # target loses 25
         self.assertTrue(any("25" in m for m in msgs))
 
     def test_jinx_transfers_share_when_target_answers_after_attacker(self):
@@ -907,7 +907,7 @@ class TestInteractionMatrix(unittest.TestCase):
 
         # Jinx fires first: 25% of 130 = 32 transferred to A.
         self.assertEqual(self.players["A"].score, 132)  # 100 + 32
-        self.assertEqual(self.players["B"].score, 58)   # 100 - 32 (jinx) - 10 (steal)
+        self.assertEqual(self.players["B"].score, 58)  # 100 - 32 (jinx) - 10 (steal)
         # Steal resolves: C gets before_hint=10 (streak not stealable).
         self.assertEqual(self.players["C"].score, 110)  # 100 + 10
 
@@ -1027,7 +1027,7 @@ class TestInteractionMatrix(unittest.TestCase):
 
         # Jinx fires: 25% of B.score_earned (115) = 28 transferred to A
         self.assertEqual(self.players["A"].score, 128)  # 100 + 28
-        self.assertEqual(self.players["B"].score, 72)   # 100 - 28
+        self.assertEqual(self.players["B"].score, 72)  # 100 - 28
 
     # --- Row 7: A forward-steals B → B answers → B late-jinxes C ---
 
@@ -1087,9 +1087,7 @@ class TestInteractionMatrix(unittest.TestCase):
         )
         manager.on_guess(ctx)
         self.assertEqual(self.players["A"].score, 130)  # 100 + 30 (jinx transfer)
-        self.assertEqual(
-            self.players["B"].score, 70
-        )  # 100 - 30 (jinx transfer)
+        self.assertEqual(self.players["B"].score, 70)  # 100 - 30 (jinx transfer)
 
         # B is now late-day
         self.data_manager.get_last_correct_guess_date.side_effect = lambda pid: (
@@ -1110,7 +1108,7 @@ class TestInteractionMatrix(unittest.TestCase):
         msgs_a = manager.on_guess(ctx_a)
 
         self.assertEqual(self.players["A"].score, 130)  # unchanged
-        self.assertEqual(self.players["B"].score, 55)   # unchanged
+        self.assertEqual(self.players["B"].score, 55)  # unchanged
         # No jinx-related message on A's answer (link already resolved)
         self.assertFalse(any(manager.emoji_jinxed in m for m in msgs_a))
 
