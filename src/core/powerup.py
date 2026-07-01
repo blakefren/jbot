@@ -186,33 +186,33 @@ class PowerUpManager(BaseManager):
         attacker_state = self._get_daily_state(attacker_id)
         penalty_total = attacker_state.jinx_penalty_total
 
-        def _penalty_suffix(penalty: int) -> str:
+        def _wrong_guess_summary(penalty: int) -> str:
+            """Return a formatted description of wrong-guess penalties, or empty string."""
             if not penalty:
                 return ""
             penalty_per_guess = self.engine.jinx_wrong_guess_penalty
             count = penalty // penalty_per_guess if penalty_per_guess else 0
-            guesses_str = f"{count} wrong guess{'es' if count != 1 else ''}"
-            return f" (but lost {penalty} pts from {guesses_str} by target)"
+            return f"{count} wrong guess{'es' if count != 1 else ''}"
 
         if transferred > 0:
             self.player_manager.update_score(player_id, -transferred)
             self.player_manager.update_score(attacker_id, transferred)
             ctx.points_earned -= transferred
+            suffix = ""
+            if penalty_total > 0:
+                suffix = f" (but lost {penalty_total} pts from {_wrong_guess_summary(penalty_total)} by target)"
             return (
                 f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx pays off! "
                 f"Siphoned {transferred} pts ({int(self.jinx_share_ratio * 100)}%) "
                 f"from <@{player_id}>."
-                f"{_penalty_suffix(penalty_total)}"
+                f"{suffix}"
             )
 
         if penalty_total > 0:
-            penalty_per_guess = self.engine.jinx_wrong_guess_penalty
-            count = penalty_total // penalty_per_guess if penalty_per_guess else 0
-            guesses_str = f"{count} wrong guess{'es' if count != 1 else ''}"
             return (
                 f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx on <@{player_id}> "
                 f"had nothing to siphon, but cost {penalty_total} pts from "
-                f"{guesses_str} by target."
+                f"{_wrong_guess_summary(penalty_total)} by target."
             )
 
         # No message if the link was already resolved (double-transfer guard in engine)
