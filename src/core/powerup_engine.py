@@ -26,8 +26,11 @@ class PowerUpEngine:
         self.retro_steal_streak_cost = int(
             config.get("JBOT_RETRO_STEAL_STREAK_COST", "5")
         )
-        self.retro_jinx_bonus_ratio = float(
-            config.get("JBOT_RETRO_JINX_BONUS_RATIO", "0.5")
+        self.jinx_share_ratio = float(
+            config.get("JBOT_JINX_SHARE_RATIO", "0.25")
+        )
+        self.jinx_wrong_guess_penalty = int(
+            config.get("JBOT_JINX_WRONG_GUESS_PENALTY", "5")
         )
 
     # ------------------------------------------------------------------
@@ -53,26 +56,28 @@ class PowerUpEngine:
     ) -> int:
         """Set jinx state flags. If target already answered, resolve retroactively.
 
-        Silences the attacker. If the target has already answered correctly, transfers
-        ``retro_jinx_bonus_ratio`` of their streak bonus to the attacker immediately.
+        Silences the attacker and establishes the parasitic link (``jinx_target`` on
+        attacker, ``jinxed_by`` on target). If the target has already answered correctly,
+        transfers ``jinx_share_ratio`` of their total points to the attacker immediately
+        and marks the link resolved (clears ``jinx_target``).
 
-        Returns the number of points transferred (0 if none).
+        Returns the number of points transferred (0 if target has not answered yet).
         """
         attacker_state = self._get_state(daily_state, attacker_id)
         target_state = self._get_state(daily_state, target_id)
         attacker_state.silenced = True
+        attacker_state.jinx_target = target_id
+        target_state.jinxed_by = attacker_id
 
         if target_state.is_correct:
-            streak_val = target_state.bonuses.get("streak", 0)
-            transferred = int(streak_val * self.retro_jinx_bonus_ratio)
-            if transferred > 0:
-                target_state.score_earned -= transferred
-                attacker_state.score_earned += transferred
-                target_state.bonuses.pop("streak", None)
-            target_state.jinxed_by = attacker_id  # mark resolved
-            return transferred
+            # Retroactive: target already answered — transfer share immediately.
+            share = int(target_state.score_earned * self.jinx_share_ratio)
+            if share > 0:
+                target_state.score_earned -= share
+                attacker_state.score_earned += share
+            attacker_state.jinx_target = None  # Mark resolved to prevent double-transfer
+            return share
 
-        target_state.jinxed_by = attacker_id
         return 0
 
     def apply_late_jinx(
@@ -86,9 +91,6 @@ class PowerUpEngine:
         Strips the attacker's before_hint and fastest bonuses as the cost, then
         applies jinx state flags and retroactive resolution against the target.
 
-        ``strip_late_day_jinx_cost`` mutates score_earned directly.
-        ``apply_jinx`` handles silencing and retroactive transfer independently.
-
         Returns ``(cost_deducted, points_transferred_from_target)``.
         """
         cost = self.strip_late_day_jinx_cost(daily_state, attacker_id)
@@ -99,24 +101,79 @@ class PowerUpEngine:
         self,
         daily_state: dict[str, DailyPlayerState],
         target_id: str,
-        bonus_values: dict,
     ) -> int:
-        """Transfer streak bonus from a jinxed target to their attacker when they answer.
+        """Transfer share of target's points to attacker when the target answers correctly.
 
-        ``bonus_values`` is the mutable bonuses dict from score calculation (modified
-        in place to remove the streak entry). Returns the number of points transferred.
+        The transfer only occurs if the attacker has **already answered correctly**
+        (parasitic: both players must have earned points for the share to flow).
+        Clears ``attacker.jinx_target`` to prevent a double-transfer later.
+
+        Returns points transferred (0 if attacker has not yet answered or already resolved).
         """
         target_state = self._get_state(daily_state, target_id)
         attacker_id = target_state.jinxed_by
         if not attacker_id:
             return 0
 
-        streak_bonus = bonus_values.get("streak", 0)
-        if streak_bonus > 0:
-            bonus_values.pop("streak")
-            attacker_state = self._get_state(daily_state, attacker_id)
-            attacker_state.score_earned += streak_bonus
-        return streak_bonus
+        attacker_state = self._get_state(daily_state, attacker_id)
+        # Only resolve if attacker has answered AND the link is still pending
+        if not attacker_state.is_correct or attacker_state.jinx_target is None:
+            return 0
+
+        share = int(target_state.score_earned * self.jinx_share_ratio)
+        if share > 0:
+            target_state.score_earned -= share
+            attacker_state.score_earned += share
+        attacker_state.jinx_target = None  # Mark resolved
+        return share
+
+    def resolve_attacker_jinx_on_correct(
+        self,
+        daily_state: dict[str, DailyPlayerState],
+        attacker_id: str,
+    ) -> int:
+        """Transfer share of target's points when the attacker answers correctly.
+
+        The transfer only occurs if the target has **already answered correctly**
+        (parasitic: both players must have earned points for the share to flow).
+        Clears ``attacker.jinx_target`` to prevent a double-transfer later.
+
+        Returns points transferred (0 if target has not yet answered or already resolved).
+        """
+        attacker_state = self._get_state(daily_state, attacker_id)
+        target_id = attacker_state.jinx_target
+        if not target_id:
+            return 0  # No active link or already resolved
+
+        target_state = self._get_state(daily_state, target_id)
+        if not target_state.is_correct:
+            return 0  # Target hasn't answered yet; resolve when they do
+
+        share = int(target_state.score_earned * self.jinx_share_ratio)
+        if share > 0:
+            target_state.score_earned -= share
+            attacker_state.score_earned += share
+        attacker_state.jinx_target = None  # Mark resolved
+        return share
+
+    def apply_jinx_wrong_guess_penalty(
+        self,
+        daily_state: dict[str, DailyPlayerState],
+        target_id: str,
+    ) -> int:
+        """Deduct the wrong-guess penalty from the attacker when a jinxed target guesses wrong.
+
+        Returns the penalty deducted (0 if the target is not jinxed).
+        """
+        target_state = self._get_state(daily_state, target_id)
+        attacker_id = target_state.jinxed_by
+        if not attacker_id:
+            return 0
+
+        attacker_state = self._get_state(daily_state, attacker_id)
+        penalty = self.jinx_wrong_guess_penalty
+        attacker_state.score_earned -= penalty
+        return penalty
 
     # ------------------------------------------------------------------
     # Steal
@@ -286,6 +343,7 @@ class PowerUpEngine:
         attacker_state = self._get_state(daily_state, attacker_id)
         target_state = self._get_state(daily_state, target_id)
         attacker_state.silenced = True
+        attacker_state.jinx_target = target_id
         target_state.jinxed_by = attacker_id
 
     # ------------------------------------------------------------------

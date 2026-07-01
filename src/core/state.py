@@ -25,6 +25,7 @@ class DailyPlayerState:
 
     # Power-up: Attack (Outgoing)
     silenced: bool = False  # Result of jinxing
+    jinx_target: str | None = None  # User ID being jinxed (cleared once share is resolved)
     stealing_from: str | None = None  # User ID
     steal_ratio: float = (
         1.0  # Fraction of stealable bonuses the thief receives (≤1.0 when partial)
@@ -35,4 +36,9 @@ class DailyPlayerState:
         """
         Determines if a powerup was used today based on state flags.
         """
-        return self.is_resting or self.silenced or self.stealing_from is not None
+        return (
+            self.is_resting
+            or self.silenced
+            or self.stealing_from is not None
+            or self.jinx_target is not None
+        )

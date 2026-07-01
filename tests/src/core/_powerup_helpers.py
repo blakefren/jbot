@@ -8,14 +8,20 @@ a single edit here rather than updating every test file individually.
 from unittest.mock import MagicMock
 
 
-def make_config(steal_cost=3, retro_steal_cost=5, retro_jinx_ratio=0.5):
+def make_config(
+    steal_cost=3,
+    retro_steal_cost=5,
+    jinx_share_ratio=0.25,
+    jinx_wrong_guess_penalty=5,
+):
     """Return a MagicMock ConfigReader pre-loaded with standard test values."""
     cfg = MagicMock()
 
     values = {
         "JBOT_STEAL_STREAK_COST": str(steal_cost),
         "JBOT_RETRO_STEAL_STREAK_COST": str(retro_steal_cost),
-        "JBOT_RETRO_JINX_BONUS_RATIO": str(retro_jinx_ratio),
+        "JBOT_JINX_SHARE_RATIO": str(jinx_share_ratio),
+        "JBOT_JINX_WRONG_GUESS_PENALTY": str(jinx_wrong_guess_penalty),
         "JBOT_BONUS_STREAK_PER_DAY": "5",
         "JBOT_BONUS_STREAK_CAP": "25",
         "JBOT_BONUS_BEFORE_HINT": "10",

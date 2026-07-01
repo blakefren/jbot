@@ -52,6 +52,7 @@ class PowerUpManager(BaseManager):
         self.emoji_rest_wakeup = _config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
         self.emoji_streak = _config.get("JBOT_EMOJI_STREAK", "🔥")
         self.rest_multiplier = float(_config.get("JBOT_REST_MULTIPLIER", "1.2"))
+        self.jinx_share_ratio = self.engine.jinx_share_ratio
         # Transient state for the day
         self.daily_state: dict[str, DailyPlayerState] = {}
 
@@ -144,7 +145,28 @@ class PowerUpManager(BaseManager):
                     )
                 self.data_manager.clear_pending_multiplier(pid)
 
+        # Wrong-guess penalty: each incorrect guess by a jinxed player costs their attacker points
+        if not ctx.is_correct:
+            penalty = self.engine.apply_jinx_wrong_guess_penalty(
+                self.daily_state, pid
+            )
+            if penalty > 0:
+                attacker_id = self._get_daily_state(pid).jinxed_by
+                self.player_manager.update_score(attacker_id, -penalty)
+                messages.append(
+                    f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx backfired! "
+                    f"<@{pid}> guessed wrong — {penalty} pts deducted from attacker."
+                )
+
+        # Resolve jinx: if target (pid) just answered correctly AND attacker already has too,
+        # transfer the share now. Otherwise the transfer waits for the attacker to answer.
         msg = self.resolve_jinx(pid, ctx)
+        if msg:
+            messages.append(msg)
+
+        # Resolve attacker jinx: if attacker (pid) just answered correctly AND their target
+        # has already answered, transfer the share now.
+        msg = self.resolve_attacker_jinx(pid, ctx)
         if msg:
             messages.append(msg)
 
@@ -156,33 +178,74 @@ class PowerUpManager(BaseManager):
 
     def resolve_jinx(self, player_id: str, ctx: GuessContext) -> str:
         """
-        Resolve Jinx effect on the target.
+        Resolve the parasitic Jinx effect when the TARGET answers correctly.
+
+        If the attacker has also answered, transfer their share of the target's
+        points immediately.  If the attacker has not yet answered the transfer
+        is deferred — it will fire via resolve_attacker_jinx when they do.
         """
+        if not ctx.is_correct:
+            return ""
+
         state = self._get_daily_state(player_id)
         attacker_id = state.jinxed_by
 
-        if not attacker_id or not ctx.is_correct:
+        if not attacker_id:
             return ""
 
-        # Engine: transfer streak bonus in state, strip from bonus_values dict
+        # Engine: transfer share if attacker already answered; clears jinx_target on attacker
         transferred = self.engine.resolve_jinx_on_correct(
-            self.daily_state, player_id, ctx.bonus_values
+            self.daily_state, player_id
         )
 
         if transferred > 0:
             self.player_manager.update_score(player_id, -transferred)
             self.player_manager.update_score(attacker_id, transferred)
             ctx.points_earned -= transferred
+            return (
+                f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx pays off! "
+                f"Siphoned {transferred} pts ({int(self.jinx_share_ratio * 100)}%) "
+                f"from <@{player_id}>."
+            )
 
-            # Remove streak message if present
-            for i, msg in enumerate(ctx.bonus_messages):
-                if self.emoji_streak in msg:
-                    ctx.bonus_messages.pop(i)
-                    break
+        # Attacker hasn't answered yet — share is deferred until they do
+        return (
+            f"{self.emoji_jinxed} <@{player_id}> answered while Jinxed by <@{attacker_id}>! "
+            f"Their points are at risk once <@{attacker_id}> answers."
+        )
 
-            return f"{self.emoji_jinxed} <@{attacker_id}> swiped <@{player_id}>'s streak bonus of {transferred} pts via Jinx!"
+    def resolve_attacker_jinx(self, player_id: str, ctx: GuessContext) -> str:
+        """
+        Resolve the parasitic Jinx effect when the ATTACKER answers correctly.
 
-        return f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx had no effect — <@{player_id}> had no streak bonus to steal!"
+        If the jinxed target has already answered, transfer the share now.
+        Otherwise nothing happens here — resolve_jinx will handle it when the
+        target eventually answers.
+        """
+        if not ctx.is_correct:
+            return ""
+
+        state = self._get_daily_state(player_id)
+        target_id = state.jinx_target  # None if no active jinx or already resolved
+
+        if not target_id:
+            return ""
+
+        # Engine: transfer share if target already answered; clears jinx_target
+        transferred = self.engine.resolve_attacker_jinx_on_correct(
+            self.daily_state, player_id
+        )
+
+        if transferred > 0:
+            self.player_manager.update_score(target_id, -transferred)
+            self.player_manager.update_score(player_id, transferred)
+            ctx.points_earned += transferred
+            return (
+                f"{self.emoji_jinxed} Your Jinx pays off! Siphoned {transferred} pts "
+                f"({int(self.jinx_share_ratio * 100)}%) from <@{target_id}>."
+            )
+
+        return ""
 
     def resolve_steal(self, target_id: str, ctx: GuessContext) -> str:
         """
@@ -254,11 +317,13 @@ class PowerUpManager(BaseManager):
 
     def jinx(self, attacker_id: str, target_id: str, question_id: int = None) -> str:
         """
-        Jinx another player.
+        Jinx another player — parasitic link.
 
         Overnight (question_id is None): pre-loads the jinx for the next question day.
-        Daytime: silences attacker until hint; if target already answered, resolves
-        immediately at a reduced ratio (retro_jinx_bonus_ratio) of the streak bonus.
+        Daytime: silences attacker until hint; establishes a parasitic link so the
+        attacker siphons a share of the target's points when both have answered.
+        The attacker also loses points for each wrong guess the target makes.
+        If target already answered, transfers the share immediately (retroactive).
         """
         attacker = self.player_manager.get_player(attacker_id)
         target = self.player_manager.get_player(target_id)
@@ -286,9 +351,12 @@ class PowerUpManager(BaseManager):
             self.data_manager.log_powerup_usage(
                 attacker_id, "jinx_preload", target_id, None
             )
+            share_pct = int(self.jinx_share_ratio * 100)
             return (
                 f"{self.emoji_silenced} Your jinx is queued for tomorrow! "
                 f"{target.name} won't know until it takes effect. "
+                f"You'll siphon {share_pct}% of their points, but lose "
+                f"{self.engine.jinx_wrong_guess_penalty} pts per wrong guess they make. "
                 f"You can't answer until the hint is revealed!"
             )
 
@@ -310,14 +378,8 @@ class PowerUpManager(BaseManager):
         if target_state.jinxed_by:
             raise PowerUpError(f"<@{target_id}> has already been jinxed!")
 
-        # Block retroactive jinx when the target has no streak bonus — the attacker
-        # would consume their power-up slot (and pay late costs) for zero gain.
-        if target_state.is_correct and not target_state.bonuses.get("streak", 0):
-            raise PowerUpError(
-                f"<@{target_id}> already answered but has no streak bonus — nothing to jinx!"
-            )
-
-        attacker_state.silenced = True
+        share_pct = int(self.jinx_share_ratio * 100)
+        penalty = self.engine.jinx_wrong_guess_penalty
 
         if is_late_day:
             # --- Late-day jinx: attacker already answered ---
@@ -344,16 +406,17 @@ class PowerUpManager(BaseManager):
                 if transferred > 0:
                     return (
                         f"{self.emoji_jinxed} Late jinx on <@{target_id}>! "
-                        f"Swiped {transferred} pts of their streak bonus{cost_str}."
+                        f"Siphoned {transferred} pts ({share_pct}%){cost_str}."
                     )
                 return (
                     f"{self.emoji_jinxed} Late jinx landed on <@{target_id}>, "
-                    f"but they had no streak bonus{cost_str}."
+                    f"but they had 0 pts to siphon{cost_str}."
                 )
 
             return (
                 f"{self.emoji_jinxed} Late jinx set on {target.name}{cost_str}! "
-                f"Their streak bonus is forfeit when they answer."
+                f"You'll siphon {share_pct}% of their points when they answer, "
+                f"but lose {penalty} pts per wrong guess they make."
             )
 
         # --- Normal daytime path ---
@@ -361,18 +424,20 @@ class PowerUpManager(BaseManager):
         transferred = self.engine.apply_jinx(self.daily_state, attacker_id, target_id)
 
         if self._get_daily_state(target_id).is_correct:
-            # Retroactive: target already answered (no-streak case blocked above)
+            # Retroactive: target already answered
             self.player_manager.update_score(target_id, -transferred)
             self.player_manager.update_score(attacker_id, transferred)
             return (
                 f"{self.emoji_jinxed} <@{target_id}> already answered \u2014 retroactive jinx! "
-                f"You swiped half their streak bonus ({transferred} pts). "
+                f"Siphoned {transferred} pts ({share_pct}% of their score). "
                 f"{self.emoji_silenced} You still can't answer until the hint is revealed."
             )
 
         # Normal daytime path (target hasn't answered yet)
         return (
-            f"{self.emoji_silenced} Your jinx is set! {target.name} won't know until it takes effect. "
+            f"{self.emoji_silenced} Jinx activated on {target.name}! "
+            f"You'll siphon {share_pct}% of their points when both of you answer. "
+            f"You lose {penalty} pts for each wrong guess they make. "
             f"You can't answer until the hint is revealed!"
         )
 

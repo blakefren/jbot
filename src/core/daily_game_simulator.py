@@ -138,7 +138,11 @@ class DailyGameSimulator:
             if self.checker.is_correct(guess_text, ans):
                 is_correct = True
                 break
+
         if not is_correct:
+            # Wrong-guess penalty: each incorrect guess by a jinxed player costs their attacker
+            if state.jinxed_by:
+                self.engine.apply_jinx_wrong_guess_penalty(self.daily_state, user_id)
             return
 
         state.is_correct = True
@@ -183,7 +187,7 @@ class DailyGameSimulator:
 
         # Apply rest multiplier BEFORE jinx, matching the live on_guess order:
         # PowerUpManager.on_guess applies rest bonus to ctx.points_earned (full score)
-        # then resolves jinx, so the multiplier never touches the stolen streak portion.
+        # then resolves jinx, so the multiplier never touches the jinxed portion.
         player = self.initial_player_states.get(user_id)
         pending_mult = float(player.pending_rest_multiplier or 0.0) if player else 0.0
         if pending_mult > 1.0:
@@ -192,17 +196,20 @@ class DailyGameSimulator:
                 points += rest_bonus
                 bonuses["rest"] = rest_bonus
 
-        # Apply Jinx/Silence Logic (Remove Streak Bonus, Transfer to Attacker)
-        if state.jinxed_by or state.silenced:
-            if "streak" in bonuses:
-                transferred = self.engine.resolve_jinx_on_correct(
-                    self.daily_state, user_id, bonuses
-                )
-                points -= transferred
-
         state.score_earned += points
         state.bonuses = bonuses
         state.streak_delta += 1
+
+        # Resolve Jinx — parasitic share transfer on correct answer.
+        # Case A: this player is the TARGET (jinxed_by is set):
+        #   If the attacker has already answered, transfer share now.
+        if state.jinxed_by:
+            self.engine.resolve_jinx_on_correct(self.daily_state, user_id)
+
+        # Case B: this player is the ATTACKER (jinx_target is set):
+        #   If the target has already answered, transfer share now.
+        if state.jinx_target:
+            self.engine.resolve_attacker_jinx_on_correct(self.daily_state, user_id)
 
         # Resolve Steal
         if state.steal_attempt_by:

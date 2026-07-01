@@ -186,50 +186,53 @@ class TestHydration(unittest.TestCase):
 
 
 class TestRetroactiveJinx(unittest.TestCase):
-    def _setup_with_answered_target(self, streak_bonus=20):
+    def _setup_with_answered_target(self, score_earned=100):
+        """Set up a target that has already answered correctly with the given score."""
         manager, pm, dm, players = _make_manager()
-        # Mark target as already answered with a streak bonus
         target_state = manager._get_daily_state("target")
         target_state.is_correct = True
-        target_state.bonuses = {"streak": streak_bonus}
+        target_state.score_earned = score_earned
+        target_state.bonuses = {"streak": 20}  # streak stays with target in new mechanic
         return manager, pm, dm, players
 
-    def test_retro_jinx_transfers_half_streak(self):
-        manager, pm, dm, players = self._setup_with_answered_target(streak_bonus=20)
+    def test_retro_jinx_transfers_share_of_score(self):
+        """Retroactive jinx transfers 25% of target's total score_earned."""
+        manager, pm, dm, players = self._setup_with_answered_target(score_earned=100)
         manager.jinx("attacker", "target", question_id=99)
-        # attacker gains 10, target loses 10
-        self.assertEqual(players["attacker"].score, 110)
-        self.assertEqual(players["target"].score, 90)
+        # 25% of 100 = 25 transferred
+        self.assertEqual(players["attacker"].score, 125)
+        self.assertEqual(players["target"].score, 75)
 
     def test_retro_jinx_silences_attacker(self):
-        manager, pm, dm, players = self._setup_with_answered_target(streak_bonus=20)
+        manager, pm, dm, players = self._setup_with_answered_target(score_earned=100)
         manager.jinx("attacker", "target", question_id=99)
         self.assertTrue(manager._get_daily_state("attacker").silenced)
 
     def test_retro_jinx_marks_target_jinxed_by(self):
-        manager, pm, dm, players = self._setup_with_answered_target(streak_bonus=20)
+        manager, pm, dm, players = self._setup_with_answered_target(score_earned=100)
         manager.jinx("attacker", "target", question_id=99)
         self.assertEqual(manager._get_daily_state("target").jinxed_by, "attacker")
 
     def test_retro_jinx_logs_normal_jinx_type(self):
-        manager, pm, dm, players = self._setup_with_answered_target(streak_bonus=20)
+        manager, pm, dm, players = self._setup_with_answered_target(score_earned=100)
         manager.jinx("attacker", "target", question_id=99)
         dm.log_powerup_usage.assert_called_once_with("attacker", "jinx", "target", 99)
 
-    def test_retro_jinx_no_streak_bonus_blocked(self):
-        manager, pm, dm, players = self._setup_with_answered_target(streak_bonus=0)
-        with self.assertRaises(PowerUpError):
-            manager.jinx("attacker", "target", question_id=99)
-        # No score changes, power-up slot not consumed
+    def test_retro_jinx_zero_score_no_transfer(self):
+        """Retro jinx on target with 0 score_earned: no points transferred, no error."""
+        manager, pm, dm, players = self._setup_with_answered_target(score_earned=0)
+        manager.jinx("attacker", "target", question_id=99)
+        # No transfer; attacker is still silenced
         self.assertEqual(players["attacker"].score, 100)
         self.assertEqual(players["target"].score, 100)
+        self.assertTrue(manager._get_daily_state("attacker").silenced)
 
     def test_retro_jinx_rounds_down(self):
-        """int(7 * 0.5) = 3, not 4."""
-        manager, pm, dm, players = self._setup_with_answered_target(streak_bonus=7)
+        """int(7 * 0.25) = 1 (truncates, not rounds)."""
+        manager, pm, dm, players = self._setup_with_answered_target(score_earned=7)
         manager.jinx("attacker", "target", question_id=99)
-        self.assertEqual(players["attacker"].score, 103)
-        self.assertEqual(players["target"].score, 97)
+        self.assertEqual(players["attacker"].score, 101)
+        self.assertEqual(players["target"].score, 99)
 
     def test_normal_jinx_not_triggered_when_target_unanswered(self):
         """Normal path: target hasn't answered, no immediate resolution."""
@@ -261,9 +264,9 @@ class TestRetroactiveJinx(unittest.TestCase):
         # Attacker jinxes after target has already answered
         result = manager.jinx("attacker", "target", question_id=99)
 
-        # Should be retroactive: attacker gains 10, target loses 10
-        self.assertEqual(players["attacker"].score, 110)
-        self.assertEqual(players["target"].score, 90)
+        # Retroactive: 25% of 100 = 25 transferred
+        self.assertEqual(players["attacker"].score, 125)
+        self.assertEqual(players["target"].score, 75)
         self.assertIn("retroactive jinx", result)
 
 
@@ -388,8 +391,8 @@ class TestSimulatorOvernightStealPreload(unittest.TestCase):
 
 
 class TestSimulatorRetroactiveJinx(unittest.TestCase):
-    def test_retro_jinx_half_streak_transferred(self):
-        """When jinx fires after target has answered, attacker gets half streak bonus."""
+    def test_retro_jinx_transfers_share_immediately(self):
+        """Retro jinx (target already answered) transfers 25% of score_earned at once."""
         config = _make_config()
         attacker = Player(id="A", name="A", score=0, answer_streak=1)
         target = Player(id="T", name="T", score=0, answer_streak=5)
@@ -403,25 +406,26 @@ class TestSimulatorRetroactiveJinx(unittest.TestCase):
         sim = DailyGameSimulator(
             _make_question(), ["correct"], None, events, initial_states, config
         )
-        sim.run(apply_end_of_day=False)
+        results = sim.run(apply_end_of_day=False)
 
-        target_state = sim.daily_state["T"]
         attacker_state = sim.daily_state["A"]
+        target_state = sim.daily_state["T"]
 
-        streak_bonus = target_state.bonuses.get("streak", 0)
-        # streak bonus should be stripped from target's bonuses
-        self.assertEqual(streak_bonus, 0)
-        # attacker has positive score_earned from streak transfer
+        # Retro transfer fires immediately: attacker gets positive score_earned
         self.assertGreater(attacker_state.score_earned, 0)
+        # Streak bonus is NOT stripped from target by the new jinx
+        self.assertIn("streak", target_state.bonuses)
 
-    def test_normal_jinx_full_streak_transferred(self):
-        """Check that a pre-answer jinx (normal path) strips full streak from target."""
+    def test_forward_jinx_deferred_until_attacker_answers(self):
+        """Forward jinx (before target answers): transfer deferred until attacker answers.
+        If attacker never answers, no transfer occurs.
+        """
         config = _make_config()
         attacker = Player(id="A", name="A", score=0, answer_streak=1)
         target = Player(id="T", name="T", score=0, answer_streak=5)
         initial_states = {"A": attacker, "T": target}
 
-        # Jinx fires BEFORE target answers
+        # Jinx fires BEFORE target answers; attacker never answers in this test
         events = [
             PowerUpEvent(_ts(8, 30), "A", "jinx", "T"),
             GuessEvent(_ts(9), "T", "correct"),
@@ -431,13 +435,15 @@ class TestSimulatorRetroactiveJinx(unittest.TestCase):
         )
         sim.run(apply_end_of_day=False)
 
-        target_state = sim.daily_state["T"]
         attacker_state = sim.daily_state["A"]
+        target_state = sim.daily_state["T"]
 
-        # Full streak bonus transferred (no fraction)
-        streak_bonus = target_state.bonuses.get("streak", 0)
-        self.assertEqual(streak_bonus, 0)
-        self.assertGreater(attacker_state.score_earned, 0)
+        # No transfer yet (attacker hasn't answered)
+        self.assertEqual(attacker_state.score_earned, 0)
+        # Streak bonus stays with target (new jinx doesn't strip it)
+        self.assertIn("streak", target_state.bonuses)
+        # Jinx link is still open (attacker has pending jinx_target)
+        self.assertEqual(attacker_state.jinx_target, "T")
 
 
 class TestSimulatorRetroactiveSteal(unittest.TestCase):
