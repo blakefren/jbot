@@ -242,13 +242,15 @@ class TestResolveJinxOnCorrect(unittest.TestCase):
         self.assertIsNone(ds["att"].jinx_target)
 
     def test_no_double_transfer_if_already_resolved(self):
-        """If jinx_target is already None (resolved), no transfer occurs."""
+        """If jinx_target is already None (resolved), no transfer occurs and scores unchanged."""
         ds = {
             "tgt": _state(jinxed_by="att", score_earned=100),
             "att": _state(is_correct=True, jinx_target=None),
         }
         transferred = self.engine.resolve_jinx_on_correct(ds, "tgt")
         self.assertEqual(transferred, 0)
+        self.assertEqual(ds["tgt"].score_earned, 100)
+        self.assertEqual(ds["att"].score_earned, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -293,13 +295,15 @@ class TestResolveAttackerJinxOnCorrect(unittest.TestCase):
         self.assertIsNone(ds["att"].jinx_target)
 
     def test_no_double_transfer(self):
-        """Calling again after jinx_target is cleared returns 0."""
+        """Calling again after jinx_target is cleared returns 0 and scores remain unchanged."""
         ds = {
             "att": _state(is_correct=True, jinx_target=None),
             "tgt": _state(is_correct=True, score_earned=100),
         }
         transferred = self.engine.resolve_attacker_jinx_on_correct(ds, "att")
         self.assertEqual(transferred, 0)
+        self.assertEqual(ds["tgt"].score_earned, 100)
+        self.assertEqual(ds["att"].score_earned, 0)
 
 
 # ---------------------------------------------------------------------------

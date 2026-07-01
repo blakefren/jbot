@@ -153,7 +153,9 @@ class TestJinxLateDay(unittest.TestCase):
         self.assertEqual(self.players["target"].score, initial_target - 25)
 
     def test_late_jinx_retro_zero_target_points_no_transfer(self):
-        """When target answered with 0 points, no transfer occurs but jinx still succeeds."""
+        """When target answered with 0 points, no transfer occurs but jinx still succeeds.
+        The jinx_target is cleared to prevent any future double-transfer.
+        """
         self._setup()
         t_state = self.manager._get_daily_state("target")
         t_state.is_correct = True
@@ -166,6 +168,8 @@ class TestJinxLateDay(unittest.TestCase):
         except PowerUpError:
             self.fail("jinx raised PowerUpError with 0-point target")
         self.assertEqual(self.players["target"].score, initial_target)
+        # Link resolved — jinx_target cleared even on zero-transfer
+        self.assertIsNone(self.manager._get_daily_state("attacker").jinx_target)
 
     def test_powerup_used_today_blocks_second_jinx(self):
         """A second jinx attempt by the same attacker is blocked."""

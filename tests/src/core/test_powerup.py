@@ -235,6 +235,8 @@ class TestJinxBehavior(_PowerUpManagerTests):
         wrong_ctx = GuessContext(2, "P2", "wrong", False, points_earned=0)
         msgs = self.manager.on_guess(wrong_ctx)
         self.assertEqual(self.players["1"].score, 95)  # -5 penalty
+        # State mutation: score_earned on attacker's daily state also decremented
+        self.assertEqual(self.manager._get_daily_state("1").score_earned, -5)
         self.assertTrue(any("backfired" in m or "wrong" in m.lower() for m in msgs))
 
     def test_jinx_wrong_guess_penalty_accumulates(self):

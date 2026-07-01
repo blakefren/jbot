@@ -219,13 +219,17 @@ class TestRetroactiveJinx(unittest.TestCase):
         dm.log_powerup_usage.assert_called_once_with("attacker", "jinx", "target", 99)
 
     def test_retro_jinx_zero_score_no_transfer(self):
-        """Retro jinx on target with 0 score_earned: no points transferred, no error."""
+        """Retro jinx on target with 0 score_earned: no points transferred, no error.
+        Link is still resolved (jinx_target cleared) to prevent double-transfer.
+        """
         manager, pm, dm, players = self._setup_with_answered_target(score_earned=0)
         manager.jinx("attacker", "target", question_id=99)
         # No transfer; attacker is still silenced
         self.assertEqual(players["attacker"].score, 100)
         self.assertEqual(players["target"].score, 100)
         self.assertTrue(manager._get_daily_state("attacker").silenced)
+        # Link is resolved — jinx_target cleared to prevent any future double-transfer
+        self.assertIsNone(manager._get_daily_state("attacker").jinx_target)
 
     def test_retro_jinx_rounds_down(self):
         """int(7 * 0.25) = 1 (truncates, not rounds)."""
