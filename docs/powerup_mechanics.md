@@ -108,7 +108,7 @@ Forward power-ups (target hasn't answered) carry risk: the target might not answ
 
 | | Forward | Retroactive |
 |---|---|---|
-| **JINX** | 100% of target's streak bonus transferred (if target answers) | 50% of streak bonus (`JBOT_RETRO_JINX_BONUS_RATIO`), transferred immediately |
+| **JINX** | 25% of target's `score_earned` transferred when target answers | 25% of target's `score_earned` transferred immediately (no ratio difference — only timing) |
 | **STEAL** | Lower streak cost (`JBOT_STEAL_STREAK_COST`, default 3) | Higher streak cost (`JBOT_RETRO_STEAL_STREAK_COST`, default 5) |
 
 ### 3. Streak as a strategic resource
@@ -117,7 +117,7 @@ Streaks serve multiple roles simultaneously — and the tension between those ro
 
 - **Scoring**: The streak bonus rewards consistent daily play.
 - **Steal fuel**: Stealing requires streak days as payment. A larger streak means more purchasing power for high-value steals.
-- **Attack surface**: A large streak bonus makes a player an attractive jinx target; a high streak count makes them an attractive steal target.
+- **Attack surface**: A large total score makes a player an attractive jinx target; a high streak count makes them an attractive steal target.
 - **Rest gives control**: Players can freeze their streak to avoid a reset on days they don't know the answer, trading today's score for a future multiplier.
 
 The system is designed so that players *must* build and maintain a streak to be competitive — but are naturally incentivized to manage it carefully, not let it grow without bound. Rest is the pressure-release valve that gives players agency over this tradeoff.
@@ -193,7 +193,7 @@ Skip today's question. Freeze your streak (no reset). Apply a multiplier to your
 ## JINX
 
 ### Purpose
-Silence **yourself** (the attacker) until the hint is sent. Steal the target's streak bonus when they answer.
+Silence **yourself** (the attacker) until the hint is sent. Parasitically siphon a fraction of the target's total score when they answer correctly. Each wrong guess the target makes deducts a penalty from the attacker.
 
 ### When Available
 - Attacker has not used a power-up today.
@@ -205,20 +205,26 @@ Silence **yourself** (the attacker) until the hint is sent. Steal the target's s
 
 Once jinx is activated, the attacker **cannot answer** until the hint has been sent. After the hint, they may answer normally.
 
+### Score Share
+
+When the target answers correctly, `JBOT_JINX_SHARE_RATIO` (default 25%) of the target's total `score_earned` is transferred to the attacker. The same ratio applies for both forward and retroactive jinx — the only difference is *when* the transfer happens (at target answer vs. immediately).
+
+### Wrong-Guess Penalty
+
+Each incorrect guess by the jinxed target deducts `JBOT_JINX_WRONG_GUESS_PENALTY` (default 5) points from the **attacker's** score. This penalty fires publicly so all players can see the effect. It creates risk for attackers who target unreliable guessers — if the target guesses wrong many times, the attacker's score suffers before any share is received.
+
 ### Behavior by Timing
 
 The outcome depends on whether the **attacker** (Early vs. Late) and the **target** (Forward vs. Retroactive) have answered. See the [Terminology](#terminology) section.
 
 | | **Forward** (target not yet answered) | **Retroactive** (target already answered) |
 |---|---|---|
-| **Early** (attacker not yet answered) | Attacker silenced. Target's full streak bonus is transferred to the attacker when the target answers. | Attacker silenced. 50% of target's streak bonus transferred immediately. |
-| **Late** (attacker already answered) | Attacker's `before_hint` + all fastest bonuses are stripped as a cost. Target's full streak bonus transferred when the target answers. | Attacker's `before_hint` + all fastest bonuses stripped. 50% of target's streak bonus transferred immediately. |
-
-> **Streak transfer amount**: Full (100%) for forward targets; partial (50%, `JBOT_RETRO_JINX_BONUS_RATIO`) for retroactive targets.
+| **Early** (attacker not yet answered) | Attacker silenced. Each target wrong guess deducts penalty from attacker. When target answers correctly, 25% of target's `score_earned` transferred to attacker. | Attacker silenced. 25% of target's `score_earned` transferred immediately. |
+| **Late** (attacker already answered) | Attacker's `before_hint` + all fastest bonuses stripped as cost. Each target wrong guess deducts penalty from attacker. 25% of target's `score_earned` transferred when target answers correctly. | Attacker's `before_hint` + all fastest bonuses stripped. 25% of target's `score_earned` transferred immediately. |
 
 > **Late cost**: If the attacker earned none of those bonuses, the cost is 0 but the jinx still applies. The attacker is still silenced, but since they've already answered, it has no practical effect.
 
-> **On timing symmetry**: Jinx enforces early ≡ late symmetry by mechanism rather than identical outcome. An early attacker is *prevented* from earning `before_hint` and fastest bonuses while jinxing (via silence); a late attacker has those bonuses *stripped*. In both cases the attacker cannot keep those bonuses while jinxing. In practice, an early attacker who was not going to earn those bonuses anyway (e.g. would have answered after the hint regardless) pays no effective cost — exactly the same as a late attacker who earned none. See [Principle 1](#1-attacker-timing-symmetry-early--late).
+> **On timing symmetry**: Jinx enforces early ≡ late symmetry by mechanism rather than identical outcome. An early attacker is *prevented* from earning `before_hint` and fastest bonuses while jinxing (via silence); a late attacker has those bonuses *stripped*. In both cases the attacker cannot keep those bonuses while jinxing. See [Principle 1](#1-attacker-timing-symmetry-early--late).
 
 > **Overnight pre-load**: Resolved at morning hydration as early-forward. See [Overnight Pre-loads and Hydration](#overnight-pre-loads-and-hydration).
 
@@ -226,11 +232,12 @@ The outcome depends on whether the **attacker** (Early vs. Late) and the **targe
 
 | Scenario | Expected Result |
 |---|---|
-| Target never answers | Attacker was silenced / bonuses stripped; no streak bonus to transfer |
-| Target answers but earns no streak bonus | Attacker was silenced / bonuses stripped; transfer has no effect — no error raised |
+| Target never answers | Attacker was silenced / bonuses stripped; no share transferred |
+| Target answers but earns 0 points | Jinx is not blocked — proceeds normally but transfers 0 pts |
 | Target rests after being jinxed | Jinx cancelled; no transfer occurs; attacker's silence is **not** lifted |
-| Retroactive jinx, target has no streak bonus | Blocked — nothing to steal, power-up slot preserved |
 | Second jinx attempt on same target | Blocked — target already jinxed |
+
+> **Wrong-guess penalty floor**: There is no score floor. If the attacker has earned fewer points than the total penalties, their score can go negative.
 
 ---
 
@@ -303,15 +310,15 @@ Here we explicitly define some more complex interactions for multiple power-ups 
 | Rested player targeted by jinx or steal | Attempt blocked — no actions taken or costs paid | rest -> jinx/steal (blocked) |
 | Players A and B both try to jinx target C | Second attempt blocked — C already jinxed | A jinx C -> B jinx C (blocked) |
 | Players A and B both try to steal from target C | Second attempt blocked — steal already attempted on C | A steals from C -> B steal from C (blocked) |
-| Player A jinxes B while Player C steals from B | Both attacks coexist — bonus pools don't overlap. A gets B's streak bonus (100% if forward jinx, 50% if retroactive); C gets all non-streak bonuses. B keeps only base score (plus the remaining 50% streak bonus if jinx was retroactive). | Any order; both resolve at B's answer (or immediately if retroactive) |
+| Player A jinxes B while Player C steals from B | Both attacks coexist. **Jinx resolves before steal** (code order in `on_guess`). A siphons 25% of B's `score_earned` at the time of resolution; C then receives B's non-streak bonuses from the `bonuses` dict (independent of jinx). Order matters for jinx amount: if steal fired first and reduced `score_earned`, jinx would take 25% of the smaller value. Current code ensures jinx always fires first. | Any order of activation; jinx resolves before steal at B's correct answer |
 | Player A forward steals from B, who early jinxes C | B paid jinx silence cost, A only gets remaining bonuses | A steal from B -> B jinxes C -> B answer |
 | Player A forward steals from B, who late jinxes C | A took B's bonuses, so B pays no jinx-late bonus costs | A steals from B -> B answer -> B jinxes C |
 | Player A retro steals from B, who early jinxes C | A takes relevant/remaining bonuses from B (depends on B correctness, speed, etc.) | B jinxes C -> B answers -> A steals from B |
-| Player A retro steals from B, who late jinxes C | A takes relevant/remaining bonuses from B (remaining depend on B correctness, speed, etc.), but won't get jinx-late cost bonuses from B  | B answers -> B jinxes C -> A steals from B |
-| Player A forward jinxes B, who early steals from C | B paid streak cost for steal; A gets streak bonus based on streak at B answer time | A jinx B -> B steal from C -> B answer |
-| Player A forward jinxes B, who late steals from C | A gets streak bonus based on streak at B answer time; B streak cost deducted at steal time but no streak bonus revision as it was already taken by A | A jinx B -> B answer -> B steal from C |
-| Player A retro jinxes B, who early steals from C | B pays streak cost at steal time, B streak bonus calculated at answer but (reduced amount) taken by A | B steal from C -> B answer -> A jinx B |
-| Player A retro jinxes B, who late steals from C | B gets streak bonus at answer but may be revised down at steal, then A takes remaining at jinx | B answer -> B steal from C -> A jinx B |
+| Player A retro steals from B, who late jinxes C | A takes relevant/remaining bonuses from B (remaining depend on B correctness, speed, etc.), but won't get jinx-late cost bonuses from B | B answers -> B jinxes C -> A steals from B |
+| Player A forward jinxes B, who early steals from C | B paid streak cost for steal; A gets 25% of B's score_earned when B answers | A jinx B -> B steal from C -> B answer |
+| Player A forward jinxes B, who late steals from C | A gets 25% of B's score_earned when B answers; B streak cost deducted at steal time | A jinx B -> B answer -> B steal from C |
+| Player A retro jinxes B, who early steals from C | B pays streak cost at steal time; A takes 25% of B's score_earned immediately at jinx time | B steal from C -> B answer -> A jinx B |
+| Player A retro jinxes B, who late steals from C | B gets score at answer; streak may be revised down at steal; A takes 25% of B's score_earned immediately at jinx time | B answer -> B steal from C -> A jinx B |
 
 ---
 
@@ -347,7 +354,8 @@ Unlike `jinx_late`, there is no separate `steal_late` DB type. The late-day stre
 | `JBOT_REST_MULTIPLIER` | `1.2` | Score multiplier applied on the resting player's next correct answer |
 | `JBOT_STEAL_STREAK_COST` | `3` | Streak days deducted for a forward steal |
 | `JBOT_RETRO_STEAL_STREAK_COST` | `5` | Streak days deducted for a retroactive steal |
-| `JBOT_RETRO_JINX_BONUS_RATIO` | `0.5` | Fraction of streak bonus transferred in a retroactive jinx |
+| `JBOT_JINX_SHARE_RATIO` | `0.25` | Fraction of target's total `score_earned` siphoned by jinx |
+| `JBOT_JINX_WRONG_GUESS_PENALTY` | `5` | Points deducted from the attacker per wrong guess made by a jinxed target |
 
 ---
 

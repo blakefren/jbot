@@ -135,35 +135,41 @@ class TestJinxLateDay(unittest.TestCase):
         t_state = self.manager._get_daily_state("target")
         self.assertEqual(t_state.jinxed_by, "attacker")
 
-    def test_late_jinx_retro_transfers_half_streak(self):
-        """When target already answered with streak bonus, half is transferred."""
+    def test_late_jinx_retro_transfers_share_of_total_score(self):
+        """When target already answered, share of their total points is transferred."""
         self._setup()
         t_state = self.manager._get_daily_state("target")
         t_state.is_correct = True
-        t_state.bonuses = {"streak": 20}
+        t_state.score_earned = 100
 
         initial_attacker = self.players["attacker"].score  # 200
         initial_target = self.players["target"].score  # 150
 
         self.manager.jinx("attacker", "target", question_id=99)
 
-        # half = int(20 * 0.5) = 10 transferred; plus attacker's own cost of 20
-        expected_attacker = initial_attacker - 20 + 10  # -20 cost, +10 steal
+        # 25% of 100 = 25 transferred; attacker also pays 20 (before_hint+fastest)
+        expected_attacker = initial_attacker - 20 + 25  # -20 cost, +25 siphon
         self.assertEqual(self.players["attacker"].score, expected_attacker)
-        self.assertEqual(self.players["target"].score, initial_target - 10)
+        self.assertEqual(self.players["target"].score, initial_target - 25)
 
-    def test_late_jinx_retro_no_streak_blocked(self):
-        """When target answered but has no streak bonus, jinx is blocked entirely."""
+    def test_late_jinx_retro_zero_target_points_no_transfer(self):
+        """When target answered with 0 points, no transfer occurs but jinx still succeeds.
+        The jinx_target is cleared to prevent any future double-transfer.
+        """
         self._setup()
         t_state = self.manager._get_daily_state("target")
         t_state.is_correct = True
-        t_state.bonuses = {}
+        t_state.score_earned = 0
 
-        initial_attacker = self.players["attacker"].score
-        with self.assertRaises(PowerUpError):
+        initial_target = self.players["target"].score
+        # Should NOT raise even when target has 0 points
+        try:
             self.manager.jinx("attacker", "target", question_id=99)
-        # No costs paid, no changes
-        self.assertEqual(self.players["attacker"].score, initial_attacker)
+        except PowerUpError:
+            self.fail("jinx raised PowerUpError with 0-point target")
+        self.assertEqual(self.players["target"].score, initial_target)
+        # Link resolved — jinx_target cleared even on zero-transfer
+        self.assertIsNone(self.manager._get_daily_state("attacker").jinx_target)
 
     def test_powerup_used_today_blocks_second_jinx(self):
         """A second jinx attempt by the same attacker is blocked."""
@@ -385,15 +391,16 @@ class TestSimulatorJinxLate(unittest.TestCase):
         sim = self._make_simulator(initial_states, events)
         results = sim.run()
 
-        # Attacker scored: base=100, first_try=20, before_hint=10, fastest=10, streak(3)=15 → 155
-        # jinx_late strips before_hint=10 and fastest=10 → 155 - 20 = 135
-        # Target not yet answered when jinx fires (order: T answers then jinx fires on T who IS answered)
-        # Wait - T answered before jinx, so target IS already correct → retro path
-        # T streak=0 → no streak bonus → no transfer
-        self.assertEqual(results["A"]["score_earned"], 155 - 20)
+        # A: base=100, try1=20, before_hint=10, fastest_1=10, streak(3)=15 → 155
+        # jinx_late strips before_hint=10 + fastest_1=10 = 20 cost → 135
+        # T already answered (retro): T scored base=100, try1=20, before_hint=10, fastest_2=5 → 135
+        # 25% of 135 = 33 transferred to A → A = 135 + 33 = 168
+        self.assertEqual(results["A"]["score_earned"], 168)
+        # T loses 33 to the transfer
+        self.assertEqual(results["T"]["score_earned"], 102)
 
-    def test_jinx_late_forward_target_not_answered_sets_jinx(self):
-        """jinx_late on a target who hasn't answered yet sets their jinxed_by."""
+    def test_jinx_late_forward_target_answers_after_jinx(self):
+        """jinx_late on a target who hasn't answered yet: when target answers, share is transferred."""
         initial_states = {
             "A": Player(id="A", name="Attacker", score=100, answer_streak=2),
             "T": Player(id="T", name="Target", score=100, answer_streak=5),
@@ -412,7 +419,7 @@ class TestSimulatorJinxLate(unittest.TestCase):
                 powerup_type="jinx_late",
                 target_user_id="T",
             ),
-            # T answers after being jinxed — streak bonus should be lost
+            # T answers after being jinxed
             GuessEvent(
                 timestamp="2023-01-01 10:10:00",
                 user_id="T",
@@ -422,11 +429,18 @@ class TestSimulatorJinxLate(unittest.TestCase):
         sim = self._make_simulator(initial_states, events)
         results = sim.run()
 
-        # T streak=5 → streak_length=6 → bonus=25. Jinxed → loses streak bonus.
-        self.assertNotIn("streak", sim.daily_state["T"].bonuses)
+        # T streak=5 → streak_length=6 → bonus=25. Streak is NOT stripped by new jinx.
+        self.assertIn("streak", sim.daily_state["T"].bonuses)
+        # A already answered → transfer fires when T answers
+        # T scored: base=100, try1=20, before_hint=10, fastest_2=5, streak=25 → 160
+        # A: base=100, try1=20, before_hint=10, fastest_1=10, streak(3)=15 → 155
+        # jinx_late strips before_hint=10 + fastest_1=10 = 20 → A = 135
+        # Transfer = 25% of 160 = 40 → A = 175, T = 120
+        self.assertEqual(results["A"]["score_earned"], 175)
+        self.assertEqual(results["T"]["score_earned"], 120)
 
-    def test_jinx_late_retro_transfers_half_streak_to_attacker(self):
-        """jinx_late with target already answered transfers half streak bonus."""
+    def test_jinx_late_retro_transfers_share_to_attacker(self):
+        """jinx_late with target already answered transfers share of total points."""
         initial_states = {
             "A": Player(id="A", name="Attacker", score=100, answer_streak=2),
             "T": Player(id="T", name="Target", score=100, answer_streak=6),
@@ -456,13 +470,12 @@ class TestSimulatorJinxLate(unittest.TestCase):
         results = sim.run()
 
         # T streak=6 → streak_length=7 → bonus = min(35, 25) = 25
-        # jinx_late retro: half = int(25 * 0.5) = 12 transferred
-        # T loses 12 from score_earned
-        self.assertNotIn("streak", sim.daily_state["T"].bonuses)
-
-        # A: base=100, try1=20, before_hint=10, fastest_2=5 (T was 1st), streak(3)=15 → 150
-        # jinx_late strips before_hint=10 + fastest_2=5 = 15 cost, gains 12 from T → 150-15+12=147
-        self.assertEqual(results["A"]["score_earned"], 147)
+        # T scored: base=100, try1=20, before_hint=10, fastest_1=10, streak=25 → 165
+        # A: base=100, try1=20, before_hint=10, fastest_2=5, streak(3)=15 → 150
+        # jinx_late strips before_hint=10 + fastest_2=5 = 15 cost → A = 135
+        # Retro: 25% of 165 = 41 transferred → A = 176, T = 124
+        self.assertEqual(results["A"]["score_earned"], 176)
+        self.assertEqual(results["T"]["score_earned"], 124)
 
 
 class TestSimulatorStealLateDay(unittest.TestCase):
@@ -719,11 +732,8 @@ class TestStealThenLateJinxNoDoubleDeduction(unittest.TestCase):
           base=100, try_1=20, first_try(alias), before_hint=10, fastest_2=5, streak(3)=15 → 150
           Steal by T: -(20+10+5)=35 → 115 (try/before_hint/fastest removed from bonuses)
           Late-jinx cost: before_hint+fastest already gone → 0  (was -15 before fix)
-          Retro jinx on B (B streak_length=1 < 2 → bonus=0): no transfer
-          Final A score_earned = 115
-
-        Without the fix, the jinx cost would re-deduct before_hint(10)+fastest_2(5)=15,
-        leaving A at 100.
+          Retro jinx on B (B scored 140): 25% of 140 = 35 transferred
+          Final A score_earned = 115 + 35 = 150
         """
         initial_states = {
             "B": Player(id="B", name="B", score=100, answer_streak=0),
@@ -769,9 +779,11 @@ class TestStealThenLateJinxNoDoubleDeduction(unittest.TestCase):
         self.assertNotIn("fastest_1", a_bonuses)
         self.assertNotIn("fastest_2", a_bonuses)
 
-        # A's final score: 115 (after steal, no double-deduction from jinx cost).
-        # Without the fix this would be 100 (jinx cost re-deducts already-stolen bonuses).
-        self.assertEqual(results["A"]["score_earned"], 115)
+        # B scored: base=100, try_1=20, before_hint=10, fastest_1=10 = 140
+        # A's final: 115 (after steal, no double-deduction) + 35 (25% of B's 140) = 150
+        self.assertEqual(results["A"]["score_earned"], 150)
+        # B loses 35 to jinx
+        self.assertEqual(results["B"]["score_earned"], 105)
 
     def test_early_and_late_steal_same_net_cost(self):
         """Early and late forward steal both result in the same thief streak after the steal."""

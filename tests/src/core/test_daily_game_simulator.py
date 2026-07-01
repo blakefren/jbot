@@ -120,7 +120,9 @@ class TestDailyGameSimulator(unittest.TestCase):
         self.assertEqual(results["p1"]["final_streak"], 2)  # unchanged
 
     def test_jinx_success(self):
-        # Re-run with P3 as target
+        """Forward jinx: attacker siphons 25% of target's score when target answers.
+        Transfer fires immediately on target answer (no dependency on attacker answering).
+        """
         events = [
             PowerUpEvent(
                 timestamp="2023-01-01 09:00:00",
@@ -128,9 +130,16 @@ class TestDailyGameSimulator(unittest.TestCase):
                 powerup_type="jinx",
                 target_user_id="p3",
             ),
+            # p3 answers first (before hint); p1 is silenced so can't answer yet
             GuessEvent(
                 timestamp="2023-01-01 10:00:00",
                 user_id="p3",
+                guess_text="4",
+            ),
+            # p1 answers after hint (hint at 12:00)
+            GuessEvent(
+                timestamp="2023-01-01 13:00:00",
+                user_id="p1",
                 guess_text="4",
             ),
         ]
@@ -144,11 +153,15 @@ class TestDailyGameSimulator(unittest.TestCase):
         )
         results = simulator.run()
 
-        # P3 Streak bonus would be 5 * 5 = 25.
-        # But jinxed -> 0.
-        # Score: 100 + 20 + 10 + 10 = 140.
-        self.assertEqual(results["p3"]["score_earned"], 140)
-        self.assertNotIn("streak", results["p3"]["bonuses"])
+        # P3: base=100, try_1=20, before_hint=10, fastest_1=10, streak(6)=25 → 165
+        # Jinx transfer = 25% of 165 = 41 → p3 loses 41 → 124
+        # Streak bonus is NOT stripped by new jinx
+        self.assertIn("streak", results["p3"]["bonuses"])
+        self.assertEqual(results["p3"]["score_earned"], 124)
+
+        # P1: base=100, try_1=20, fastest_2=5, no before_hint (after hint), streak(3)=15 → 140
+        # Plus jinx transfer: +41 → 181
+        self.assertEqual(results["p1"]["score_earned"], 181)
 
     def test_steal_success(self):
         events = [

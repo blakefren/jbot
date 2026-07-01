@@ -15,7 +15,8 @@ from src.core.state import DailyPlayerState
 def _make_engine(
     steal_cost=3,
     retro_steal_cost=5,
-    retro_jinx_ratio=0.5,
+    jinx_share_ratio=0.25,
+    jinx_wrong_guess_penalty=5,
     streak_per_day=5,
     streak_cap=25,
 ):
@@ -24,7 +25,8 @@ def _make_engine(
     values = {
         "JBOT_STEAL_STREAK_COST": str(steal_cost),
         "JBOT_RETRO_STEAL_STREAK_COST": str(retro_steal_cost),
-        "JBOT_RETRO_JINX_BONUS_RATIO": str(retro_jinx_ratio),
+        "JBOT_JINX_SHARE_RATIO": str(jinx_share_ratio),
+        "JBOT_JINX_WRONG_GUESS_PENALTY": str(jinx_wrong_guess_penalty),
         "JBOT_BONUS_STREAK_PER_DAY": str(streak_per_day),
         "JBOT_BONUS_STREAK_CAP": str(streak_cap),
         "JBOT_BONUS_BEFORE_HINT": "10",
@@ -78,7 +80,7 @@ class TestGetState(unittest.TestCase):
 
 class TestApplyJinx(unittest.TestCase):
     def setUp(self):
-        self.engine = _make_engine(retro_jinx_ratio=0.5)
+        self.engine = _make_engine(jinx_share_ratio=0.25)
 
     def test_silences_attacker(self):
         ds = {}
@@ -90,6 +92,11 @@ class TestApplyJinx(unittest.TestCase):
         self.engine.apply_jinx(ds, "att", "tgt")
         self.assertEqual(ds["tgt"].jinxed_by, "att")
 
+    def test_sets_jinx_target_on_attacker(self):
+        ds = {}
+        self.engine.apply_jinx(ds, "att", "tgt")
+        self.assertEqual(ds["att"].jinx_target, "tgt")
+
     def test_returns_zero_when_target_not_answered(self):
         ds = {}
         result = self.engine.apply_jinx(ds, "att", "tgt")
@@ -100,42 +107,50 @@ class TestApplyJinx(unittest.TestCase):
         self.engine.apply_jinx(ds, "att", "tgt")
         self.assertEqual(ds.get("att", DailyPlayerState()).score_earned, 0)
 
-    def test_retro_transfers_half_streak_bonus(self):
+    def test_retro_transfers_share_of_total_points(self):
+        """Retroactive jinx transfers share_ratio of target's total score."""
         ds = {
-            "tgt": _state(is_correct=True, score_earned=100, bonuses={"streak": 20}),
+            "tgt": _state(is_correct=True, score_earned=100, bonuses={}),
         }
         transferred = self.engine.apply_jinx(ds, "att", "tgt")
-        self.assertEqual(transferred, 10)  # int(20 * 0.5)
-        self.assertEqual(ds["tgt"].score_earned, 90)
-        self.assertEqual(ds["att"].score_earned, 10)
+        self.assertEqual(transferred, 25)  # int(100 * 0.25)
+        self.assertEqual(ds["tgt"].score_earned, 75)
+        self.assertEqual(ds["att"].score_earned, 25)
 
-    def test_retro_strips_streak_from_target_bonuses(self):
-        ds = {"tgt": _state(is_correct=True, bonuses={"streak": 20})}
+    def test_retro_clears_jinx_target_after_transfer(self):
+        """After retroactive resolution jinx_target is cleared to prevent double-transfer."""
+        ds = {"tgt": _state(is_correct=True, score_earned=100, bonuses={})}
         self.engine.apply_jinx(ds, "att", "tgt")
-        self.assertNotIn("streak", ds["tgt"].bonuses)
+        self.assertIsNone(ds["att"].jinx_target)
 
-    def test_retro_zero_transfer_when_no_streak_bonus(self):
-        ds = {"tgt": _state(is_correct=True, bonuses={}, score_earned=50)}
+    def test_retro_zero_transfer_when_target_has_no_points(self):
+        ds = {"tgt": _state(is_correct=True, bonuses={}, score_earned=0)}
         transferred = self.engine.apply_jinx(ds, "att", "tgt")
         self.assertEqual(transferred, 0)
-        self.assertEqual(ds["tgt"].score_earned, 50)
+        self.assertEqual(ds["tgt"].score_earned, 0)
 
     def test_retro_jinxed_by_still_set_on_zero_transfer(self):
-        ds = {"tgt": _state(is_correct=True, bonuses={})}
+        ds = {"tgt": _state(is_correct=True, bonuses={}, score_earned=0)}
         self.engine.apply_jinx(ds, "att", "tgt")
         self.assertEqual(ds["tgt"].jinxed_by, "att")
 
     def test_ratio_floor_truncates(self):
-        """int() truncates, so odd amounts lose the remainder."""
-        ds = {"tgt": _state(is_correct=True, score_earned=100, bonuses={"streak": 7})}
+        """int() truncates, so non-divisible amounts lose the remainder."""
+        ds = {"tgt": _state(is_correct=True, score_earned=7, bonuses={})}
         transferred = self.engine.apply_jinx(ds, "att", "tgt")
-        self.assertEqual(transferred, 3)  # int(7 * 0.5) = 3
+        self.assertEqual(transferred, 1)  # int(7 * 0.25) = 1
 
-    def test_custom_ratio_applied(self):
-        engine = _make_engine(retro_jinx_ratio=0.25)
-        ds = {"tgt": _state(is_correct=True, score_earned=100, bonuses={"streak": 20})}
+    def test_custom_share_ratio_applied(self):
+        engine = _make_engine(jinx_share_ratio=0.5)
+        ds = {"tgt": _state(is_correct=True, score_earned=100, bonuses={})}
         transferred = engine.apply_jinx(ds, "att", "tgt")
-        self.assertEqual(transferred, 5)  # int(20 * 0.25)
+        self.assertEqual(transferred, 50)  # int(100 * 0.5)
+
+    def test_streak_bonus_not_stripped(self):
+        """The new jinx no longer strips the streak bonus from target's bonuses."""
+        ds = {"tgt": _state(is_correct=True, score_earned=100, bonuses={"streak": 20})}
+        self.engine.apply_jinx(ds, "att", "tgt")
+        self.assertIn("streak", ds["tgt"].bonuses)
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +160,7 @@ class TestApplyJinx(unittest.TestCase):
 
 class TestApplyLateJinx(unittest.TestCase):
     def setUp(self):
-        self.engine = _make_engine(retro_jinx_ratio=0.5)
+        self.engine = _make_engine(jinx_share_ratio=0.25)
 
     def test_strips_before_hint_cost(self):
         ds = {"att": _state(score_earned=100, bonuses={"before_hint": 10})}
@@ -165,11 +180,11 @@ class TestApplyLateJinx(unittest.TestCase):
             "att": _state(
                 score_earned=150, bonuses={"before_hint": 10, "fastest_1": 10}
             ),
-            "tgt": _state(is_correct=True, score_earned=100, bonuses={"streak": 20}),
+            "tgt": _state(is_correct=True, score_earned=100, bonuses={}),
         }
         cost, transferred = self.engine.apply_late_jinx(ds, "att", "tgt")
         self.assertEqual(cost, 20)
-        self.assertEqual(transferred, 10)
+        self.assertEqual(transferred, 25)  # int(100 * 0.25)
 
     def test_sets_silenced_and_jinxed_by(self):
         ds = {"att": _state(score_earned=50, bonuses={})}
@@ -185,42 +200,92 @@ class TestApplyLateJinx(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# resolve_jinx_on_correct
+# resolve_jinx_on_correct  (transfer fires when target answers)
 # ---------------------------------------------------------------------------
 
 
 class TestResolveJinxOnCorrect(unittest.TestCase):
     def setUp(self):
-        self.engine = _make_engine()
+        self.engine = _make_engine(jinx_share_ratio=0.25)
 
     def test_returns_zero_when_no_jinx(self):
-        ds = {"tgt": _state()}
-        bonus_values = {"streak": 15}
-        result = self.engine.resolve_jinx_on_correct(ds, "tgt", bonus_values)
+        ds = {"tgt": _state(score_earned=100)}
+        result = self.engine.resolve_jinx_on_correct(ds, "tgt")
         self.assertEqual(result, 0)
 
-    def test_transfers_streak_bonus_to_attacker(self):
+    def test_transfers_share_on_target_answer(self):
+        """Transfer fires when target answers, regardless of whether attacker has answered."""
+        ds = {
+            "tgt": _state(jinxed_by="att", score_earned=100),
+            "att": _state(jinx_target="tgt", score_earned=50),
+        }
+        transferred = self.engine.resolve_jinx_on_correct(ds, "tgt")
+        self.assertEqual(transferred, 25)  # int(100 * 0.25)
+        self.assertEqual(ds["tgt"].score_earned, 75)
+        self.assertEqual(ds["att"].score_earned, 75)
+
+    def test_clears_jinx_target_after_transfer(self):
+        ds = {
+            "tgt": _state(jinxed_by="att", score_earned=100),
+            "att": _state(jinx_target="tgt"),
+        }
+        self.engine.resolve_jinx_on_correct(ds, "tgt")
+        self.assertIsNone(ds["att"].jinx_target)
+
+    def test_no_double_transfer_if_already_resolved(self):
+        """If jinx_target is already None (resolved), no transfer occurs and scores unchanged."""
+        ds = {
+            "tgt": _state(jinxed_by="att", score_earned=100),
+            "att": _state(jinx_target=None),
+        }
+        transferred = self.engine.resolve_jinx_on_correct(ds, "tgt")
+        self.assertEqual(transferred, 0)
+        self.assertEqual(ds["tgt"].score_earned, 100)
+        self.assertEqual(ds["att"].score_earned, 0)
+
+
+# ---------------------------------------------------------------------------
+# apply_jinx_wrong_guess_penalty
+# ---------------------------------------------------------------------------
+
+
+class TestApplyJinxWrongGuessPenalty(unittest.TestCase):
+    def setUp(self):
+        self.engine = _make_engine(jinx_wrong_guess_penalty=5)
+
+    def test_deducts_penalty_from_attacker(self):
         ds = {
             "tgt": _state(jinxed_by="att"),
-            "att": _state(score_earned=0),
+            "att": _state(score_earned=50),
         }
-        bonus_values = {"streak": 15}
-        transferred = self.engine.resolve_jinx_on_correct(ds, "tgt", bonus_values)
-        self.assertEqual(transferred, 15)
-        self.assertEqual(ds["att"].score_earned, 15)
+        penalty = self.engine.apply_jinx_wrong_guess_penalty(ds, "tgt")
+        self.assertEqual(penalty, 5)
+        self.assertEqual(ds["att"].score_earned, 45)
+        self.assertEqual(ds["att"].jinx_penalty_total, 5)
 
-    def test_strips_streak_from_bonus_values(self):
-        ds = {"tgt": _state(jinxed_by="att")}
-        bonus_values = {"streak": 15, "before_hint": 10}
-        self.engine.resolve_jinx_on_correct(ds, "tgt", bonus_values)
-        self.assertNotIn("streak", bonus_values)
-        self.assertIn("before_hint", bonus_values)
+    def test_returns_zero_when_not_jinxed(self):
+        ds = {"tgt": _state()}
+        penalty = self.engine.apply_jinx_wrong_guess_penalty(ds, "tgt")
+        self.assertEqual(penalty, 0)
 
-    def test_returns_zero_when_no_streak_bonus(self):
-        ds = {"tgt": _state(jinxed_by="att")}
-        bonus_values = {"before_hint": 10}
-        result = self.engine.resolve_jinx_on_correct(ds, "tgt", bonus_values)
-        self.assertEqual(result, 0)
+    def test_penalty_can_go_negative(self):
+        """Attacker's score_earned can go below zero (net negative day)."""
+        ds = {
+            "tgt": _state(jinxed_by="att"),
+            "att": _state(score_earned=3),
+        }
+        self.engine.apply_jinx_wrong_guess_penalty(ds, "tgt")
+        self.assertEqual(ds["att"].score_earned, -2)
+
+    def test_penalty_accumulates_over_multiple_wrong_guesses(self):
+        ds = {
+            "tgt": _state(jinxed_by="att"),
+            "att": _state(score_earned=50),
+        }
+        self.engine.apply_jinx_wrong_guess_penalty(ds, "tgt")
+        self.engine.apply_jinx_wrong_guess_penalty(ds, "tgt")
+        self.assertEqual(ds["att"].score_earned, 40)
+        self.assertEqual(ds["att"].jinx_penalty_total, 10)
 
 
 # ---------------------------------------------------------------------------

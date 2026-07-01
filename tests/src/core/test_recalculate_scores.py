@@ -37,7 +37,8 @@ class TestRecalculateScores(unittest.TestCase):
             "JBOT_QUESTION_RETRIES": "10",
             "JBOT_STEAL_STREAK_COST": "3",
             "JBOT_RETRO_STEAL_STREAK_COST": "5",
-            "JBOT_RETRO_JINX_BONUS_RATIO": "0.5",
+            "JBOT_JINX_SHARE_RATIO": "0.25",
+            "JBOT_JINX_WRONG_GUESS_PENALTY": "5",
         }
         self.game_runner.config.get.side_effect = lambda k, d=None: self.defaults.get(k)
 

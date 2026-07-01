@@ -76,13 +76,15 @@ You get **one power-up per day**. Power-ups can be used at any time **until the 
 ### 🤐 `/power jinx @player`
 
 **Cost:** You are **silenced until 7 PM** — you can't answer before the hint drops.
-**Effect:** Steal your target's streak bonus when they answer correctly.
+**Effect:** Parasitically link yourself to your target. When your **target answers correctly**, you siphon **25%** of their total score earned for the day.
+
+**But beware:** Every time your target guesses **incorrectly**, you lose **5 points**. Jinxing a sloppy guesser can cost you.
 
 **Timing matters:**
-- **Target hasn't answered yet** — full streak bonus transfers to you when they do.
-- **Target already answered** — you immediately receive **50%** of their streak bonus.
+- **Target hasn't answered yet** — the transfer fires when *they* answer.
+- **Target already answered** — you immediately receive **25%** of their score earned.
 
-> If your target has no streak, the jinx resolves with no points — but you're still silenced. Choose targets with streaks.
+> Streak bonuses are **not** transferable by jinx — only the target's total earned score is shared.
 
 ---
 
@@ -105,8 +107,9 @@ You get **one power-up per day**. Power-ups can be used at any time **until the 
                    Jinx                       Steal
 ───────────────────────────────────────────────────────────────
 Your cost          Silenced until hint         2–4 streak days
-What you take      Target's streak bonus       Target's try/hint/speed/rest bonuses
-Retroactive?       Yes (50% of bonus)          Yes (costs more)
+What you take      25% of target's score       Target's try/hint/speed/rest bonuses
+Downside           −5 pts per target wrong     Streak cost even if whiff
+Retroactive?       Yes (25% immediately)       Yes (costs more)
 Overnight OK?      Yes                         Yes
 Whiffs on rest?    Yes                         Yes (streak cost still applies)
 ```
@@ -120,7 +123,7 @@ Whiffs on rest?    Yes                         Yes (streak cost still applies)
 /game status           Time until next event; your score & streak
 /game profile          Your personal stats and accuracy
 /power rest            Skip today, freeze streak, earn ×1.2 tomorrow
-/power jinx @...       Silence yourself; steal their streak bonus
+/power jinx @...       Silence yourself; siphon 25% of their score (−5 per wrong guess)
 /power steal @...      Pay streak days; steal their bonuses
 ```
 
