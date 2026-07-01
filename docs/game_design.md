@@ -96,7 +96,7 @@ Streaks play multiple roles simultaneously:
 
 - **Scoring multiplier**: The streak bonus adds points every day.
 - **Steal fuel**: Steal costs streak days. A bigger streak means more purchasing power.
-- **Attack surface**: A large streak makes a player an attractive target — both for jinx (which targets their streak bonus) and steal (which costs the thief streak days, but is more valuable when the target has earned big bonuses).
+- **Attack surface**: A large total score makes a player an attractive jinx target (25% siphon); a high streak count makes them an attractive steal target (streak days are the cost, and targets with big bonuses return more value).
 - **Rest protection**: Players can freeze their streak for a day to avoid a reset.
 
 This multi-role tension is intentional: growing a streak is good, but large streaks also invite attacks and create pressure around days a player isn't confident about.
@@ -117,9 +117,9 @@ Rest also acts as a **shield**: any pending incoming jinx or steal against you i
 
 ### 🤐 Jinx
 
-Silence yourself until the hint reveal. Steal the target's streak bonus.
+Silence yourself until the hint reveal. Parasitically siphon a fraction of the target's total score when they answer correctly.
 
-Jinxing costs the attacker their before-hint and fastest-answer eligibility for the day (either by being silenced if they haven't answered yet, or by having those bonuses stripped if they have). In exchange, the attacker receives a portion of the target's streak bonus — full amount if the target hasn't answered yet, a reduced fraction if they already have.
+Jinxing costs the attacker their before-hint and fastest-answer eligibility for the day (either by being silenced if they haven't answered yet, or by having those bonuses stripped if they have). In exchange, the attacker siphons 25% of the target's total score when the target answers correctly — regardless of whether the attacker has answered yet. Each wrong guess the target makes also deducts a small penalty from the attacker's score, so targeting an unreliable guesser carries real risk.
 
 ### 💰 Steal
 
