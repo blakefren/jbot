@@ -195,16 +195,20 @@ class TestJinxBehavior(_PowerUpManagerTests):
         """Transfer fires when the attacker answers, if the target has already answered."""
         self.manager.jinx("1", "2", "q1")
         # Target answers first
-        target_ctx = GuessContext(2, "P2", "ans", True, points_earned=100, bonus_values={})
+        target_ctx = GuessContext(
+            2, "P2", "ans", True, points_earned=100, bonus_values={}
+        )
         self.manager.on_guess(target_ctx)
         # Attacker answers second — set is_correct=True on state manually to mimic answering
         att_state = self.manager._get_daily_state("1")
         att_state.is_correct = True
         att_state.score_earned = 80
-        attacker_ctx = GuessContext(1, "P1", "ans", True, points_earned=80, bonus_values={})
+        attacker_ctx = GuessContext(
+            1, "P1", "ans", True, points_earned=80, bonus_values={}
+        )
         msgs = self.manager.on_guess(attacker_ctx)
         # 25% of 100 = 25 transferred
-        self.assertEqual(self.players["2"].score, 75)   # target loses 25
+        self.assertEqual(self.players["2"].score, 75)  # target loses 25
         self.assertTrue(any("25" in m for m in msgs))
 
     def test_jinx_transfers_share_when_target_answers_after_attacker(self):
@@ -218,9 +222,9 @@ class TestJinxBehavior(_PowerUpManagerTests):
         ctx = GuessContext(2, "P2", "ans", True, points_earned=100, bonus_values={})
         msgs = self.manager.on_guess(ctx)
         # 25% of 100 = 25 transferred
-        self.assertEqual(self.players["1"].score, 125)   # attacker gains 25
-        self.assertEqual(self.players["2"].score, 75)    # target loses 25
-        self.assertEqual(ctx.points_earned, 75)           # ctx reflects net
+        self.assertEqual(self.players["1"].score, 125)  # attacker gains 25
+        self.assertEqual(self.players["2"].score, 75)  # target loses 25
+        self.assertEqual(ctx.points_earned, 75)  # ctx reflects net
         self.assertTrue(any("25" in m for m in msgs))
 
     def test_jinx_no_transfer_if_neither_answers(self):
@@ -243,7 +247,9 @@ class TestJinxBehavior(_PowerUpManagerTests):
         """Multiple wrong guesses by the target accumulate penalty."""
         self.manager.jinx("1", "2", "q1")
         for _ in range(3):
-            self.manager.on_guess(GuessContext(2, "P2", "wrong", False, points_earned=0))
+            self.manager.on_guess(
+                GuessContext(2, "P2", "wrong", False, points_earned=0)
+            )
         self.assertEqual(self.players["1"].score, 85)  # -5 * 3 = -15
 
     def test_jinx_streak_bonus_kept_by_target(self):
@@ -925,7 +931,7 @@ class TestInteractionMatrix(unittest.TestCase):
         self.assertEqual(self.players["C"].score, 110)  # 100 + 10 from steal
         # Jinx deferred — A has not yet answered; no score changes for A or B
         self.assertEqual(self.players["A"].score, 100)
-        self.assertEqual(self.players["B"].score, 90)   # 100 - 10 (stolen by C)
+        self.assertEqual(self.players["B"].score, 90)  # 100 - 10 (stolen by C)
 
         # A answers — jinx transfer fires: 25% of B.score_earned (120) = 30
         ctx_a = GuessContext(
@@ -935,7 +941,7 @@ class TestInteractionMatrix(unittest.TestCase):
 
         # A gets the transfer; B loses it
         self.assertEqual(self.players["A"].score, 130)  # 100 + 30
-        self.assertEqual(self.players["B"].score, 60)   # 90 - 30
+        self.assertEqual(self.players["B"].score, 60)  # 90 - 30
         self.assertEqual(self.players["C"].score, 110)  # unchanged
 
     def test_retro_jinx_and_steal_coexist_on_same_target(self):
@@ -955,7 +961,7 @@ class TestInteractionMatrix(unittest.TestCase):
 
         self.assertEqual(self.players["A"].score, 132)  # 100 + 32
         self.assertEqual(self.players["C"].score, 110)  # 100 + 10
-        self.assertEqual(self.players["B"].score, 58)   # 100 - 32 - 10
+        self.assertEqual(self.players["B"].score, 58)  # 100 - 32 - 10
 
     # --- Gap 5.2: A forward-steals B, B early-jinxes a third player ---
 
@@ -1064,7 +1070,7 @@ class TestInteractionMatrix(unittest.TestCase):
         self.manager.on_guess(ctx_a)
 
         self.assertEqual(self.players["A"].score, 128)  # 100 + 28
-        self.assertEqual(self.players["B"].score, 72)   # 100 - 28
+        self.assertEqual(self.players["B"].score, 72)  # 100 - 28
 
     # --- Row 7: A forward-steals B → B answers → B late-jinxes C ---
 
@@ -1124,7 +1130,9 @@ class TestInteractionMatrix(unittest.TestCase):
         manager.on_guess(ctx)
         # Jinx deferred (A hasn't answered); no power-up score changes for B
         self.assertEqual(self.players["A"].score, 100)
-        self.assertEqual(self.players["B"].score, 100)  # base points handled by GuessHandler
+        self.assertEqual(
+            self.players["B"].score, 100
+        )  # base points handled by GuessHandler
 
         # B is now late-day
         self.data_manager.get_last_correct_guess_date.side_effect = lambda pid: (
@@ -1145,7 +1153,7 @@ class TestInteractionMatrix(unittest.TestCase):
         manager.on_guess(ctx_a)
 
         self.assertEqual(self.players["A"].score, 126)  # 100 + 26
-        self.assertEqual(self.players["B"].score, 59)   # 85 - 26
+        self.assertEqual(self.players["B"].score, 59)  # 85 - 26
 
     # --- Row 12: B early-steals C → B answers → A retro-jinxes B ---
 

@@ -147,9 +147,7 @@ class PowerUpManager(BaseManager):
 
         # Wrong-guess penalty: each incorrect guess by a jinxed player costs their attacker points
         if not ctx.is_correct:
-            penalty = self.engine.apply_jinx_wrong_guess_penalty(
-                self.daily_state, pid
-            )
+            penalty = self.engine.apply_jinx_wrong_guess_penalty(self.daily_state, pid)
             if penalty > 0:
                 attacker_id = self._get_daily_state(pid).jinxed_by
                 self.player_manager.update_score(attacker_id, -penalty)
@@ -194,9 +192,7 @@ class PowerUpManager(BaseManager):
             return ""
 
         # Engine: transfer share if attacker already answered; clears jinx_target on attacker
-        transferred = self.engine.resolve_jinx_on_correct(
-            self.daily_state, player_id
-        )
+        transferred = self.engine.resolve_jinx_on_correct(self.daily_state, player_id)
 
         if transferred > 0:
             self.player_manager.update_score(player_id, -transferred)

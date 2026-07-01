@@ -26,9 +26,7 @@ class PowerUpEngine:
         self.retro_steal_streak_cost = int(
             config.get("JBOT_RETRO_STEAL_STREAK_COST", "5")
         )
-        self.jinx_share_ratio = float(
-            config.get("JBOT_JINX_SHARE_RATIO", "0.25")
-        )
+        self.jinx_share_ratio = float(config.get("JBOT_JINX_SHARE_RATIO", "0.25"))
         self.jinx_wrong_guess_penalty = int(
             config.get("JBOT_JINX_WRONG_GUESS_PENALTY", "5")
         )
@@ -75,7 +73,9 @@ class PowerUpEngine:
             if share > 0:
                 target_state.score_earned -= share
                 attacker_state.score_earned += share
-            attacker_state.jinx_target = None  # Mark resolved to prevent double-transfer
+            attacker_state.jinx_target = (
+                None  # Mark resolved to prevent double-transfer
+            )
             return share
 
         return 0

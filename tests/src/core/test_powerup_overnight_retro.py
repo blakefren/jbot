@@ -192,7 +192,9 @@ class TestRetroactiveJinx(unittest.TestCase):
         target_state = manager._get_daily_state("target")
         target_state.is_correct = True
         target_state.score_earned = score_earned
-        target_state.bonuses = {"streak": 20}  # streak stays with target in new mechanic
+        target_state.bonuses = {
+            "streak": 20
+        }  # streak stays with target in new mechanic
         return manager, pm, dm, players
 
     def test_retro_jinx_transfers_share_of_score(self):

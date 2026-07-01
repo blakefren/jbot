@@ -25,7 +25,9 @@ class DailyPlayerState:
 
     # Power-up: Attack (Outgoing)
     silenced: bool = False  # Result of jinxing
-    jinx_target: str | None = None  # User ID being jinxed (cleared once share is resolved)
+    jinx_target: str | None = (
+        None  # User ID being jinxed (cleared once share is resolved)
+    )
     stealing_from: str | None = None  # User ID
     steal_ratio: float = (
         1.0  # Fraction of stealable bonuses the thief receives (≤1.0 when partial)
