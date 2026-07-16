@@ -389,7 +389,7 @@ class TestJeopardyDifficultyFiltering(unittest.TestCase):
 
             # Verify specific Final Jeopardy category
             fj1 = next(q for q in final_jeopardy if q.question == "Final-Q1")
-            self.assertEqual(fj1.category, "Jeopardy! | FINAL CATEGORY 1")
+            self.assertEqual(fj1.category, "Jeopardy! | FINAL CATEGORY 1 | 1984-09-10")
 
 
 if __name__ == "__main__":
