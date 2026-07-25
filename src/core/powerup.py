@@ -51,7 +51,7 @@ class PowerUpManager(BaseManager):
         self.emoji_rest = _config.get("JBOT_EMOJI_REST", "😴")
         self.emoji_rest_wakeup = _config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
         self.emoji_streak = _config.get("JBOT_EMOJI_STREAK", "🔥")
-        self.rest_multiplier = float(_config.get("JBOT_REST_MULTIPLIER", "1.2"))
+        self.rest_bonus_per_day = float(_config.get("JBOT_REST_BONUS_PER_DAY", "0.2"))
         self.jinx_share_ratio = self.engine.jinx_share_ratio
         # Transient state for the day
         self.daily_state: dict[str, DailyPlayerState] = {}
@@ -128,17 +128,18 @@ class PowerUpManager(BaseManager):
 
         messages = []
 
-        # Apply pending rest multiplier (from yesterday's rest) on correct answers
+        # Apply pending rest multiplier (from previous rest days) on correct answers
         if ctx.is_correct and ctx.points_earned > 0:
             pending_mult = self.data_manager.get_pending_multiplier(pid)
-            if pending_mult > 1.0:
-                bonus_amount = round(ctx.points_earned * (pending_mult - 1.0))
+            if pending_mult > 0.0:
+                bonus_amount = round(ctx.points_earned * pending_mult)
                 if bonus_amount > 0:
                     self.player_manager.update_score(pid, bonus_amount)
                     ctx.points_earned += bonus_amount
                     state.bonuses["rest"] = bonus_amount
+                    multiplier_display = 1.0 + pending_mult
                     messages.append(
-                        f"{self.emoji_rest_wakeup} Rest bonus! ×{pending_mult} (+{bonus_amount})"
+                        f"{self.emoji_rest_wakeup} Rest bonus! ×{multiplier_display:.2f} (+{bonus_amount})"
                     )
                     self.data_manager.log_powerup_usage(
                         pid, "rest_wakeup", None, ctx.question_id
@@ -336,8 +337,8 @@ class PowerUpManager(BaseManager):
         is_late_day = last_correct == self.data_manager.get_today()
 
         attacker_state = self._get_daily_state(attacker_id)
-        if attacker_state.powerup_used_today:
-            raise PowerUpError("You have already used a power-up today.")
+        if attacker_state.attack_powerup_used_today:
+            raise PowerUpError("You have already used an attack power-up today.")
 
         target_state = self._get_daily_state(target_id)
 
@@ -473,8 +474,8 @@ class PowerUpManager(BaseManager):
         is_late_day = last_correct == self.data_manager.get_today()
 
         thief_state = self._get_daily_state(thief_id)
-        if thief_state.powerup_used_today:
-            raise PowerUpError("You have already used a power-up today.")
+        if thief_state.attack_powerup_used_today:
+            raise PowerUpError("You have already used an attack power-up today.")
 
         target_state = self._get_daily_state(target_id)
 
@@ -586,8 +587,6 @@ class PowerUpManager(BaseManager):
         state = self._get_daily_state(player_id)
         if state.is_resting:
             raise PowerUpError("You are already resting today.")
-        if state.powerup_used_today:
-            raise PowerUpError("You have already used a power-up today.")
 
         # Engine: mark resting, whiff pending attacks, return attacker IDs
         whiffed_jinx_id, whiffed_steal_id = self.engine.apply_rest(
@@ -595,8 +594,12 @@ class PowerUpManager(BaseManager):
         )
         self.data_manager.log_powerup_usage(player_id, "rest", None, question_id)
 
-        # Store rest multiplier for tomorrow
-        self.data_manager.set_pending_multiplier(player_id, self.rest_multiplier)
+        # Increment pending rest multiplier (stacking)
+        self.data_manager.increment_pending_multiplier(
+            player_id, self.rest_bonus_per_day
+        )
+        pending_mult = self.data_manager.get_pending_multiplier(player_id)
+        multiplier_display = 1.0 + pending_mult
 
         whiff_parts = []
         if whiffed_jinx_id:
@@ -612,7 +615,7 @@ class PowerUpManager(BaseManager):
 
         public_parts = [
             f"{self.emoji_rest} <@{player_id}> is resting today. "
-            f"Streak frozen. ×{self.rest_multiplier} bonus applies to tomorrow's score."
+            f"Streak frozen. ×{multiplier_display:.2f} bonus on next correct answer."
         ]
         public_parts.extend(whiff_parts)
         public_msg = "\n".join(public_parts)
@@ -620,7 +623,7 @@ class PowerUpManager(BaseManager):
         private_msg = (
             f"{self.emoji_rest} You're resting today. The answer was: **{question_answer}**\n"
             "Your streak is frozen (not reset). "
-            f"You'll earn a **×{self.rest_multiplier} multiplier** on your base + bonuses the next day you answer correctly."
+            f"You'll earn a **×{multiplier_display:.2f} multiplier** on your base + bonuses the next day you answer correctly."
         )
 
         return public_msg, private_msg

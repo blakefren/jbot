@@ -190,8 +190,8 @@ class DailyGameSimulator:
         # then resolves jinx, so the multiplier never touches the jinxed portion.
         player = self.initial_player_states.get(user_id)
         pending_mult = float(player.pending_rest_multiplier or 0.0) if player else 0.0
-        if pending_mult > 1.0:
-            rest_bonus = round(points * (pending_mult - 1.0))
+        if pending_mult > 0.0:
+            rest_bonus = round(points * pending_mult)
             if rest_bonus > 0:
                 points += rest_bonus
                 bonuses["rest"] = rest_bonus

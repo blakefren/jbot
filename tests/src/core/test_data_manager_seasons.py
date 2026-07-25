@@ -220,7 +220,7 @@ class TestDataManagerSeasonScores(unittest.TestCase):
     def test_reset_all_player_season_scores_clears_pending_rest_multiplier(self):
         """A rest taken on the last day of a season must not carry over to the next."""
         self.db.execute_update(
-            "UPDATE players SET pending_rest_multiplier = 1.2 WHERE id = 'p1'"
+            "UPDATE players SET pending_rest_multiplier = 0.2 WHERE id = 'p1'"
         )
         self.dm.reset_all_player_season_scores()
         rows = self.db.execute_query(

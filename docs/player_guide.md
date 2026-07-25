@@ -59,7 +59,7 @@ Answering correctly every day builds a streak. **Miss a day and your streak rese
 
 ## ⚡ Power-ups
 
-You get **one power-up per day**. Power-ups can be used at any time **until the answer is revealed at 8 PM PT** — or overnight to preload for the next question.
+You get **one attack power-up per day** (jinx or steal). **Rest is independent** and can be used alongside an attack power-up. Power-ups can be used at any time **until the answer is revealed at 8 PM PT** — or overnight to preload for the next question.
 
 ---
 
@@ -67,7 +67,15 @@ You get **one power-up per day**. Power-ups can be used at any time **until the 
 
 **Skip today without losing your streak.** Your streak is frozen — it won't reset, but it won't grow either.
 
-**Bonus:** Earn a **×1.2 multiplier** on your next correct answer (the morning after).
+**Bonus:** Earn stacking multipliers on your next correct answer. Each rest day adds **20%** to the multiplier:
+- 1 rest day = ×1.2 (20% bonus)
+- 2 rest days = ×1.4 (40% bonus)
+- 3 rest days = ×1.6 (60% bonus)
+- etc.
+
+The bonus applies to your **entire score** (base + all bonuses) on the next day you answer correctly, then resets.
+
+**Rest is independent:** You can rest AND use an attack power-up (jinx or steal) on the same day.
 
 > Resting makes you untargetable — any jinx or steal queued for you will whiff.
 
@@ -75,7 +83,7 @@ You get **one power-up per day**. Power-ups can be used at any time **until the 
 
 ### 🤐 `/power jinx @player`
 
-**Cost:** You are **silenced until 7 PM** — you can't answer before the hint drops.
+**Cost:** You are **silenced until 7 PM** — you can't answer before the hint drops. (Rest can still be used while silenced.)
 **Effect:** Parasitically link yourself to your target. When your **target answers correctly**, you siphon **25%** of their total score earned for the day.
 
 **But beware:** Every time your target guesses **incorrectly**, you lose **5 points**. Jinxing a sloppy guesser can cost you.

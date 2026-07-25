@@ -83,7 +83,7 @@ attacker_user_id TEXT
 
 These apply to all three power-ups unless a path explicitly overrides them.
 
-1. **One power-up per day**: A player cannot use a second power-up on the same day.
+1. **Attack power-ups are mutually exclusive**: A player can use only one attack power-up (jinx or steal) per day. Rest is independent and can be used alongside an attack power-up.
 2. **No self-targeting**: Jinx and steal require a different player as the target.
 3. **One attack type per target**: A player cannot be jinxed twice in one day; cannot be stolen from twice in one day.
 4. **Target must be a registered player**.
@@ -163,30 +163,36 @@ After hydration, the day proceeds identically to any other early-forward jinx or
 ## REST
 
 ### Purpose
-Skip today's question. Freeze your streak (no reset). Apply a multiplier to your **next day's** correct answer score.
+Skip today's question. Freeze your streak (no reset). Stack multipliers for your **next** correct answer.
 
 ### When Available
 - Question is active (not overnight).
 - Player has not answered correctly today.
-- Player has not used any power-up today.
+- Player has not already rested today.
 
 ### Behavior
 
 1. The player's streak is **frozen** — neither incremented nor reset.
-2. A score multiplier (`JBOT_REST_MULTIPLIER`) is stored and applied to the player's next correct answer on any future day as a bonus: `round(points × (multiplier − 1.0))`.
-3. Any **incoming jinx** is cancelled, with a public announcement. The jinxer's costs remain paid — if early, they stay silenced until the hint; if late, any bonuses already stripped as the jinx cost are not refunded.
-4. Any **incoming steal** is cancelled, with a public announcement. The thief's streak cost is **not refunded** — it was paid when the steal was initiated (or at morning hydration) and is forfeit.
-5. A private message reveals today's answer to the resting player.
+2. The **pending rest multiplier** is incremented by `JBOT_REST_MULTIPLIER` (default 0.2 = 20%). Multiple consecutive rests stack: 1 rest = +0.2, 2 rests = +0.4, 3 rests = +0.6, etc.
+3. The accumulated multiplier is applied to the player's next correct answer: `round(points × pending_multiplier)`.
+4. Once applied, the multiplier resets to 0.0.
+5. Any **incoming jinx** is cancelled, with a public announcement. The jinxer's costs remain paid — if early, they stay silenced until the hint; if late, any bonuses already stripped as the jinx cost are not refunded.
+6. Any **incoming steal** is cancelled, with a public announcement. The thief's streak cost is **not refunded** — it was paid when the steal was initiated (or at morning hydration) and is forfeit.
+7. A private message reveals today's answer to the resting player.
+8. **Rest is independent from attack power-ups**: A player can rest AND use jinx or steal on the same day.
 
 ### Expected Behavior
 
 | Scenario | Expected Result |
 |---|---|
-| Rest with no incoming attacks | Streak frozen, multiplier stored, answer revealed privately |
+| Rest with no incoming attacks | Streak frozen, multiplier incremented by 0.2, answer revealed privately |
 | Rest with incoming jinx | Jinx cancelled (public announcement), jinxer still pays their cost (silenced if early; bonuses forfeited if late) |
 | Rest with incoming steal | Steal cancelled (public announcement), thief's streak cost is forfeit |
 | Player tries to rest after answering | Blocked — already answered today |
-| Player tries to rest after using a power-up | Blocked — power-up already used today |
+| Player tries to rest twice in one day | Blocked — already resting today |
+| Player rests 2 days in a row | Multiplier = 0.4, next answer gets ×1.4 bonus (1.0 + 0.4) |
+| Player rests, then uses jinx | Allowed — rest is independent from attack powerups |
+| Player uses steal, then rests | Allowed — rest is independent from attack powerups |
 
 ---
 
@@ -310,6 +316,10 @@ Here we explicitly define some more complex interactions for multiple power-ups 
 | Rested player targeted by jinx or steal | Attempt blocked — no actions taken or costs paid | rest -> jinx/steal (blocked) |
 | Players A and B both try to jinx target C | Second attempt blocked — C already jinxed | A jinx C -> B jinx C (blocked) |
 | Players A and B both try to steal from target C | Second attempt blocked — steal already attempted on C | A steals from C -> B steal from C (blocked) |
+| Player A jinxes B, then rests | Allowed — rest is independent. A stays silenced, rest multiplier stacks for tomorrow | A jinx B -> A rest |
+| Player A rests, then jinxes B | Allowed — rest is independent. A silenced after rest, rest multiplier stacks for tomorrow | A rest -> A jinx B |
+| Player A steals from B, then rests | Allowed — rest is independent. A paid streak cost, rest multiplier stacks for tomorrow | A steal B -> A rest |
+| Player A rests, then steals from B | Allowed — rest is independent. A pays streak cost after rest, rest multiplier stacks for tomorrow | A rest -> A steal B |
 | Player A jinxes B while Player C steals from B | Both attacks coexist. **Jinx resolves before steal** (code order in `on_guess`). A siphons 25% of B's `score_earned` at the time of resolution; C then receives B's non-streak bonuses from the `bonuses` dict (independent of jinx). Order matters for jinx amount: if steal fired first and reduced `score_earned`, jinx would take 25% of the smaller value. Current code ensures jinx always fires first. | Any order of activation; jinx resolves before steal at B's correct answer |
 | Player A forward steals from B, who early jinxes C | B paid jinx silence cost, A only gets remaining bonuses | A steal from B -> B jinxes C -> B answer |
 | Player A forward steals from B, who late jinxes C | A took B's bonuses, so B pays no jinx-late bonus costs | A steals from B -> B answer -> B jinxes C |
@@ -351,7 +361,7 @@ Unlike `jinx_late`, there is no separate `steal_late` DB type. The late-day stre
 
 | Key | Default | Effect |
 |---|---|---|
-| `JBOT_REST_MULTIPLIER` | `1.2` | Score multiplier applied on the resting player's next correct answer |
+| `JBOT_REST_MULTIPLIER` | `0.2` | Score multiplier applied on the resting player's next correct answer |
 | `JBOT_STEAL_STREAK_COST` | `3` | Streak days deducted for a forward steal |
 | `JBOT_RETRO_STEAL_STREAK_COST` | `5` | Streak days deducted for a retroactive steal |
 | `JBOT_JINX_SHARE_RATIO` | `0.25` | Fraction of target's total `score_earned` siphoned by jinx |

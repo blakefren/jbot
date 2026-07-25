@@ -200,6 +200,7 @@ class TestJinxLateDay(unittest.TestCase):
             "target": Player(id="target", name="T", score=150, answer_streak=5),
         }
         manager, _pm, dm = _make_manager(players, return_today=False)
+        dm.get_pending_multiplier.return_value = 0.0  # No pending rest multiplier
         dm.get_last_correct_guess_date.side_effect = lambda pid: (
             today if pid == "attacker" else today - timedelta(days=1)
         )

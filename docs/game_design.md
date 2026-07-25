@@ -105,15 +105,17 @@ This multi-role tension is intentional: growing a streak is good, but large stre
 
 ## Power-Ups
 
-Each player has **one power-up per day**. Power-ups are not rechargeable mid-day; using any one locks the player out of the others for the rest of that day.
+Each player has **one attack power-up per day** (jinx or steal). **Rest is independent** and does not count toward this limit — a player can rest and use an attack power-up on the same day. Attack power-ups are not rechargeable mid-day; using jinx locks the player out of steal (and vice versa) for the rest of that day.
 
 See [powerup_mechanics.md](powerup_mechanics.md) for the full behavior specification.
 
 ### 😴 Rest
 
-Skip today without losing your streak. Your streak is frozen — neither incremented nor reset. A score multiplier is stored and applied to your next correct answer on any future day. Today's answer is privately revealed to you.
+Skip today without losing your streak. Your streak is frozen — neither incremented nor reset. The pending rest multiplier is incremented by a configurable amount (`JBOT_REST_MULTIPLIER`, default 0.2). Multiple consecutive rests stack linearly: 1 rest = +0.2, 2 rests = +0.4, 3 rests = +0.6. The accumulated multiplier is applied to your next correct answer, then reset. Today's answer is privately revealed to you.
 
 Rest also acts as a **shield**: any pending incoming jinx or steal against you is cancelled when you rest. The attacker's costs are not refunded.
+
+Design intent: Rest gives players control over their streak and provides a strategic option to bank multipliers for high-value questions.
 
 ### 🤐 Jinx
 

@@ -43,7 +43,7 @@ class MockQuestion:
 
 
 config = ConfigReader()
-REST_MULTIPLIER = float(config.get("JBOT_REST_MULTIPLIER", "1.2"))
+REST_BONUS_PER_DAY = float(config.get("JBOT_REST_BONUS_PER_DAY", "0.2"))
 
 # Streak day at which the bonus is fully capped (no more marginal value from streak).
 # Above this, rest/steal is preferred over protecting a streak that's already maxed out.
@@ -308,10 +308,10 @@ class AdaptiveStrategy(ProceduralStrategy):
             # Weight = pending_rest_multiplier bonus on expected score if waker,
             # else fall back to raw score as a proxy for likely bonuses.
             def steal_weight(p):
-                if p.pending_rest_multiplier > 1.0:
-                    # Waker: their score_earned tomorrow gets a ×1.2 bonus on top,
+                if p.pending_rest_multiplier > 0.0:
+                    # Waker: their score_earned tomorrow gets a ×(1.0 + multiplier) bonus on top,
                     # all of which is stealable. Heavily prefer these targets.
-                    return p.score * p.pending_rest_multiplier * 3
+                    return p.score * (1.0 + p.pending_rest_multiplier) * 3
                 return p.score
 
             target = self._pick_target_weighted(player_id, game_state, steal_weight)
@@ -535,21 +535,19 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None, days=None
             p = players[pid]
 
             # Apply (or expire) pending rest multiplier for non-resting players
-            if p.pending_rest_multiplier > 1.0 and pid not in resting_pids:
+            if p.pending_rest_multiplier > 0.0 and pid not in resting_pids:
                 if result["score_earned"] > 0:
-                    bonus = round(
-                        result["score_earned"] * (p.pending_rest_multiplier - 1.0)
-                    )
+                    bonus = round(result["score_earned"] * p.pending_rest_multiplier)
                     result["final_score"] += bonus
                 p.pending_rest_multiplier = 0.0  # Consumed or expired
 
             p.score = result["final_score"]
             p.answer_streak = result["final_streak"]
 
-        # Grant next-day multiplier to players who rested today
+        # Increment pending multiplier for players who rested today (stacking)
         for pid in resting_pids:
             if pid in players:
-                players[pid].pending_rest_multiplier = REST_MULTIPLIER
+                players[pid].pending_rest_multiplier += REST_BONUS_PER_DAY
 
         # Carry resting set forward so tomorrow's strategies can target wakers.
         prev_resting_pids = resting_pids

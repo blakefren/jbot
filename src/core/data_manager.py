@@ -159,10 +159,10 @@ class DataManager:
             return float(result[0]["pending_rest_multiplier"] or 0.0)
         return 0.0
 
-    def set_pending_multiplier(self, player_id: str, multiplier: float):
-        """Sets the pending rest multiplier for a player."""
-        query = "UPDATE players SET pending_rest_multiplier = ? WHERE id = ?"
-        self._db.execute_update(query, (multiplier, player_id))
+    def increment_pending_multiplier(self, player_id: str, increment: float):
+        """Increments the pending rest multiplier for a player by the given amount."""
+        query = "UPDATE players SET pending_rest_multiplier = pending_rest_multiplier + ? WHERE id = ?"
+        self._db.execute_update(query, (increment, player_id))
 
     def clear_pending_multiplier(self, player_id: str):
         """Clears the pending rest multiplier for a player (sets to 0.0)."""
@@ -173,7 +173,7 @@ class DataManager:
         """
         Clears pending rest multipliers for players who did NOT rest today.
         Called at end of day so bonuses don't carry beyond the next question.
-        Players who rested today keep their freshly-set multiplier.
+        Players who rested today keep their freshly-incremented multiplier.
         """
         rested_rows = self._db.execute_query(
             "SELECT user_id FROM powerup_usage WHERE question_id = ? AND powerup_type = 'rest'",

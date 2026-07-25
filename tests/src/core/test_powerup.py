@@ -95,7 +95,9 @@ class TestRestBehavior(_PowerUpManagerTests):
         self.assertIn("resting", public_msg)
         self.assertIn("Correct Answer", private_msg)
         self.assertTrue(self.manager._get_daily_state("1").is_resting)
-        self.data_manager.set_pending_multiplier.assert_called_once_with("1", 1.2)
+        self.data_manager.increment_pending_multiplier.assert_called_once_with(
+            "1", self.manager.rest_bonus_per_day
+        )
 
     def test_rest_already_answered(self):
         """Rest is blocked when the player has already answered correctly today."""
@@ -127,7 +129,7 @@ class TestRestBehavior(_PowerUpManagerTests):
 
     def test_rest_next_day_multiplier(self):
         """1.2x rest multiplier is applied to the player's next correct answer."""
-        self.data_manager.get_pending_multiplier.return_value = 1.2
+        self.data_manager.get_pending_multiplier.return_value = 0.2
         ctx = GuessContext(1, "P1", "ans", True, points_earned=100)
         msgs = self.manager.on_guess(ctx)
         self.assertTrue(any("Rest bonus" in m for m in msgs))
@@ -378,7 +380,7 @@ class TestStealBehavior(_PowerUpManagerTests):
     def test_steal_excludes_rest_bonus(self):
         """Rest multiplier bonus is not stealable — only other bonuses are stolen."""
         self.data_manager.get_pending_multiplier.side_effect = lambda pid: (
-            1.2 if pid == "2" else 0.0
+            0.2 if pid == "2" else 0.0
         )
         self.manager.steal("1", "2", "q1")
         # base=100, before_hint=10 -> 110 pts; rest bonus = round(110x0.2) = 22
@@ -469,35 +471,35 @@ class TestGuards(_PowerUpManagerTests):
         self.manager.jinx("1", "2", "q1")
         with self.assertRaises(PowerUpError) as cm:
             self.manager.jinx("1", "3", "q1")
-        self.assertIn("already used a power-up today", str(cm.exception))
+        self.assertIn("already used an attack power-up today", str(cm.exception))
 
     def test_second_steal_by_same_attacker_blocked(self):
         """A player cannot use steal twice in one day."""
         self.manager.steal("1", "2", "q1")
         with self.assertRaises(PowerUpError) as cm:
             self.manager.steal("1", "3", "q1")
-        self.assertIn("already used a power-up today", str(cm.exception))
+        self.assertIn("already used an attack power-up today", str(cm.exception))
 
     def test_steal_blocked_after_jinx(self):
         """A player who already jinxed cannot then steal."""
         self.manager.jinx("1", "2", "q1")
         with self.assertRaises(PowerUpError) as cm:
             self.manager.steal("1", "3", "q1")
-        self.assertIn("already used a power-up today", str(cm.exception))
+        self.assertIn("already used an attack power-up today", str(cm.exception))
 
     def test_jinx_blocked_after_steal(self):
         """A player who already stole cannot then jinx."""
         self.manager.steal("1", "2", "q1")
         with self.assertRaises(PowerUpError) as cm:
             self.manager.jinx("1", "3", "q1")
-        self.assertIn("already used a power-up today", str(cm.exception))
+        self.assertIn("already used an attack power-up today", str(cm.exception))
 
-    def test_jinx_blocked_after_rest(self):
-        """A player who already rested cannot then jinx."""
+    def test_jinx_allowed_after_rest(self):
+        """A player who already rested CAN still jinx (rest is independent)."""
         self.manager.rest("1", "q1", "Ans")
-        with self.assertRaises(PowerUpError) as cm:
-            self.manager.jinx("1", "2", "q1")
-        self.assertIn("already used a power-up today", str(cm.exception))
+        # Should not raise
+        msg = self.manager.jinx("1", "2", "q1")
+        self.assertIn("jinx", msg.lower())
 
     # --- invalid players ---
 
@@ -557,28 +559,28 @@ class TestGuards(_PowerUpManagerTests):
             self.manager.steal("1", "1", "q1")
         self.assertIn("yourself", str(cm.exception))
 
-    # --- one-per-day: missing permutations ---
+    # --- rest is independent from attack power-ups ---
 
-    def test_rest_blocked_after_jinx(self):
-        """A player who already jinxed cannot then rest."""
+    def test_rest_allowed_after_jinx(self):
+        """A player who already jinxed CAN still rest (rest is independent)."""
         self.manager.jinx("1", "2", "q1")
-        with self.assertRaises(PowerUpError) as cm:
-            self.manager.rest("1", "q1", "Ans")
-        self.assertIn("already used a power-up today", str(cm.exception))
+        # Should not raise
+        msg, _ = self.manager.rest("1", "q1", "Ans")
+        self.assertIn("resting", msg.lower())
 
-    def test_rest_blocked_after_steal(self):
-        """A player who already stole cannot then rest."""
+    def test_rest_allowed_after_steal(self):
+        """A player who already stole CAN still rest (rest is independent)."""
         self.manager.steal("1", "2", "q1")
-        with self.assertRaises(PowerUpError) as cm:
-            self.manager.rest("1", "q1", "Ans")
-        self.assertIn("already used a power-up today", str(cm.exception))
+        # Should not raise
+        msg, _ = self.manager.rest("1", "q1", "Ans")
+        self.assertIn("resting", msg.lower())
 
-    def test_steal_blocked_after_rest(self):
-        """A player who already rested cannot then steal."""
+    def test_steal_allowed_after_rest(self):
+        """A player who already rested CAN still steal (rest is independent)."""
         self.manager.rest("1", "q1", "Ans")
-        with self.assertRaises(PowerUpError) as cm:
-            self.manager.steal("1", "2", "q1")
-        self.assertIn("already used a power-up today", str(cm.exception))
+        # Should not raise
+        msg = self.manager.steal("1", "2", "q1")
+        self.assertIn("steal", msg.lower())
 
     # --- resting target cannot be attacked ---
 

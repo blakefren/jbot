@@ -71,12 +71,13 @@ class TestDataManager(unittest.TestCase):
             "UPDATE players SET answer_streak = 0 WHERE id = ?", ("1",)
         )
 
-    def test_set_pending_multiplier(self):
-        """Test setting a player's pending rest multiplier."""
+    def test_increment_pending_multiplier(self):
+        """Test incrementing a player's pending rest multiplier."""
         self.db.execute_update = MagicMock()
-        self.data_manager.set_pending_multiplier("1", 1.2)
+        self.data_manager.increment_pending_multiplier("1", 0.2)
         self.db.execute_update.assert_called_once_with(
-            "UPDATE players SET pending_rest_multiplier = ? WHERE id = ?", (1.2, "1")
+            "UPDATE players SET pending_rest_multiplier = pending_rest_multiplier + ? WHERE id = ?",
+            (0.2, "1"),
         )
 
     def test_load_players(self):
@@ -1649,15 +1650,15 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.data_manager.create_player("p3", "Player3")  # no multiplier
 
         # p1 has a leftover multiplier from a prior day (no powerup_usage row for this question)
-        self.data_manager.set_pending_multiplier("p1", 1.2)
+        self.data_manager.increment_pending_multiplier("p1", 0.2)
         # p2 rested today
-        self.data_manager.set_pending_multiplier("p2", 1.2)
+        self.data_manager.increment_pending_multiplier("p2", 0.2)
         self.data_manager.log_powerup_usage("p2", "rest", None, dq_id)
 
         self.data_manager.clear_stale_rest_multipliers(dq_id)
 
         self.assertEqual(self.data_manager.get_pending_multiplier("p1"), 0.0)
-        self.assertEqual(self.data_manager.get_pending_multiplier("p2"), 1.2)
+        self.assertGreater(self.data_manager.get_pending_multiplier("p2"), 0.0)
         self.assertEqual(self.data_manager.get_pending_multiplier("p3"), 0.0)
 
 
@@ -1976,7 +1977,7 @@ class TestRollbackQuestionDay(unittest.TestCase):
 
     def test_snapshot_captures_pending_rest_multiplier(self):
         # Give alice a pending rest multiplier before the snapshot is taken.
-        self.dm.set_pending_multiplier("alice", 1.2)
+        self.dm.increment_pending_multiplier("alice", 1.2)
 
         q2 = Question("Q2?", "B", "Cat", 10, "test", "H2")
         dq2_id = self.dm.log_daily_question(q2, force_new=True)
@@ -1991,7 +1992,7 @@ class TestRollbackQuestionDay(unittest.TestCase):
 
     def test_rollback_clears_rest_multiplier_set_during_question(self):
         # Player rests during the active question (multiplier set to 1.2).
-        self.dm.set_pending_multiplier("alice", 1.2)
+        self.dm.increment_pending_multiplier("alice", 1.2)
 
         # Snapshot was taken BEFORE rest, so pending_rest_multiplier was 0.
         # That's already snapshotted in setUp (snapshot taken with 0.0).

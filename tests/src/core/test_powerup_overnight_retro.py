@@ -252,7 +252,7 @@ class TestRetroactiveJinx(unittest.TestCase):
     def test_retro_jinx_triggered_after_on_guess(self):
         """Regression: on_guess must set is_correct so jinx sees it retroactively."""
         manager, pm, dm, players = _make_manager()
-        dm.get_pending_multiplier.return_value = 1.0
+        dm.get_pending_multiplier.return_value = 0.0
 
         # Target answers correctly through the normal on_guess path
         manager.on_guess(
