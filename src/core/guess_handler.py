@@ -161,7 +161,10 @@ class GuessHandler:
             base_value = self.daily_q.clue_value or 100
 
             # Check Rank (before logging this guess)
-            existing_correct_count = self.data_manager.get_correct_guess_count(
+            # Use get_correct_solver_count to count unique players, not total guesses
+            # This ensures the rank is based on number of unique players who answered,
+            # not inflated by players with multiple correct guesses
+            existing_correct_count = self.data_manager.get_correct_solver_count(
                 self.daily_question_id
             )
             answer_rank = existing_correct_count + 1

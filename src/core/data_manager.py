@@ -1178,8 +1178,23 @@ class DataManager:
     def get_correct_guess_count(self, daily_question_id: int) -> int:
         """
         Returns the number of correct guesses for a specific daily question.
+        WARNING: This counts TOTAL guesses, including multiple from same player.
+        For determining answer_rank (fastest badge), use get_correct_solver_count() instead.
         """
         query = "SELECT COUNT(*) as count FROM guesses WHERE daily_question_id = ? AND is_correct = 1"
+        result = self._db.execute_query(query, (daily_question_id,))
+        return result[0]["count"] if result else 0
+
+    def get_correct_solver_count(self, daily_question_id: int) -> int:
+        """
+        Returns the number of UNIQUE PLAYERS who have answered correctly for a daily question.
+        This is the correct method to use for determining answer_rank (fastest badge).
+        """
+        query = """
+            SELECT COUNT(DISTINCT player_id) as count
+            FROM guesses
+            WHERE daily_question_id = ? AND is_correct = 1
+        """
         result = self._db.execute_query(query, (daily_question_id,))
         return result[0]["count"] if result else 0
 
