@@ -136,3 +136,13 @@ class AnswerView(discord.ui.View):
         # Create and show the modal
         modal = AnswerModal(self.bot, self.bot.game.daily_q.question)
         await interaction.response.send_modal(modal)
+
+
+async def setup(bot):
+    """Setup function required by cog loader.
+
+    AnswerModal and AnswerView are not cogs but rather Discord UI components
+    that are instantiated and managed by the discord.py main bot file.
+    This function exists to satisfy the cog loader's requirements.
+    """
+    pass
