@@ -338,7 +338,7 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
         await self.bot.send_message("Hello Channel", is_channel=True, target_id=456)
 
         self.bot.get_channel.assert_called_once_with(456)
-        mock_channel.send.assert_awaited_once_with("Hello Channel")
+        mock_channel.send.assert_awaited_once_with("Hello Channel", view=None)
         self.bot.data_manager.log_messaging_event.assert_called_once()
 
     async def test_send_message_via_ctx(self):
@@ -349,7 +349,7 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
 
         await self.bot.send_message("Hello Ctx", ctx=mock_ctx)
 
-        mock_ctx.send.assert_awaited_once_with("Hello Ctx")
+        mock_ctx.send.assert_awaited_once_with("Hello Ctx", view=None)
         self.bot.data_manager.log_messaging_event.assert_called_once()
 
     async def test_send_message_via_interaction_response(self):
@@ -411,12 +411,14 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
                     is_channel=False,
                     target_id=1,
                     success_status="test_status",
+                    view=None,
                 ),
                 call(
                     "Daily Content",
                     is_channel=True,
                     target_id=2,
                     success_status="test_status",
+                    view=None,
                 ),
             ]
         )
@@ -465,12 +467,14 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
                     is_channel=False,
                     target_id=1,
                     success_status="test_status",
+                    view=None,
                 ),
                 call(
                     "<@&12345>\nDaily Content",
                     is_channel=True,
                     target_id=2,
                     success_status="test_status",
+                    view=None,
                 ),
             ]
         )
@@ -497,12 +501,14 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
                     is_channel=False,
                     target_id=1,
                     success_status="test_status",
+                    view=None,
                 ),
                 call(
                     "Leaderboard Content",
                     is_channel=False,
                     target_id=1,
                     success_status="test_status",
+                    view=None,
                 ),
             ]
         )

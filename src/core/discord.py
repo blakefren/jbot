@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 
 from src.cfg.main import ConfigReader
+from src.cogs.answer_modal import AnswerView
 import sys
 
 # Add the project root to the Python path
@@ -149,6 +150,10 @@ class DiscordBot(commands.Bot):
             self.ready_event_fired = True
         else:
             logging.info("Bot reconnected.")
+
+        # Register persistent views for buttons
+        self.add_view(AnswerView(self))
+
         # Start the tasks
         if not self.prepare_daily_question_task.is_running():
             self.prepare_daily_question_task.start()
@@ -285,6 +290,7 @@ class DiscordBot(commands.Bot):
                     morning_content_getter,
                     "morning_message",
                     send_leaderboard=True,
+                    include_answer_button=True,
                 )
             except Exception as e:
                 self._log_task_error(e, "morning_message_task - send_message")
@@ -316,7 +322,7 @@ class DiscordBot(commands.Bot):
                 )
 
                 await self._send_daily_message_to_all_subscribers(
-                    content_getter, "reminder_message"
+                    content_getter, "reminder_message", include_answer_button=True
                 )
                 logging.info("Reminder message sent successfully")
             except Exception as e:
@@ -481,6 +487,7 @@ class DiscordBot(commands.Bot):
         send_leaderboard: bool = False,
         requires_guild: bool = False,
         show_daily_bonuses: bool = False,
+        include_answer_button: bool = False,
     ):
         """Helper function to send a daily message to all subscribers."""
         logging.debug(f"DiscordBot._send_daily_message_to_all_subscribers")
@@ -518,11 +525,17 @@ class DiscordBot(commands.Bot):
                     guild, show_daily_bonuses=show_daily_bonuses
                 )
 
+            # Prepare view for button if this is a channel message
+            view = None
+            if include_answer_button and sub.is_channel:
+                view = AnswerView(self)
+
             await self.send_message(
                 content,
                 is_channel=sub.is_channel,
                 target_id=sub.sub_id,
                 success_status=success_status,
+                view=view,
             )
             if leaderboard:
                 await self.send_message(
@@ -530,6 +543,7 @@ class DiscordBot(commands.Bot):
                     is_channel=sub.is_channel,
                     target_id=sub.sub_id,
                     success_status=success_status,
+                    view=None,
                 )
 
     def _backup_database(self):
@@ -620,8 +634,9 @@ class DiscordBot(commands.Bot):
         interaction=None,
         ephemeral=False,
         success_status="sent",
+        view: discord.ui.View = None,
     ):
-        """Sends a message to a Discord user, channel, or context. Supports ephemeral for interaction responses."""
+        """Sends a message to a Discord user, channel, or context. Supports ephemeral for interaction responses and views for buttons."""
         if target_id < 0 and ctx is None and interaction is None:
             raise ValueError("Either target_id, ctx, or interaction must be provided.")
         try:
@@ -637,12 +652,12 @@ class DiscordBot(commands.Bot):
                     interaction.user.id if hasattr(interaction, "user") else target_id
                 )
             elif ctx is not None:
-                await ctx.send(content)
+                await ctx.send(content, view=view)
                 target_id = ctx.channel.id if ctx.guild else ctx.author.id
             elif is_channel:
                 channel = self.get_channel(target_id)
                 if channel:
-                    await channel.send(content)
+                    await channel.send(content, view=view)
             else:
                 user = await self.fetch_user(target_id)
                 if user:
