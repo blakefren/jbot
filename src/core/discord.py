@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 
 from src.cfg.main import ConfigReader
-from src.cogs.answer_modal import AnswerView
+from src.cogs.quick_actions import GameActionView
 import sys
 
 # Add the project root to the Python path
@@ -152,7 +152,7 @@ class DiscordBot(commands.Bot):
             logging.info("Bot reconnected.")
 
         # Register persistent views for buttons
-        self.add_view(AnswerView(self))
+        self.add_view(GameActionView(self))
 
         # Start the tasks
         if not self.prepare_daily_question_task.is_running():
@@ -528,7 +528,7 @@ class DiscordBot(commands.Bot):
             # Prepare view for button if this is a channel message
             view = None
             if include_answer_button and sub.is_channel:
-                view = AnswerView(self)
+                view = GameActionView(self)
 
             await self.send_message(
                 content,
