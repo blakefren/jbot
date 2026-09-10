@@ -615,3 +615,198 @@ class TestRecalculateStreakBonus(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Regression Tests: Jinx excludes stolen points
+# ---------------------------------------------------------------------------
+
+
+class TestJinxExcludesStolenPoints(unittest.TestCase):
+    """
+    Regression test for jinx bug: when target steals from another player,
+    those stolen points should NOT be included in jinx calculation.
+
+    Scenario:
+    - Target starts with 0 points
+    - Target steals 50 points from another player (target.score_earned = 50, score_stolen = 50)
+    - Attacker jinxes target retroactively
+    - Jinx should take 25% of EARNED points (0), not stolen points
+    - Result: 25% of (50 - 50) = 0 points transferred
+    """
+
+    def setUp(self):
+        self.engine = _make_engine(jinx_share_ratio=0.25)
+
+    def test_jinx_excludes_stolen_points_retroactive(self):
+        """Retroactive jinx: target has already answered with stolen points."""
+        # Target earned 100 points, stole 50 points, now has 150 total
+        ds = {
+            "tgt": _state(
+                is_correct=True,
+                score_earned=150,
+                score_stolen=50,  # Track that 50 came from stealing
+                bonuses={},
+            ),
+        }
+
+        transferred = self.engine.apply_jinx(ds, "att", "tgt")
+
+        # Jinx should take 25% of earned only: 25% of (150 - 50) = 25% of 100 = 25
+        self.assertEqual(transferred, 25, "Jinx should only take 25% of earned points")
+        self.assertEqual(
+            ds["tgt"].score_earned,
+            125,
+            "Target should lose 25 earned points, keep 50 stolen",
+        )
+        self.assertEqual(ds["att"].score_earned, 25, "Attacker gains 25 points")
+        self.assertEqual(
+            ds["tgt"].score_stolen,
+            50,
+            "Target's stolen points should remain unchanged",
+        )
+
+    def test_jinx_excludes_stolen_points_forward_resolve(self):
+        """Forward jinx: target answers later after stealing from someone else."""
+        # Attacker sets up jinx (target hasn't answered yet)
+        ds = {
+            "tgt": _state(
+                is_correct=False,  # Target hasn't answered yet
+                jinxed_by="att",
+            ),
+            "att": _state(jinx_target="tgt", score_earned=0),
+        }
+
+        # Attacker jinxes
+        self.engine.apply_jinx(ds, "att", "tgt")
+
+        # Now target answers, and has earned 100 but stole 50
+        ds["tgt"].is_correct = True
+        ds["tgt"].score_earned = 150
+        ds["tgt"].score_stolen = 50
+
+        transferred = self.engine.resolve_jinx_on_correct(ds, "tgt")
+
+        # Jinx should take 25% of earned only: 25% of (150 - 50) = 25
+        self.assertEqual(
+            transferred, 25, "Jinx should only take 25% of earned points, not stolen"
+        )
+        self.assertEqual(
+            ds["tgt"].score_earned,
+            125,
+            "Target should lose 25 earned points, keep 50 stolen",
+        )
+        self.assertEqual(ds["att"].score_earned, 25, "Attacker gains 25 points")
+
+    def test_jinx_when_target_earned_nothing_but_stole_much(self):
+        """Edge case: target earned 0 points but stole 100 points."""
+        ds = {
+            "tgt": _state(
+                is_correct=True,
+                score_earned=100,  # All from stealing
+                score_stolen=100,
+                bonuses={},
+            ),
+        }
+
+        transferred = self.engine.apply_jinx(ds, "att", "tgt")
+
+        # Jinx should take 25% of earned: 25% of (100 - 100) = 0
+        self.assertEqual(transferred, 0, "No transfer when target earned nothing")
+        self.assertEqual(ds["tgt"].score_earned, 100, "Target keeps all stolen points")
+        self.assertEqual(ds["att"].score_earned, 0, "Attacker gains nothing")
+
+    def test_steal_increments_score_stolen(self):
+        """Verify that steal correctly increments score_stolen on retroactive steal."""
+        ds = {
+            "tgt": _state(
+                is_correct=True,
+                score_earned=50,
+                bonuses={"before_hint": 10, "try_1": 20},
+            ),
+            "thief": _state(score_earned=0, score_stolen=0),
+        }
+
+        # Apply retroactive steal (target already answered)
+        deducted, stolen, bonus_delta = self.engine.apply_steal(
+            ds, "thief", "tgt", initial_streak=5
+        )
+
+        # pop_stealable_bonuses = try_1 + before_hint = 30
+        self.assertEqual(stolen, 30, "Should steal 30 points from bonuses")
+        self.assertEqual(
+            ds["thief"].score_stolen, 30, "Thief's score_stolen should be incremented"
+        )
+        self.assertEqual(
+            ds["thief"].score_earned, 30, "Thief's score_earned includes stolen points"
+        )
+
+    def test_complex_scenario_steal_then_jinx(self):
+        """
+        Complex scenario:
+        1. Player A earns 100 points
+        2. Player B steals 40 points from Player A (B now has 40 stolen, earned 60 base)
+        3. Player C jinxes Player B retroactively
+        4. Jinx should take 25% of earned (60), not including stolen (40)
+        """
+        # Start: B has earned 100 points
+        ds = {
+            "b": _state(is_correct=True, score_earned=100, score_stolen=0, bonuses={}),
+        }
+
+        # B steals 40 from A (retroactive steal)
+        # For this test, manually set up the state as if steal happened
+        ds["b"].score_earned = 60  # After giving up stolen points
+        ds["b"].score_stolen = 40  # Track that B stole from A
+
+        # Now C jinxes B
+        transferred = self.engine.apply_jinx(ds, "c", "b")
+
+        # Jinx should take 25% of (60 - 40) = 25% of 20 = 5
+        self.assertEqual(transferred, 5, "Jinx should take 25% of earned only (20 pts)")
+        self.assertEqual(ds["b"].score_earned, 55, "B should have 60 - 5 = 55")
+        self.assertEqual(ds["c"].score_earned, 5, "C should gain 5 points")
+
+    def test_jinx_points_tracked_as_score_stolen(self):
+        """
+        Cascade prevention: when a player jinxes someone and gains points,
+        those points are tracked as score_stolen. A subsequent jinx on that
+        player excludes those cascade points.
+
+        Scenario:
+        1. Player A earns 100, B earns 80
+        2. A jinxes B retroactively, gains 25% of 80 = 20 points
+        3. A now has 20 points tracked as score_stolen (gained via jinx)
+        4. C jinxes A retroactively
+        5. C should only take 25% of A's earned (not the 20 from jinx)
+        """
+        ds = {
+            "a": _state(is_correct=True, score_earned=0, score_stolen=0),
+            "b": _state(is_correct=True, score_earned=80, score_stolen=0),
+        }
+
+        # A jinxes B retroactively
+        transferred_ab = self.engine.apply_jinx(ds, "a", "b")
+        self.assertEqual(transferred_ab, 20, "A should gain 25% of 80 = 20 from jinx")
+        self.assertEqual(ds["a"].score_earned, 20, "A's earned points from jinx: 20")
+        self.assertEqual(
+            ds["a"].score_stolen, 20, "A's jinx points tracked as score_stolen: 20"
+        )
+
+        # Now C jinxes A (who has earned 0 and score_stolen 20)
+        ds["c"] = _state(is_correct=False, score_earned=0, score_stolen=0)
+        transferred_ca = self.engine.apply_jinx(ds, "c", "a")
+
+        # C should take 25% of (20 - 20) = 25% of 0 = 0
+        # A's jinx points don't count toward C's jinx
+        self.assertEqual(
+            transferred_ca,
+            0,
+            "Cascade prevention: C takes nothing (A's 20 are all from power-ups)",
+        )
+        self.assertEqual(ds["a"].score_earned, 20, "A keeps all their points")
+        self.assertEqual(ds["c"].score_earned, 0, "C gains nothing")
+
+
+if __name__ == "__main__":
+    unittest.main()

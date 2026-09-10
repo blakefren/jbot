@@ -56,8 +56,8 @@ class PowerUpEngine:
 
         Silences the attacker and establishes the parasitic link (``jinx_target`` on
         attacker, ``jinxed_by`` on target). If the target has already answered correctly,
-        transfers ``jinx_share_ratio`` of their total points to the attacker immediately
-        and marks the link resolved (clears ``jinx_target``).
+        transfers ``jinx_share_ratio`` of their earned points (excluding stolen points)
+        to the attacker immediately and marks the link resolved (clears ``jinx_target``).
 
         Returns the number of points transferred (0 if target has not answered yet).
         """
@@ -69,10 +69,15 @@ class PowerUpEngine:
 
         if target_state.is_correct:
             # Retroactive: target already answered — transfer share immediately.
-            share = int(target_state.score_earned * self.jinx_share_ratio)
+            # Only take 25% of earned points, not stolen points.
+            earned_only = target_state.score_earned - target_state.score_stolen
+            share = int(earned_only * self.jinx_share_ratio)
             if share > 0:
                 target_state.score_earned -= share
                 attacker_state.score_earned += share
+                attacker_state.score_stolen += (
+                    share  # Track as power-up points, not earned
+                )
             attacker_state.jinx_target = (
                 None  # Mark resolved to prevent double-transfer
             )
@@ -102,9 +107,10 @@ class PowerUpEngine:
         daily_state: dict[str, DailyPlayerState],
         target_id: str,
     ) -> int:
-        """Transfer share of target's points to attacker when the target answers correctly.
+        """Transfer share of target's earned points to attacker when the target answers correctly.
 
-        Clears ``attacker.jinx_target`` to prevent a double-transfer.
+        Only earned points (excluding stolen points) are transferred. Clears ``attacker.jinx_target``
+        to prevent a double-transfer.
         Returns points transferred (0 if no active link or already resolved).
         """
         target_state = self._get_state(daily_state, target_id)
@@ -117,10 +123,13 @@ class PowerUpEngine:
         if attacker_state.jinx_target is None:
             return 0
 
-        share = int(target_state.score_earned * self.jinx_share_ratio)
+        # Only take 25% of earned points, not stolen points.
+        earned_only = target_state.score_earned - target_state.score_stolen
+        share = int(earned_only * self.jinx_share_ratio)
         if share > 0:
             target_state.score_earned -= share
             attacker_state.score_earned += share
+            attacker_state.score_stolen += share  # Track as power-up points, not earned
         attacker_state.jinx_target = None  # Mark resolved
         return share
 
@@ -229,6 +238,7 @@ class PowerUpEngine:
             if stolen_amount > 0:
                 target_state.score_earned -= stolen_amount
                 thief_state.score_earned += stolen_amount
+                thief_state.score_stolen += stolen_amount
             target_state.steal_attempt_by = thief_id  # mark resolved
         else:
             target_state.steal_attempt_by = thief_id
@@ -264,6 +274,7 @@ class PowerUpEngine:
             if stolen > 0:
                 target_state.score_earned -= stolen
                 attacker_state.score_earned += stolen
+                attacker_state.score_stolen += stolen
             return stolen
 
         return 0

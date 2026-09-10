@@ -11,6 +11,7 @@ class DailyPlayerState:
 
     # Scoring & Progress
     score_earned: int = 0
+    score_stolen: int = 0  # Points stolen from other players (via steal power-up)
     streak_delta: int = 0
     is_correct: bool = False
     guesses_count: int = 0
