@@ -42,7 +42,7 @@ class TestGameActionView(unittest.IsolatedAsyncioTestCase):
         mock_interaction.response.send_message.assert_called_once()
 
     async def test_answer_button_with_question(self):
-        """Test answer button opens modal when question is active."""
+        """Test answer button opens modal with question displayed."""
         self.mock_bot.game.daily_q = MagicMock(question="What is 2+2?")
         view = GameActionView(self.mock_bot)
 
@@ -55,6 +55,7 @@ class TestGameActionView(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(button)
         mock_interaction = AsyncMock()
         await button.callback(mock_interaction)
+        # Verify modal is shown directly
         mock_interaction.response.send_modal.assert_called_once()
 
     async def test_jinx_button_shows_selection(self):

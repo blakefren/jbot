@@ -7,7 +7,11 @@ from src.core.powerup import PowerUpError
 
 
 class AnswerModal(discord.ui.Modal):
-    """Modal for players to submit their answer to the daily trivia question."""
+    """Modal for players to submit their answer to the daily trivia question.
+
+    The question text is shown in the channel message; players click the Answer button
+    and type their answer here when ready.
+    """
 
     def __init__(self, bot, question_text: str):
         super().__init__(title="Submit Your Answer", timeout=300)
@@ -285,13 +289,14 @@ class GameActionView(discord.ui.View):
     async def answer_button(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
-        """Button callback that opens the answer modal."""
+        """Button callback that opens the answer modal with the question."""
         if not self.bot.game.daily_q:
             await interaction.response.send_message(
                 "There is no active question.", ephemeral=True
             )
             return
 
+        # Show the modal with the question displayed
         modal = AnswerModal(self.bot, self.bot.game.daily_q.question)
         await interaction.response.send_modal(modal)
 
