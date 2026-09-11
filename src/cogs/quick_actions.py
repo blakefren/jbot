@@ -281,6 +281,22 @@ class GameActionView(discord.ui.View):
         super().__init__(timeout=None)  # No timeout for persistence
         self.bot = bot
 
+        # Load emoji from config and update button labels
+        config = ConfigReader()
+        emoji_jinx = config.get("JBOT_EMOJI_JINXED", "🧙")
+        emoji_steal = config.get("JBOT_EMOJI_STEALING", "💰")
+        emoji_rest = config.get("JBOT_EMOJI_REST", "😴")
+
+        # Update button labels with emoji
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                if item.custom_id == "trivia:jinx":
+                    item.label = f"{emoji_jinx} Jinx"
+                elif item.custom_id == "trivia:steal":
+                    item.label = f"{emoji_steal} Steal"
+                elif item.custom_id == "trivia:rest":
+                    item.label = f"{emoji_rest} Rest"
+
     @discord.ui.button(
         label="Answer",
         style=discord.ButtonStyle.primary,
