@@ -377,11 +377,11 @@ class PowerUpManager(BaseManager):
             if self._get_daily_state(target_id).is_correct:
                 if transferred > 0:
                     return (
-                        f"{self.emoji_jinxed} Late jinx on <@{target_id}>! "
+                        f"<@{attacker_id}> {self.emoji_jinxed} Late jinx on <@{target_id}>! "
                         f"Siphoned {transferred} pts ({share_pct}%){cost_str}."
                     )
                 return (
-                    f"{self.emoji_jinxed} Late jinx landed on <@{target_id}>, "
+                    f"<@{attacker_id}> {self.emoji_jinxed} Late jinx landed on <@{target_id}>, "
                     f"but they had 0 pts to siphon{cost_str}."
                 )
 
@@ -400,7 +400,7 @@ class PowerUpManager(BaseManager):
             self.player_manager.update_score(target_id, -transferred)
             self.player_manager.update_score(attacker_id, transferred)
             return (
-                f"{self.emoji_jinxed} <@{target_id}> already answered \u2014 retroactive jinx! "
+                f"<@{attacker_id}> {self.emoji_jinxed} <@{target_id}> already answered — retroactive jinx! "
                 f"Siphoned {transferred} pts ({share_pct}% of their score). "
                 f"{self.emoji_silenced} You still can't answer until the hint is revealed."
             )
@@ -514,19 +514,19 @@ class PowerUpManager(BaseManager):
                 self.player_manager.update_score(thief_id, bonus_delta)
             if stealable_amount == 0:
                 return (
-                    f"{self.emoji_stealing} You sacrificed {actual_lost} streak days "
+                    f"<@{thief_id}> {self.emoji_stealing} You sacrificed {actual_lost} streak days "
                     f"to rob <@{target_id}>, but there was nothing to steal!"
                 )
             self.player_manager.update_score(target_id, -stealable_amount)
             self.player_manager.update_score(thief_id, stealable_amount)
             if is_partial:
                 return (
-                    f"{self.emoji_stealing} <@{target_id}> already answered! "
+                    f"<@{thief_id}> {self.emoji_stealing} <@{target_id}> already answered! "
                     f"You only had {actual_lost}/{self.engine.retro_steal_streak_cost} streak days — "
                     f"partial steal: swiped {stealable_amount} pts!"
                 )
             return (
-                f"{self.emoji_stealing} <@{target_id}> already answered! "
+                f"<@{thief_id}> {self.emoji_stealing} <@{target_id}> already answered! "
                 f"You paid {actual_lost} streak days and instantly swiped "
                 f"{stealable_amount} pts!"
             )
