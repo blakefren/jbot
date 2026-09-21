@@ -130,7 +130,7 @@ def read_jeopardy_questions(
                     "position": position,
                 }
                 original_category = row.get("category", "N/A")
-                formatted_category = f"Jeopardy! | {original_category}"
+                formatted_category = f"Jeopardy! | {original_category} | {air_date}"
                 filtered_questions.append(
                     Question(
                         question=row.get("answer", "N/A"),

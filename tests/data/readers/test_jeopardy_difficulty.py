@@ -360,7 +360,7 @@ class TestJeopardyDifficultyFiltering(unittest.TestCase):
 
             # Verify specific category format
             q1 = next(q for q in easy_questions if q.question == "Q1-Pos1")
-            self.assertEqual(q1.category, "Jeopardy! | HISTORY")
+            self.assertEqual(q1.category, "Jeopardy! | HISTORY | 1984-09-10")
 
             # Test medium difficulty
             medium_questions = read_jeopardy_questions("dummy.tsv", difficulty="medium")
