@@ -1250,6 +1250,14 @@ class GameRunner:
 
         all_players = self.data_manager.get_all_players()
 
+        # Phase 1: Diagnostic logging for score verification
+        logging.info(
+            f"[VERIFY Q{daily_question_id}] Starting verification with {len(snapshot)} snapshotted players"
+        )
+        logging.info(
+            f"[VERIFY Q{daily_question_id}] Simulator produced results for {len(sim_results)} players"
+        )
+
         diffs = []
         for user_id, expected in sim_results.items():
             actual_player = all_players.get(user_id)
@@ -1258,17 +1266,35 @@ class GameRunner:
 
             player_diffs = {}
 
+            # Log the comparison for all players (not just those with diffs)
+            logging.debug(
+                f"[VERIFY Q{daily_question_id}] {actual_player.name} ({user_id}): "
+                f"sim_score={expected['final_score']}, db_score={actual_player.score}, "
+                f"sim_earned={expected.get('score_earned', '?')}, "
+                f"sim_streak={expected['final_streak']}, db_streak={actual_player.answer_streak}"
+            )
+
             if expected["final_score"] != actual_player.score:
                 player_diffs["score"] = {
                     "expected": expected["final_score"],
                     "actual": actual_player.score,
                 }
+                logging.error(
+                    f"[VERIFY Q{daily_question_id}] ❌ SCORE MISMATCH for {actual_player.name}: "
+                    f"expected {expected['final_score']}, got {actual_player.score}, "
+                    f"diff={expected['final_score'] - actual_player.score}"
+                )
 
             if expected["final_streak"] != actual_player.answer_streak:
                 player_diffs["streak"] = {
                     "expected": expected["final_streak"],
                     "actual": actual_player.answer_streak,
                 }
+                logging.error(
+                    f"[VERIFY Q{daily_question_id}] ❌ STREAK MISMATCH for {actual_player.name}: "
+                    f"expected {expected['final_streak']}, got {actual_player.answer_streak}, "
+                    f"diff={expected['final_streak'] - actual_player.answer_streak}"
+                )
 
             if season_id is not None:
                 snapshot_player = snapshot.get(user_id)
@@ -1285,6 +1311,11 @@ class GameRunner:
                         "expected": expected_season_score,
                         "actual": actual_season_score,
                     }
+                    logging.error(
+                        f"[VERIFY Q{daily_question_id}] ❌ SEASON SCORE MISMATCH for {actual_player.name}: "
+                        f"expected {expected_season_score}, got {actual_season_score}, "
+                        f"diff={expected_season_score - actual_season_score}"
+                    )
 
             if player_diffs:
                 player_name = snapshot[user_id].name if user_id in snapshot else user_id
@@ -1295,6 +1326,15 @@ class GameRunner:
                         "diffs": player_diffs,
                     }
                 )
+
+        if diffs:
+            logging.warning(
+                f"[VERIFY Q{daily_question_id}] ⚠️  Found {len(diffs)} player(s) with discrepancies"
+            )
+        else:
+            logging.info(
+                f"[VERIFY Q{daily_question_id}] ✓ All players verified successfully"
+            )
 
         return diffs
 

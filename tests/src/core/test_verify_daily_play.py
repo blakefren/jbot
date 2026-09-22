@@ -270,6 +270,117 @@ class TestVerifyDailyPlay(unittest.TestCase):
         report = GameRunner.format_verify_report(10, diffs)
         self.assertIn("-50", report)
 
+    def test_rest_bonus_with_retroactive_jinx(self):
+        """
+        CRITICAL TEST: Verifies rest bonus + jinx scenario through verify_daily_play.
+
+        This is the exact scenario that caused Q408/Q403 score verification alerts:
+        - Player A answers correctly with rest multiplier (previous day's rest)
+        - Player B jinxes Player A retroactively (after A already answered)
+        - Verify that simulator correctly includes rest bonus in jinx transfer
+
+        Scenario:
+        - Player A: score=100, streak=0, pending_rest_multiplier=0.2 (20%)
+        - Player A guesses correctly → scores 100+20+10+10 = 140 base
+        - Rest multiplier applied: 140 * 0.2 = 28 rest bonus
+        - Player A's total earned: 168
+        - Player A's final score: 268
+        - Player B jinxes retroactively → transfers 25% of 168 = 42 points
+        - Player A final: 268 - 42 = 226
+        - Player B final: 0 + 42 = 42
+        """
+        from src.core.events import GuessEvent, PowerUpEvent
+
+        player_a_id = "player_a"
+        player_b_id = "player_b"
+
+        # Initial state: A has rest multiplier, B doesn't
+        snapshot = {
+            player_a_id: Player(
+                id=player_a_id,
+                name="Alice",
+                score=100,
+                answer_streak=0,
+                season_score=50,
+                pending_rest_multiplier=0.2,  # 20% rest bonus
+            ),
+            player_b_id: Player(
+                id=player_b_id,
+                name="Bob",
+                score=0,
+                answer_streak=0,
+                season_score=0,
+                pending_rest_multiplier=0.0,
+            ),
+        }
+
+        # Events: A guesses correctly, B jinxes retroactively
+        guess_events = [
+            {
+                "player_id": player_a_id,
+                "guess_text": "4",
+                "is_correct": True,
+                "guessed_at": "2024-01-15 10:00:00",
+            }
+        ]
+        powerup_events = [
+            {
+                "user_id": player_b_id,
+                "powerup_type": "jinx_late",
+                "target_user_id": player_a_id,
+                "used_at": "2024-01-15 10:05:00",  # After A answered
+            }
+        ]
+
+        self._setup_common_mocks(snapshot, guess_events, powerup_events, season_id=7)
+
+        # DB state: Matches expected from simulator
+        # A: 100 initial + 168 earned - 42 jinx = 226 final
+        # B: 0 initial + 42 from jinx = 42 final
+        # Season: A: 50 + 168 - 42 = 176; B: 0 + 42 = 42
+        mock_season_score_a = MagicMock()
+        mock_season_score_a.points = 176
+        mock_season_score_b = MagicMock()
+        mock_season_score_b.points = 42
+
+        def get_season_side_effect(player_id, season_id):
+            if player_id == player_a_id:
+                return mock_season_score_a
+            elif player_id == player_b_id:
+                return mock_season_score_b
+            return None
+
+        self.mock_data_manager.get_player_season_score.side_effect = (
+            get_season_side_effect
+        )
+
+        self.mock_data_manager.get_all_players.return_value = {
+            player_a_id: Player(
+                id=player_a_id,
+                name="Alice",
+                score=226,  # Matches expected
+                answer_streak=1,
+                season_score=176,
+            ),
+            player_b_id: Player(
+                id=player_b_id,
+                name="Bob",
+                score=42,  # Matches expected
+                answer_streak=0,
+                season_score=42,
+            ),
+        }
+
+        result = self.game_runner.verify_daily_play(1)
+
+        # If rest bonus is correctly included in jinx, no diffs should be found
+        self.assertEqual(
+            result,
+            [],
+            "verify_daily_play should find no diffs when rest bonus is correctly "
+            "included in jinx transfers. If this fails, jinx logic is wrong.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
