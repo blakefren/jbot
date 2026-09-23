@@ -59,6 +59,8 @@ class PowerUpEngine:
         transfers ``jinx_share_ratio`` of their earned points (excluding stolen points)
         to the attacker immediately and marks the link resolved (clears ``jinx_target``).
 
+        Also applies wrong-guess penalties retroactively if target has made any wrong guesses.
+
         Returns the number of points transferred (0 if target has not answered yet).
         """
         attacker_state = self._get_state(daily_state, attacker_id)
@@ -78,6 +80,15 @@ class PowerUpEngine:
                 attacker_state.score_stolen += (
                     share  # Track as power-up points, not earned
                 )
+
+            # Retroactively apply wrong-guess penalties for any wrong guesses the target made
+            # (target's total guesses minus 1 for the correct guess)
+            wrong_guesses = max(0, target_state.guesses_count - 1)
+            if wrong_guesses > 0:
+                penalty_total = wrong_guesses * self.jinx_wrong_guess_penalty
+                attacker_state.score_earned -= penalty_total
+                attacker_state.jinx_penalty_total += penalty_total
+
             attacker_state.jinx_target = (
                 None  # Mark resolved to prevent double-transfer
             )

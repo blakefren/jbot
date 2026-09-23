@@ -152,6 +152,46 @@ class TestApplyJinx(unittest.TestCase):
         self.engine.apply_jinx(ds, "att", "tgt")
         self.assertIn("streak", ds["tgt"].bonuses)
 
+    def test_retro_applies_wrong_guess_penalties(self):
+        """Retroactive jinx applies wrong-guess penalties for the target's previous wrong guesses.
+
+        If target took 3 guesses to answer correctly (2 wrong + 1 correct),
+        the attacker should be penalized twice for those 2 wrong guesses.
+        """
+        # Target answered correctly but took 3 guesses total (2 wrong, 1 correct)
+        ds = {
+            "tgt": _state(
+                is_correct=True, score_earned=100, bonuses={}, guesses_count=3
+            ),
+            "att": _state(score_earned=100),
+        }
+        transferred = self.engine.apply_jinx(ds, "att", "tgt")
+
+        # Target's share should be transferred
+        self.assertEqual(transferred, 25)  # int(100 * 0.25)
+        self.assertEqual(ds["tgt"].score_earned, 75)
+
+        # Attacker should be penalized for 2 wrong guesses (guesses_count - 1)
+        # 2 wrong guesses × 5 points penalty = 10 points deducted
+        expected_attacker_score = 100 - 10  # paid penalty
+        expected_attacker_score += 25  # received share
+        self.assertEqual(ds["att"].score_earned, expected_attacker_score)
+        self.assertEqual(ds["att"].jinx_penalty_total, 10)
+
+    def test_retro_applies_wrong_guess_penalties_single_guess(self):
+        """Retroactive jinx with single correct guess (no wrong guesses) applies no penalty."""
+        ds = {
+            "tgt": _state(
+                is_correct=True, score_earned=100, bonuses={}, guesses_count=1
+            ),
+            "att": _state(score_earned=100),
+        }
+        transferred = self.engine.apply_jinx(ds, "att", "tgt")
+
+        # No wrong guesses, so no penalty
+        self.assertEqual(ds["att"].score_earned, 125)  # 100 - 0 + 25 share
+        self.assertEqual(ds["att"].jinx_penalty_total, 0)
+
 
 # ---------------------------------------------------------------------------
 # apply_late_jinx
@@ -197,6 +237,27 @@ class TestApplyLateJinx(unittest.TestCase):
         cost, _ = self.engine.apply_late_jinx(ds, "att", "tgt")
         self.assertEqual(cost, 0)
         self.assertEqual(ds["att"].score_earned, 100)
+
+    def test_late_applies_wrong_guess_penalties_on_retro_target(self):
+        """Late-day jinx on retroactive target applies both cost and wrong-guess penalties."""
+        ds = {
+            "att": _state(score_earned=100, bonuses={"before_hint": 10}),
+            "tgt": _state(
+                is_correct=True, score_earned=100, bonuses={}, guesses_count=3
+            ),
+        }
+        cost, transferred = self.engine.apply_late_jinx(ds, "att", "tgt")
+
+        # Cost is stripped bonuses
+        self.assertEqual(cost, 10)
+        # Transferred is share of target's points
+        self.assertEqual(transferred, 25)
+
+        # Attacker pays: 10 (before_hint) + 10 (2 wrong guesses × 5 penalty)
+        # Attacker gains: 25 (share)
+        # Net: 100 - 10 - 10 + 25 = 105
+        self.assertEqual(ds["att"].score_earned, 105)
+        self.assertEqual(ds["att"].jinx_penalty_total, 10)
 
 
 # ---------------------------------------------------------------------------

@@ -225,8 +225,8 @@ The outcome depends on whether the **attacker** (Early vs. Late) and the **targe
 
 | | **Forward** (target not yet answered) | **Retroactive** (target already answered) |
 |---|---|---|
-| **Early** (attacker not yet answered) | Attacker silenced. Each target wrong guess deducts penalty from attacker. When target answers correctly, 25% of target's `score_earned` transferred to attacker. | Attacker silenced. 25% of target's `score_earned` transferred immediately. |
-| **Late** (attacker already answered) | Attacker's `before_hint` + all fastest bonuses stripped as cost. Each target wrong guess deducts penalty from attacker. 25% of target's `score_earned` transferred when target answers correctly. | Attacker's `before_hint` + all fastest bonuses stripped. 25% of target's `score_earned` transferred immediately. |
+| **Early** (attacker not yet answered) | Attacker silenced. Each target wrong guess deducts penalty from attacker. When target answers correctly, 25% of target's `score_earned` transferred to attacker. | Attacker silenced. 25% of target's `score_earned` transferred immediately. Wrong-guess penalties for all the target's previous incorrect guesses deducted immediately from attacker. |
+| **Late** (attacker already answered) | Attacker's `before_hint` + all fastest bonuses stripped as cost. Each target wrong guess deducts penalty from attacker. 25% of target's `score_earned` transferred when target answers correctly. | Attacker's `before_hint` + all fastest bonuses stripped. 25% of target's `score_earned` transferred immediately. Wrong-guess penalties for all the target's previous incorrect guesses deducted immediately from attacker. |
 
 > **Late cost**: If the attacker earned none of those bonuses, the cost is 0 but the jinx still applies. The attacker is still silenced, but since they've already answered, it has no practical effect.
 
