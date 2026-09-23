@@ -270,8 +270,409 @@ class RestConfirmationView(discord.ui.View):
             await interaction.followup.send(str(e), ephemeral=True)
 
 
+class SkipConfirmationView(discord.ui.View):
+    """Sub-view with confirmation button for skip command."""
+
+    def __init__(self, bot):
+        super().__init__(timeout=None)
+        self.bot = bot
+
+    @discord.ui.button(
+        label="Confirm Skip",
+        style=discord.ButtonStyle.danger,
+        custom_id="admin:skip_confirm",
+    )
+    async def confirm_skip(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        """Confirm and execute skip command."""
+        await interaction.response.defer(ephemeral=True)
+
+        if not self.bot.game.daily_q:
+            await interaction.followup.send(
+                "There is no active question to skip.", ephemeral=True
+            )
+            return
+
+        try:
+            if self.bot.game.reset_daily_question():
+                new_question = self.bot.game.daily_q
+                question_content = self.bot.game.format_question(new_question)
+                await interaction.channel.send(
+                    f"The daily question has been skipped. The new question is:\n{question_content}"
+                )
+                await interaction.followup.send("✅ Question skipped.", ephemeral=True)
+            else:
+                await interaction.followup.send(
+                    "❌ Failed to skip the daily question. Check the logs.",
+                    ephemeral=True,
+                )
+        except Exception as e:
+            logging.error(f"Error skipping question: {e}")
+            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
+
+
+class AddAnswerConfirmationView(discord.ui.View):
+    """View with Apply/Cancel buttons after dry-run preview."""
+
+    def __init__(self, bot, answer_text: str, admin_id: str):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.answer_text = answer_text
+        self.admin_id = admin_id
+
+    @discord.ui.button(
+        label="Apply",
+        style=discord.ButtonStyle.success,
+        custom_id="admin:add_answer_apply",
+    )
+    async def apply_answer(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        """Apply the answer change."""
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            result = self.bot.game.recalculate_scores_for_new_answer(
+                self.answer_text, self.admin_id, dry_run=False
+            )
+
+            if result["status"] == "error":
+                await interaction.followup.send(
+                    f"❌ Error: {result['message']}", ephemeral=True
+                )
+                return
+
+            # Determine if answer has been revealed
+            is_revealed = False
+            try:
+                morning_task = self.bot.morning_message_task
+                evening_task = self.bot.evening_message_task
+                if morning_task.is_running() and evening_task.is_running():
+                    if morning_task.next_iteration < evening_task.next_iteration:
+                        is_revealed = True
+            except Exception:
+                pass
+
+            # Build the message body
+            if is_revealed:
+                header = f"Added ||{self.answer_text}|| as a correct answer.\n"
+            else:
+                header = "Added alternative answer.\n"
+
+            summary = (
+                f"Updated scores for {result['updated_players']} players.\n"
+                f"Total points refunded: {result['total_refunded']}."
+            )
+            if result.get("age_warning"):
+                summary = result["age_warning"] + "\n" + summary
+
+            use_season = self.bot.game.season_manager.enabled
+
+            # Sync the newly-calculated daily_state back to PowerUpManager
+            daily_state_new = result.get("daily_state_new", {})
+            powerup_manager = self.bot.game.managers.get("powerup")
+            if powerup_manager and daily_state_new:
+                for user_id, player_state in daily_state_new.items():
+                    powerup_manager.daily_state[user_id] = player_state
+
+            # Public message
+            public_msg = f"**Score Adjustment:**\n{header}{summary}"
+            if result.get("details"):
+                public_msg += "\n\n**Details:**\n"
+                for d in result["details"]:
+                    badges = "".join(d["badges"])
+                    sb = d["season_score_before"] if use_season else d["score_before"]
+                    sa = d["season_score_after"] if use_season else d["score_after"]
+                    public_msg += (
+                        f"<@{d['user_id']}>: {sb} -> {sa} ({d['diff']:+}) {badges}\n"
+                    )
+            if result.get("rest_cleared_players"):
+                mentions = " ".join(
+                    f"<@{r['user_id']}>" for r in result["rest_cleared_players"]
+                )
+                public_msg += (
+                    f"\nRest revoked — got it right with the new answer: {mentions}"
+                )
+
+            await interaction.channel.send(public_msg)
+            await interaction.followup.send(
+                "✅ Answer applied and scores updated.", ephemeral=True
+            )
+
+        except Exception as e:
+            logging.error(f"Error applying answer: {e}")
+            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
+
+    @discord.ui.button(
+        label="Cancel",
+        style=discord.ButtonStyle.secondary,
+        custom_id="admin:add_answer_cancel",
+    )
+    async def cancel_answer(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        """Cancel the answer change."""
+        await interaction.response.defer(ephemeral=True)
+        await interaction.followup.send("Cancelled.", ephemeral=True)
+
+
+class AddAnswerModal(discord.ui.Modal):
+    """Modal for admins to add an alternative answer."""
+
+    def __init__(self, bot):
+        super().__init__(title="Add Alternative Answer", timeout=300)
+        self.bot = bot
+
+        self.answer_input = discord.ui.TextInput(
+            label="Answer Text",
+            placeholder="Enter the alternative answer...",
+            required=True,
+            max_length=500,
+        )
+        self.add_item(self.answer_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        """Called when the admin submits the modal."""
+        await interaction.response.defer(ephemeral=True)
+
+        answer_text = str(self.answer_input.value).strip()
+
+        try:
+            # Do a dry-run first
+            result = self.bot.game.recalculate_scores_for_new_answer(
+                answer_text, str(interaction.user.id), dry_run=True
+            )
+
+            if result["status"] == "error":
+                await interaction.followup.send(
+                    f"❌ Error: {result['message']}", ephemeral=True
+                )
+                return
+
+            # Build the preview message
+            use_season = self.bot.game.season_manager.enabled
+
+            preview_msg = f"**[DRY RUN PREVIEW]**\nAnswer: `{answer_text}`\n\n"
+            preview_msg += f"Would update {result['updated_players']} players.\n"
+            preview_msg += f"Total points to refund: {result['total_refunded']}."
+
+            if result.get("age_warning"):
+                preview_msg = result["age_warning"] + "\n\n" + preview_msg
+
+            if result.get("details"):
+                preview_msg += "\n\n**Changes:**\n"
+                for d in result["details"]:
+                    badges = "".join(d["badges"])
+                    sb = d["season_score_before"] if use_season else d["score_before"]
+                    sa = d["season_score_after"] if use_season else d["score_after"]
+                    preview_msg += (
+                        f"{d['name']}: {sb} → {sa} ({d['diff']:+}) {badges}\n"
+                    )
+
+            if result.get("rest_cleared_players"):
+                names = ", ".join(r["name"] for r in result["rest_cleared_players"])
+                preview_msg += f"\n**Rest revoked (newly correct):** {names}"
+
+            # Show preview with Apply/Cancel buttons
+            view = AddAnswerConfirmationView(
+                self.bot, answer_text, str(interaction.user.id)
+            )
+            await interaction.followup.send(preview_msg, view=view, ephemeral=True)
+
+        except Exception as e:
+            logging.error(f"Error preparing answer preview: {e}")
+            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
+
+
+class RefundSelectView(discord.ui.View):
+    """Sub-view with UserSelect to choose a player to refund."""
+
+    def __init__(self, bot):
+        super().__init__(timeout=None)
+        self.bot = bot
+
+    @discord.ui.select(
+        cls=discord.ui.UserSelect,
+        placeholder="Choose a player to refund...",
+        min_values=1,
+        max_values=1,
+        custom_id="admin:refund_user_select",
+    )
+    async def select_refund_target(
+        self, interaction: discord.Interaction, select: discord.ui.UserSelect
+    ):
+        """Handle player selection for refund."""
+        await interaction.response.defer(ephemeral=True)
+
+        if not select.values:
+            await interaction.followup.send("No player selected.", ephemeral=True)
+            return
+
+        member = select.values[0]
+        modal = RefundModal(self.bot, member)
+        await interaction.followup.send_modal(modal)
+
+
+class RefundModal(discord.ui.Modal):
+    """Modal for admins to enter refund details."""
+
+    def __init__(self, bot, member: discord.Member):
+        super().__init__(title="Refund Player", timeout=300)
+        self.bot = bot
+        self.member = member
+
+        self.amount_input = discord.ui.TextInput(
+            label="Amount (points)",
+            placeholder="e.g., 50",
+            required=True,
+            max_length=10,
+        )
+        self.add_item(self.amount_input)
+
+        self.streak_input = discord.ui.TextInput(
+            label="Streak (optional, leave blank to skip)",
+            placeholder="e.g., 5",
+            required=False,
+            max_length=10,
+        )
+        self.add_item(self.streak_input)
+
+        self.reason_input = discord.ui.TextInput(
+            label="Reason",
+            placeholder="Brief reason for the refund...",
+            required=True,
+            max_length=500,
+        )
+        self.add_item(self.reason_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        """Called when the admin submits the refund modal."""
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            amount = int(str(self.amount_input.value).strip())
+        except ValueError:
+            await interaction.followup.send(
+                "❌ Amount must be a valid integer.", ephemeral=True
+            )
+            return
+
+        streak = None
+        if self.streak_input.value and str(self.streak_input.value).strip():
+            try:
+                streak = int(str(self.streak_input.value).strip())
+            except ValueError:
+                await interaction.followup.send(
+                    "❌ Streak must be a valid integer.", ephemeral=True
+                )
+                return
+
+        reason = str(self.reason_input.value).strip()
+
+        try:
+            player_manager = self.bot.player_manager
+            player = player_manager.get_or_create_player(
+                str(self.member.id), self.member.display_name
+            )
+
+            player_manager.update_score(str(self.member.id), amount)
+
+            if streak is not None:
+                player_manager.set_streak(str(self.member.id), streak)
+
+            player = player_manager.get_player(str(self.member.id))
+            if not player:
+                await interaction.followup.send(
+                    f"❌ Could not find player {self.member.display_name} after refund.",
+                    ephemeral=True,
+                )
+                return
+
+            # Log the adjustment
+            self.bot.data_manager.log_score_adjustment(
+                player_id=str(self.member.id),
+                admin_id=str(interaction.user.id),
+                amount=amount,
+                reason=reason,
+            )
+
+            msg = (
+                f"✅ Refunded {self.member.mention}: {amount:+} (Score: {player.score}"
+            )
+            if streak is not None:
+                msg += f", Streak: {streak}"
+            msg += f"). Reason: {reason}"
+
+            await interaction.channel.send(msg)
+            await interaction.followup.send("Refund processed.", ephemeral=True)
+
+        except Exception as e:
+            logging.error(f"Error processing refund: {e}")
+            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
+
+
+class AdminMenuView(discord.ui.View):
+    """Sub-view for admin quick actions."""
+
+    def __init__(self, bot):
+        super().__init__(timeout=None)
+        self.bot = bot
+
+    @discord.ui.button(
+        label="Refund",
+        style=discord.ButtonStyle.blurple,
+        custom_id="admin:refund",
+    )
+    async def admin_refund(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        """Open refund player selection."""
+        view = RefundSelectView(self.bot)
+        await interaction.response.send_message(
+            "Select a player to refund:", view=view, ephemeral=True
+        )
+
+    @discord.ui.button(
+        label="Add Answer",
+        style=discord.ButtonStyle.blurple,
+        custom_id="admin:add_answer",
+    )
+    async def admin_add_answer(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        """Open add_answer modal."""
+        modal = AddAnswerModal(self.bot)
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(
+        label="Skip Question",
+        style=discord.ButtonStyle.blurple,
+        custom_id="admin:skip",
+    )
+    async def admin_skip(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        """Open skip confirmation."""
+        if not self.bot.game.daily_q:
+            await interaction.response.send_message(
+                "There is no active question to skip.", ephemeral=True
+            )
+            return
+
+        skip_description = (
+            "⚠️ This will skip the current question and load a new one. "
+            "Players will see the new question immediately.\n\n"
+            "Confirm to skip?"
+        )
+        view = SkipConfirmationView(self.bot)
+        await interaction.response.send_message(
+            skip_description, view=view, ephemeral=True
+        )
+
+
 class GameActionView(discord.ui.View):
-    """Main view with buttons for Answer, Jinx, Steal, and Rest.
+    """Main view with buttons for Answer, Jinx, Steal, Rest, and Admin.
 
     This is the only view that needs to be registered with the bot.
     Sub-views are shown via the button callbacks.
@@ -389,6 +790,28 @@ class GameActionView(discord.ui.View):
         view = RestConfirmationView(self.bot)
         await interaction.response.send_message(
             rest_description, view=view, ephemeral=True
+        )
+
+    @discord.ui.button(
+        label="⚙️ Admin",
+        style=discord.ButtonStyle.secondary,
+        custom_id="trivia:admin",
+    )
+    async def admin_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        """Button callback that shows the admin menu (admin-only)."""
+        # Check if user has administrator permission (same as admin cog)
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message(
+                "You don't have permission to access admin functions.", ephemeral=True
+            )
+            return
+
+        admin_description = "**Admin Panel** — Select a task:"
+        view = AdminMenuView(self.bot)
+        await interaction.response.send_message(
+            admin_description, view=view, ephemeral=True
         )
 
 

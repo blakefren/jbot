@@ -110,6 +110,42 @@ class TestGameActionView(unittest.IsolatedAsyncioTestCase):
         await button.callback(mock_interaction)
         mock_interaction.response.send_message.assert_called_once()
 
+    async def test_admin_button_permission_denied(self):
+        """Test admin button denies access to non-admins."""
+        view = GameActionView(self.mock_bot)
+
+        button = None
+        for item in view.children:
+            if hasattr(item, "custom_id") and item.custom_id == "trivia:admin":
+                button = item
+                break
+
+        self.assertIsNotNone(button)
+        mock_interaction = AsyncMock()
+        mock_interaction.user.guild_permissions.administrator = False
+        await button.callback(mock_interaction)
+        mock_interaction.response.send_message.assert_called_once()
+        call_args = mock_interaction.response.send_message.call_args
+        self.assertIn(
+            "permission", call_args[1].get("ephemeral", True) and str(call_args).lower()
+        )
+
+    async def test_admin_button_shows_menu(self):
+        """Test admin button shows admin menu for admins."""
+        view = GameActionView(self.mock_bot)
+
+        button = None
+        for item in view.children:
+            if hasattr(item, "custom_id") and item.custom_id == "trivia:admin":
+                button = item
+                break
+
+        self.assertIsNotNone(button)
+        mock_interaction = AsyncMock()
+        mock_interaction.user.guild_permissions.administrator = True
+        await button.callback(mock_interaction)
+        mock_interaction.response.send_message.assert_called_once()
+
     async def test_view_persistent(self):
         """Test that GameActionView has no timeout for persistence."""
         view = GameActionView(self.mock_bot)
@@ -121,7 +157,13 @@ class TestGameActionView(unittest.IsolatedAsyncioTestCase):
         custom_ids = {
             item.custom_id for item in view.children if hasattr(item, "custom_id")
         }
-        expected_ids = {"trivia:answer", "trivia:jinx", "trivia:steal", "trivia:rest"}
+        expected_ids = {
+            "trivia:answer",
+            "trivia:jinx",
+            "trivia:steal",
+            "trivia:rest",
+            "trivia:admin",
+        }
         self.assertEqual(custom_ids, expected_ids)
 
 
