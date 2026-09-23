@@ -144,6 +144,14 @@ class Admin(commands.Cog):
         use_season = self.bot.game.season_manager.enabled
 
         if apply:
+            # Sync the newly-calculated daily_state back to PowerUpManager so that
+            # retroactive jinx/steal targeting works correctly after add_answer
+            daily_state_new = result.get("daily_state_new", {})
+            powerup_manager = self.bot.game.managers.get("powerup")
+            if powerup_manager and daily_state_new:
+                for user_id, player_state in daily_state_new.items():
+                    powerup_manager.daily_state[user_id] = player_state
+
             # Public message only — tag affected players
             public_msg = f"**Score Adjustment:**\n{header}{summary}"
             if result.get("details"):

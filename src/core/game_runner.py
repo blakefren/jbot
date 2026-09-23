@@ -1190,6 +1190,7 @@ class GameRunner:
             "details": details,
             "age_warning": age_warning,
             "rest_cleared_players": rest_cleared_players,
+            "daily_state_new": scorer_new.daily_state if not dry_run else {},
         }
 
     def verify_daily_play(self, daily_question_id: int) -> list[dict]:
