@@ -10,18 +10,40 @@ class AnswerModal(discord.ui.Modal):
     """Modal for players to submit their answer to the daily trivia question.
 
     The question text is shown in the channel message; players click the Answer button
-    and type their answer here when ready.
+    and type their answer here when ready. Previous guesses for this question are
+    displayed as a read-only field for reference.
     """
 
-    def __init__(self, bot, question_text: str):
+    def __init__(self, bot, question_text: str, player_id: int):
         super().__init__(title="Submit Your Answer", timeout=300)
         self.bot = bot
         self.question_text = question_text
+        self.player_id = player_id
+
+        # Fetch and format previous guesses for this player on this question
+        daily_question_id = bot.game.daily_question_id
+        if daily_question_id:
+            guesses = bot.game.data_manager.read_guess_history(user_id=player_id)
+            all_guesses = [
+                g.get("guess_text")
+                for g in guesses
+                if g.get("daily_question_id") == daily_question_id
+            ]
+            # Deduplicate and sort guesses
+            unique_guesses = sorted({(g or "").lower() for g in all_guesses})
+            guesses_placeholder = (
+                "Your previous guesses:\n"
+                + "\n".join(f"{i+1}. {g}" for i, g in enumerate(unique_guesses))
+                if unique_guesses
+                else "Type your answer here..."
+            )
+        else:
+            guesses_placeholder = "Type your answer here..."
 
         # Add a text input field for the answer
         self.answer_input = discord.ui.TextInput(
             label="Your Answer",
-            placeholder="Type your answer here...",
+            placeholder=guesses_placeholder,
             required=True,
             max_length=500,
         )
@@ -713,8 +735,10 @@ class GameActionView(discord.ui.View):
             )
             return
 
-        # Show the modal with the question displayed
-        modal = AnswerModal(self.bot, self.bot.game.daily_q.question)
+        # Show the modal with the question displayed and previous guesses
+        modal = AnswerModal(
+            self.bot, self.bot.game.daily_q.question, interaction.user.id
+        )
         await interaction.response.send_modal(modal)
 
     @discord.ui.button(
