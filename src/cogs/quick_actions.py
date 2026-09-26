@@ -46,6 +46,7 @@ class AnswerModal(discord.ui.Modal):
             placeholder=guesses_placeholder,
             required=True,
             max_length=500,
+            style=discord.TextStyle.paragraph,
         )
         self.add_item(self.answer_input)
 
