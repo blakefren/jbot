@@ -115,12 +115,15 @@ class TestOvernightSteal(unittest.TestCase):
         # Message should still mention the upcoming sacrifice
         self.assertIn("sacrifice", result.lower())
 
-    def test_overnight_steal_sets_no_state_at_pretime(self):
-        """State is set during hydration, not at pre-load time."""
+    def test_overnight_steal_sets_state_at_pretime(self):
+        """State is set immediately at pre-load time for retaliation blocking."""
         manager, pm, dm, players = _make_manager()
         manager.steal("attacker", "target", question_id=None)
-        # No daily_state mutation at pre-load time
-        self.assertIsNone(manager._get_daily_state("attacker").stealing_from)
+        # Daily_state is mutated at pre-load time for retaliation blocking
+        attacker_state = manager._get_daily_state("attacker")
+        target_state = manager._get_daily_state("target")
+        self.assertEqual(attacker_state.stealing_from, "target")
+        self.assertIn("attacker", target_state.attacked_by)
 
     def test_overnight_steal_blocks_if_already_queued(self):
         manager, pm, dm, players = _make_manager()

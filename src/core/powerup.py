@@ -317,9 +317,17 @@ class PowerUpManager(BaseManager):
                     f"<@{target_id}> is already being targeted by a Jinx!"
                 )
 
-            # Silence attacker in-memory immediately; hydration will re-apply at morning
+            # Check for retaliation block: has target already attacked attacker today?
+            target_state = self._get_daily_state(target_id)
             attacker_state = self._get_daily_state(attacker_id)
-            attacker_state.silenced = True
+            if target_id in attacker_state.attacked_by:
+                raise PowerUpError(
+                    f"You can't retaliate against <@{target_id}> today after being attacked!"
+                )
+
+            # Apply preload state immediately for retaliation blocking logic.
+            # Engine sets: attacker.silenced, attacker.jinx_target, target.jinxed_by, target.attacked_by
+            self.engine.apply_preload_jinx(self.daily_state, attacker_id, target_id)
             self.data_manager.log_powerup_usage(
                 attacker_id, "jinx_preload", target_id, None
             )
@@ -341,6 +349,12 @@ class PowerUpManager(BaseManager):
             raise PowerUpError("You have already used an attack power-up today.")
 
         target_state = self._get_daily_state(target_id)
+
+        # Check for retaliation block: has target already attacked attacker today?
+        if target_id in attacker_state.attacked_by:
+            raise PowerUpError(
+                f"You can't retaliate against <@{target_id}> today after being attacked!"
+            )
 
         if target_state.is_resting:
             raise PowerUpError(
@@ -444,14 +458,27 @@ class PowerUpManager(BaseManager):
                 raise PowerUpError(
                     f"<@{target_id}> is already being targeted for theft!"
                 )
+
+            # Check for retaliation block: has target already attacked thief today?
+            thief_state = self._get_daily_state(thief_id)
+            target_state = self._get_daily_state(target_id)
+            if target_id in thief_state.attacked_by:
+                raise PowerUpError(
+                    f"You can't retaliate against <@{target_id}> today after being attacked!"
+                )
+
             if current_streak == 0:
                 raise PowerUpError(
                     "You don't have any streak days to sacrifice. "
                     "Keep your streak going before stealing!"
                 )
 
-            # Streak cost is deducted at hydration (when the question goes live),
-            # not here, so we don't bake an early penalty into the DB snapshot.
+            # Apply steal state immediately for retaliation blocking logic.
+            # Engine sets: thief.steal_ratio, thief.stealing_from, thief.streak_delta,
+            # target.attacked_by, target.steal_attempt_by
+            self.engine.apply_steal(
+                self.daily_state, thief_id, target_id, current_streak
+            )
             steal_cost = self.engine.steal_streak_cost
             actual_lost = min(steal_cost, current_streak)
             self.data_manager.log_powerup_usage(
@@ -478,6 +505,12 @@ class PowerUpManager(BaseManager):
             raise PowerUpError("You have already used an attack power-up today.")
 
         target_state = self._get_daily_state(target_id)
+
+        # Check for retaliation block: has target already attacked thief today?
+        if target_id in thief_state.attacked_by:
+            raise PowerUpError(
+                f"You can't retaliate against <@{target_id}> today after being attacked!"
+            )
 
         if target_state.is_resting:
             raise PowerUpError(

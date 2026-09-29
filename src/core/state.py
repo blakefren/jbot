@@ -23,6 +23,9 @@ class DailyPlayerState:
     # Power-up: Attack (Incoming)
     jinxed_by: str | None = None  # User ID
     steal_attempt_by: str | None = None  # User ID
+    attacked_by: set[str] = field(
+        default_factory=set
+    )  # User IDs that have attacked this player today (for retaliation blocking)
 
     # Power-up: Attack (Outgoing)
     silenced: bool = False  # Result of jinxing

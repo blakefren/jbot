@@ -68,6 +68,8 @@ class PowerUpEngine:
         attacker_state.silenced = True
         attacker_state.jinx_target = target_id
         target_state.jinxed_by = attacker_id
+        # Track attack for retaliation blocking
+        target_state.attacked_by.add(attacker_id)
 
         if target_state.is_correct:
             # Retroactive: target already answered — transfer share immediately.
@@ -238,6 +240,8 @@ class PowerUpEngine:
 
         thief_state.steal_ratio = steal_ratio
         thief_state.stealing_from = target_id
+        # Track attack for retaliation blocking
+        target_state.attacked_by.add(thief_id)
 
         stolen_amount = 0
         if target_state.is_correct:
@@ -336,6 +340,8 @@ class PowerUpEngine:
         attacker_state.silenced = True
         attacker_state.jinx_target = target_id
         target_state.jinxed_by = attacker_id
+        # Track attack for retaliation blocking
+        target_state.attacked_by.add(attacker_id)
 
     # ------------------------------------------------------------------
     # Streak bonus helpers
