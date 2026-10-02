@@ -23,12 +23,10 @@ class AnswerModal(discord.ui.Modal):
         # Fetch and format previous guesses for this player on this question
         daily_question_id = bot.game.daily_question_id
         if daily_question_id:
-            guesses = bot.game.data_manager.read_guess_history(user_id=player_id)
-            all_guesses = [
-                g.get("guess_text")
-                for g in guesses
-                if g.get("daily_question_id") == daily_question_id
-            ]
+            guesses = bot.game.data_manager.read_guess_history(
+                user_id=player_id, daily_question_id=daily_question_id
+            )
+            all_guesses = [g.get("guess_text") for g in guesses]
             # Deduplicate and sort guesses
             unique_guesses = sorted({(g or "").lower() for g in all_guesses})
             guesses_placeholder = (
@@ -96,12 +94,10 @@ class AnswerModal(discord.ui.Modal):
         if not daily_question_id:
             all_guesses = []
         else:
-            guesses = self.bot.game.data_manager.read_guess_history(user_id=player_id)
-            all_guesses = [
-                g.get("guess_text")
-                for g in guesses
-                if g.get("daily_question_id") == daily_question_id
-            ]
+            guesses = self.bot.game.data_manager.read_guess_history(
+                user_id=player_id, daily_question_id=daily_question_id
+            )
+            all_guesses = [g.get("guess_text") for g in guesses]
 
         # Deduplicate and sort guesses
         unique_guesses = sorted({(g or "").lower() for g in all_guesses})

@@ -61,6 +61,11 @@ CREATE TABLE IF NOT EXISTS guesses (
     FOREIGN KEY (player_id) REFERENCES players (id)
 );
 
+-- Performance indexes for common queries on guesses table
+CREATE INDEX IF NOT EXISTS idx_guesses_player_id ON guesses(player_id);
+CREATE INDEX IF NOT EXISTS idx_guesses_daily_question_id ON guesses(daily_question_id);
+CREATE INDEX IF NOT EXISTS idx_guesses_player_question ON guesses(player_id, daily_question_id);
+
 -- This table logs all messages sent by the bot.
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

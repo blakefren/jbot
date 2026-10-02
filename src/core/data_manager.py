@@ -729,9 +729,19 @@ class DataManager:
             "DELETE FROM subscribers WHERE id = ?", (subscriber.sub_id,)
         )
 
-    def read_guess_history(self, user_id: int = -1) -> list[dict]:
+    def read_guess_history(
+        self, user_id: int = -1, daily_question_id: int = -1
+    ) -> list[dict]:
         """
         Reads and parses the guess history from the database.
+        Optionally filters by user_id and/or daily_question_id.
+
+        Args:
+            user_id: Filter by player ID (default -1 = no filter).
+            daily_question_id: Filter by daily question ID (default -1 = no filter).
+
+        Returns:
+            List of guess dictionaries with player_name included.
         """
         query = """
             SELECT g.*, p.name as player_name
@@ -739,9 +749,17 @@ class DataManager:
             JOIN players p ON g.player_id = p.id
         """
         params = ()
+        conditions = []
+
         if user_id != -1:
-            query += " WHERE g.player_id = ?"
-            params = (user_id,)
+            conditions.append("g.player_id = ?")
+            params += (user_id,)
+        if daily_question_id != -1:
+            conditions.append("g.daily_question_id = ?")
+            params += (daily_question_id,)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
 
         return self._db.execute_query(query, params)
 

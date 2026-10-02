@@ -327,6 +327,70 @@ class TestDataManager(unittest.TestCase):
         )  # Non-existent user
         self.assertEqual(len(user_history), 0)
 
+    def test_read_guess_history_with_daily_question_filter(self):
+        """Test read_guess_history with daily_question_id filter."""
+        # Create two daily questions on different dates
+        q1 = Question(question="q1", answer="a1", category="cat", clue_value=100)
+        q2 = Question(question="q2", answer="a2", category="cat", clue_value=100)
+        daily_q1_id = self.data_manager.log_daily_question(q1)
+
+        # To create a second daily question, we need to insert it manually with a different date
+        # First, get the question_id for q2 by inserting and retrieving
+        q2_id = self.data_manager._db.execute_query(
+            "INSERT INTO questions (question_text, answer_text, category, value) VALUES (?, ?, ?, ?) "
+            "RETURNING id",
+            ("q2", "a2", "cat", 100),
+        )[0]["id"]
+
+        # Now insert a daily_question for q2 with a different date
+        daily_q2_id = self.data_manager._db.execute_query(
+            "INSERT INTO daily_questions (question_id, sent_at) VALUES (?, date('now', '+1 day')) "
+            "RETURNING id",
+            (q2_id,),
+        )[0]["id"]
+
+        # Log guesses for both questions
+        self.data_manager.log_player_guess("123", "PlayerOne", daily_q1_id, "A1", True)
+        self.data_manager.log_player_guess("123", "PlayerOne", daily_q2_id, "A2", True)
+        self.data_manager.log_player_guess(
+            "456", "PlayerTwo", daily_q1_id, "Wrong1", False
+        )
+        self.data_manager.log_player_guess(
+            "456", "PlayerTwo", daily_q2_id, "Wrong2", False
+        )
+
+        # Test: get all guesses for player 123
+        all_player_123 = self.data_manager.read_guess_history(user_id="123")
+        self.assertEqual(len(all_player_123), 2)
+
+        # Test: get guesses for player 123 on daily_q1 only
+        q1_only = self.data_manager.read_guess_history(
+            user_id="123", daily_question_id=daily_q1_id
+        )
+        self.assertEqual(len(q1_only), 1)
+        self.assertEqual(q1_only[0]["guess_text"], "A1")
+        self.assertEqual(q1_only[0]["daily_question_id"], daily_q1_id)
+
+        # Test: get guesses for player 123 on daily_q2 only
+        q2_only = self.data_manager.read_guess_history(
+            user_id="123", daily_question_id=daily_q2_id
+        )
+        self.assertEqual(len(q2_only), 1)
+        self.assertEqual(q2_only[0]["guess_text"], "A2")
+        self.assertEqual(q2_only[0]["daily_question_id"], daily_q2_id)
+
+        # Test: get all guesses for daily_q1 (all players)
+        q1_all_players = self.data_manager.read_guess_history(
+            daily_question_id=daily_q1_id
+        )
+        self.assertEqual(len(q1_all_players), 2)  # One from player 123, one from 456
+
+        # Test: non-existent combination
+        no_results = self.data_manager.read_guess_history(
+            user_id="999", daily_question_id=daily_q1_id
+        )
+        self.assertEqual(len(no_results), 0)
+
     def test_log_score_adjustment(self):
         """Test logging a score adjustment for a player."""
         player_id = "player1"
