@@ -52,6 +52,7 @@ class _PowerUpManagerTests(unittest.TestCase):
             "3": Player(id="3", name="P3", score=100, answer_streak=0),
         }
         self.player_manager.get_player.side_effect = lambda pid: self.players.get(pid)
+        self.player_manager.get_all_players.return_value = self.players
         # Default: player last answered yesterday â†’ not in late-day mode
         self.data_manager.get_last_correct_guess_date.return_value = (
             date.today() - timedelta(days=1)
@@ -1204,6 +1205,140 @@ class TestInteractionMatrix(unittest.TestCase):
         manager.jinx("A", "B", "q1")
         self.assertEqual(self.players["A"].score, a_initial + 33)
         self.assertEqual(self.players["B"].score, b_after_steal - 33)
+
+
+class TestValidJinxTargetsFiltering(_PowerUpManagerTests):
+    """Test the get_valid_jinx_targets filtering method."""
+
+    def test_filters_self(self):
+        """Attacker should not be in their own valid targets."""
+        valid_targets = self.manager.get_valid_jinx_targets("1")
+        target_ids = [pid for pid, _ in valid_targets]
+        self.assertNotIn("1", target_ids)
+        # Should only have 2 and 3
+        self.assertIn("2", target_ids)
+        self.assertIn("3", target_ids)
+
+    def test_filters_already_jinxed(self):
+        """Already-jinxed players should not appear in valid targets."""
+        self.manager.jinx("1", "2", "q1")
+        valid_targets = self.manager.get_valid_jinx_targets("3")
+        target_ids = [pid for pid, _ in valid_targets]
+        self.assertNotIn("2", target_ids)  # 2 is already jinxed - filtered out
+        self.assertNotIn("3", target_ids)  # 3 is the attacker - filtered out
+        self.assertIn("1", target_ids)  # 1 is valid
+
+    def test_filters_resting_players(self):
+        """Resting players should not appear in valid targets."""
+        self.manager.rest("2", "q1", "Answer")
+        valid_targets = self.manager.get_valid_jinx_targets("1")
+        target_ids = [pid for pid, _ in valid_targets]
+        self.assertNotIn("2", target_ids)  # 2 is resting - filtered out
+        self.assertNotIn("1", target_ids)  # 1 is the attacker - filtered out
+        self.assertIn("3", target_ids)  # 3 is valid
+
+    def test_filters_retaliatory_attacks(self):
+        """Players who have attacked the attacker should not be valid targets."""
+        # Player 2 jinxes player 1
+        self.manager.jinx("2", "1", "q1")
+        # Now player 1 tries to get valid targets - 2 should be filtered out
+        valid_targets = self.manager.get_valid_jinx_targets("1")
+        target_ids = [pid for pid, _ in valid_targets]
+        self.assertNotIn("2", target_ids)
+        self.assertIn("3", target_ids)
+
+    def test_returns_player_names(self):
+        """Valid targets should return tuples with player IDs and names."""
+        valid_targets = self.manager.get_valid_jinx_targets("1")
+        self.assertTrue(len(valid_targets) > 0)
+        for player_id, name in valid_targets:
+            self.assertIsInstance(player_id, str)
+            self.assertIsInstance(name, str)
+            # Names should match players dict
+            self.assertEqual(name, self.players[player_id].name)
+
+    def test_sorted_by_score_descending(self):
+        """Valid targets should be sorted by score descending (highest score first)."""
+        valid_targets = self.manager.get_valid_jinx_targets("1")
+        self.assertTrue(len(valid_targets) > 0)
+        # Extract scores for sorted targets
+        target_scores = [self.players[pid].score for pid, _ in valid_targets]
+        # Verify targets are sorted in descending order by score
+        self.assertEqual(target_scores, sorted(target_scores, reverse=True))
+
+
+class TestValidStealTargetsFiltering(_PowerUpManagerTests):
+    """Test the get_valid_steal_targets filtering method."""
+
+    def test_filters_self(self):
+        """Thief should not be in their own valid targets."""
+        valid_targets = self.manager.get_valid_steal_targets("1")
+        target_ids = [pid for pid, _ in valid_targets]
+        self.assertNotIn("1", target_ids)
+        # Should only have 2 and 3
+        self.assertIn("2", target_ids)
+        self.assertIn("3", target_ids)
+
+    def test_filters_already_stolen_from(self):
+        """Already-targeted players should not appear in valid targets."""
+        self.manager.steal("1", "2", "q1")
+        valid_targets = self.manager.get_valid_steal_targets("3")
+        target_ids = [pid for pid, _ in valid_targets]
+        self.assertNotIn("2", target_ids)  # 2 is already targeted - filtered out
+        self.assertNotIn("3", target_ids)  # 3 is the thief - filtered out
+        self.assertIn("1", target_ids)  # 1 is valid
+
+    def test_filters_resting_players(self):
+        """Resting players should not appear in valid targets."""
+        self.manager.rest("2", "q1", "Answer")
+        valid_targets = self.manager.get_valid_steal_targets("1")
+        target_ids = [pid for pid, _ in valid_targets]
+        self.assertNotIn("2", target_ids)  # 2 is resting - filtered out
+        self.assertNotIn("1", target_ids)  # 1 is the thief - filtered out
+        self.assertIn("3", target_ids)  # 3 is valid
+
+    def test_filters_retaliatory_attacks(self):
+        """Players who have attacked the thief should not be valid targets."""
+        # Player 2 steals from player 1
+        self.manager.steal("2", "1", "q1")
+        # Now player 1 tries to get valid targets - 2 should be filtered out
+        valid_targets = self.manager.get_valid_steal_targets("1")
+        target_ids = [pid for pid, _ in valid_targets]
+        self.assertNotIn("2", target_ids)
+        self.assertIn("3", target_ids)
+
+    def test_returns_player_names(self):
+        """Valid targets should return tuples with player IDs and names."""
+        valid_targets = self.manager.get_valid_steal_targets("1")
+        self.assertTrue(len(valid_targets) > 0)
+        for player_id, name in valid_targets:
+            self.assertIsInstance(player_id, str)
+            self.assertIsInstance(name, str)
+            # Names should match players dict
+            self.assertEqual(name, self.players[player_id].name)
+
+    def test_sorted_by_score_descending(self):
+        """Valid targets should be sorted by score descending (highest score first)."""
+        valid_targets = self.manager.get_valid_steal_targets("1")
+        self.assertTrue(len(valid_targets) > 0)
+        # Extract scores for sorted targets
+        target_scores = [self.players[pid].score for pid, _ in valid_targets]
+        # Verify targets are sorted in descending order by score
+        self.assertEqual(target_scores, sorted(target_scores, reverse=True))
+
+    def test_combined_filters(self):
+        """Multiple filtering conditions should work together."""
+        # Player 2 attacks player 1
+        self.manager.steal("2", "1", "q1")
+        # Player 3 rests
+        self.manager.rest("3", "q1", "Answer")
+        # Player 1 tries to get valid targets
+        # - 2 is filtered (attacked 1)
+        # - 3 is filtered (resting)
+        # - Result should be empty or only include themselves (which is also filtered)
+        valid_targets = self.manager.get_valid_steal_targets("1")
+        target_ids = [pid for pid, _ in valid_targets]
+        self.assertEqual(len(target_ids), 0, "No valid targets when all filtered")
 
 
 if __name__ == "__main__":

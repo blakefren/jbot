@@ -660,3 +660,111 @@ class PowerUpManager(BaseManager):
         )
 
         return public_msg, private_msg
+
+    def get_valid_jinx_targets(
+        self, attacker_id: str, question_id: int = None
+    ) -> list[tuple[str, str]]:
+        """
+        Get a list of valid players who can be jinxed by the attacker.
+
+        Returns a list of (player_id, player_name) tuples for eligible targets,
+        sorted by score descending (highest score/top-ranked player first).
+
+        Filters out:
+        - The attacker themselves
+        - Players already jinxed
+        - Resting players
+        - Players the attacker has been attacked by (retaliation block)
+
+        Args:
+            attacker_id: The player attempting to jinx
+            question_id: The active question ID (used for preload checks)
+
+        Returns:
+            List of (player_id, player_name) tuples sorted by score descending
+        """
+        all_players = self.player_manager.get_all_players()
+        attacker_state = self._get_daily_state(attacker_id)
+        valid_targets = []
+
+        for player_id, player_obj in all_players.items():
+            # Skip self
+            if player_id == attacker_id:
+                continue
+
+            target_state = self._get_daily_state(player_id)
+
+            # Skip already jinxed players
+            if target_state.jinxed_by:
+                continue
+
+            # Skip resting players
+            if target_state.is_resting:
+                continue
+
+            # Skip if attacker has been attacked by target (retaliation block)
+            if player_id in attacker_state.attacked_by:
+                continue
+
+            # Add to valid targets (include score for sorting)
+            valid_targets.append((player_id, player_obj.name, player_obj.season_score))
+
+        # Sort by score descending (highest score first = top ranked)
+        valid_targets.sort(key=lambda x: x[2], reverse=True)
+
+        # Return just (player_id, player_name) tuples without the score
+        return [(pid, name) for pid, name, _ in valid_targets]
+
+    def get_valid_steal_targets(
+        self, thief_id: str, question_id: int = None
+    ) -> list[tuple[str, str]]:
+        """
+        Get a list of valid players who can be stolen from by the thief.
+
+        Returns a list of (player_id, player_name) tuples for eligible targets,
+        sorted by score descending (highest score/top-ranked player first).
+
+        Filters out:
+        - The thief themselves
+        - Players already targeted for steal
+        - Resting players
+        - Players the thief has been attacked by (retaliation block)
+
+        Args:
+            thief_id: The player attempting to steal
+            question_id: The active question ID (used for preload checks)
+
+        Returns:
+            List of (player_id, player_name) tuples sorted by score descending
+        """
+        all_players = self.player_manager.get_all_players()
+        thief_state = self._get_daily_state(thief_id)
+        valid_targets = []
+
+        for player_id, player_obj in all_players.items():
+            # Skip self
+            if player_id == thief_id:
+                continue
+
+            target_state = self._get_daily_state(player_id)
+
+            # Skip players already targeted for steal
+            if target_state.steal_attempt_by:
+                continue
+
+            # Skip resting players
+            if target_state.is_resting:
+                continue
+
+            # Skip if thief has been attacked by target (retaliation block)
+            if player_id in thief_state.attacked_by:
+                continue
+
+            # Add to valid targets (include score for sorting)
+            valid_targets.append((player_id, player_obj.name, player_obj.season_score))
+
+        # Sort by score descending (highest score first = top ranked)
+        valid_targets.sort(key=lambda x: x[2], reverse=True)
+
+        # Return just (player_id, player_name) tuples without the score
+        return [(pid, name) for pid, name, _ in valid_targets]

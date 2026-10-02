@@ -136,22 +136,48 @@ class AnswerModal(discord.ui.Modal):
 
 
 class JinxSelectView(discord.ui.View):
-    """Sub-view with UserSelect to choose a player to jinx."""
+    """Sub-view with StringSelect to choose an eligible player to jinx.
 
-    def __init__(self, bot):
+    Options are filtered to only show players who:
+    - Haven't been jinxed yet
+    - Are not resting
+    - The attacker hasn't been attacked by (retaliation block)
+    """
+
+    def __init__(self, bot, attacker_id: str):
         super().__init__(timeout=None)
         self.bot = bot
+        self.attacker_id = attacker_id
+
+        # Get valid targets and build options
+        manager = self.bot.game.managers.get("powerup")
+        valid_targets = (
+            manager.get_valid_jinx_targets(attacker_id, self.bot.game.daily_question_id)
+            if manager
+            else []
+        )
+
+        # Build select options from valid targets
+        options = [
+            discord.SelectOption(label=name, value=player_id)
+            for player_id, name in valid_targets
+        ]
+
+        # Create the select if there are valid targets
+        if options:
+            self.select.options = options
+        else:
+            # Disable the view if no valid targets
+            self.select.disabled = True
 
     @discord.ui.select(
-        cls=discord.ui.UserSelect,
+        cls=discord.ui.Select,
         placeholder="Choose a player to jinx...",
         min_values=1,
         max_values=1,
-        custom_id="jinx_user_select",
+        custom_id="jinx_string_select",
     )
-    async def select_jinx_target(
-        self, interaction: discord.Interaction, select: discord.ui.UserSelect
-    ):
+    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
         """Handle player selection for jinx."""
         await interaction.response.defer(ephemeral=True)
 
@@ -159,7 +185,7 @@ class JinxSelectView(discord.ui.View):
             await interaction.followup.send("No player selected.", ephemeral=True)
             return
 
-        target_id = str(select.values[0].id)
+        target_id = select.values[0]
 
         try:
             manager = self.bot.game.managers.get("powerup")
@@ -189,22 +215,48 @@ class JinxSelectView(discord.ui.View):
 
 
 class StealSelectView(discord.ui.View):
-    """Sub-view with UserSelect to choose a player to steal from."""
+    """Sub-view with StringSelect to choose an eligible player to steal from.
 
-    def __init__(self, bot):
+    Options are filtered to only show players who:
+    - Are not already targeted for steal
+    - Are not resting
+    - The thief hasn't been attacked by (retaliation block)
+    """
+
+    def __init__(self, bot, thief_id: str):
         super().__init__(timeout=None)
         self.bot = bot
+        self.thief_id = thief_id
+
+        # Get valid targets and build options
+        manager = self.bot.game.managers.get("powerup")
+        valid_targets = (
+            manager.get_valid_steal_targets(thief_id, self.bot.game.daily_question_id)
+            if manager
+            else []
+        )
+
+        # Build select options from valid targets
+        options = [
+            discord.SelectOption(label=name, value=player_id)
+            for player_id, name in valid_targets
+        ]
+
+        # Create the select if there are valid targets
+        if options:
+            self.select.options = options
+        else:
+            # Disable the view if no valid targets
+            self.select.disabled = True
 
     @discord.ui.select(
-        cls=discord.ui.UserSelect,
+        cls=discord.ui.Select,
         placeholder="Choose a player to steal from...",
         min_values=1,
         max_values=1,
-        custom_id="steal_user_select",
+        custom_id="steal_string_select",
     )
-    async def select_steal_target(
-        self, interaction: discord.Interaction, select: discord.ui.UserSelect
-    ):
+    async def select(self, interaction: discord.Interaction, select: discord.ui.Select):
         """Handle player selection for steal."""
         await interaction.response.defer(ephemeral=True)
 
@@ -212,7 +264,7 @@ class StealSelectView(discord.ui.View):
             await interaction.followup.send("No player selected.", ephemeral=True)
             return
 
-        target_id = str(select.values[0].id)
+        target_id = select.values[0]
 
         try:
             manager = self.bot.game.managers.get("powerup")
@@ -747,16 +799,23 @@ class GameActionView(discord.ui.View):
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         """Button callback that shows the jinx target selection."""
+        attacker_id = str(interaction.user.id)
         jinx_description = (
             "**JINX** — Silence yourself until the hint, then get a share of the target's score when they answer. "
             "Each wrong guess they make costs you.\n\n"
             "Can be used for preloading if no question is active.\n\n"
             "Select a player to jinx:"
         )
-        view = JinxSelectView(self.bot)
-        await interaction.response.send_message(
-            jinx_description, view=view, ephemeral=True
-        )
+        view = JinxSelectView(self.bot, attacker_id)
+        if view.select.disabled:
+            await interaction.response.send_message(
+                "No eligible targets to jinx. All available players are either already jinxed, resting, or you've been attacked by them.",
+                ephemeral=True,
+            )
+        else:
+            await interaction.response.send_message(
+                jinx_description, view=view, ephemeral=True
+            )
 
     @discord.ui.button(
         label="Steal",
@@ -767,16 +826,23 @@ class GameActionView(discord.ui.View):
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         """Button callback that shows the steal target selection."""
+        thief_id = str(interaction.user.id)
         steal_description = (
             "**STEAL** — Pay streak days upfront to receive all non-streak bonuses "
             "(try, before-hint, fastest-answer) earned by the target when they answer.\n\n"
             "Can be used for preloading if no question is active.\n\n"
             "Select a player to steal from:"
         )
-        view = StealSelectView(self.bot)
-        await interaction.response.send_message(
-            steal_description, view=view, ephemeral=True
-        )
+        view = StealSelectView(self.bot, thief_id)
+        if view.select.disabled:
+            await interaction.response.send_message(
+                "No eligible targets to steal from. All available players are either already targeted, resting, or you've been attacked by them.",
+                ephemeral=True,
+            )
+        else:
+            await interaction.response.send_message(
+                steal_description, view=view, ephemeral=True
+            )
 
     @discord.ui.button(
         label="Rest",
