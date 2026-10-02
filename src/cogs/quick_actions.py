@@ -330,6 +330,18 @@ class RestConfirmationView(discord.ui.View):
                 self.bot.game.daily_question_id,
                 self.bot.game.daily_q.answer,
             )
+
+            # Initialize season score if seasons are enabled
+            # (ensures player appears on season leaderboard even with 0 points)
+            if self.bot.game.season_manager and self.bot.game.season_manager.enabled:
+                current_season = (
+                    self.bot.game.season_manager.get_or_create_current_season()
+                )
+                if current_season:
+                    self.bot.game.data_manager.initialize_player_season_score(
+                        str(interaction.user.id), current_season.season_id
+                    )
+
             # Send public announcement
             channel = interaction.channel
             if channel:

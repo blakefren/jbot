@@ -524,12 +524,12 @@ class DataManager:
         """
         Retrieves player ids, names and scores from the database, ordered by score.
         Excludes players who haven't guessed or used a power-up in the last 28 days.
+        Includes players with zero score if they have recent activity (e.g., rested).
         """
         query = """
             SELECT p.id, p.name, p.score
             FROM players p
-            WHERE p.score > 0
-            AND (
+            WHERE (
                 EXISTS (
                     SELECT 1
                     FROM guesses g
