@@ -16,7 +16,7 @@ class GeminiManager:
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-2.5-pro",
+        model: str = "gemini-3-pro",
         fallback_model: str = None,
     ):
         if not api_key:
