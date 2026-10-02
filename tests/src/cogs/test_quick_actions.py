@@ -23,7 +23,12 @@ class TestGameActionView(unittest.IsolatedAsyncioTestCase):
         self.mock_bot = MagicMock()
         self.mock_bot.game = MagicMock()
         self.mock_bot.game.daily_q = MagicMock(question="What is 2+2?")
-        self.mock_bot.game.managers = {"powerup": MagicMock()}
+        mock_powerup_manager = MagicMock()
+        # Mock the can_answer, can_rest, can_use_attack_powerup to return (True, "") by default
+        mock_powerup_manager.can_answer = MagicMock(return_value=(True, ""))
+        mock_powerup_manager.can_rest = MagicMock(return_value=(True, ""))
+        mock_powerup_manager.can_use_attack_powerup = MagicMock(return_value=(True, ""))
+        self.mock_bot.game.managers = {"powerup": mock_powerup_manager}
 
     async def test_answer_button_no_question(self):
         """Test answer button when no question is active."""

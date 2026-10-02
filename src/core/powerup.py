@@ -116,6 +116,28 @@ class PowerUpManager(BaseManager):
             "You are Jinxed! You cannot answer until the hint is revealed.",
         )
 
+    def can_use_attack_powerup(self, player_id: str) -> tuple[bool, str]:
+        """
+        Check if a player can use an attack power-up (jinx or steal).
+        Returns (bool, reason).
+        """
+        state = self._get_daily_state(player_id)
+        if state.attack_powerup_used_today:
+            return False, "You have already used an attack power-up today."
+        return True, ""
+
+    def can_rest(self, player_id: str) -> tuple[bool, str]:
+        """
+        Check if a player can use the rest power-up.
+        Returns (bool, reason).
+        """
+        state = self._get_daily_state(player_id)
+        if state.is_resting:
+            return False, "You are already resting today."
+        if state.is_correct:
+            return False, "You have already answered correctly today. You cannot rest."
+        return True, ""
+
     def on_guess(self, ctx: GuessContext) -> list[str]:
         pid = str(ctx.player_id)
         state = self._get_daily_state(pid)

@@ -634,6 +634,87 @@ class TestCanAnswer(_PowerUpManagerTests):
 
 
 # ---------------------------------------------------------------------------
+# Attack power-up availability gating
+# ---------------------------------------------------------------------------
+
+
+class TestCanUseAttackPowerup(_PowerUpManagerTests):
+    """Early validation: check if player can use attack power-ups."""
+
+    def test_can_use_attack_powerup_initially(self):
+        """A player who hasn't used an attack power-up yet can use one."""
+        can_use, _ = self.manager.can_use_attack_powerup("1")
+        self.assertTrue(can_use)
+
+    def test_cannot_use_after_jinx(self):
+        """After jinxing, a player cannot use another attack power-up."""
+        self.manager.jinx("1", "2", "q1")
+        can_use, reason = self.manager.can_use_attack_powerup("1")
+        self.assertFalse(can_use)
+        self.assertIn("already used an attack power-up", reason)
+
+    def test_cannot_use_after_steal(self):
+        """After stealing, a player cannot use another attack power-up."""
+        self.manager.steal("1", "2", "q1")
+        can_use, reason = self.manager.can_use_attack_powerup("1")
+        self.assertFalse(can_use)
+        self.assertIn("already used an attack power-up", reason)
+
+    def test_can_use_after_rest(self):
+        """After resting, a player can still use an attack power-up (rest is independent)."""
+        self.manager.rest("1", "q1", "Ans")
+        can_use, _ = self.manager.can_use_attack_powerup("1")
+        self.assertTrue(can_use)
+
+    def test_different_player_can_use(self):
+        """When one player uses an attack, another player can still use one."""
+        self.manager.jinx("1", "2", "q1")
+        can_use, _ = self.manager.can_use_attack_powerup("3")
+        self.assertTrue(can_use)
+
+
+# ---------------------------------------------------------------------------
+# Rest availability gating
+# ---------------------------------------------------------------------------
+
+
+class TestCanRest(_PowerUpManagerTests):
+    """Early validation: check if player can use rest power-up."""
+
+    def test_can_rest_initially(self):
+        """A player who hasn't rested can rest."""
+        can_rest, _ = self.manager.can_rest("1")
+        self.assertTrue(can_rest)
+
+    def test_cannot_rest_already_resting(self):
+        """A player who is already resting cannot rest again."""
+        self.manager.rest("1", "q1", "Ans")
+        can_rest, reason = self.manager.can_rest("1")
+        self.assertFalse(can_rest)
+        self.assertIn("already resting", reason)
+
+    def test_cannot_rest_after_correct_answer(self):
+        """A player who has answered correctly cannot rest."""
+        # Mark player as having answered correctly
+        self.manager._get_daily_state("1").is_correct = True
+        can_rest, reason = self.manager.can_rest("1")
+        self.assertFalse(can_rest)
+        self.assertIn("already answered correctly", reason)
+
+    def test_can_rest_after_attack(self):
+        """A player can rest after using an attack power-up."""
+        self.manager.jinx("1", "2", "q1")
+        can_rest, _ = self.manager.can_rest("1")
+        self.assertTrue(can_rest)
+
+    def test_different_player_can_rest(self):
+        """When one player rests, another player can still rest."""
+        self.manager.rest("1", "q1", "Ans")
+        can_rest, _ = self.manager.can_rest("3")
+        self.assertTrue(can_rest)
+
+
+# ---------------------------------------------------------------------------
 # Daily state management
 # ---------------------------------------------------------------------------
 

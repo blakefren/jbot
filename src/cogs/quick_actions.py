@@ -784,6 +784,17 @@ class GameActionView(discord.ui.View):
             )
             return
 
+        # Early check: can the player answer (not jinxed before hint, not resting)?
+        manager = self.bot.game.managers.get("powerup")
+        if manager:
+            can_answer, reason = manager.can_answer(str(interaction.user.id))
+            if not can_answer:
+                emoji_silenced = ConfigReader().get("JBOT_EMOJI_SILENCED", "🤐")
+                await interaction.response.send_message(
+                    f"{emoji_silenced} {reason}", ephemeral=True
+                )
+                return
+
         # Show the modal with the question displayed and previous guesses
         modal = AnswerModal(
             self.bot, self.bot.game.daily_q.question, interaction.user.id
@@ -800,6 +811,15 @@ class GameActionView(discord.ui.View):
     ):
         """Button callback that shows the jinx target selection."""
         attacker_id = str(interaction.user.id)
+
+        # Early check: can the player use an attack power-up today?
+        manager = self.bot.game.managers.get("powerup")
+        if manager:
+            can_use, reason = manager.can_use_attack_powerup(attacker_id)
+            if not can_use:
+                await interaction.response.send_message(reason, ephemeral=True)
+                return
+
         jinx_description = (
             "**JINX** — Silence yourself until the hint, then get a share of the target's score when they answer. "
             "Each wrong guess they make costs you.\n\n"
@@ -827,6 +847,15 @@ class GameActionView(discord.ui.View):
     ):
         """Button callback that shows the steal target selection."""
         thief_id = str(interaction.user.id)
+
+        # Early check: can the player use an attack power-up today?
+        manager = self.bot.game.managers.get("powerup")
+        if manager:
+            can_use, reason = manager.can_use_attack_powerup(thief_id)
+            if not can_use:
+                await interaction.response.send_message(reason, ephemeral=True)
+                return
+
         steal_description = (
             "**STEAL** — Pay streak days upfront to receive all non-streak bonuses "
             "(try, before-hint, fastest-answer) earned by the target when they answer.\n\n"
@@ -858,6 +887,17 @@ class GameActionView(discord.ui.View):
                 "There is no active question right now.", ephemeral=True
             )
             return
+
+        # Early check: can the player rest (not already resting, not already answered)?
+        manager = self.bot.game.managers.get("powerup")
+        if manager:
+            can_rest, reason = manager.can_rest(str(interaction.user.id))
+            if not can_rest:
+                emoji_rest = ConfigReader().get("JBOT_EMOJI_REST", "😴")
+                await interaction.response.send_message(
+                    f"{emoji_rest} {reason}", ephemeral=True
+                )
+                return
 
         rest_description = (
             "**REST** — Skip today's question, keep your streak, and stack a bonus for your next answer. "
