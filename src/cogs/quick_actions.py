@@ -747,15 +747,10 @@ class GameActionView(discord.ui.View):
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         """Button callback that shows the jinx target selection."""
-        if not self.bot.game.daily_q:
-            await interaction.response.send_message(
-                "There is no active question.", ephemeral=True
-            )
-            return
-
         jinx_description = (
             "**JINX** — Silence yourself until the hint, then get a share of the target's score when they answer. "
             "Each wrong guess they make costs you.\n\n"
+            "Can be used for preloading if no question is active.\n\n"
             "Select a player to jinx:"
         )
         view = JinxSelectView(self.bot)
@@ -772,15 +767,10 @@ class GameActionView(discord.ui.View):
         self, interaction: discord.Interaction, button: discord.ui.Button
     ):
         """Button callback that shows the steal target selection."""
-        if not self.bot.game.daily_q:
-            await interaction.response.send_message(
-                "There is no active question.", ephemeral=True
-            )
-            return
-
         steal_description = (
             "**STEAL** — Pay streak days upfront to receive all non-streak bonuses "
             "(try, before-hint, fastest-answer) earned by the target when they answer.\n\n"
+            "Can be used for preloading if no question is active.\n\n"
             "Select a player to steal from:"
         )
         view = StealSelectView(self.bot)
