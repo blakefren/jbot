@@ -694,7 +694,7 @@ async def discord_bot_async(
         if gemini_api_key:
             gemini_manager = GeminiManager(
                 api_key=gemini_api_key,
-                model=config.get("GEMINI_MODEL", "gemini-3-pro"),
+                model=config.get("GEMINI_MODEL", "gemini-pro-latest"),
                 fallback_model=config.get("GEMINI_FALLBACK_MODEL") or None,
             )
     except ValueError as e:

@@ -57,6 +57,7 @@ class TestGeminiManager(unittest.TestCase):
     def test_generate_content_exhausts_retries_returns_none(self, mock_sleep):
         """Verify that exhausting all retries with no fallback returns None."""
         max_attempts = len(_RETRY_DELAYS) + 1
+        self.gemini_manager.fallback_model = None
         self.mock_client.models.generate_content.side_effect = Exception(
             "503 UNAVAILABLE"
         )

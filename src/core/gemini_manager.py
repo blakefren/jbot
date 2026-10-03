@@ -16,8 +16,8 @@ class GeminiManager:
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-3-pro",
-        fallback_model: str = None,
+        model: str = "gemini-pro-latest",
+        fallback_model: str = "gemini-flash-latest",
     ):
         if not api_key:
             raise ValueError("Gemini API key is required.")
