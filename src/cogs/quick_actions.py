@@ -799,7 +799,14 @@ class GameActionView(discord.ui.View):
         # Early check: can the player answer (not jinxed before hint, not resting)?
         manager = self.bot.game.managers.get("powerup")
         if manager:
-            can_answer, reason = manager.can_answer(str(interaction.user.id))
+            # Check if hint has been sent to properly validate jinxed players
+            hint_timestamp = self.bot.game.data_manager.get_hint_sent_timestamp(
+                self.bot.game.daily_question_id
+            )
+            hint_sent = hint_timestamp is not None
+            can_answer, reason = manager.can_answer(
+                str(interaction.user.id), hint_sent=hint_sent
+            )
             if not can_answer:
                 emoji_silenced = ConfigReader().get("JBOT_EMOJI_SILENCED", "🤐")
                 await interaction.response.send_message(
