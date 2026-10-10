@@ -38,7 +38,7 @@ The project uses Google's Gemini AI for dynamic content generation:
 The bot's features are organized into distinct "tracks":
 *   **Fight Track**: Player-vs-player interactions like jinx and steal. Commands: `/power jinx`, `/power steal`.
     - **Overnight Pre-loading**: When no question is active (`question_id is None`), jinx/steal are queued for the next day. Stored in `powerup_usage` with `question_id = NULL`. Steal streak cost is deducted immediately at pre-load time.
-    - **Retroactive Targeting**: A player can jinx/steal a target who has already answered. Jinx transfers a reduced share (`JBOT_RETRO_JINX_BONUS_RATIO`) of the target's streak bonus immediately. Retroactive steal costs more streak days (`JBOT_RETRO_STEAL_STREAK_COST`) and resolves immediately.
+    - **Retroactive Targeting**: A player can jinx/steal a target who has already answered. Jinx transfers the configured share (`JBOT_JINX_SHARE_RATIO`, default 25%) of the target's earned points immediately, including rest bonus points and excluding points already stolen from that target. It also applies the 5-point wrong-guess penalty for each wrong guess made before the jinx. Retroactive steal costs more streak days (`JBOT_RETRO_STEAL_STREAK_COST`) and resolves immediately.
     - **Hydration**: At the start of each question day, `PowerUpManager.hydrate_pending_powerups(question_id)` promotes all `question_id IS NULL` rows to the new question and activates them in `daily_state`.
 *   **Power-up Track**: Mechanics that reward consistent play — streaks, bonuses, and rest. Always enabled. The `/power rest` command belongs here.
 *   **Coop Track**: [Future] Collaborative features. Not yet implemented.
@@ -79,7 +79,7 @@ The project follows a strict "DataManager-Only" pattern:
 *   **DataManager**: Exclusive database access layer
 *   **GeminiManager**: AI content generation (regular class instance, not a singleton)
 *   **RolesGameMode** (`src/core/roles.py`): Assigns DB roles based on score standings; called by `DiscordBot.apply_discord_roles()` in the evening task
-*   **DailyPlayerState** (`src/core/state.py`): In-memory dataclass holding all transient per-player state for the current question round (score earned, guesses, bonuses, jinx/steal/rest flags). Single source of truth during a round. Key field: `streak_delta` — tracks the net streak adjustment applied during the round (e.g. `-3` after a steal cost deduction), used by the simulator to avoid double-counting costs that were already persisted to the DB.
+*   **DailyPlayerState** (`src/core/state.py`): In-memory dataclass holding all transient per-player state for the current question round (score earned, guesses, bonuses, jinx/steal/rest flags). Single source of truth during a round. `guesses_count` must be incremented for every submitted guess in both live handling and replay so retroactive jinxes can charge prior wrong guesses correctly. Jinx penalties must also be persisted to the attacker's score in live handling, not only recorded in transient state. Key field: `streak_delta` — tracks the net streak adjustment applied during the round (e.g. `-3` after a steal cost deduction), used by the simulator to avoid double-counting costs that were already persisted to the DB.
 *   Managers should use dependency injection via constructors. **Note:** some existing modules (`powerup.py`, `guess_handler.py`, `trivia.py`) still instantiate `ConfigReader` at module level — this is a known issue tracked in the code review doc.
 
 ## My Persona
@@ -121,7 +121,7 @@ As your partner, I will adhere to the following principles:
         - **Scheduling**: `JBOT_MORNING_TIME`, `JBOT_REMINDER_TIME`, `JBOT_EVENING_TIME` (in `.env`)
         - **Question Sources**: All configured in `sources.toml` - no dataset settings in `.env`
         - **Scoring/Bonuses**: `JBOT_BONUS_TRY_CSV`, `JBOT_BONUS_FASTEST_CSV`, `JBOT_BONUS_BEFORE_HINT`, `JBOT_BONUS_STREAK_PER_DAY`, `JBOT_BONUS_STREAK_CAP` (in `.env`)
-        - **Power-ups**: `JBOT_REST_MULTIPLIER`, `JBOT_STEAL_STREAK_COST`, `JBOT_RETRO_STEAL_STREAK_COST` (streak cost for retroactive steal, default 5), `JBOT_RETRO_JINX_BONUS_RATIO` (fraction of streak bonus transferred in retroactive jinx, default 0.5) (in `.env`)
+        - **Power-ups**: `JBOT_REST_MULTIPLIER`, `JBOT_STEAL_STREAK_COST`, `JBOT_RETRO_STEAL_STREAK_COST` (streak cost for retroactive steal, default 5), `JBOT_JINX_SHARE_RATIO` (fraction of earned points transferred by jinx, default 0.25), and `JBOT_JINX_WRONG_GUESS_PENALTY` (points deducted per wrong target guess, default 5) (in `.env`)
         - **Behavior**: `JBOT_TAG_UNANSWERED_PLAYERS` — whether to @-mention players who haven't answered in the reminder message
         - **Emojis**: `JBOT_EMOJI_*` keys for all in-game emoji (fastest, streak, before-hint, jinxed, silenced, rest, etc.)
         - **Discord**: Bot tokens, role names (in `.env`)

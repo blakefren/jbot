@@ -286,6 +286,65 @@ class TestJinxBehavior(_PowerUpManagerTests):
         self.assertIn("already been jinxed", str(cm.exception))
         self.assertEqual(self.data_manager.log_powerup_usage.call_count, 1)
 
+    def test_jinx_share_includes_live_rest_bonus(self):
+        """Live jinx uses the target's full post-rest score."""
+        config = _make_config(jinx_share_ratio=0.25)
+        manager = PowerUpManager(self.player_manager, self.data_manager, config)
+        self.data_manager.get_pending_multiplier.side_effect = lambda pid: (
+            0.2 if pid == "2" else 0.0
+        )
+
+        manager.jinx("1", "2", "q1")
+        manager.on_guess(
+            GuessContext(2, "P2", "ans", True, points_earned=100, bonus_values={})
+        )
+
+        self.assertEqual(self.players["1"].score, 130)
+        self.assertEqual(self.players["2"].score, 90)
+
+    def test_retroactive_jinx_charges_prior_wrong_guesses(self):
+        """A retroactive jinx charges five points for each prior wrong target guess."""
+        config = _make_config(jinx_share_ratio=0.25)
+        manager = PowerUpManager(self.player_manager, self.data_manager, config)
+        target = manager._get_daily_state("2")
+        target.is_correct = True
+        target.score_earned = 100
+        target.guesses_count = 3
+        manager.jinx("1", "2", "q1")
+
+        self.assertEqual(self.players["1"].score, 115)
+        self.assertEqual(self.players["2"].score, 75)
+
+    def test_retroactive_jinx_message_reports_prior_wrong_guesses(self):
+        """Retroactive jinx reports penalties already charged for prior wrong guesses."""
+        config = _make_config(jinx_share_ratio=0.25)
+        manager = PowerUpManager(self.player_manager, self.data_manager, config)
+        target = manager._get_daily_state("2")
+        target.is_correct = True
+        target.score_earned = 100
+        target.guesses_count = 3
+
+        message = manager.jinx("1", "2", "q1")
+
+        self.assertIn("10 pts", message)
+        self.assertIn("2 wrong guesses", message)
+
+    def test_late_retroactive_jinx_message_reports_prior_wrong_guesses(self):
+        """Late retroactive jinx reports penalties already charged for prior wrong guesses."""
+        config = _make_config(jinx_share_ratio=0.25)
+        manager = PowerUpManager(self.player_manager, self.data_manager, config)
+        today = self.data_manager.get_today.return_value
+        self.data_manager.get_last_correct_guess_date.return_value = today
+        target = manager._get_daily_state("2")
+        target.is_correct = True
+        target.score_earned = 100
+        target.guesses_count = 3
+
+        message = manager.jinx("1", "2", "q1")
+
+        self.assertIn("10 pts", message)
+        self.assertIn("2 wrong guesses", message)
+
     def test_jinx_early_forward_target_never_answers(self):
         """Early-forward jinx: target never answers. Attacker silenced, no transfer."""
         self.manager.jinx("1", "2", "q1")

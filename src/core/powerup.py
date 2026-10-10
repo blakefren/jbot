@@ -141,6 +141,7 @@ class PowerUpManager(BaseManager):
     def on_guess(self, ctx: GuessContext) -> list[str]:
         pid = str(ctx.player_id)
         state = self._get_daily_state(pid)
+        state.guesses_count += 1
 
         # Store earnings for potential theft
         if ctx.is_correct:
@@ -167,6 +168,7 @@ class PowerUpManager(BaseManager):
                         pid, "rest_wakeup", None, ctx.question_id
                     )
                 self.data_manager.clear_pending_multiplier(pid)
+                state.score_earned = ctx.points_earned
 
         # Wrong-guess penalty: each incorrect guess by a jinxed player costs their attacker points.
         # No per-guess message — penalty is summarised in the resolution message when target answers.
@@ -186,6 +188,17 @@ class PowerUpManager(BaseManager):
             messages.append(msg)
 
         return messages
+
+    def _format_jinx_penalty_summary(self, penalty_total: int) -> str:
+        """Format accumulated wrong-guess penalties for a jinx resolution."""
+        if not penalty_total:
+            return ""
+        penalty_per_guess = self.engine.jinx_wrong_guess_penalty
+        count = penalty_total // penalty_per_guess if penalty_per_guess else 0
+        return (
+            f"but lost {penalty_total} pts from "
+            f"{count} wrong guess{'es' if count != 1 else ''} by target"
+        )
 
     def resolve_jinx(self, player_id: str, ctx: GuessContext) -> str:
         """
@@ -209,21 +222,13 @@ class PowerUpManager(BaseManager):
         attacker_state = self._get_daily_state(attacker_id)
         penalty_total = attacker_state.jinx_penalty_total
 
-        def _wrong_guess_summary(penalty: int) -> str:
-            """Return a formatted description of wrong-guess penalties, or empty string."""
-            if not penalty:
-                return ""
-            penalty_per_guess = self.engine.jinx_wrong_guess_penalty
-            count = penalty // penalty_per_guess if penalty_per_guess else 0
-            return f"{count} wrong guess{'es' if count != 1 else ''}"
-
         if transferred > 0:
             self.player_manager.update_score(player_id, -transferred)
             self.player_manager.update_score(attacker_id, transferred)
             ctx.points_earned -= transferred
             suffix = ""
             if penalty_total > 0:
-                suffix = f" (but lost {penalty_total} pts from {_wrong_guess_summary(penalty_total)} by target)"
+                suffix = f" ({self._format_jinx_penalty_summary(penalty_total)})"
             return (
                 f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx pays off! "
                 f"Siphoned {transferred} pts ({int(self.jinx_share_ratio * 100)}%) "
@@ -234,8 +239,8 @@ class PowerUpManager(BaseManager):
         if penalty_total > 0:
             return (
                 f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx on <@{player_id}> "
-                f"had nothing to siphon, but cost {penalty_total} pts from "
-                f"{_wrong_guess_summary(penalty_total)} by target."
+                f"had nothing to siphon, "
+                f"{self._format_jinx_penalty_summary(penalty_total)}."
             )
 
         # No message if the link was already resolved (double-transfer guard in engine)
@@ -387,7 +392,7 @@ class PowerUpManager(BaseManager):
             raise PowerUpError(f"<@{target_id}> has already been jinxed!")
 
         share_pct = int(self.jinx_share_ratio * 100)
-        penalty = self.engine.jinx_wrong_guess_penalty
+        penalty_per_wrong_guess = self.engine.jinx_wrong_guess_penalty
 
         if is_late_day:
             # --- Late-day jinx: attacker already answered ---
@@ -411,20 +416,26 @@ class PowerUpManager(BaseManager):
             )
 
             if self._get_daily_state(target_id).is_correct:
+                penalty_total = self._get_daily_state(attacker_id).jinx_penalty_total
+                if penalty_total > 0:
+                    self.player_manager.update_score(attacker_id, -penalty_total)
+                penalty_summary = self._format_jinx_penalty_summary(penalty_total)
+                penalty_suffix = f" ({penalty_summary})" if penalty_summary else ""
                 if transferred > 0:
                     return (
                         f"<@{attacker_id}> {self.emoji_jinxed} Late jinx on <@{target_id}>! "
-                        f"Siphoned {transferred} pts ({share_pct}%){cost_str}."
+                        f"Siphoned {transferred} pts ({share_pct}%){cost_str}"
+                        f"{penalty_suffix}."
                     )
                 return (
                     f"<@{attacker_id}> {self.emoji_jinxed} Late jinx landed on <@{target_id}>, "
-                    f"but they had 0 pts to siphon{cost_str}."
+                    f"but they had 0 pts to siphon{cost_str}{penalty_suffix}."
                 )
 
             return (
                 f"{self.emoji_jinxed} Late jinx set on {target.name}{cost_str}! "
                 f"You'll siphon {share_pct}% of their points when they answer, "
-                f"but lose {penalty} pts per wrong guess they make."
+                f"but lose {penalty_per_wrong_guess} pts per wrong guess they make."
             )
 
         # --- Normal daytime path ---
@@ -433,11 +444,17 @@ class PowerUpManager(BaseManager):
 
         if self._get_daily_state(target_id).is_correct:
             # Retroactive: target already answered
+            penalty_total = self._get_daily_state(attacker_id).jinx_penalty_total
+            if penalty_total > 0:
+                self.player_manager.update_score(attacker_id, -penalty_total)
             self.player_manager.update_score(target_id, -transferred)
             self.player_manager.update_score(attacker_id, transferred)
+            penalty_summary = self._format_jinx_penalty_summary(penalty_total)
+            penalty_suffix = f" ({penalty_summary})" if penalty_summary else ""
             return (
                 f"<@{attacker_id}> {self.emoji_jinxed} <@{target_id}> already answered — retroactive jinx! "
-                f"Siphoned {transferred} pts ({share_pct}% of their score). "
+                f"Siphoned {transferred} pts ({share_pct}% of their score)"
+                f"{penalty_suffix}. "
                 f"{self.emoji_silenced} You still can't answer until the hint is revealed."
             )
 
@@ -445,7 +462,7 @@ class PowerUpManager(BaseManager):
         return (
             f"{self.emoji_silenced} Jinx activated on {target.name}! "
             f"You'll siphon {share_pct}% of their points when they answer. "
-            f"You lose {penalty} pts for each wrong guess they make. "
+            f"You lose {penalty_per_wrong_guess} pts for each wrong guess they make. "
             f"You can't answer until the hint is revealed!"
         )
 

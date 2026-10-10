@@ -73,7 +73,7 @@ class PowerUpEngine:
 
         if target_state.is_correct:
             # Retroactive: target already answered — transfer share immediately.
-            # Only take 25% of earned points, not stolen points.
+            # Take the configured share of earned points, not stolen points.
             earned_only = target_state.score_earned - target_state.score_stolen
             share = int(earned_only * self.jinx_share_ratio)
             if share > 0:
@@ -136,7 +136,7 @@ class PowerUpEngine:
         if attacker_state.jinx_target is None:
             return 0
 
-        # Only take 25% of earned points, not stolen points.
+        # Take the configured share of earned points, not stolen points.
         earned_only = target_state.score_earned - target_state.score_stolen
         share = int(earned_only * self.jinx_share_ratio)
         if share > 0:

@@ -4,16 +4,31 @@ Regression test to verify rest multiplier is included in jinx calculations.
 """
 
 import unittest
+from unittest.mock import MagicMock
 from src.core.state import DailyPlayerState
 from src.core.powerup_engine import PowerUpEngine
-from src.cfg.main import ConfigReader
 
 
 class TestJinxRestBonusInclusion(unittest.TestCase):
     """Test that rest multiplier bonus is included in jinx transfers."""
 
     def setUp(self):
-        self.config = ConfigReader()
+        self.config = MagicMock()
+        values = {
+            "JBOT_JINX_SHARE_RATIO": "0.25",
+            "JBOT_JINX_WRONG_GUESS_PENALTY": "5",
+            "JBOT_BONUS_TRY_CSV": "20,10,5",
+            "JBOT_BONUS_FASTEST_CSV": "10,5,1",
+            "JBOT_BONUS_BEFORE_HINT": "10",
+            "JBOT_BONUS_STREAK_PER_DAY": "5",
+            "JBOT_BONUS_STREAK_CAP": "25",
+            "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
+            "JBOT_EMOJI_FASTEST": "🥇",
+            "JBOT_EMOJI_FIRST_TRY": "🎯",
+            "JBOT_EMOJI_BEFORE_HINT": "🧠",
+            "JBOT_EMOJI_STREAK": "🔥",
+        }
+        self.config.get.side_effect = lambda key, default=None: values.get(key, default)
         self.engine = PowerUpEngine(self.config)
         self.daily_state = {}
 
@@ -46,7 +61,7 @@ class TestJinxRestBonusInclusion(unittest.TestCase):
         transferred = self.engine.apply_jinx(self.daily_state, attacker_id, target_id)
 
         # Verify transfer includes rest bonus
-        # 25% of 318 = 79.5 ≈ 79
+        # 25% of 318 = 79.5 -> 79
         expected_transfer = 79
         self.assertEqual(transferred, expected_transfer)
 
@@ -82,7 +97,7 @@ class TestJinxRestBonusInclusion(unittest.TestCase):
         transferred = self.engine.resolve_jinx_on_correct(self.daily_state, target_id)
 
         # Verify transfer includes rest bonus
-        # 25% of 318 = 79
+        # 25% of 318 = 79.5 -> 79
         expected_transfer = 79
         self.assertEqual(transferred, expected_transfer)
 
@@ -108,7 +123,7 @@ class TestJinxRestBonusInclusion(unittest.TestCase):
         # Apply late jinx
         transferred = self.engine.apply_jinx(self.daily_state, attacker_id, target_id)
 
-        # 25% of (500 - 30_stolen) = 25% of 470 = 117.5 ≈ 117
+        # 25% of (500 - 30_stolen) = 25% of 470 = 117.5 -> 117
         # Rest bonus (100) is included in the 500
         expected_transfer = 117
         self.assertEqual(transferred, expected_transfer)
@@ -135,7 +150,7 @@ class TestJinxRestBonusInclusion(unittest.TestCase):
         # Apply late jinx
         transferred = self.engine.apply_jinx(self.daily_state, attacker_id, target_id)
 
-        # 25% of (250 - 0) = 62.5 ≈ 62
+        # 25% of (250 - 0) = 62.5 -> 62
         expected_transfer = 62
         self.assertEqual(transferred, expected_transfer)
 
