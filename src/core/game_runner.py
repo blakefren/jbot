@@ -460,6 +460,15 @@ class GameRunner:
                 g["player_id"] for g in daily_correct_guesses
             }
             daily_correct_guesses.sort(key=lambda x: x.get("guessed_at"))
+            # Multiple correct guesses per player (e.g. after add_answer) must
+            # only count once: keep each player's earliest correct guess.
+            seen_players: set = set()
+            unique_correct_guesses = []
+            for g in daily_correct_guesses:
+                if g["player_id"] not in seen_players:
+                    seen_players.add(g["player_id"])
+                    unique_correct_guesses.append(g)
+            daily_correct_guesses = unique_correct_guesses
 
             emoji_first_try = self.config.get("JBOT_EMOJI_FIRST_TRY")
             first_try_solvers = self.data_manager.get_first_try_solvers(
