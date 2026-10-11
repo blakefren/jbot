@@ -135,6 +135,17 @@ class AnswerModal(discord.ui.Modal):
             )
 
 
+async def _send_power_result(
+    interaction: discord.Interaction, result: str, public: bool
+):
+    """Deliver a power-up result without replying to the (ephemeral) menu message."""
+    if public and interaction.channel:
+        await interaction.channel.send(result)
+        await interaction.edit_original_response(content="✅ Done.", view=None)
+    else:
+        await interaction.edit_original_response(content=result, view=None)
+
+
 class JinxSelectView(discord.ui.View):
     """Sub-view with StringSelect to choose an eligible player to jinx.
 
@@ -202,9 +213,7 @@ class JinxSelectView(discord.ui.View):
             result = manager.jinx(
                 str(interaction.user.id), target_id, self.bot.game.daily_question_id
             )
-            await interaction.followup.send(
-                result, ephemeral=not target_already_answered
-            )
+            await _send_power_result(interaction, result, target_already_answered)
         except PowerUpError as e:
             await interaction.followup.send(str(e), ephemeral=True)
         except Exception as e:
@@ -281,9 +290,7 @@ class StealSelectView(discord.ui.View):
             result = manager.steal(
                 str(interaction.user.id), target_id, self.bot.game.daily_question_id
             )
-            await interaction.followup.send(
-                result, ephemeral=not target_already_answered
-            )
+            await _send_power_result(interaction, result, target_already_answered)
         except PowerUpError as e:
             await interaction.followup.send(str(e), ephemeral=True)
         except Exception as e:
