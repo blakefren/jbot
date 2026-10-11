@@ -266,14 +266,15 @@ The Phase 1 parity harness is implemented in
 
 The initial scenarios cover:
 
-- submitted-guess counting;
-- forward and retroactive jinxes after wrong guesses;
-- late retroactive jinxes;
+- correct and incorrect guesses without power-ups, plus submitted-guess counting;
+- forward, retroactive, late-forward, and late-retroactive jinxes;
 - pending rest bonus plus jinx;
+- standalone forward, retroactive, late-forward, partial, and preloaded steals;
 - jinx plus steal;
-- rest cancelling an incoming jinx;
-- overnight jinx hydration; and
-- accepting an alternative answer after a correction.
+- rest cancelling incoming jinxes and steals;
+- overnight jinx and steal hydration;
+- consecutive rest carryover to the following question day; and
+- accepting multiple alternative answers after corrections.
 
 The contracts intentionally remain failing until live and replay state agree.
 At initial implementation, the contracts identified that live correct-guess

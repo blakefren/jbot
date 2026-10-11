@@ -159,8 +159,6 @@ class InMemoryDataManager:
 class TestLiveReplayParity(unittest.TestCase):
     """Contract tests for equivalent live and replay game-event processing."""
 
-    # TODO: Add parity scenarios for standalone steal flows, correct and incorrect
-    # guesses without power-ups, consecutive rests, and multiple-answer corrections.
     question_id = 1
     today = date(2023, 1, 1)
 
@@ -251,9 +249,45 @@ class TestLiveReplayParity(unittest.TestCase):
             )
         )
 
+    def _preload_steal(self, thief_id: str, target_id: str) -> None:
+        self.data_manager.pending_powerups.append(
+            {
+                "user_id": thief_id,
+                "target_user_id": target_id,
+                "powerup_type": "steal_preload",
+            }
+        )
+        self.powerup_manager.hydrate_pending_powerups(self.question_id)
+        self.events.append(
+            PowerUpEvent(
+                timestamp=self._timestamp(),
+                user_id=thief_id,
+                powerup_type="steal_preload",
+                target_user_id=target_id,
+            )
+        )
+
     def _set_pending_rest_multiplier(self, player_id: str, multiplier: float) -> None:
         self.players[player_id].pending_rest_multiplier = multiplier
         self.initial_players[player_id].pending_rest_multiplier = multiplier
+
+    def _set_initial_streak(self, player_id: str, streak: int) -> None:
+        self.players[player_id].answer_streak = streak
+        self.initial_players[player_id].answer_streak = streak
+
+    def _start_next_question_day(self) -> None:
+        self.question_id += 1
+        self.events = []
+        self.initial_players = copy.deepcopy(self.players)
+        self.powerup_manager.reset_daily_state()
+        self.guess_handler = GuessHandler(
+            data_manager=self.data_manager,
+            player_manager=self.player_manager,
+            daily_question=self.question,
+            daily_question_id=self.question_id,
+            managers={"powerup": self.powerup_manager},
+            config=self.config,
+        )
 
     def _assert_live_replay_parity(self) -> None:
         simulator = DailyGameSimulator(
@@ -324,6 +358,16 @@ class TestLiveReplayParity(unittest.TestCase):
 
         self._assert_live_replay_parity()
 
+    def test_correct_guess_without_powerups_matches_replay(self):
+        self._guess("2", "4")
+
+        self._assert_live_replay_parity()
+
+    def test_incorrect_guess_without_powerups_matches_replay(self):
+        self._guess("2", "wrong")
+
+        self._assert_live_replay_parity()
+
     def test_every_submitted_guess_is_counted_once_live_and_replay(self):
         self._guess("2", "wrong")
         self._guess("2", "still wrong")
@@ -357,6 +401,13 @@ class TestLiveReplayParity(unittest.TestCase):
 
         self._assert_live_replay_parity()
 
+    def test_late_forward_jinx_matches_replay(self):
+        self._guess("1", "4")
+        self._powerup("jinx", "1", "2")
+        self._guess("2", "4")
+
+        self._assert_live_replay_parity()
+
     def test_jinx_includes_pending_rest_bonus_in_live_and_replay(self):
         self._set_pending_rest_multiplier("2", 0.2)
         self._powerup("jinx", "1", "2")
@@ -371,8 +422,47 @@ class TestLiveReplayParity(unittest.TestCase):
 
         self._assert_live_replay_parity()
 
+    def test_forward_steal_matches_replay(self):
+        self._powerup("steal", "1", "2")
+        self._guess("2", "4")
+
+        self._assert_live_replay_parity()
+
+    def test_retroactive_steal_matches_replay(self):
+        self._guess("2", "4")
+        self._powerup("steal", "1", "2")
+
+        self._assert_live_replay_parity()
+
+    def test_partial_forward_steal_matches_replay(self):
+        self._set_initial_streak("1", 1)
+        self._powerup("steal", "1", "2")
+        self._guess("2", "4")
+
+        self._assert_live_replay_parity()
+
+    def test_partial_retroactive_steal_matches_replay(self):
+        self._set_initial_streak("1", 1)
+        self._guess("2", "4")
+        self._powerup("steal", "1", "2")
+
+        self._assert_live_replay_parity()
+
+    def test_late_forward_steal_matches_replay(self):
+        self._guess("1", "4")
+        self._powerup("steal", "1", "2")
+        self._guess("2", "4")
+
+        self._assert_live_replay_parity()
+
     def test_rest_cancels_pending_jinx_in_live_and_replay(self):
         self._powerup("jinx", "1", "2")
+        self._powerup("rest", "2")
+
+        self._assert_live_replay_parity()
+
+    def test_rest_cancels_pending_steal_in_live_and_replay(self):
+        self._powerup("steal", "1", "2")
         self._powerup("rest", "2")
 
         self._assert_live_replay_parity()
@@ -383,9 +473,27 @@ class TestLiveReplayParity(unittest.TestCase):
 
         self._assert_live_replay_parity()
 
-    def test_alternative_answer_matches_replay(self):
-        self.data_manager.alternative_answers = ["four"]
+    def test_overnight_preloaded_steal_matches_replay(self):
+        self._preload_steal("1", "2")
+        self._guess("2", "4")
+
+        self._assert_live_replay_parity()
+
+    def test_multiple_answer_corrections_match_replay(self):
+        self.data_manager.alternative_answers = ["four", "iv"]
         self._guess("2", "four")
+        self._guess("3", "iv")
+
+        self._assert_live_replay_parity()
+
+    def test_consecutive_rests_carry_over_to_next_question_day(self):
+        self._powerup("rest", "2")
+        self._start_next_question_day()
+        self._powerup("rest", "2")
+        self._start_next_question_day()
+
+        self.assertEqual(self.players["2"].pending_rest_multiplier, 0.4)
+        self._guess("2", "4")
 
         self._assert_live_replay_parity()
 
