@@ -148,6 +148,7 @@ class PowerUpManager(BaseManager):
             state.is_correct = True
             state.score_earned = ctx.points_earned
             state.bonuses = ctx.bonus_values
+            state.streak_delta += 1
 
         messages = []
 

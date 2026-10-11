@@ -256,6 +256,32 @@ Implement **Option E**, then **Option B**, then formalize the result as **Option
 
 This phase would have caught the recent jinx issues without requiring a broad rewrite.
 
+#### Phase 1 implementation status
+
+The Phase 1 parity harness is implemented in
+`tests/src/core/test_live_replay_parity.py`. It uses the production
+`GuessHandler` and `PowerUpManager` with stateful in-memory adapters for
+`PlayerManager` and `DataManager`, then compares them with
+`DailyGameSimulator` before end-of-day-only bonuses are applied.
+
+The initial scenarios cover:
+
+- submitted-guess counting;
+- forward and retroactive jinxes after wrong guesses;
+- late retroactive jinxes;
+- pending rest bonus plus jinx;
+- jinx plus steal;
+- rest cancelling an incoming jinx;
+- overnight jinx hydration; and
+- accepting an alternative answer after a correction.
+
+The contracts intentionally remain failing until live and replay state agree.
+At initial implementation, the contracts identified that live correct-guess
+handling persists a streak increment but does not increment
+`DailyPlayerState.streak_delta`; replay increments it. The harness verifies
+scores, final streaks, and persisted score deltas before comparing complete
+daily state so it can isolate state-only discrepancies from persistence bugs.
+
 ### Phase 2: Centralize complete event workflows
 
 Create a shared event-processing service that owns complete guess and power-up transitions. The live manager should become an adapter that:
