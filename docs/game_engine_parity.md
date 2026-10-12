@@ -276,12 +276,12 @@ The initial scenarios cover:
 - consecutive rest carryover to the following question day; and
 - accepting multiple alternative answers after corrections.
 
-The contracts intentionally remain failing until live and replay state agree.
 At initial implementation, the contracts identified that live correct-guess
-handling persists a streak increment but does not increment
-`DailyPlayerState.streak_delta`; replay increments it. The harness verifies
-scores, final streaks, and persisted score deltas before comparing complete
-daily state so it can isolate state-only discrepancies from persistence bugs.
+handling persisted a streak increment but did not increment
+`DailyPlayerState.streak_delta`; replay incremented it. That issue was fixed,
+and the contracts now pass. The harness verifies scores, final streaks, and
+persisted score deltas before comparing complete daily state so it can isolate
+state-only discrepancies from persistence bugs.
 
 ### Phase 2: Centralize complete event workflows
 
@@ -306,6 +306,31 @@ Recommended enforcement mechanisms:
 - compare state snapshots before and after every event in parity tests.
 
 The service should not make the exact score-effect ledger authoritative. Effects are an execution result used by live persistence and diagnostics; persisted game events remain the source of truth.
+
+#### Phase 2 implementation status
+
+`src/core/game_event_service.py` now provides the shared mutable transition
+boundary:
+
+- `process_guess()` increments guess state, applies rest before jinx and steal,
+  and returns rest, pending-multiplier consumption, jinx, steal, and
+  wrong-guess penalty effects;
+- `process_powerup()` handles rest, jinx, steal, and preload transitions and
+  returns their score/streak effects. It rejects retaliation attempts before
+  mutating state; live and replay adapters surface the rejection without
+  persisting or applying the event.
+
+`PowerUpManager` now delegates all daily-state mutation to this service and
+only validates requests, persists returned effects, and formats messages.
+`DailyGameSimulator` delegates power-up dispatch and per-guess state
+transitions to the same service while retaining replay-specific answer
+matching, rank calculation, event ordering, and end-of-day processing. It
+reports each consumed pending rest multiplier so answer correction can compare
+old and new replay effects before clearing the persisted multiplier.
+
+`PowerUpEngine` remains the service's lower-level state helper in this phase.
+Phase 3 will decide whether to fold those helpers into a reducer-owned module
+and replace mutable transitions with explicit next-state results.
 
 ### Phase 3: Formalize the reducer architecture
 

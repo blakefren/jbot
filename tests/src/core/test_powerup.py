@@ -619,6 +619,17 @@ class TestGuards(_PowerUpManagerTests):
             self.manager.steal("1", "1", "q1")
         self.assertIn("yourself", str(cm.exception))
 
+    def test_retaliatory_jinx_is_rejected_without_persisting_an_event(self):
+        """A rejection from the shared service is surfaced before event logging."""
+        self.manager.jinx("2", "1", "q1")
+        self.data_manager.log_powerup_usage.reset_mock()
+
+        with self.assertRaises(PowerUpError) as cm:
+            self.manager.jinx("1", "2", "q1")
+
+        self.assertIn("can't retaliate", str(cm.exception))
+        self.data_manager.log_powerup_usage.assert_not_called()
+
     # --- rest is independent from attack power-ups ---
 
     def test_rest_allowed_after_jinx(self):

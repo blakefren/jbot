@@ -1,12 +1,11 @@
 import logging
 from collections import defaultdict
-from datetime import datetime
 from src.core.answer_checker import AnswerChecker
 from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 from src.core.player import Player
 from src.core.state import DailyPlayerState
 from src.core.scoring import ScoreCalculator
-from src.core.powerup_engine import PowerUpEngine
+from src.core.game_event_service import GameEventService
 from src.core.utils import parse_timestamp
 
 
@@ -34,12 +33,13 @@ class DailyGameSimulator:
         self.initial_player_states = initial_player_states
         self.config = config
         self.score_calculator = ScoreCalculator(self.config)
-        self.engine = PowerUpEngine(self.config)
+        self.event_service = GameEventService(self.config)
         # Players who kept their streak yesterday (grace period: one missed day allowed)
         self.prev_streak_keepers: set[str] = prev_streak_keepers or set()
 
         # Daily State per player
         self.daily_state = defaultdict(DailyPlayerState)
+        self.pending_rest_multiplier_consumed: set[str] = set()
 
         # Global daily state
         self.first_correct_timestamp = None
@@ -71,55 +71,24 @@ class DailyGameSimulator:
         return self.calculate_final_results()
 
     def handle_powerup(self, event: PowerUpEvent):
-        user_id = event.user_id
-        ptype = event.powerup_type
-        target_id = event.target_user_id
-
-        if ptype == "rest":
-            self.engine.apply_rest(self.daily_state, user_id)
-
-        elif ptype == "jinx":
-            if target_id:
-                self.engine.apply_jinx(self.daily_state, user_id, target_id)
-
-        elif ptype == "jinx_preload":
-            if target_id:
-                self.engine.apply_preload_jinx(self.daily_state, user_id, target_id)
-
-        elif ptype == "jinx_late":
-            if target_id:
-                self.engine.apply_late_jinx(self.daily_state, user_id, target_id)
-
-        elif ptype == "steal_preload":
-            if target_id:
-                player = self.initial_player_states.get(user_id)
-                initial_streak = player.answer_streak if player else 0
-                self.engine.apply_steal(
-                    self.daily_state, user_id, target_id, initial_streak
-                )
-
-        elif ptype == "steal":
-            if target_id:
-                player = self.initial_player_states.get(user_id)
-                initial_streak = player.answer_streak if player else 0
-                self.engine.apply_steal(
-                    self.daily_state, user_id, target_id, initial_streak
-                )
-
-        elif ptype == "rest_wakeup":
+        if event.powerup_type in {"rest_wakeup", "crowd_wisdom"}:
             # Rest bonus was already applied during handle_guess (before jinx resolution)
-            # to match live play order in PowerUpManager.on_guess. No-op here.
             pass
-        elif ptype == "crowd_wisdom":
-            # Logged as a bookkeeping event by live flow; replay bonus is applied in
-            # end_of_day(), so this should be a no-op during event dispatch.
-            pass
+            return
 
-        else:
+        player = self.initial_player_states.get(event.user_id)
+        initial_streak = player.answer_streak if player else 0
+        transition = self.event_service.process_powerup(
+            self.daily_state, event, initial_streak=initial_streak
+        )
+        if transition.rejection_reason:
             logging.warning(
-                "DailyGameSimulator: unrecognised powerup type %r for user %s — skipping.",
-                ptype,
-                user_id,
+                "Skipping rejected replay power-up event: user_id=%s, type=%s, "
+                "target_id=%s, reason=%s",
+                event.user_id,
+                event.powerup_type,
+                event.target_user_id,
+                transition.rejection_reason,
             )
 
     def handle_guess(self, event: GuessEvent):
@@ -128,11 +97,12 @@ class DailyGameSimulator:
         timestamp = event.timestamp
 
         state = self.daily_state[user_id]
-        state.guesses_count += 1
-
-        # Check correctness
         if state.is_correct or state.is_resting:
-            return  # Already answered or resting
+            self.event_service.process_guess(
+                self.daily_state, user_id, is_correct=False
+            )
+            return
+
         is_correct = False
         for ans in self.answers:
             if self.checker.is_correct(guess_text, ans):
@@ -140,17 +110,15 @@ class DailyGameSimulator:
                 break
 
         if not is_correct:
-            # Wrong-guess penalty: each incorrect guess by a jinxed player costs their attacker
-            if state.jinxed_by:
-                self.engine.apply_jinx_wrong_guess_penalty(self.daily_state, user_id)
+            self.event_service.process_guess(
+                self.daily_state, user_id, is_correct=False
+            )
             return
-
-        state.is_correct = True
 
         # Calculate Points
         base_value = self.question.clue_value or 100
 
-        guesses_count = state.guesses_count
+        guesses_count = state.guesses_count + 1
 
         is_before_hint = True
         if self.hint_timestamp:
@@ -185,28 +153,18 @@ class DailyGameSimulator:
             streak_length=streak_length,
         )
 
-        # Apply rest multiplier BEFORE jinx, matching the live on_guess order:
-        # PowerUpManager.on_guess applies rest bonus to ctx.points_earned (full score)
-        # then resolves jinx, so the multiplier never touches the jinxed portion.
         player = self.initial_player_states.get(user_id)
         pending_mult = float(player.pending_rest_multiplier or 0.0) if player else 0.0
-        if pending_mult > 0.0:
-            rest_bonus = round(points * pending_mult)
-            if rest_bonus > 0:
-                points += rest_bonus
-                bonuses["rest"] = rest_bonus
-
-        state.score_earned += points
-        state.bonuses = bonuses
-        state.streak_delta += 1
-
-        # Resolve Jinx — transfer attacker's share when target answers correctly.
-        if state.jinxed_by:
-            self.engine.resolve_jinx_on_correct(self.daily_state, user_id)
-
-        # Resolve Steal
-        if state.steal_attempt_by:
-            self.engine.resolve_steal_on_correct(self.daily_state, user_id)
+        transition = self.event_service.process_guess(
+            self.daily_state,
+            user_id,
+            is_correct=True,
+            points_earned=points,
+            bonuses=bonuses,
+            pending_rest_multiplier=pending_mult,
+        )
+        if transition.consume_pending_rest_multiplier:
+            self.pending_rest_multiplier_consumed.add(user_id)
 
     def end_of_day(self):
         # Crowd Wisdom is an end-of-day/post-resolution bonus.
@@ -294,6 +252,9 @@ class DailyGameSimulator:
                 "streak_delta": state.streak_delta,
                 "bonuses": state.bonuses,
                 "badges": self._get_badges(state.bonuses),
+                "consume_pending_rest_multiplier": (
+                    user_id in self.pending_rest_multiplier_consumed
+                ),
             }
         return results
 

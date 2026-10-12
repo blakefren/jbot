@@ -7,9 +7,9 @@ import logging
 from src.cfg.main import ConfigReader
 from src.core.base_manager import BaseManager
 from src.core.data_manager import DataManager
-from src.core.events import GuessContext
+from src.core.events import GuessContext, PowerUpEvent
 from src.core.player_manager import PlayerManager
-from src.core.powerup_engine import PowerUpEngine
+from src.core.game_event_service import GameEventService
 from src.core.state import DailyPlayerState
 
 
@@ -42,7 +42,8 @@ class PowerUpManager(BaseManager):
         self.player_manager = player_manager
         self.data_manager = data_manager
         _config = config or ConfigReader()
-        self.engine = PowerUpEngine(_config)
+        self.event_service = GameEventService(_config)
+        self.engine = self.event_service.engine
         # Config-driven constants
         self.emoji_jinxed = _config.get("JBOT_EMOJI_JINXED", "🥶")
         self.emoji_silenced = _config.get("JBOT_EMOJI_SILENCED", "🤐")
@@ -140,53 +141,58 @@ class PowerUpManager(BaseManager):
 
     def on_guess(self, ctx: GuessContext) -> list[str]:
         pid = str(ctx.player_id)
-        state = self._get_daily_state(pid)
-        state.guesses_count += 1
-
-        # Store earnings for potential theft
-        if ctx.is_correct:
-            state.is_correct = True
-            state.score_earned = ctx.points_earned
-            state.bonuses = ctx.bonus_values
-            state.streak_delta += 1
-
         messages = []
-
-        # Apply pending rest multiplier (from previous rest days) on correct answers
+        pending_multiplier = 0.0
         if ctx.is_correct and ctx.points_earned > 0:
-            pending_mult = self.data_manager.get_pending_multiplier(pid)
-            if pending_mult > 0.0:
-                bonus_amount = round(ctx.points_earned * pending_mult)
-                if bonus_amount > 0:
-                    self.player_manager.update_score(pid, bonus_amount)
-                    ctx.points_earned += bonus_amount
-                    state.bonuses["rest"] = bonus_amount
-                    multiplier_display = 1.0 + pending_mult
-                    messages.append(
-                        f"{self.emoji_rest_wakeup} Rest bonus! ×{multiplier_display:.2f} (+{bonus_amount})"
-                    )
-                    self.data_manager.log_powerup_usage(
-                        pid, "rest_wakeup", None, ctx.question_id
-                    )
-                self.data_manager.clear_pending_multiplier(pid)
-                state.score_earned = ctx.points_earned
+            pending_multiplier = self.data_manager.get_pending_multiplier(pid)
 
-        # Wrong-guess penalty: each incorrect guess by a jinxed player costs their attacker points.
-        # No per-guess message — penalty is summarised in the resolution message when target answers.
-        if not ctx.is_correct:
-            penalty = self.engine.apply_jinx_wrong_guess_penalty(self.daily_state, pid)
-            if penalty > 0:
-                attacker_id = self._get_daily_state(pid).jinxed_by
-                self.player_manager.update_score(attacker_id, -penalty)
+        transition = self.event_service.process_guess(
+            self.daily_state,
+            pid,
+            is_correct=ctx.is_correct,
+            points_earned=ctx.points_earned,
+            bonuses=ctx.bonus_values,
+            pending_rest_multiplier=pending_multiplier,
+        )
 
-        # Resolve jinx: transfer the attacker's share when the target answers correctly.
-        msg = self.resolve_jinx(pid, ctx)
-        if msg:
-            messages.append(msg)
+        if transition.rest_bonus > 0:
+            self.player_manager.update_score(pid, transition.rest_bonus)
+            multiplier_display = 1.0 + pending_multiplier
+            messages.append(
+                f"{self.emoji_rest_wakeup} Rest bonus! ×{multiplier_display:.2f} "
+                f"(+{transition.rest_bonus})"
+            )
+            self.data_manager.log_powerup_usage(
+                pid, "rest_wakeup", None, ctx.question_id
+            )
+        if transition.consume_pending_rest_multiplier:
+            self.data_manager.clear_pending_multiplier(pid)
 
-        msg = self.resolve_steal(pid, ctx)
-        if msg:
-            messages.append(msg)
+        if transition.jinx_wrong_guess_penalty > 0:
+            self.player_manager.update_score(
+                transition.jinx_attacker_id, -transition.jinx_wrong_guess_penalty
+            )
+
+        if transition.jinx_transfer > 0:
+            self.player_manager.update_score(pid, -transition.jinx_transfer)
+            self.player_manager.update_score(
+                transition.jinx_attacker_id, transition.jinx_transfer
+            )
+
+        if transition.steal_transfer > 0:
+            self.player_manager.update_score(pid, -transition.steal_transfer)
+            self.player_manager.update_score(
+                transition.steal_thief_id, transition.steal_transfer
+            )
+
+        if ctx.is_correct:
+            ctx.points_earned = transition.points_earned
+            msg = self._format_jinx_resolution_message(pid, transition)
+            if msg:
+                messages.append(msg)
+            msg = self._format_steal_resolution_message(pid, transition)
+            if msg:
+                messages.append(msg)
 
         return messages
 
@@ -201,77 +207,57 @@ class PowerUpManager(BaseManager):
             f"{count} wrong guess{'es' if count != 1 else ''} by target"
         )
 
-    def resolve_jinx(self, player_id: str, ctx: GuessContext) -> str:
-        """
-        Resolve the parasitic Jinx effect when the TARGET answers correctly.
-
-        Transfers the attacker's share of the target's points immediately,
-        regardless of whether the attacker has answered. Includes a summary of
-        any wrong-guess penalties the attacker accumulated during the round.
-        """
-        if not ctx.is_correct:
-            return ""
-
-        state = self._get_daily_state(player_id)
-        attacker_id = state.jinxed_by
-
+    def _format_jinx_resolution_message(self, player_id: str, transition) -> str:
+        """Format the public result of a shared jinx resolution."""
+        attacker_id = transition.jinx_attacker_id
         if not attacker_id:
             return ""
 
-        # Engine: transfer share; clears jinx_target on attacker
-        transferred = self.engine.resolve_jinx_on_correct(self.daily_state, player_id)
-        attacker_state = self._get_daily_state(attacker_id)
-        penalty_total = attacker_state.jinx_penalty_total
-
-        if transferred > 0:
-            self.player_manager.update_score(player_id, -transferred)
-            self.player_manager.update_score(attacker_id, transferred)
-            ctx.points_earned -= transferred
-            suffix = ""
-            if penalty_total > 0:
-                suffix = f" ({self._format_jinx_penalty_summary(penalty_total)})"
+        penalty_total = self._get_daily_state(attacker_id).jinx_penalty_total
+        if transition.jinx_transfer > 0:
+            suffix = (
+                f" ({self._format_jinx_penalty_summary(penalty_total)})"
+                if penalty_total > 0
+                else ""
+            )
             return (
                 f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx pays off! "
-                f"Siphoned {transferred} pts ({int(self.jinx_share_ratio * 100)}%) "
-                f"from <@{player_id}>."
+                f"Siphoned {transition.jinx_transfer} pts "
+                f"({int(self.jinx_share_ratio * 100)}%) from <@{player_id}>."
                 f"{suffix}"
             )
-
         if penalty_total > 0:
             return (
                 f"{self.emoji_jinxed} <@{attacker_id}>'s Jinx on <@{player_id}> "
                 f"had nothing to siphon, "
                 f"{self._format_jinx_penalty_summary(penalty_total)}."
             )
-
-        # No message if the link was already resolved (double-transfer guard in engine)
         return ""
 
-    def resolve_steal(self, target_id: str, ctx: GuessContext) -> str:
-        """
-        Resolve Steal effect when the target answers.
-        """
-        target_state = self._get_daily_state(target_id)
-        attacker_id = target_state.steal_attempt_by
-
-        if not attacker_id or not ctx.is_correct:
+    def _format_steal_resolution_message(self, player_id: str, transition) -> str:
+        """Format the public result of a shared steal resolution."""
+        thief_id = transition.steal_thief_id
+        if not thief_id:
             return ""
-
-        # Engine: transfer stealable bonuses in state
-        stealable_amount = self.engine.resolve_steal_on_correct(
-            self.daily_state, target_id
+        if transition.steal_transfer == 0:
+            return (
+                f"{self.emoji_stealing} <@{thief_id}> tried to steal from "
+                f"<@{player_id}>, but there was nothing to steal!"
+            )
+        thief_state = self._get_daily_state(thief_id)
+        partial_note = " (partial steal)" if thief_state.steal_ratio < 1.0 else ""
+        return (
+            f"{self.emoji_stealing} <@{thief_id}> stole "
+            f"{transition.steal_transfer} pts from <@{player_id}>!{partial_note}"
         )
 
-        if stealable_amount == 0:
-            return f"{self.emoji_stealing} <@{attacker_id}> tried to steal from <@{target_id}>, but there was nothing to steal!"
-
-        self.player_manager.update_score(target_id, -stealable_amount)
-        self.player_manager.update_score(attacker_id, stealable_amount)
-        ctx.points_earned -= stealable_amount
-
-        thief_state = self._get_daily_state(attacker_id)
-        partial_note = " (partial steal)" if thief_state.steal_ratio < 1.0 else ""
-        return f"{self.emoji_stealing} <@{attacker_id}> stole {stealable_amount} pts from <@{target_id}>!{partial_note}"
+    @staticmethod
+    def _raise_for_rejected_powerup(transition, target_id: str) -> None:
+        """Raise a player-facing error for a rejected shared power-up transition."""
+        if transition.rejection_reason == "retaliation_blocked":
+            raise PowerUpError(
+                f"You can't retaliate against <@{target_id}> today after being attacked!"
+            )
 
     def hydrate_pending_powerups(self, question_id: int):
         """
@@ -292,7 +278,16 @@ class PowerUpManager(BaseManager):
             ptype = row["powerup_type"]
 
             if ptype == "jinx_preload":
-                self.engine.apply_preload_jinx(self.daily_state, attacker_id, target_id)
+                transition = self.event_service.process_powerup(
+                    self.daily_state,
+                    PowerUpEvent(
+                        timestamp=None,
+                        user_id=attacker_id,
+                        powerup_type=ptype,
+                        target_user_id=target_id,
+                    ),
+                )
+                self._raise_for_rejected_powerup(transition, target_id)
                 logging.info(
                     "[Hydration] Overnight jinx applied: %s \u2192 %s",
                     attacker_id,
@@ -301,9 +296,18 @@ class PowerUpManager(BaseManager):
             elif ptype == "steal_preload":
                 thief = self.player_manager.get_player(attacker_id)
                 initial_streak = thief.answer_streak if thief else 0
-                streak_deducted, _, _ = self.engine.apply_steal(
-                    self.daily_state, attacker_id, target_id, initial_streak
+                transition = self.event_service.process_powerup(
+                    self.daily_state,
+                    PowerUpEvent(
+                        timestamp=None,
+                        user_id=attacker_id,
+                        powerup_type=ptype,
+                        target_user_id=target_id,
+                    ),
+                    initial_streak=initial_streak,
                 )
+                self._raise_for_rejected_powerup(transition, target_id)
+                streak_deducted = transition.streak_deducted
                 if streak_deducted > 0:
                     self.player_manager.set_streak(
                         attacker_id, initial_streak - streak_deducted
@@ -345,17 +349,18 @@ class PowerUpManager(BaseManager):
                     f"<@{target_id}> is already being targeted by a Jinx!"
                 )
 
-            # Check for retaliation block: has target already attacked attacker today?
-            target_state = self._get_daily_state(target_id)
-            attacker_state = self._get_daily_state(attacker_id)
-            if target_id in attacker_state.attacked_by:
-                raise PowerUpError(
-                    f"You can't retaliate against <@{target_id}> today after being attacked!"
-                )
-
             # Apply preload state immediately for retaliation blocking logic.
             # Engine sets: attacker.silenced, attacker.jinx_target, target.jinxed_by, target.attacked_by
-            self.engine.apply_preload_jinx(self.daily_state, attacker_id, target_id)
+            transition = self.event_service.process_powerup(
+                self.daily_state,
+                PowerUpEvent(
+                    timestamp=None,
+                    user_id=attacker_id,
+                    powerup_type="jinx_preload",
+                    target_user_id=target_id,
+                ),
+            )
+            self._raise_for_rejected_powerup(transition, target_id)
             self.data_manager.log_powerup_usage(
                 attacker_id, "jinx_preload", target_id, None
             )
@@ -378,12 +383,6 @@ class PowerUpManager(BaseManager):
 
         target_state = self._get_daily_state(target_id)
 
-        # Check for retaliation block: has target already attacked attacker today?
-        if target_id in attacker_state.attacked_by:
-            raise PowerUpError(
-                f"You can't retaliate against <@{target_id}> today after being attacked!"
-            )
-
         if target_state.is_resting:
             raise PowerUpError(
                 f"<@{target_id}> is resting today — you can't jinx a resting player!"
@@ -398,9 +397,18 @@ class PowerUpManager(BaseManager):
         if is_late_day:
             # --- Late-day jinx: attacker already answered ---
             # Engine handles cost stripping and jinx/retro application; DB write happens here.
-            cost, transferred = self.engine.apply_late_jinx(
-                self.daily_state, attacker_id, target_id
+            transition = self.event_service.process_powerup(
+                self.daily_state,
+                PowerUpEvent(
+                    timestamp=None,
+                    user_id=attacker_id,
+                    powerup_type="jinx_late",
+                    target_user_id=target_id,
+                ),
             )
+            self._raise_for_rejected_powerup(transition, target_id)
+            cost = transition.jinx_cost
+            transferred = transition.jinx_transfer
             # DB: deduct cost, credit transferred amount
             if cost > 0:
                 self.player_manager.update_score(attacker_id, -cost)
@@ -440,8 +448,18 @@ class PowerUpManager(BaseManager):
             )
 
         # --- Normal daytime path ---
+        transition = self.event_service.process_powerup(
+            self.daily_state,
+            PowerUpEvent(
+                timestamp=None,
+                user_id=attacker_id,
+                powerup_type="jinx",
+                target_user_id=target_id,
+            ),
+        )
+        self._raise_for_rejected_powerup(transition, target_id)
         self.data_manager.log_powerup_usage(attacker_id, "jinx", target_id, question_id)
-        transferred = self.engine.apply_jinx(self.daily_state, attacker_id, target_id)
+        transferred = transition.jinx_transfer
 
         if self._get_daily_state(target_id).is_correct:
             # Retroactive: target already answered
@@ -499,14 +517,6 @@ class PowerUpManager(BaseManager):
                     f"<@{target_id}> is already being targeted for theft!"
                 )
 
-            # Check for retaliation block: has target already attacked thief today?
-            thief_state = self._get_daily_state(thief_id)
-            target_state = self._get_daily_state(target_id)
-            if target_id in thief_state.attacked_by:
-                raise PowerUpError(
-                    f"You can't retaliate against <@{target_id}> today after being attacked!"
-                )
-
             if current_streak == 0:
                 raise PowerUpError(
                     "You don't have any streak days to sacrifice. "
@@ -516,9 +526,17 @@ class PowerUpManager(BaseManager):
             # Apply steal state immediately for retaliation blocking logic.
             # Engine sets: thief.steal_ratio, thief.stealing_from, thief.streak_delta,
             # target.attacked_by, target.steal_attempt_by
-            self.engine.apply_steal(
-                self.daily_state, thief_id, target_id, current_streak
+            transition = self.event_service.process_powerup(
+                self.daily_state,
+                PowerUpEvent(
+                    timestamp=None,
+                    user_id=thief_id,
+                    powerup_type="steal_preload",
+                    target_user_id=target_id,
+                ),
+                initial_streak=current_streak,
             )
+            self._raise_for_rejected_powerup(transition, target_id)
             steal_cost = self.engine.steal_streak_cost
             actual_lost = min(steal_cost, current_streak)
             self.data_manager.log_powerup_usage(
@@ -546,12 +564,6 @@ class PowerUpManager(BaseManager):
 
         target_state = self._get_daily_state(target_id)
 
-        # Check for retaliation block: has target already attacked thief today?
-        if target_id in thief_state.attacked_by:
-            raise PowerUpError(
-                f"You can't retaliate against <@{target_id}> today after being attacked!"
-            )
-
         if target_state.is_resting:
             raise PowerUpError(
                 f"<@{target_id}> is resting today — you can't steal from a resting player!"
@@ -572,13 +584,24 @@ class PowerUpManager(BaseManager):
 
         if target_state.is_correct:
             # --- Retroactive: target already answered — higher cost, immediate resolution ---
+            # Engine: sets state flags, streak_delta, bonus recalc (if late-day), score transfer.
+            transition = self.event_service.process_powerup(
+                self.daily_state,
+                PowerUpEvent(
+                    timestamp=None,
+                    user_id=thief_id,
+                    powerup_type="steal",
+                    target_user_id=target_id,
+                ),
+                initial_streak=engine_streak,
+            )
+            self._raise_for_rejected_powerup(transition, target_id)
             self.data_manager.log_powerup_usage(
                 thief_id, "steal", target_id, question_id
             )
-            # Engine: sets state flags, streak_delta, bonus recalc (if late-day), score transfer.
-            deducted, stealable_amount, bonus_delta = self.engine.apply_steal(
-                self.daily_state, thief_id, target_id, engine_streak
-            )
+            deducted = transition.streak_deducted
+            stealable_amount = transition.steal_transfer
+            bonus_delta = transition.steal_bonus_delta
             new_streak = max(0, current_streak - deducted)
             actual_lost = deducted
             is_partial = current_streak < self.engine.retro_steal_streak_cost
@@ -605,11 +628,21 @@ class PowerUpManager(BaseManager):
             )
 
         # --- Normal / forward daytime path ---
-        self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
         # Engine: sets state flags, streak_delta, bonus recalc (if late-day).
-        deducted, _, bonus_delta = self.engine.apply_steal(
-            self.daily_state, thief_id, target_id, engine_streak
+        transition = self.event_service.process_powerup(
+            self.daily_state,
+            PowerUpEvent(
+                timestamp=None,
+                user_id=thief_id,
+                powerup_type="steal",
+                target_user_id=target_id,
+            ),
+            initial_streak=engine_streak,
         )
+        self._raise_for_rejected_powerup(transition, target_id)
+        self.data_manager.log_powerup_usage(thief_id, "steal", target_id, question_id)
+        deducted = transition.streak_deducted
+        bonus_delta = transition.steal_bonus_delta
         new_streak = max(0, current_streak - deducted)
         actual_lost = deducted
         is_partial = current_streak < self.engine.steal_streak_cost
@@ -661,10 +694,16 @@ class PowerUpManager(BaseManager):
         if state.is_resting:
             raise PowerUpError("You are already resting today.")
 
-        # Engine: mark resting, whiff pending attacks, return attacker IDs
-        whiffed_jinx_id, whiffed_steal_id = self.engine.apply_rest(
-            self.daily_state, player_id
+        transition = self.event_service.process_powerup(
+            self.daily_state,
+            PowerUpEvent(
+                timestamp=None,
+                user_id=player_id,
+                powerup_type="rest",
+            ),
         )
+        whiffed_jinx_id = transition.whiffed_jinx_id
+        whiffed_steal_id = transition.whiffed_steal_id
         self.data_manager.log_powerup_usage(player_id, "rest", None, question_id)
 
         # Increment pending rest multiplier (stacking)
@@ -743,7 +782,9 @@ class PowerUpManager(BaseManager):
                 continue
 
             # Skip if attacker has been attacked by target (retaliation block)
-            if player_id in attacker_state.attacked_by:
+            if self.event_service.is_retaliation_blocked(
+                self.daily_state, attacker_id, player_id
+            ):
                 continue
 
             # Add to valid targets (include score for sorting)
@@ -797,7 +838,9 @@ class PowerUpManager(BaseManager):
                 continue
 
             # Skip if thief has been attacked by target (retaliation block)
-            if player_id in thief_state.attacked_by:
+            if self.event_service.is_retaliation_blocked(
+                self.daily_state, thief_id, player_id
+            ):
                 continue
 
             # Add to valid targets (include score for sorting)

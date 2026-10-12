@@ -167,9 +167,11 @@ class GameRunner:
         # but the record was already inserted.
         daily_question_data = self.data_manager.get_todays_daily_question()
         if daily_question_data:
-            self.daily_q, self.daily_question_id, self.question_db_id = (
-                daily_question_data
-            )
+            (
+                self.daily_q,
+                self.daily_question_id,
+                self.question_db_id,
+            ) = daily_question_data
 
         if self.daily_question_id is None:
             logging.error("Failed to log new daily question.")
@@ -275,9 +277,11 @@ class GameRunner:
         # Check for an existing daily question ID for today
         daily_question_data = self.data_manager.get_todays_daily_question()
         if daily_question_data:
-            self.daily_q, self.daily_question_id, self.question_db_id = (
-                daily_question_data
-            )
+            (
+                self.daily_q,
+                self.daily_question_id,
+                self.question_db_id,
+            ) = daily_question_data
             logging.info(
                 f"Daily question already set with ID: {self.daily_question_id}"
             )
@@ -1105,6 +1109,7 @@ class GameRunner:
         updated_players = 0
         total_refunded = 0
         details = []
+        pending_multiplier_clear_ids: set[str] = set()
 
         # Check if correcting an old question
         days_old = (self.data_manager.get_today() - question_date).days
@@ -1124,6 +1129,10 @@ class GameRunner:
 
             score_diff = new_res["score_earned"] - old_res["score_earned"]
             streak_diff = new_res["streak_delta"] - old_res["streak_delta"]
+            if new_res.get(
+                "consume_pending_rest_multiplier", False
+            ) and not old_res.get("consume_pending_rest_multiplier", False):
+                pending_multiplier_clear_ids.add(user_id)
 
             if score_diff != 0 or streak_diff != 0:
                 if not dry_run:
@@ -1189,8 +1198,11 @@ class GameRunner:
                 player_name = initial_states[uid].name if uid in initial_states else uid
                 rest_cleared_players.append({"user_id": uid, "name": player_name})
                 seen_resting.add(uid)
-                if not dry_run:
-                    self.data_manager.clear_pending_multiplier(uid)
+                pending_multiplier_clear_ids.add(uid)
+
+        if not dry_run:
+            for user_id in pending_multiplier_clear_ids:
+                self.data_manager.clear_pending_multiplier(user_id)
 
         return {
             "status": "success",

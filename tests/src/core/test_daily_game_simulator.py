@@ -119,6 +119,28 @@ class TestDailyGameSimulator(unittest.TestCase):
         self.assertEqual(results["p1"]["streak_delta"], 0)
         self.assertEqual(results["p1"]["final_streak"], 2)  # unchanged
 
+    def test_correct_answer_reports_pending_rest_multiplier_consumption(self):
+        self.initial_states["p1"].pending_rest_multiplier = 0.2
+        events = [
+            GuessEvent(
+                timestamp="2023-01-01 10:00:00",
+                user_id="p1",
+                guess_text="4",
+            ),
+        ]
+
+        simulator = DailyGameSimulator(
+            self.question,
+            self.answers,
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+        )
+        results = simulator.run(apply_end_of_day=False)
+
+        self.assertTrue(results["p1"]["consume_pending_rest_multiplier"])
+
     def test_jinx_success(self):
         """Forward jinx: attacker siphons 25% of target's score when target answers.
         Transfer fires immediately on target answer (no dependency on attacker answering).

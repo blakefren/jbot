@@ -101,6 +101,35 @@ class TestRecalculateScores(unittest.TestCase):
         self.game_runner.player_manager.update_score.assert_called_with("p1", 140)
         self.game_runner.player_manager.set_streak.assert_called_with("p1", 1)
 
+    def test_recalculation_consumes_newly_applied_rest_multiplier(self):
+        """A correction consumes rest only when the new replay applies it."""
+        from src.core.player import Player
+
+        self.mock_data_manager.get_daily_snapshot.return_value = {
+            "p1": Player(
+                id="p1",
+                name="Player 1",
+                pending_rest_multiplier=0.2,
+            ),
+        }
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = [
+            {
+                "id": 1,
+                "daily_question_id": 1,
+                "player_id": "p1",
+                "guess_text": "800",
+                "is_correct": 0,
+                "guessed_at": "2023-01-01 10:00:00",
+            },
+        ]
+        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
+        self.mock_data_manager.get_alternative_answers.return_value = []
+        self.mock_data_manager.get_powerup_usage_for_daily_question.return_value = []
+
+        self.game_runner.recalculate_scores_for_new_answer("800", "admin1")
+
+        self.mock_data_manager.clear_pending_multiplier.assert_called_once_with("p1")
+
     def test_recalculate_scores_already_correct(self):
         # Player 1: "800-899" (Correct)
         guesses = [
