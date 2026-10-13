@@ -36,6 +36,10 @@ class DailyGameReducer:
         self._rest_bonus_per_day = float(
             config.get("JBOT_REST_BONUS_PER_DAY", "0.2") or "0.2"
         )
+        self._steal_streak_cost = int(config.get("JBOT_STEAL_STREAK_COST", "3") or "3")
+        self._retro_steal_streak_cost = int(
+            config.get("JBOT_RETRO_STEAL_STREAK_COST", "5") or "5"
+        )
 
     @staticmethod
     def _copy_state(
@@ -234,6 +238,19 @@ class DailyGameReducer:
             self._apply_preload_jinx(next_state, user_id, target_id)
             return ReducerResult(next_state, PowerUpTransition())
 
+        if event.powerup_type in {"steal", "steal_preload"} and target_id:
+            deducted, transfer, bonus_delta = self._apply_steal(
+                next_state, user_id, target_id, initial_streak
+            )
+            return ReducerResult(
+                next_state,
+                PowerUpTransition(
+                    streak_deducted=deducted,
+                    steal_transfer=transfer,
+                    steal_bonus_delta=bonus_delta,
+                ),
+            )
+
         transition = self._service.process_powerup(
             next_state, event, initial_streak=initial_streak
         )
@@ -313,3 +330,70 @@ class DailyGameReducer:
         cost = before_hint + fastest
         state.score_earned -= cost
         return cost
+
+    def _apply_steal(
+        self,
+        daily_state: dict[str, DailyPlayerState],
+        thief_id: str,
+        target_id: str,
+        initial_streak: int,
+    ) -> tuple[int, int, int]:
+        thief_state = self._get_state(daily_state, thief_id)
+        target_state = self._get_state(daily_state, target_id)
+        cost = (
+            self._retro_steal_streak_cost
+            if target_state.is_correct
+            else self._steal_streak_cost
+        )
+
+        bonus_delta = 0
+        if thief_state.is_correct:
+            effective_streak = initial_streak + 1
+            streak_deducted = min(cost, effective_streak)
+            steal_ratio = min(1.0, effective_streak / cost)
+            new_bonus_streak = max(0, effective_streak - cost)
+            thief_state.streak_delta = new_bonus_streak - initial_streak
+            if "streak" in thief_state.bonuses:
+                bonus_delta = self._recalculate_streak_bonus(
+                    thief_state, new_bonus_streak
+                )
+        else:
+            if initial_streak == 0:
+                return 0, 0, 0
+            streak_deducted = min(cost, initial_streak)
+            steal_ratio = min(1.0, initial_streak / cost)
+            thief_state.streak_delta = -streak_deducted
+
+        thief_state.steal_ratio = steal_ratio
+        thief_state.stealing_from = target_id
+        target_state.attacked_by.add(thief_id)
+
+        transfer = 0
+        if target_state.is_correct:
+            stealable = self._score_calculator.pop_stealable_bonuses(
+                target_state.bonuses
+            )
+            transfer = round(stealable * steal_ratio)
+            if transfer > 0:
+                target_state.score_earned -= transfer
+                thief_state.score_earned += transfer
+                thief_state.score_stolen += transfer
+            target_state.steal_attempt_by = thief_id
+        else:
+            target_state.steal_attempt_by = thief_id
+
+        return streak_deducted, transfer, bonus_delta
+
+    def _recalculate_streak_bonus(
+        self, state: DailyPlayerState, new_streak: int
+    ) -> int:
+        old_bonus = state.bonuses.get("streak", 0)
+        new_bonus = self._score_calculator.get_streak_bonus(new_streak)
+        delta = new_bonus - old_bonus
+        if delta != 0:
+            state.score_earned += delta
+        if new_bonus > 0:
+            state.bonuses["streak"] = new_bonus
+        else:
+            state.bonuses.pop("streak", None)
+        return delta

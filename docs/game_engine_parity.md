@@ -387,6 +387,15 @@ including retaliation rejection, retroactive transfers, prior wrong-guess
 penalties, and late-day bonus costs. Differential tests retain
 `GameEventService` as the reference until the steal family is complete.
 
+TODO: Harden jinx differential coverage for zero-transfer retroactive penalties,
+retroactive `score_stolen` exclusion, and late/preload retaliation rejection.
+
+The reducer now natively handles forward, preloaded, retroactive, partial, and
+late steal transitions, including streak deductions, proportional transfer
+ratios, retroactive bonus removal, late-day streak-bonus recalculation, and
+retaliation rejection. Differential tests retain `GameEventService` as the
+reference before the production power-up adapter cutover.
+
 ## Suggested domain invariants
 
 These should be encoded as tests and, where practical, assertions or validation logs:

@@ -478,6 +478,117 @@ class TestDailyGameReducer(unittest.TestCase):
         self.assertIsNone(result_state["second"].jinx_target)
         self.assertIsNone(result_state["first"].jinxed_by)
 
+    def test_reduce_forward_steal_matches_service(self):
+        result_state, transition = self._assert_powerup_matches_service(
+            {},
+            PowerUpEvent(None, "thief", "steal", "target"),
+            initial_streak=2,
+        )
+
+        self.assertEqual(transition.streak_deducted, 2)
+        self.assertEqual(transition.steal_transfer, 0)
+        self.assertEqual(result_state["thief"].steal_ratio, 1.0)
+        self.assertEqual(result_state["thief"].stealing_from, "target")
+        self.assertEqual(result_state["target"].steal_attempt_by, "thief")
+
+    def test_reduce_preloaded_steal_matches_service(self):
+        result_state, transition = self._assert_powerup_matches_service(
+            {},
+            PowerUpEvent(None, "thief", "steal_preload", "target"),
+            initial_streak=2,
+        )
+
+        self.assertEqual(transition.streak_deducted, 2)
+        self.assertEqual(result_state["thief"].stealing_from, "target")
+        self.assertEqual(result_state["target"].steal_attempt_by, "thief")
+
+    def test_reduce_steal_with_zero_streak_matches_service(self):
+        result_state, transition = self._assert_powerup_matches_service(
+            {},
+            PowerUpEvent(None, "thief", "steal", "target"),
+        )
+
+        self.assertEqual(transition.streak_deducted, 0)
+        self.assertIsNone(result_state["thief"].stealing_from)
+        self.assertIsNone(result_state["target"].steal_attempt_by)
+
+    def test_reduce_retroactive_steal_matches_service(self):
+        daily_state = {
+            "target": DailyPlayerState(
+                score_earned=145,
+                is_correct=True,
+                bonuses={"try_1": 20, "before_hint": 10, "streak": 15},
+            ),
+        }
+
+        result_state, transition = self._assert_powerup_matches_service(
+            daily_state,
+            PowerUpEvent(None, "thief", "steal", "target"),
+            initial_streak=4,
+        )
+
+        self.assertEqual(transition.streak_deducted, 4)
+        self.assertEqual(transition.steal_transfer, 30)
+        self.assertEqual(result_state["thief"].score_earned, 30)
+        self.assertEqual(result_state["target"].bonuses, {"streak": 15})
+
+    def test_reduce_partial_retroactive_steal_matches_service(self):
+        daily_state = {
+            "target": DailyPlayerState(
+                score_earned=145,
+                is_correct=True,
+                bonuses={"try_1": 20, "before_hint": 10, "streak": 15},
+            ),
+        }
+
+        result_state, transition = self._assert_powerup_matches_service(
+            daily_state,
+            PowerUpEvent(None, "thief", "steal", "target"),
+            initial_streak=2,
+        )
+
+        self.assertEqual(transition.streak_deducted, 2)
+        self.assertEqual(transition.steal_transfer, 15)
+        self.assertEqual(result_state["thief"].steal_ratio, 0.5)
+
+    def test_reduce_late_steal_matches_service(self):
+        daily_state = {
+            "thief": DailyPlayerState(
+                score_earned=150,
+                is_correct=True,
+                bonuses={"streak": 25},
+            ),
+        }
+
+        result_state, transition = self._assert_powerup_matches_service(
+            daily_state,
+            PowerUpEvent(None, "thief", "steal", "target"),
+            initial_streak=4,
+        )
+
+        self.assertEqual(transition.streak_deducted, 2)
+        self.assertEqual(transition.steal_bonus_delta, -10)
+        self.assertEqual(result_state["thief"].streak_delta, -1)
+        self.assertEqual(result_state["thief"].bonuses, {"streak": 15})
+
+    def test_reduce_retaliatory_steal_matches_service(self):
+        daily_state = {}
+        self.service.process_powerup(
+            daily_state,
+            PowerUpEvent(None, "first", "steal", "second"),
+            initial_streak=2,
+        )
+
+        result_state, transition = self._assert_powerup_matches_service(
+            daily_state,
+            PowerUpEvent(None, "second", "steal", "first"),
+            initial_streak=2,
+        )
+
+        self.assertEqual(transition.rejection_reason, "retaliation_blocked")
+        self.assertIsNone(result_state["second"].stealing_from)
+        self.assertIsNone(result_state["first"].steal_attempt_by)
+
 
 if __name__ == "__main__":
     unittest.main()
