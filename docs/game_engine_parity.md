@@ -376,6 +376,11 @@ the live power-up adapter and replay simulator now use `reduce_guess()` while
 power-up events remain on the Phase 2 service until `reduce_powerup()` has a
 native implementation.
 
+`reduce_powerup()` now natively handles rest in automated differential tests:
+it marks the player resting, cancels incoming jinx and steal links, and returns
+the corresponding whiff effects. Production power-up adapters remain on Phase
+2 until the jinx and steal transition families are also native.
+
 ## Suggested domain invariants
 
 These should be encoded as tests and, where practical, assertions or validation logs:

@@ -35,6 +35,27 @@ class TestDailyGameReducer(unittest.TestCase):
         self.assertEqual(result.transition, expected)
         return result.daily_state
 
+    def _assert_powerup_matches_service(
+        self,
+        daily_state: dict[str, DailyPlayerState],
+        event: PowerUpEvent,
+        initial_streak: int = 0,
+    ) -> tuple[dict[str, DailyPlayerState], object]:
+        original_state = deepcopy(daily_state)
+        service_state = deepcopy(daily_state)
+
+        expected = self.service.process_powerup(
+            service_state, event, initial_streak=initial_streak
+        )
+        result = self.reducer.reduce_powerup(
+            daily_state, event, initial_streak=initial_streak
+        )
+
+        self.assertEqual(daily_state, original_state)
+        self.assertEqual(result.daily_state, service_state)
+        self.assertEqual(result.transition, expected)
+        return result.daily_state, result.transition
+
     def test_reduce_guess_matches_service_without_mutating_input(self):
         daily_state = {}
         self.service.process_powerup(
@@ -316,6 +337,39 @@ class TestDailyGameReducer(unittest.TestCase):
         self.assertEqual(daily_state, original_state)
         self.assertEqual(result.daily_state, service_state)
         self.assertEqual(result.transition, expected)
+
+    def test_reduce_rest_matches_service_without_mutating_input(self):
+        result_state, transition = self._assert_powerup_matches_service(
+            {},
+            PowerUpEvent(None, "player", "rest"),
+        )
+
+        self.assertTrue(result_state["player"].is_resting)
+        self.assertIsNone(transition.whiffed_jinx_id)
+        self.assertIsNone(transition.whiffed_steal_id)
+
+    def test_reduce_rest_matches_service_when_cancelling_incoming_attacks(self):
+        daily_state = {}
+        self.service.process_powerup(
+            daily_state,
+            PowerUpEvent(None, "jinxer", "jinx", "target"),
+        )
+        self.service.process_powerup(
+            daily_state,
+            PowerUpEvent(None, "thief", "steal", "target"),
+            initial_streak=2,
+        )
+
+        result_state, transition = self._assert_powerup_matches_service(
+            daily_state,
+            PowerUpEvent(None, "target", "rest"),
+        )
+
+        self.assertTrue(result_state["target"].is_resting)
+        self.assertIsNone(result_state["target"].jinxed_by)
+        self.assertIsNone(result_state["target"].steal_attempt_by)
+        self.assertEqual(transition.whiffed_jinx_id, "jinxer")
+        self.assertEqual(transition.whiffed_steal_id, "thief")
 
 
 if __name__ == "__main__":

@@ -173,6 +173,21 @@ class DailyGameReducer:
     ) -> ReducerResult:
         """Return the next state and effects for a power-up event."""
         next_state = self._copy_state(daily_state)
+        if event.powerup_type == "rest":
+            state = next_state.setdefault(str(event.user_id), DailyPlayerState())
+            state.is_resting = True
+            whiffed_jinx_id = state.jinxed_by
+            whiffed_steal_id = state.steal_attempt_by
+            state.jinxed_by = None
+            state.steal_attempt_by = None
+            return ReducerResult(
+                next_state,
+                PowerUpTransition(
+                    whiffed_jinx_id=whiffed_jinx_id,
+                    whiffed_steal_id=whiffed_steal_id,
+                ),
+            )
+
         transition = self._service.process_powerup(
             next_state, event, initial_streak=initial_streak
         )
