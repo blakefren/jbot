@@ -366,11 +366,13 @@ for now. Subsequent Phase 3 increments will move one rule group at a time from
 the mutable service and `PowerUpEngine` into the reducer, retaining
 differential tests until the reducer becomes the shared adapter path.
 
-The first native reducer rule group is the guess prelude: it creates player
-state as needed, increments submitted-guess counts, and short-circuits
-already-correct or resting players. Eligible guesses still delegate their
-remaining behavior to Phase 2 while differential tests cover every prelude
-outcome.
+The first complete native reducer transition is `reduce_guess()`. It creates
+player state as needed, increments submitted-guess counts, applies
+already-correct/resting guards, handles wrong-guess jinx penalties, records
+correct-answer scoring state, consumes pending rest multipliers, and resolves
+jinx and steal transfers in the established order. Differential tests cover
+the reducer against the Phase 2 implementation across these outcomes while
+production remains on Phase 2.
 
 ## Suggested domain invariants
 
