@@ -70,6 +70,27 @@ class GameEventService:
         if state.is_correct or state.is_resting:
             return GuessTransition(points_earned=0)
 
+        return self._process_eligible_guess(
+            daily_state,
+            player_id,
+            is_correct=is_correct,
+            points_earned=points_earned,
+            bonuses=bonuses,
+            pending_rest_multiplier=pending_rest_multiplier,
+        )
+
+    def _process_eligible_guess(
+        self,
+        daily_state: dict[str, DailyPlayerState],
+        player_id: str,
+        is_correct: bool,
+        points_earned: int = 0,
+        bonuses: dict[str, int] | None = None,
+        pending_rest_multiplier: float = 0.0,
+    ) -> GuessTransition:
+        """Process a guess after its count and eligibility have been resolved."""
+        state = self.engine._get_state(daily_state, str(player_id))
+
         if not is_correct:
             attacker_id = state.jinxed_by
             penalty = self.engine.apply_jinx_wrong_guess_penalty(daily_state, player_id)
