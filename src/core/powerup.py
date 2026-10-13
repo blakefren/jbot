@@ -54,7 +54,7 @@ class PowerUpManager(BaseManager):
         self.emoji_rest = _config.get("JBOT_EMOJI_REST", "😴")
         self.emoji_rest_wakeup = _config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
         self.emoji_streak = _config.get("JBOT_EMOJI_STREAK", "🔥")
-        self.rest_bonus_per_day = float(_config.get("JBOT_REST_BONUS_PER_DAY", "0.2"))
+        self.rest_bonus_per_day = self.event_service.rest_bonus_per_day
         self.jinx_share_ratio = self.engine.jinx_share_ratio
         # Transient state for the day
         self.daily_state: dict[str, DailyPlayerState] = {}
@@ -712,7 +712,7 @@ class PowerUpManager(BaseManager):
 
         # Increment pending rest multiplier (stacking)
         self.data_manager.increment_pending_multiplier(
-            player_id, self.rest_bonus_per_day
+            player_id, transition.pending_rest_multiplier_increment
         )
         pending_mult = self.data_manager.get_pending_multiplier(player_id)
         multiplier_display = 1.0 + pending_mult

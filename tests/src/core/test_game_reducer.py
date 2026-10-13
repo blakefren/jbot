@@ -345,6 +345,7 @@ class TestDailyGameReducer(unittest.TestCase):
         )
 
         self.assertTrue(result_state["player"].is_resting)
+        self.assertEqual(transition.pending_rest_multiplier_increment, 0.2)
         self.assertIsNone(transition.whiffed_jinx_id)
         self.assertIsNone(transition.whiffed_steal_id)
 
@@ -370,6 +371,112 @@ class TestDailyGameReducer(unittest.TestCase):
         self.assertIsNone(result_state["target"].steal_attempt_by)
         self.assertEqual(transition.whiffed_jinx_id, "jinxer")
         self.assertEqual(transition.whiffed_steal_id, "thief")
+        self.assertEqual(transition.pending_rest_multiplier_increment, 0.2)
+
+    def test_reduce_forward_jinx_matches_service(self):
+        result_state, transition = self._assert_powerup_matches_service(
+            {},
+            PowerUpEvent(None, "attacker", "jinx", "target"),
+        )
+
+        self.assertTrue(result_state["attacker"].silenced)
+        self.assertEqual(result_state["attacker"].jinx_target, "target")
+        self.assertEqual(result_state["target"].jinxed_by, "attacker")
+        self.assertEqual(transition.jinx_transfer, 0)
+        self.assertEqual(transition.jinx_wrong_guess_penalty, 0)
+
+    def test_reduce_retroactive_jinx_matches_service(self):
+        daily_state = {
+            "target": DailyPlayerState(
+                score_earned=100,
+                is_correct=True,
+                guesses_count=3,
+            ),
+        }
+
+        result_state, transition = self._assert_powerup_matches_service(
+            daily_state,
+            PowerUpEvent(None, "attacker", "jinx", "target"),
+        )
+
+        self.assertEqual(transition.jinx_transfer, 25)
+        self.assertEqual(transition.jinx_wrong_guess_penalty, 10)
+        self.assertEqual(result_state["attacker"].score_earned, 15)
+        self.assertIsNone(result_state["attacker"].jinx_target)
+
+    def test_reduce_late_jinx_matches_service(self):
+        daily_state = {
+            "attacker": DailyPlayerState(
+                score_earned=150,
+                is_correct=True,
+                bonuses={
+                    "before_hint": 10,
+                    "fastest_1": 20,
+                    "fastest": 20,
+                    "streak": 15,
+                },
+            ),
+        }
+
+        result_state, transition = self._assert_powerup_matches_service(
+            daily_state,
+            PowerUpEvent(None, "attacker", "jinx_late", "target"),
+        )
+
+        self.assertEqual(transition.jinx_cost, 30)
+        self.assertEqual(result_state["attacker"].score_earned, 120)
+        self.assertEqual(result_state["attacker"].bonuses, {"streak": 15})
+
+    def test_reduce_late_retroactive_jinx_matches_service(self):
+        daily_state = {
+            "attacker": DailyPlayerState(
+                score_earned=150,
+                is_correct=True,
+                bonuses={"before_hint": 10, "fastest_1": 20},
+            ),
+            "target": DailyPlayerState(
+                score_earned=100,
+                is_correct=True,
+                guesses_count=2,
+            ),
+        }
+
+        result_state, transition = self._assert_powerup_matches_service(
+            daily_state,
+            PowerUpEvent(None, "attacker", "jinx_late", "target"),
+        )
+
+        self.assertEqual(transition.jinx_cost, 30)
+        self.assertEqual(transition.jinx_transfer, 25)
+        self.assertEqual(transition.jinx_wrong_guess_penalty, 5)
+        self.assertEqual(result_state["attacker"].score_earned, 140)
+
+    def test_reduce_preloaded_jinx_matches_service(self):
+        result_state, transition = self._assert_powerup_matches_service(
+            {},
+            PowerUpEvent(None, "attacker", "jinx_preload", "target"),
+        )
+
+        self.assertTrue(result_state["attacker"].silenced)
+        self.assertEqual(result_state["attacker"].jinx_target, "target")
+        self.assertEqual(result_state["target"].jinxed_by, "attacker")
+        self.assertEqual(transition.jinx_transfer, 0)
+
+    def test_reduce_retaliatory_jinx_matches_service(self):
+        daily_state = {}
+        self.service.process_powerup(
+            daily_state,
+            PowerUpEvent(None, "first", "jinx", "second"),
+        )
+
+        result_state, transition = self._assert_powerup_matches_service(
+            daily_state,
+            PowerUpEvent(None, "second", "jinx", "first"),
+        )
+
+        self.assertEqual(transition.rejection_reason, "retaliation_blocked")
+        self.assertIsNone(result_state["second"].jinx_target)
+        self.assertIsNone(result_state["first"].jinxed_by)
 
 
 if __name__ == "__main__":

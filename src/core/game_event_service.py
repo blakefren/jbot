@@ -27,6 +27,7 @@ class PowerUpTransition:
     """State changes produced by one power-up event."""
 
     rejection_reason: str | None = None
+    pending_rest_multiplier_increment: float = 0.0
     whiffed_jinx_id: str | None = None
     whiffed_steal_id: str | None = None
     jinx_cost: int = 0
@@ -42,6 +43,9 @@ class GameEventService:
 
     def __init__(self, config: ConfigReader):
         self.engine = PowerUpEngine(config)
+        self.rest_bonus_per_day = float(
+            config.get("JBOT_REST_BONUS_PER_DAY", "0.2") or "0.2"
+        )
 
     def is_retaliation_blocked(
         self,
@@ -156,6 +160,7 @@ class GameEventService:
                 daily_state, user_id
             )
             return PowerUpTransition(
+                pending_rest_multiplier_increment=self.rest_bonus_per_day,
                 whiffed_jinx_id=whiffed_jinx_id,
                 whiffed_steal_id=whiffed_steal_id,
             )

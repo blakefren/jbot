@@ -33,6 +33,9 @@ class DailyGameReducer:
         self._jinx_wrong_guess_penalty = int(
             config.get("JBOT_JINX_WRONG_GUESS_PENALTY", "5")
         )
+        self._rest_bonus_per_day = float(
+            config.get("JBOT_REST_BONUS_PER_DAY", "0.2") or "0.2"
+        )
 
     @staticmethod
     def _copy_state(
@@ -173,8 +176,24 @@ class DailyGameReducer:
     ) -> ReducerResult:
         """Return the next state and effects for a power-up event."""
         next_state = self._copy_state(daily_state)
+        user_id = str(event.user_id)
+        target_id = (
+            str(event.target_user_id) if event.target_user_id is not None else None
+        )
+
+        if (
+            event.powerup_type
+            in {"jinx", "jinx_late", "jinx_preload", "steal", "steal_preload"}
+            and target_id
+            and self._is_retaliation_blocked(next_state, user_id, target_id)
+        ):
+            return ReducerResult(
+                next_state,
+                PowerUpTransition(rejection_reason="retaliation_blocked"),
+            )
+
         if event.powerup_type == "rest":
-            state = next_state.setdefault(str(event.user_id), DailyPlayerState())
+            state = self._get_state(next_state, user_id)
             state.is_resting = True
             whiffed_jinx_id = state.jinxed_by
             whiffed_steal_id = state.steal_attempt_by
@@ -183,12 +202,114 @@ class DailyGameReducer:
             return ReducerResult(
                 next_state,
                 PowerUpTransition(
+                    pending_rest_multiplier_increment=self._rest_bonus_per_day,
                     whiffed_jinx_id=whiffed_jinx_id,
                     whiffed_steal_id=whiffed_steal_id,
                 ),
             )
 
+        if event.powerup_type == "jinx" and target_id:
+            transfer, penalty = self._apply_jinx(next_state, user_id, target_id)
+            return ReducerResult(
+                next_state,
+                PowerUpTransition(
+                    jinx_transfer=transfer,
+                    jinx_wrong_guess_penalty=penalty,
+                ),
+            )
+
+        if event.powerup_type == "jinx_late" and target_id:
+            cost = self._strip_late_jinx_cost(next_state, user_id)
+            transfer, penalty = self._apply_jinx(next_state, user_id, target_id)
+            return ReducerResult(
+                next_state,
+                PowerUpTransition(
+                    jinx_cost=cost,
+                    jinx_transfer=transfer,
+                    jinx_wrong_guess_penalty=penalty,
+                ),
+            )
+
+        if event.powerup_type == "jinx_preload" and target_id:
+            self._apply_preload_jinx(next_state, user_id, target_id)
+            return ReducerResult(next_state, PowerUpTransition())
+
         transition = self._service.process_powerup(
             next_state, event, initial_streak=initial_streak
         )
         return ReducerResult(next_state, transition)
+
+    @staticmethod
+    def _get_state(
+        daily_state: dict[str, DailyPlayerState], player_id: str
+    ) -> DailyPlayerState:
+        return daily_state.setdefault(player_id, DailyPlayerState())
+
+    def _is_retaliation_blocked(
+        self,
+        daily_state: dict[str, DailyPlayerState],
+        attacker_id: str,
+        target_id: str,
+    ) -> bool:
+        attacker_state = self._get_state(daily_state, attacker_id)
+        return target_id in attacker_state.attacked_by
+
+    def _apply_jinx(
+        self,
+        daily_state: dict[str, DailyPlayerState],
+        attacker_id: str,
+        target_id: str,
+    ) -> tuple[int, int]:
+        attacker_state = self._get_state(daily_state, attacker_id)
+        target_state = self._get_state(daily_state, target_id)
+        attacker_state.silenced = True
+        attacker_state.jinx_target = target_id
+        target_state.jinxed_by = attacker_id
+        target_state.attacked_by.add(attacker_id)
+
+        if not target_state.is_correct:
+            return 0, 0
+
+        earned_only = target_state.score_earned - target_state.score_stolen
+        transfer = int(earned_only * self._jinx_share_ratio)
+        if transfer > 0:
+            target_state.score_earned -= transfer
+            attacker_state.score_earned += transfer
+            attacker_state.score_stolen += transfer
+
+        wrong_guesses = max(0, target_state.guesses_count - 1)
+        penalty = wrong_guesses * self._jinx_wrong_guess_penalty
+        if penalty > 0:
+            attacker_state.score_earned -= penalty
+            attacker_state.jinx_penalty_total += penalty
+
+        attacker_state.jinx_target = None
+        return transfer, penalty
+
+    def _apply_preload_jinx(
+        self,
+        daily_state: dict[str, DailyPlayerState],
+        attacker_id: str,
+        target_id: str,
+    ) -> None:
+        attacker_state = self._get_state(daily_state, attacker_id)
+        target_state = self._get_state(daily_state, target_id)
+        attacker_state.silenced = True
+        attacker_state.jinx_target = target_id
+        target_state.jinxed_by = attacker_id
+        target_state.attacked_by.add(attacker_id)
+
+    def _strip_late_jinx_cost(
+        self, daily_state: dict[str, DailyPlayerState], player_id: str
+    ) -> int:
+        state = self._get_state(daily_state, player_id)
+        before_hint = state.bonuses.pop("before_hint", 0)
+        fastest = sum(
+            state.bonuses.pop(key)
+            for key in list(state.bonuses)
+            if key.startswith("fastest_")
+        )
+        state.bonuses.pop("fastest", None)
+        cost = before_hint + fastest
+        state.score_earned -= cost
+        return cost

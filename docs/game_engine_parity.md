@@ -378,8 +378,14 @@ native implementation.
 
 `reduce_powerup()` now natively handles rest in automated differential tests:
 it marks the player resting, cancels incoming jinx and steal links, and returns
-the corresponding whiff effects. Production power-up adapters remain on Phase
-2 until the jinx and steal transition families are also native.
+the corresponding whiff effects plus the pending-rest-multiplier increment for
+live persistence. Production power-up adapters remain on Phase 2 until the
+jinx and steal transition families are also native.
+
+The reducer now also natively handles normal, late, and preloaded jinx events,
+including retaliation rejection, retroactive transfers, prior wrong-guess
+penalties, and late-day bonus costs. Differential tests retain
+`GameEventService` as the reference until the steal family is complete.
 
 ## Suggested domain invariants
 
