@@ -372,29 +372,42 @@ already-correct/resting guards, handles wrong-guess jinx penalties, records
 correct-answer scoring state, consumes pending rest multipliers, and resolves
 jinx and steal transfers in the established order. Differential tests cover
 the reducer against the Phase 2 implementation across these outcomes. Both
-the live power-up adapter and replay simulator now use `reduce_guess()` while
-power-up events remain on the Phase 2 service until `reduce_powerup()` has a
-native implementation.
+the live power-up adapter and replay simulator now use `reduce_guess()`.
 
 `reduce_powerup()` now natively handles rest in automated differential tests:
 it marks the player resting, cancels incoming jinx and steal links, and returns
 the corresponding whiff effects plus the pending-rest-multiplier increment for
-live persistence. Production power-up adapters remain on Phase 2 until the
-jinx and steal transition families are also native.
+live persistence.
 
 The reducer now also natively handles normal, late, and preloaded jinx events,
 including retaliation rejection, retroactive transfers, prior wrong-guess
 penalties, and late-day bonus costs. Differential tests retain
-`GameEventService` as the reference until the steal family is complete.
-
-TODO: Harden jinx differential coverage for zero-transfer retroactive penalties,
-retroactive `score_stolen` exclusion, and late/preload retaliation rejection.
+`GameEventService` as the reference during the production observation period.
 
 The reducer now natively handles forward, preloaded, retroactive, partial, and
 late steal transitions, including streak deductions, proportional transfer
 ratios, retroactive bonus removal, late-day streak-bonus recalculation, and
-retaliation rejection. Differential tests retain `GameEventService` as the
-reference before the production power-up adapter cutover.
+retaliation rejection. Both the live power-up adapter and replay simulator now
+use `reduce_powerup()` while differential tests retain `GameEventService` as
+the reference during the production observation period.
+
+#### Remaining reducer TODOs
+
+- TODO: Move answer matching, correct-answer rank, and ordinary point
+  calculation into a reducer-owned input/context so live and replay no longer
+  orchestrate those rules separately.
+- TODO: Add an explicit end-of-day reducer transition for streak resets and
+  grace-period handling.
+- TODO: Add an explicit deterministic end-of-day reducer transition for Crowd
+  Wisdom, shared by live award application and replay.
+- TODO: Decide whether command-level power-up eligibility checks should remain
+  adapter validation or become reducer rejection effects; if migrated, add
+  parity contracts for self-targeting, resting/already-targeted targets, and
+  per-day attack limits.
+- TODO: Keep `GameEventService` and `PowerUpEngine` as the differential
+  reference through the production observation period, then remove their
+  superseded daytime transition methods only after parity diagnostics remain
+  clean.
 
 ## Suggested domain invariants
 

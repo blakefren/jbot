@@ -156,7 +156,7 @@ class PowerUpManager(BaseManager):
             bonuses=ctx.bonus_values,
             pending_rest_multiplier=pending_multiplier,
         )
-        self.daily_state = result.daily_state
+        self._adopt_daily_state(result.daily_state)
         transition = result.transition
 
         if transition.rest_bonus > 0:
@@ -199,6 +199,28 @@ class PowerUpManager(BaseManager):
                 messages.append(msg)
 
         return messages
+
+    def _reduce_powerup(self, event: PowerUpEvent, initial_streak: int = 0):
+        """Apply a copy-on-write power-up reduction and retain its next state."""
+        result = self.reducer.reduce_powerup(
+            self.daily_state, event, initial_streak=initial_streak
+        )
+        self._adopt_daily_state(result.daily_state)
+        return result.transition
+
+    def _adopt_daily_state(self, next_state: dict[str, DailyPlayerState]) -> None:
+        """Adopt a reducer snapshot without invalidating retained player-state references."""
+        removed_player_ids = self.daily_state.keys() - next_state.keys()
+        for player_id in removed_player_ids:
+            del self.daily_state[player_id]
+
+        for player_id, next_player_state in next_state.items():
+            current_player_state = self.daily_state.get(player_id)
+            if current_player_state is None:
+                self.daily_state[player_id] = next_player_state
+                continue
+            current_player_state.__dict__.clear()
+            current_player_state.__dict__.update(next_player_state.__dict__)
 
     def _format_jinx_penalty_summary(self, penalty_total: int) -> str:
         """Format accumulated wrong-guess penalties for a jinx resolution."""
@@ -282,8 +304,7 @@ class PowerUpManager(BaseManager):
             ptype = row["powerup_type"]
 
             if ptype == "jinx_preload":
-                transition = self.event_service.process_powerup(
-                    self.daily_state,
+                transition = self._reduce_powerup(
                     PowerUpEvent(
                         timestamp=None,
                         user_id=attacker_id,
@@ -300,8 +321,7 @@ class PowerUpManager(BaseManager):
             elif ptype == "steal_preload":
                 thief = self.player_manager.get_player(attacker_id)
                 initial_streak = thief.answer_streak if thief else 0
-                transition = self.event_service.process_powerup(
-                    self.daily_state,
+                transition = self._reduce_powerup(
                     PowerUpEvent(
                         timestamp=None,
                         user_id=attacker_id,
@@ -355,8 +375,7 @@ class PowerUpManager(BaseManager):
 
             # Apply preload state immediately for retaliation blocking logic.
             # Engine sets: attacker.silenced, attacker.jinx_target, target.jinxed_by, target.attacked_by
-            transition = self.event_service.process_powerup(
-                self.daily_state,
+            transition = self._reduce_powerup(
                 PowerUpEvent(
                     timestamp=None,
                     user_id=attacker_id,
@@ -401,8 +420,7 @@ class PowerUpManager(BaseManager):
         if is_late_day:
             # --- Late-day jinx: attacker already answered ---
             # Engine handles cost stripping and jinx/retro application; DB write happens here.
-            transition = self.event_service.process_powerup(
-                self.daily_state,
+            transition = self._reduce_powerup(
                 PowerUpEvent(
                     timestamp=None,
                     user_id=attacker_id,
@@ -452,8 +470,7 @@ class PowerUpManager(BaseManager):
             )
 
         # --- Normal daytime path ---
-        transition = self.event_service.process_powerup(
-            self.daily_state,
+        transition = self._reduce_powerup(
             PowerUpEvent(
                 timestamp=None,
                 user_id=attacker_id,
@@ -530,8 +547,7 @@ class PowerUpManager(BaseManager):
             # Apply steal state immediately for retaliation blocking logic.
             # Engine sets: thief.steal_ratio, thief.stealing_from, thief.streak_delta,
             # target.attacked_by, target.steal_attempt_by
-            transition = self.event_service.process_powerup(
-                self.daily_state,
+            transition = self._reduce_powerup(
                 PowerUpEvent(
                     timestamp=None,
                     user_id=thief_id,
@@ -589,8 +605,7 @@ class PowerUpManager(BaseManager):
         if target_state.is_correct:
             # --- Retroactive: target already answered — higher cost, immediate resolution ---
             # Engine: sets state flags, streak_delta, bonus recalc (if late-day), score transfer.
-            transition = self.event_service.process_powerup(
-                self.daily_state,
+            transition = self._reduce_powerup(
                 PowerUpEvent(
                     timestamp=None,
                     user_id=thief_id,
@@ -633,8 +648,7 @@ class PowerUpManager(BaseManager):
 
         # --- Normal / forward daytime path ---
         # Engine: sets state flags, streak_delta, bonus recalc (if late-day).
-        transition = self.event_service.process_powerup(
-            self.daily_state,
+        transition = self._reduce_powerup(
             PowerUpEvent(
                 timestamp=None,
                 user_id=thief_id,
@@ -698,8 +712,7 @@ class PowerUpManager(BaseManager):
         if state.is_resting:
             raise PowerUpError("You are already resting today.")
 
-        transition = self.event_service.process_powerup(
-            self.daily_state,
+        transition = self._reduce_powerup(
             PowerUpEvent(
                 timestamp=None,
                 user_id=player_id,

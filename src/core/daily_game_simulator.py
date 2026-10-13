@@ -80,9 +80,11 @@ class DailyGameSimulator:
 
         player = self.initial_player_states.get(event.user_id)
         initial_streak = player.answer_streak if player else 0
-        transition = self.event_service.process_powerup(
+        result = self.reducer.reduce_powerup(
             self.daily_state, event, initial_streak=initial_streak
         )
+        self.daily_state = defaultdict(DailyPlayerState, result.daily_state)
+        transition = result.transition
         if transition.rejection_reason:
             logging.warning(
                 "Skipping rejected replay power-up event: user_id=%s, type=%s, "
