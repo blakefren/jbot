@@ -10,6 +10,7 @@ from src.core.data_manager import DataManager
 from src.core.events import GuessContext, PowerUpEvent
 from src.core.player_manager import PlayerManager
 from src.core.game_event_service import GameEventService
+from src.core.game_reducer import DailyGameReducer
 from src.core.state import DailyPlayerState
 
 
@@ -43,6 +44,7 @@ class PowerUpManager(BaseManager):
         self.data_manager = data_manager
         _config = config or ConfigReader()
         self.event_service = GameEventService(_config)
+        self.reducer = DailyGameReducer(_config)
         self.engine = self.event_service.engine
         # Config-driven constants
         self.emoji_jinxed = _config.get("JBOT_EMOJI_JINXED", "🥶")
@@ -146,7 +148,7 @@ class PowerUpManager(BaseManager):
         if ctx.is_correct and ctx.points_earned > 0:
             pending_multiplier = self.data_manager.get_pending_multiplier(pid)
 
-        transition = self.event_service.process_guess(
+        result = self.reducer.reduce_guess(
             self.daily_state,
             pid,
             is_correct=ctx.is_correct,
@@ -154,6 +156,8 @@ class PowerUpManager(BaseManager):
             bonuses=ctx.bonus_values,
             pending_rest_multiplier=pending_multiplier,
         )
+        self.daily_state = result.daily_state
+        transition = result.transition
 
         if transition.rest_bonus > 0:
             self.player_manager.update_score(pid, transition.rest_bonus)

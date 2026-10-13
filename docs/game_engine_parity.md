@@ -371,8 +371,10 @@ player state as needed, increments submitted-guess counts, applies
 already-correct/resting guards, handles wrong-guess jinx penalties, records
 correct-answer scoring state, consumes pending rest multipliers, and resolves
 jinx and steal transfers in the established order. Differential tests cover
-the reducer against the Phase 2 implementation across these outcomes while
-production remains on Phase 2.
+the reducer against the Phase 2 implementation across these outcomes. Both
+the live power-up adapter and replay simulator now use `reduce_guess()` while
+power-up events remain on the Phase 2 service until `reduce_powerup()` has a
+native implementation.
 
 ## Suggested domain invariants
 

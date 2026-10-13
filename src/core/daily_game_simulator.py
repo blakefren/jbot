@@ -6,6 +6,7 @@ from src.core.player import Player
 from src.core.state import DailyPlayerState
 from src.core.scoring import ScoreCalculator
 from src.core.game_event_service import GameEventService
+from src.core.game_reducer import DailyGameReducer
 from src.core.utils import parse_timestamp
 
 
@@ -34,6 +35,7 @@ class DailyGameSimulator:
         self.config = config
         self.score_calculator = ScoreCalculator(self.config)
         self.event_service = GameEventService(self.config)
+        self.reducer = DailyGameReducer(self.config)
         # Players who kept their streak yesterday (grace period: one missed day allowed)
         self.prev_streak_keepers: set[str] = prev_streak_keepers or set()
 
@@ -96,11 +98,9 @@ class DailyGameSimulator:
         guess_text = event.guess_text
         timestamp = event.timestamp
 
-        state = self.daily_state[user_id]
+        state = self.daily_state.get(user_id, DailyPlayerState())
         if state.is_correct or state.is_resting:
-            self.event_service.process_guess(
-                self.daily_state, user_id, is_correct=False
-            )
+            self._reduce_guess(user_id, is_correct=False)
             return
 
         is_correct = False
@@ -110,9 +110,7 @@ class DailyGameSimulator:
                 break
 
         if not is_correct:
-            self.event_service.process_guess(
-                self.daily_state, user_id, is_correct=False
-            )
+            self._reduce_guess(user_id, is_correct=False)
             return
 
         # Calculate Points
@@ -155,8 +153,7 @@ class DailyGameSimulator:
 
         player = self.initial_player_states.get(user_id)
         pending_mult = float(player.pending_rest_multiplier or 0.0) if player else 0.0
-        transition = self.event_service.process_guess(
-            self.daily_state,
+        transition = self._reduce_guess(
             user_id,
             is_correct=True,
             points_earned=points,
@@ -165,6 +162,12 @@ class DailyGameSimulator:
         )
         if transition.consume_pending_rest_multiplier:
             self.pending_rest_multiplier_consumed.add(user_id)
+
+    def _reduce_guess(self, player_id: str, **kwargs):
+        """Apply a copy-on-write guess reduction and retain defaultdict behavior."""
+        result = self.reducer.reduce_guess(self.daily_state, player_id, **kwargs)
+        self.daily_state = defaultdict(DailyPlayerState, result.daily_state)
+        return result.transition
 
     def end_of_day(self):
         # Crowd Wisdom is an end-of-day/post-resolution bonus.
