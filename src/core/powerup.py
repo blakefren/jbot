@@ -9,7 +9,6 @@ from src.core.base_manager import BaseManager
 from src.core.data_manager import DataManager
 from src.core.events import GuessContext, PowerUpEvent
 from src.core.player_manager import PlayerManager
-from src.core.game_event_service import GameEventService
 from src.core.game_reducer import DailyGameReducer
 from src.core.state import DailyPlayerState
 
@@ -43,9 +42,7 @@ class PowerUpManager(BaseManager):
         self.player_manager = player_manager
         self.data_manager = data_manager
         _config = config or ConfigReader()
-        self.event_service = GameEventService(_config)
         self.reducer = DailyGameReducer(_config)
-        self.engine = self.event_service.engine
         # Config-driven constants
         self.emoji_jinxed = _config.get("JBOT_EMOJI_JINXED", "🥶")
         self.emoji_silenced = _config.get("JBOT_EMOJI_SILENCED", "🤐")
@@ -54,8 +51,8 @@ class PowerUpManager(BaseManager):
         self.emoji_rest = _config.get("JBOT_EMOJI_REST", "😴")
         self.emoji_rest_wakeup = _config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
         self.emoji_streak = _config.get("JBOT_EMOJI_STREAK", "🔥")
-        self.rest_bonus_per_day = self.event_service.rest_bonus_per_day
-        self.jinx_share_ratio = self.engine.jinx_share_ratio
+        self.rest_bonus_per_day = self.reducer.rest_bonus_per_day
+        self.jinx_share_ratio = self.reducer.jinx_share_ratio
         # Transient state for the day
         self.daily_state: dict[str, DailyPlayerState] = {}
 
@@ -226,7 +223,7 @@ class PowerUpManager(BaseManager):
         """Format accumulated wrong-guess penalties for a jinx resolution."""
         if not penalty_total:
             return ""
-        penalty_per_guess = self.engine.jinx_wrong_guess_penalty
+        penalty_per_guess = self.reducer.jinx_wrong_guess_penalty
         count = penalty_total // penalty_per_guess if penalty_per_guess else 0
         return (
             f"but lost {penalty_total} pts from "
@@ -392,7 +389,7 @@ class PowerUpManager(BaseManager):
                 f"{self.emoji_silenced} Your jinx is queued for tomorrow! "
                 f"{target.name} won't know until it takes effect. "
                 f"You'll siphon {share_pct}% of their points, but lose "
-                f"{self.engine.jinx_wrong_guess_penalty} pts per wrong guess they make. "
+                f"{self.reducer.jinx_wrong_guess_penalty} pts per wrong guess they make. "
                 f"You can't answer until the hint is revealed!"
             )
 
@@ -415,7 +412,7 @@ class PowerUpManager(BaseManager):
             raise PowerUpError(f"<@{target_id}> has already been jinxed!")
 
         share_pct = int(self.jinx_share_ratio * 100)
-        penalty_per_wrong_guess = self.engine.jinx_wrong_guess_penalty
+        penalty_per_wrong_guess = self.reducer.jinx_wrong_guess_penalty
 
         if is_late_day:
             # --- Late-day jinx: attacker already answered ---
@@ -557,7 +554,7 @@ class PowerUpManager(BaseManager):
                 initial_streak=current_streak,
             )
             self._raise_for_rejected_powerup(transition, target_id)
-            steal_cost = self.engine.steal_streak_cost
+            steal_cost = self.reducer.steal_streak_cost
             actual_lost = min(steal_cost, current_streak)
             self.data_manager.log_powerup_usage(
                 thief_id, "steal_preload", target_id, None
@@ -623,7 +620,7 @@ class PowerUpManager(BaseManager):
             bonus_delta = transition.steal_bonus_delta
             new_streak = max(0, current_streak - deducted)
             actual_lost = deducted
-            is_partial = current_streak < self.engine.retro_steal_streak_cost
+            is_partial = current_streak < self.reducer.retro_steal_streak_cost
             self.player_manager.set_streak(thief_id, new_streak)
             if is_late_day and bonus_delta != 0:
                 self.player_manager.update_score(thief_id, bonus_delta)
@@ -637,7 +634,7 @@ class PowerUpManager(BaseManager):
             if is_partial:
                 return (
                     f"<@{thief_id}> {self.emoji_stealing} <@{target_id}> already answered! "
-                    f"You only had {actual_lost}/{self.engine.retro_steal_streak_cost} streak days — "
+                    f"You only had {actual_lost}/{self.reducer.retro_steal_streak_cost} streak days — "
                     f"partial steal: swiped {stealable_amount} pts!"
                 )
             return (
@@ -663,14 +660,14 @@ class PowerUpManager(BaseManager):
         bonus_delta = transition.steal_bonus_delta
         new_streak = max(0, current_streak - deducted)
         actual_lost = deducted
-        is_partial = current_streak < self.engine.steal_streak_cost
+        is_partial = current_streak < self.reducer.steal_streak_cost
         self.player_manager.set_streak(thief_id, new_streak)
         if is_late_day and bonus_delta != 0:
             self.player_manager.update_score(thief_id, bonus_delta)
         if is_partial:
             return (
                 f"{self.emoji_stealing} Partial steal! You only had "
-                f"{actual_lost}/{self.engine.steal_streak_cost} streak days — "
+                f"{actual_lost}/{self.reducer.steal_streak_cost} streak days — "
                 f"sacrificing all {actual_lost} to steal a proportional share of "
                 f"<@{target_id}>'s bonuses if they answer correctly."
             )
@@ -799,7 +796,7 @@ class PowerUpManager(BaseManager):
                 continue
 
             # Skip if attacker has been attacked by target (retaliation block)
-            if self.event_service.is_retaliation_blocked(
+            if self.reducer.is_retaliation_blocked(
                 self.daily_state, attacker_id, player_id
             ):
                 continue
@@ -855,7 +852,7 @@ class PowerUpManager(BaseManager):
                 continue
 
             # Skip if thief has been attacked by target (retaliation block)
-            if self.event_service.is_retaliation_blocked(
+            if self.reducer.is_retaliation_blocked(
                 self.daily_state, thief_id, player_id
             ):
                 continue

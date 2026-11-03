@@ -7,7 +7,8 @@ jbot calculates a question day's scores in two places:
 - `PowerUpManager` and `GuessHandler` update the live game as Discord events arrive.
 - `DailyGameSimulator` replays persisted events for answer corrections, midday restoration, and end-of-day reconciliation.
 
-Both paths use `PowerUpEngine`, but sharing individual helpers does not guarantee that they:
+Both paths now use `DailyGameReducer`, but sharing a transition boundary does
+not by itself guarantee that they:
 
 - receive the same state,
 - process events in the same order,
@@ -43,7 +44,7 @@ The pure power-up calculations were individually plausible, while the complete l
 
 ### 1. Shared engine, separate orchestration
 
-`PowerUpEngine` mutates `DailyPlayerState`, but each caller decides when to:
+Before the reducer migration, a shared mutable engine left each caller to:
 
 - increment guesses,
 - calculate points,
@@ -62,7 +63,7 @@ The live manager maintains transient state and separately calls `update_score()`
 
 The simulator reconstructs final state but does not produce a formal list of score deltas that can be compared with live persistence operations.
 
-### 4. Tests are strong at the pure-engine layer but weaker at workflow parity
+### 4. Tests were initially stronger at the pure-engine layer than at workflow parity
 
 Unit tests that construct `DailyPlayerState` directly can prove that a transfer includes a rest bonus. They do not prove that live orchestration placed the rest bonus into that state before transfer.
 
@@ -309,8 +310,8 @@ The service should not make the exact score-effect ledger authoritative. Effects
 
 #### Phase 2 implementation status
 
-`src/core/game_event_service.py` now provides the shared mutable transition
-boundary:
+The former `src/core/game_event_service.py` provided the shared mutable
+transition boundary:
 
 - `process_guess()` increments guess state, applies rest before jinx and steal,
   and returns rest, pending-multiplier consumption, jinx, steal, and
@@ -320,21 +321,11 @@ boundary:
   mutating state; live and replay adapters surface the rejection without
   persisting or applying the event.
 
-`PowerUpManager` now delegates all daily-state mutation to this service and
-only validates requests, persists returned effects, and formats messages.
-`DailyGameSimulator` delegates power-up dispatch and per-guess state
-transitions to the same service while retaining replay-specific answer
-matching, rank calculation, event ordering, and end-of-day processing. It
-reports each consumed pending rest multiplier so answer correction can compare
-old and new replay effects before clearing the persisted multiplier.
-
-`PowerUpEngine` remains the service's lower-level state helper in this phase.
-Phase 3 will decide whether to fold those helpers into a reducer-owned module
-and replace mutable transitions with explicit next-state results.
+This service was retired after the reducer became the production boundary.
 
 ### Phase 3: Formalize the reducer architecture
 
-Formalize the Phase 2 service as a reducer:
+Formalize the shared event workflow as a reducer:
 
 ```text
 new_state, effects = reduce(previous_state, event, context)
@@ -354,42 +345,36 @@ At this stage, immutable or copy-on-write state can be introduced if the mutable
 
 #### Phase 3 implementation status
 
-Phase 3 begins in automated tests only while Phase 2 remains the production
-path. `src/core/game_reducer.py` provides a copy-on-write reducer contract:
-each call deep-copies the supplied daily state, applies the corresponding Phase
-2 transition to that isolated copy, and returns the next state with the same
-effects. Differential tests compare the reducer result with `GameEventService`
-and verify that the supplied state remains unchanged.
-
-This compatibility boundary intentionally delegates rule execution to Phase 2
-for now. Subsequent Phase 3 increments will move one rule group at a time from
-the mutable service and `PowerUpEngine` into the reducer, retaining
-differential tests until the reducer becomes the shared adapter path.
+Phase 3 began in automated tests only while Phase 2 remained the production
+path. `src/core/game_reducer.py` provides the copy-on-write reducer contract:
+each call deep-copies the supplied daily state, applies the transition to that
+isolated copy, and returns the next state with its effects.
 
 The first complete native reducer transition is `reduce_guess()`. It creates
 player state as needed, increments submitted-guess counts, applies
 already-correct/resting guards, handles wrong-guess jinx penalties, records
 correct-answer scoring state, consumes pending rest multipliers, and resolves
-jinx and steal transfers in the established order. Differential tests cover
-the reducer against the Phase 2 implementation across these outcomes. Both
-the live power-up adapter and replay simulator now use `reduce_guess()`.
+jinx and steal transfers in the established order. The live power-up adapter
+and replay simulator now use `reduce_guess()`.
 
-`reduce_powerup()` now natively handles rest in automated differential tests:
+`reduce_powerup()` natively handles rest:
 it marks the player resting, cancels incoming jinx and steal links, and returns
 the corresponding whiff effects plus the pending-rest-multiplier increment for
 live persistence.
 
 The reducer now also natively handles normal, late, and preloaded jinx events,
 including retaliation rejection, retroactive transfers, prior wrong-guess
-penalties, and late-day bonus costs. Differential tests retain
-`GameEventService` as the reference during the production observation period.
-
-The reducer now natively handles forward, preloaded, retroactive, partial, and
+penalties, and late-day bonus costs. The reducer natively handles forward,
+preloaded, retroactive, partial, and
 late steal transitions, including streak deductions, proportional transfer
 ratios, retroactive bonus removal, late-day streak-bonus recalculation, and
-retaliation rejection. Both the live power-up adapter and replay simulator now
-use `reduce_powerup()` while differential tests retain `GameEventService` as
-the reference during the production observation period.
+retaliation rejection. Both the live power-up adapter and replay simulator use
+`reduce_powerup()`.
+
+The reducer path ran in production for three weeks without a reported parity
+discrepancy. The superseded `GameEventService` and `PowerUpEngine` mutable
+transition paths have now been removed; live and replay use the reducer as the
+sole daytime transition implementation.
 
 #### Remaining reducer TODOs
 
@@ -404,10 +389,6 @@ the reference during the production observation period.
   adapter validation or become reducer rejection effects; if migrated, add
   parity contracts for self-targeting, resting/already-targeted targets, and
   per-day attack limits.
-- TODO: Keep `GameEventService` and `PowerUpEngine` as the differential
-  reference through the production observation period, then remove their
-  superseded daytime transition methods only after parity diagnostics remain
-  clean.
 
 ## Suggested domain invariants
 

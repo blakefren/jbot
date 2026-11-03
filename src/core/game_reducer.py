@@ -1,4 +1,4 @@
-"""Copy-on-write game transitions used to migrate Phase 2 toward a reducer."""
+"""Copy-on-write game transitions for live play and replay."""
 
 from copy import deepcopy
 from dataclasses import dataclass
@@ -6,13 +6,38 @@ from typing import Mapping
 
 from src.cfg.main import ConfigReader
 from src.core.events import PowerUpEvent
-from src.core.game_event_service import (
-    GameEventService,
-    GuessTransition,
-    PowerUpTransition,
-)
 from src.core.scoring import ScoreCalculator
 from src.core.state import DailyPlayerState
+
+
+@dataclass
+class GuessTransition:
+    """State changes produced by one submitted guess."""
+
+    points_earned: int
+    rest_bonus: int = 0
+    consume_pending_rest_multiplier: bool = False
+    jinx_attacker_id: str | None = None
+    jinx_transfer: int = 0
+    jinx_wrong_guess_penalty: int = 0
+    steal_thief_id: str | None = None
+    steal_transfer: int = 0
+
+
+@dataclass
+class PowerUpTransition:
+    """State changes produced by one power-up event."""
+
+    rejection_reason: str | None = None
+    pending_rest_multiplier_increment: float = 0.0
+    whiffed_jinx_id: str | None = None
+    whiffed_steal_id: str | None = None
+    jinx_cost: int = 0
+    jinx_transfer: int = 0
+    jinx_wrong_guess_penalty: int = 0
+    streak_deducted: int = 0
+    steal_transfer: int = 0
+    steal_bonus_delta: int = 0
 
 
 @dataclass(frozen=True)
@@ -24,20 +49,19 @@ class ReducerResult:
 
 
 class DailyGameReducer:
-    """Provides copy-on-write equivalents of the Phase 2 event transitions."""
+    """Apply copy-on-write game transitions shared by live play and replay."""
 
     def __init__(self, config: ConfigReader):
-        self._service = GameEventService(config)
         self._score_calculator = ScoreCalculator(config)
-        self._jinx_share_ratio = float(config.get("JBOT_JINX_SHARE_RATIO", "0.25"))
-        self._jinx_wrong_guess_penalty = int(
+        self.jinx_share_ratio = float(config.get("JBOT_JINX_SHARE_RATIO", "0.25"))
+        self.jinx_wrong_guess_penalty = int(
             config.get("JBOT_JINX_WRONG_GUESS_PENALTY", "5")
         )
-        self._rest_bonus_per_day = float(
+        self.rest_bonus_per_day = float(
             config.get("JBOT_REST_BONUS_PER_DAY", "0.2") or "0.2"
         )
-        self._steal_streak_cost = int(config.get("JBOT_STEAL_STREAK_COST", "3") or "3")
-        self._retro_steal_streak_cost = int(
+        self.steal_streak_cost = int(config.get("JBOT_STEAL_STREAK_COST", "3") or "3")
+        self.retro_steal_streak_cost = int(
             config.get("JBOT_RETRO_STEAL_STREAK_COST", "5") or "5"
         )
 
@@ -92,7 +116,7 @@ class DailyGameReducer:
             penalty = 0
             if attacker_id:
                 attacker_state = daily_state.setdefault(attacker_id, DailyPlayerState())
-                penalty = self._jinx_wrong_guess_penalty
+                penalty = self.jinx_wrong_guess_penalty
                 attacker_state.score_earned -= penalty
                 attacker_state.jinx_penalty_total += penalty
             return GuessTransition(
@@ -144,7 +168,7 @@ class DailyGameReducer:
             return 0
 
         earned_only = target_state.score_earned - target_state.score_stolen
-        share = int(earned_only * self._jinx_share_ratio)
+        share = int(earned_only * self.jinx_share_ratio)
         if share > 0:
             target_state.score_earned -= share
             attacker_state.score_earned += share
@@ -206,7 +230,7 @@ class DailyGameReducer:
             return ReducerResult(
                 next_state,
                 PowerUpTransition(
-                    pending_rest_multiplier_increment=self._rest_bonus_per_day,
+                    pending_rest_multiplier_increment=self.rest_bonus_per_day,
                     whiffed_jinx_id=whiffed_jinx_id,
                     whiffed_steal_id=whiffed_steal_id,
                 ),
@@ -251,10 +275,17 @@ class DailyGameReducer:
                 ),
             )
 
-        transition = self._service.process_powerup(
-            next_state, event, initial_streak=initial_streak
-        )
-        return ReducerResult(next_state, transition)
+        return ReducerResult(next_state, PowerUpTransition())
+
+    def is_retaliation_blocked(
+        self,
+        daily_state: Mapping[str, DailyPlayerState],
+        attacker_id: str,
+        target_id: str,
+    ) -> bool:
+        """Return whether the target has already attacked the attacker today."""
+        state = daily_state.get(str(attacker_id))
+        return state is not None and str(target_id) in state.attacked_by
 
     @staticmethod
     def _get_state(
@@ -288,14 +319,14 @@ class DailyGameReducer:
             return 0, 0
 
         earned_only = target_state.score_earned - target_state.score_stolen
-        transfer = int(earned_only * self._jinx_share_ratio)
+        transfer = int(earned_only * self.jinx_share_ratio)
         if transfer > 0:
             target_state.score_earned -= transfer
             attacker_state.score_earned += transfer
             attacker_state.score_stolen += transfer
 
         wrong_guesses = max(0, target_state.guesses_count - 1)
-        penalty = wrong_guesses * self._jinx_wrong_guess_penalty
+        penalty = wrong_guesses * self.jinx_wrong_guess_penalty
         if penalty > 0:
             attacker_state.score_earned -= penalty
             attacker_state.jinx_penalty_total += penalty
@@ -341,9 +372,9 @@ class DailyGameReducer:
         thief_state = self._get_state(daily_state, thief_id)
         target_state = self._get_state(daily_state, target_id)
         cost = (
-            self._retro_steal_streak_cost
+            self.retro_steal_streak_cost
             if target_state.is_correct
-            else self._steal_streak_cost
+            else self.steal_streak_cost
         )
 
         bonus_delta = 0

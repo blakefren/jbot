@@ -388,13 +388,13 @@ class TestStealBehavior(_PowerUpManagerTests):
     def test_steal_deducts_streak_immediately(self):
         """Steal immediately deducts streak days from the thief."""
         self.manager.steal("1", "2", "q1")
-        expected = max(0, 3 - self.manager.engine.steal_streak_cost)
+        expected = max(0, 3 - self.manager.reducer.steal_streak_cost)
         self.assertEqual(self.players["1"].answer_streak, expected)
 
     def test_steal_forward_target_never_answers(self):
         """Forward steal: target never answers. Thief's streak is deducted; no bonuses transferred."""
         self.manager.steal("1", "2", "q1")
-        expected_streak = max(0, 3 - self.manager.engine.steal_streak_cost)
+        expected_streak = max(0, 3 - self.manager.reducer.steal_streak_cost)
         self.assertEqual(self.players["1"].answer_streak, expected_streak)
         # Target never answers — no score changes for either player
         self.assertEqual(self.players["1"].score, 100)
@@ -924,7 +924,7 @@ class TestStealEnforcementAndScaling(unittest.TestCase):
     def test_partial_steal_forward_steals_fraction(self):
         """Forward steal with 2 streak days (cost 3) transfers round(bonuses x 2/3)."""
         m = self._make_manager()
-        cost = m.engine.steal_streak_cost  # default 3
+        cost = m.reducer.steal_streak_cost  # default 3
         m.steal("partial", "target", "q1")
         self.assertAlmostEqual(m._get_daily_state("partial").steal_ratio, 2 / cost)
 
@@ -945,7 +945,7 @@ class TestStealEnforcementAndScaling(unittest.TestCase):
     def test_partial_steal_forward_resolution_note(self):
         """Forward steal resolution message includes '(partial steal)' when streak < cost."""
         m = self._make_manager()
-        cost = m.engine.steal_streak_cost
+        cost = m.reducer.steal_streak_cost
         # Force streak=1 which is always below any valid cost (minimum cost is 2).
         self.players["partial"].answer_streak = 1
         m.steal("partial", "target", "q1")
@@ -987,7 +987,7 @@ class TestStealEnforcementAndScaling(unittest.TestCase):
     def test_partial_steal_retro_steals_fraction(self):
         """Retro steal with 2 streak days (cost 5) transfers round(bonuses x 2/5) immediately."""
         m = self._make_manager()
-        retro_cost = m.engine.retro_steal_streak_cost  # default 5
+        retro_cost = m.reducer.retro_steal_streak_cost  # default 5
         tgt = m._get_daily_state("target")
         tgt.is_correct = True
         tgt.score_earned = 130

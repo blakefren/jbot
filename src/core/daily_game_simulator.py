@@ -5,7 +5,6 @@ from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 from src.core.player import Player
 from src.core.state import DailyPlayerState
 from src.core.scoring import ScoreCalculator
-from src.core.game_event_service import GameEventService
 from src.core.game_reducer import DailyGameReducer
 from src.core.utils import parse_timestamp
 
@@ -34,7 +33,6 @@ class DailyGameSimulator:
         self.initial_player_states = initial_player_states
         self.config = config
         self.score_calculator = ScoreCalculator(self.config)
-        self.event_service = GameEventService(self.config)
         self.reducer = DailyGameReducer(self.config)
         # Players who kept their streak yesterday (grace period: one missed day allowed)
         self.prev_streak_keepers: set[str] = prev_streak_keepers or set()

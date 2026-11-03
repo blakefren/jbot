@@ -18,11 +18,11 @@ Discord Command (/power jinx, /power steal, /power rest)
 │   PowerUpManager   │  Orchestrates live play. Owns daily_state, calls DB,
 │   (powerup.py)     │  reads config, builds Discord messages.
 └────────┬───────────┘
-         │ delegates logic to
+         │ delegates state transitions to
          ▼
 ┌────────────────────┐
-│   PowerUpEngine    │  Pure stateless logic. Mutates DailyPlayerState only.
-│  (powerup_engine)  │  No DB access, no Discord, no config reads.
+│ DailyGameReducer   │  Copy-on-write state transitions and effects.
+│ (game_reducer)     │  No DB access or Discord calls.
 └────────────────────┘
          │ reads/writes
          ▼
@@ -34,7 +34,7 @@ Discord Command (/power jinx, /power steal, /power rest)
 Replay path (corrections/end-of-day):
 ┌─────────────────────────┐
 │  DailyGameSimulator     │  Replays GuessEvents + PowerUpEvents from DB in
-│ (daily_game_simulator)  │  chronological order using the same PowerUpEngine.
+│ (daily_game_simulator)  │  chronological order using the same reducer.
 └─────────────────────────┘
 
 Persistence:
@@ -48,10 +48,10 @@ Persistence:
 
 | Class | Responsibility |
 |---|---|
-| `PowerUpEngine` | Stateless logic — all mutation of `DailyPlayerState` |
+| `DailyGameReducer` | Copy-on-write daytime state transitions and effects |
 | `PowerUpManager` | Live-game orchestration — DB writes, Discord messages, config |
 | `DailyPlayerState` | In-memory state per player per round |
-| `DailyGameSimulator` | Replay engine — uses `PowerUpEngine` for corrections |
+| `DailyGameSimulator` | Replay engine — uses `DailyGameReducer` for corrections |
 | `ScoreCalculator` | Bonus computation, `pop_stealable_bonuses()` |
 
 ---
@@ -334,7 +334,9 @@ Here we explicitly define some more complex interactions for multiple power-ups 
 
 ## Simulator (Replay) Behavior
 
-The `DailyGameSimulator` replays `powerup_usage` rows in chronological order using the same `PowerUpEngine`. This ensures retroactive corrections (e.g. answer changes via `/admin add_answer`) recalculate scores accurately.
+The `DailyGameSimulator` replays `powerup_usage` rows in chronological order
+using the same `DailyGameReducer`. This ensures retroactive corrections (e.g.
+answer changes via `/admin add_answer`) recalculate scores accurately.
 
 ### Event Dispatch
 
@@ -373,8 +375,9 @@ Unlike `jinx_late`, there is no separate `steal_late` DB type. The late-day stre
 
 - [ ] Does every activation path write a row to `powerup_usage`?
 - [ ] Does overnight pre-load defer streak deduction to morning hydration?
-- [ ] Does `PowerUpEngine` contain zero DB calls, Discord calls, or config reads?
-- [ ] Does `PowerUpManager` delegate all state mutation to `PowerUpEngine`?
+- [x] Does `DailyGameReducer` contain zero DB calls or Discord calls?
+- [x] Does `PowerUpManager` delegate daytime state transitions to
+  `DailyGameReducer`?
 - [ ] Do public bot responses go to the channel directly (not as replies to player messages)?
 - [ ] Does rest cancel attacks with a public announcement?
 - [ ] Is the partial steal ratio applied consistently for both forward and retroactive steals?
