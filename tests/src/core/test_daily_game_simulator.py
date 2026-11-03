@@ -119,6 +119,58 @@ class TestDailyGameSimulator(unittest.TestCase):
         self.assertEqual(results["p1"]["streak_delta"], 0)
         self.assertEqual(results["p1"]["final_streak"], 2)  # unchanged
 
+    def test_corrected_answer_wakes_resting_player(self):
+        events = [
+            PowerUpEvent(
+                timestamp="2023-01-01 09:00:00",
+                user_id="p1",
+                powerup_type="rest",
+                target_user_id=None,
+            ),
+            GuessEvent(
+                timestamp="2023-01-01 10:00:00",
+                user_id="p1",
+                guess_text="four",
+            ),
+        ]
+
+        simulator = DailyGameSimulator(
+            self.question,
+            ["4"],
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+        )
+        results = simulator.run(apply_end_of_day=False)
+
+        self.assertTrue(results["p1"]["score_earned"] > 0)
+        self.assertEqual(results["p1"]["final_streak"], 3)
+        self.assertFalse(simulator.daily_state["p1"].is_resting)
+        self.assertTrue(simulator.daily_state["p1"].is_correct)
+
+    def test_jinx_after_answer_correction_counts_only_pre_correct_wrong_guesses(self):
+        events = [
+            GuessEvent("2023-01-01 09:00:00", "p2", "wrong"),
+            GuessEvent("2023-01-01 10:00:00", "p2", "new answer"),
+            GuessEvent("2023-01-01 11:00:00", "p2", "old answer"),
+            PowerUpEvent("2023-01-01 12:00:00", "p1", "jinx", "p2"),
+        ]
+
+        simulator = DailyGameSimulator(
+            self.question,
+            ["4", "new answer"],
+            self.hint_timestamp,
+            events,
+            self.initial_states,
+            self.config,
+        )
+        simulator.run(apply_end_of_day=False)
+
+        self.assertEqual(simulator.daily_state["p2"].guesses_count, 2)
+        self.assertEqual(simulator.daily_state["p1"].jinx_penalty_total, 5)
+        self.assertEqual(simulator.daily_state["p1"].score_earned, 27)
+
     def test_correct_answer_reports_pending_rest_multiplier_consumption(self):
         self.initial_states["p1"].pending_rest_multiplier = 0.2
         events = [

@@ -99,8 +99,7 @@ class DailyGameSimulator:
         timestamp = event.timestamp
 
         state = self.daily_state.get(user_id, DailyPlayerState())
-        if state.is_correct or state.is_resting:
-            self._reduce_guess(user_id, is_correct=False)
+        if state.is_correct:
             return
 
         is_correct = False
@@ -159,6 +158,7 @@ class DailyGameSimulator:
             points_earned=points,
             bonuses=bonuses,
             pending_rest_multiplier=pending_mult,
+            allow_resting_correction=state.is_resting,
         )
         if transition.consume_pending_rest_multiplier:
             self.pending_rest_multiplier_consumed.add(user_id)

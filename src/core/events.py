@@ -35,3 +35,4 @@ class GuessContext:
     bonus_values: dict = field(default_factory=dict)
     bonus_messages: list = field(default_factory=list)
     question_id: int | None = None
+    guess_number: int | None = None

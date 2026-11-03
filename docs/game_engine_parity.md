@@ -378,6 +378,10 @@ sole daytime transition implementation.
 
 #### Remaining reducer TODOs
 
+- TODO: Migrate the remaining live "answered today" guards to reducer-owned
+  daily state: `GuessHandler` streak advancement and `PowerUpManager.rest()`.
+  First guarantee daily-state restoration before command handling, then remove
+  their database-date fallbacks and add restart/correction regression coverage.
 - TODO: Move answer matching, correct-answer rank, and ordinary point
   calculation into a reducer-owned input/context so live and replay no longer
   orchestrate those rules separately.

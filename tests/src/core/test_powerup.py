@@ -792,6 +792,11 @@ class TestCanRest(_PowerUpManagerTests):
 class TestDailyStateManagement(_PowerUpManagerTests):
     """State reset (end of day) and state restore (simulator hand-off)."""
 
+    def test_on_guess_uses_persisted_guess_number(self):
+        self.manager.on_guess(GuessContext("1", "P1", "wrong", False, guess_number=4))
+
+        self.assertEqual(self.manager._get_daily_state("1").guesses_count, 4)
+
     def test_reset_clears_all_state(self):
         """reset_daily_state clears silenced, powerup_used_today, and jinxed_by."""
         self.manager.jinx("1", "2", "q1")
@@ -1388,6 +1393,17 @@ class TestValidJinxTargetsFiltering(_PowerUpManagerTests):
         self.assertNotIn("1", target_ids)  # 1 is the attacker - filtered out
         self.assertIn("3", target_ids)  # 3 is valid
 
+    def test_woken_correct_player_is_targetable(self):
+        """A player awakened by answer correction can be targeted again."""
+        self.manager.restore_daily_state(
+            "2", DailyPlayerState(is_correct=True, is_resting=False)
+        )
+
+        valid_targets = self.manager.get_valid_jinx_targets("1")
+        target_ids = [pid for pid, _ in valid_targets]
+
+        self.assertIn("2", target_ids)
+
     def test_filters_retaliatory_attacks(self):
         """Players who have attacked the attacker should not be valid targets."""
         # Player 2 jinxes player 1
@@ -1447,6 +1463,17 @@ class TestValidStealTargetsFiltering(_PowerUpManagerTests):
         self.assertNotIn("2", target_ids)  # 2 is resting - filtered out
         self.assertNotIn("1", target_ids)  # 1 is the thief - filtered out
         self.assertIn("3", target_ids)  # 3 is valid
+
+    def test_woken_correct_player_is_targetable(self):
+        """A player awakened by answer correction can be targeted again."""
+        self.manager.restore_daily_state(
+            "2", DailyPlayerState(is_correct=True, is_resting=False)
+        )
+
+        valid_targets = self.manager.get_valid_steal_targets("1")
+        target_ids = [pid for pid, _ in valid_targets]
+
+        self.assertIn("2", target_ids)
 
     def test_filters_retaliatory_attacks(self):
         """Players who have attacked the thief should not be valid targets."""

@@ -79,15 +79,23 @@ class DailyGameReducer:
         points_earned: int = 0,
         bonuses: dict[str, int] | None = None,
         pending_rest_multiplier: float = 0.0,
+        submitted_guess_count: int | None = None,
+        allow_resting_correction: bool = False,
     ) -> ReducerResult:
         """Return the next state and effects for a submitted guess."""
         next_state = self._copy_state(daily_state)
         normalized_player_id = str(player_id)
         state = next_state.setdefault(normalized_player_id, DailyPlayerState())
-        state.guesses_count += 1
+        if submitted_guess_count is None:
+            state.guesses_count += 1
+        else:
+            state.guesses_count = submitted_guess_count
 
-        if state.is_correct or state.is_resting:
+        if state.is_correct or (state.is_resting and not allow_resting_correction):
             return ReducerResult(next_state, GuessTransition(points_earned=0))
+
+        if allow_resting_correction:
+            state.is_resting = False
 
         transition = self._reduce_eligible_guess(
             next_state,

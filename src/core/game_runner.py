@@ -1189,7 +1189,7 @@ class GameRunner:
             uid = event.user_id
             if uid in seen_resting:
                 continue
-            state = scorer_new.daily_state.get(uid)
+            state = scorer_old.daily_state.get(uid)
             if (
                 state
                 and state.is_resting

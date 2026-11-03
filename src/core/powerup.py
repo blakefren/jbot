@@ -61,6 +61,16 @@ class PowerUpManager(BaseManager):
             self.daily_state[player_id] = DailyPlayerState()
         return self.daily_state[player_id]
 
+    def _has_answered_today(self, player_id: str) -> bool:
+        """Return whether reducer state or persisted history says the player answered."""
+        state = self._get_daily_state(player_id)
+        if state.is_correct:
+            return True
+        return (
+            self.data_manager.get_last_correct_guess_date(player_id)
+            == self.data_manager.get_today()
+        )
+
     def reset_daily_state(self):
         """
         Reset the transient daily state for all players.
@@ -152,6 +162,7 @@ class PowerUpManager(BaseManager):
             points_earned=ctx.points_earned,
             bonuses=ctx.bonus_values,
             pending_rest_multiplier=pending_multiplier,
+            submitted_guess_count=ctx.guess_number,
         )
         self._adopt_daily_state(result.daily_state)
         transition = result.transition
@@ -394,10 +405,8 @@ class PowerUpManager(BaseManager):
             )
 
         # --- Daytime path ---
-        last_correct = self.data_manager.get_last_correct_guess_date(attacker_id)
-        is_late_day = last_correct == self.data_manager.get_today()
-
         attacker_state = self._get_daily_state(attacker_id)
+        is_late_day = self._has_answered_today(attacker_id)
         if attacker_state.attack_powerup_used_today:
             raise PowerUpError("You have already used an attack power-up today.")
 
@@ -572,10 +581,8 @@ class PowerUpManager(BaseManager):
             )
 
         # --- Daytime path ---
-        last_correct = self.data_manager.get_last_correct_guess_date(thief_id)
-        is_late_day = last_correct == self.data_manager.get_today()
-
         thief_state = self._get_daily_state(thief_id)
+        is_late_day = self._has_answered_today(thief_id)
         if thief_state.attack_powerup_used_today:
             raise PowerUpError("You have already used an attack power-up today.")
 
@@ -699,8 +706,7 @@ class PowerUpManager(BaseManager):
             raise PowerUpError("Invalid player.")
 
         # Must not have already answered correctly today
-        last_correct = self.data_manager.get_last_correct_guess_date(player_id)
-        if last_correct == self.data_manager.get_today():
+        if self._has_answered_today(player_id):
             raise PowerUpError(
                 "You have already answered correctly today. You cannot rest."
             )

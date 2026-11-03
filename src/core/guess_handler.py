@@ -155,6 +155,7 @@ class GuessHandler:
         # (must be checked before logging the guess below)
         previous_guesses = self.get_player_guesses(player_id)
         is_first_attempt = len(previous_guesses) == 0
+        guess_number = len(previous_guesses) + 1
 
         if is_correct:
             # Gather inputs for ScoreCalculator
@@ -170,7 +171,7 @@ class GuessHandler:
             answer_rank = existing_correct_count + 1
 
             # Check Attempt Number (before logging this guess)
-            guesses_count = len(previous_guesses) + 1
+            guesses_count = guess_number
 
             # Check Before Hint (before logging this guess)
             # Use the actual hint-sent timestamp from the DB (same as the simulator)
@@ -259,6 +260,7 @@ class GuessHandler:
             bonus_values=bonus_values,
             bonus_messages=bonus_messages,
             question_id=self.daily_question_id,
+            guess_number=guess_number,
         )
 
         for manager in self.managers.values():
