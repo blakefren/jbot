@@ -404,10 +404,11 @@ presentation and database validation into the pure domain transition.
   command handling, then remove the database-date fallbacks from
   `PowerUpManager` and migrate `GuessHandler` streak advancement with restart
   and correction regression coverage.
-- **P2 — answer-correction contract:** Add a blocking source-of-truth test
-  matrix for corrected answers, including resting players, jinx/steal timing,
-  post-correction guesses, multiple alternative answers, and correction after
-  settlement.
+- **P1 — gameplay contract matrix:** Maintain a blocking source-of-truth test
+  suite for normal guesses, power-up interactions, and answer corrections.
+  Include resting players, jinx/steal timing, post-correction guesses,
+  multiple alternative answers, correction after settlement, and the
+  documented power-up interaction matrix.
 - **P3 — replay diagnostics:** Add an in-memory per-event transition trace for
   verification reports and local forensic replay. It should show state
   before/after and component effects without becoming a second authoritative

@@ -334,6 +334,13 @@ Here we explicitly define some more complex interactions for multiple power-ups 
 
 ## Simulator (Replay) Behavior
 
+The interaction matrix above is enforced by the live/replay contract suite in
+`tests/src/core/test_live_replay_parity.py`. That suite is the blocking
+behavior contract for cross-feature sequences; the focused power-up tests
+remain the detailed arithmetic and validation contract. Answer-correction
+cases are included in the parity suite because an admin correction changes
+which historical guesses are correct during replay.
+
 The `DailyGameSimulator` replays `powerup_usage` rows in chronological order
 using the same `DailyGameReducer`. This ensures retroactive corrections (e.g.
 answer changes via `/admin add_answer`) recalculate scores accurately.

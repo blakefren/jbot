@@ -422,6 +422,38 @@ class TestLiveReplayParity(unittest.TestCase):
 
         self._assert_live_replay_parity()
 
+    def test_jinx_then_attacker_rest_matches_replay(self):
+        self._powerup("jinx", "1", "2")
+        self._powerup("rest", "1")
+
+        self._assert_live_replay_parity()
+
+    def test_rest_then_attacker_jinx_matches_replay(self):
+        self._powerup("rest", "1")
+        self._powerup("jinx", "1", "2")
+
+        self._assert_live_replay_parity()
+
+    def test_steal_then_thief_rest_matches_replay(self):
+        self._powerup("steal", "1", "2")
+        self._powerup("rest", "1")
+
+        self._assert_live_replay_parity()
+
+    def test_rest_then_thief_steal_matches_replay(self):
+        self._powerup("rest", "1")
+        self._powerup("steal", "1", "2")
+
+        self._assert_live_replay_parity()
+
+    def test_jinxed_target_wrong_guesses_before_and_after_jinx_match_replay(self):
+        self._guess("2", "wrong before")
+        self._powerup("jinx", "1", "2")
+        self._guess("2", "wrong after")
+        self._guess("2", "4")
+
+        self._assert_live_replay_parity()
+
     def test_forward_steal_matches_replay(self):
         self._powerup("steal", "1", "2")
         self._guess("2", "4")
@@ -485,6 +517,52 @@ class TestLiveReplayParity(unittest.TestCase):
         self._guess("3", "iv")
 
         self._assert_live_replay_parity()
+
+    def test_corrected_resting_player_becomes_targetable(self):
+        events = [
+            PowerUpEvent("2023-01-01 09:00:00", "2", "rest", None),
+            GuessEvent("2023-01-01 10:00:00", "2", "wrong before correction"),
+            GuessEvent("2023-01-01 10:01:00", "2", "accepted after correction"),
+            PowerUpEvent("2023-01-01 10:02:00", "1", "jinx", "2"),
+        ]
+        simulator = DailyGameSimulator(
+            question=self.question,
+            answers=[self.question.answer, "accepted after correction"],
+            hint_timestamp=None,
+            events=copy.deepcopy(events),
+            initial_player_states=copy.deepcopy(self.initial_players),
+            config=self.config,
+        )
+
+        simulator.run(apply_end_of_day=False)
+
+        corrected_state = simulator.daily_state["2"]
+        self.assertTrue(corrected_state.is_correct)
+        self.assertFalse(corrected_state.is_resting)
+        self.assertEqual(corrected_state.guesses_count, 2)
+        self.assertEqual(simulator.daily_state["1"].jinx_penalty_total, 5)
+        self.assertIsNone(simulator.daily_state["1"].jinx_target)
+
+    def test_jinx_after_correction_charges_only_prior_wrong_guesses(self):
+        events = [
+            GuessEvent("2023-01-01 09:00:00", "2", "wrong one"),
+            GuessEvent("2023-01-01 09:01:00", "2", "wrong two"),
+            GuessEvent("2023-01-01 09:02:00", "2", "accepted after correction"),
+            PowerUpEvent("2023-01-01 09:03:00", "1", "jinx", "2"),
+        ]
+        simulator = DailyGameSimulator(
+            question=self.question,
+            answers=[self.question.answer, "accepted after correction"],
+            hint_timestamp=None,
+            events=copy.deepcopy(events),
+            initial_player_states=copy.deepcopy(self.initial_players),
+            config=self.config,
+        )
+
+        simulator.run(apply_end_of_day=False)
+
+        self.assertEqual(simulator.daily_state["2"].guesses_count, 3)
+        self.assertEqual(simulator.daily_state["1"].jinx_penalty_total, 10)
 
     def test_consecutive_rests_carry_over_to_next_question_day(self):
         self._powerup("rest", "2")
