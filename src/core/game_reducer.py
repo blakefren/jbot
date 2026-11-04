@@ -1,7 +1,7 @@
 """Copy-on-write game transitions for live play and replay."""
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Mapping
 
 from src.cfg.main import ConfigReader
@@ -40,12 +40,23 @@ class PowerUpTransition:
     steal_bonus_delta: int = 0
 
 
+@dataclass
+class EndOfDayTransition:
+    """State changes and settlement effects produced at the end of a day."""
+
+    streak_resets: dict[str, int] = field(default_factory=dict)
+    crowd_wisdom_bonuses: dict[str, int] = field(default_factory=dict)
+    crowd_wisdom_multiplier: float = 0.0
+    correct_solvers: int = 0
+    active_participants: int = 0
+
+
 @dataclass(frozen=True)
 class ReducerResult:
     """The next daily state and effects produced by one domain transition."""
 
     daily_state: dict[str, DailyPlayerState]
-    transition: GuessTransition | PowerUpTransition
+    transition: GuessTransition | PowerUpTransition | EndOfDayTransition
 
 
 class DailyGameReducer:
@@ -284,6 +295,79 @@ class DailyGameReducer:
             )
 
         return ReducerResult(next_state, PowerUpTransition())
+
+    def reduce_end_of_day(
+        self,
+        daily_state: Mapping[str, DailyPlayerState],
+        initial_player_states: Mapping[str, object],
+        prev_streak_keepers: set[str] | None = None,
+        apply_streak_resets: bool = True,
+        apply_crowd_wisdom: bool = True,
+        already_awarded_crowd_wisdom: set[str] | None = None,
+    ) -> ReducerResult:
+        """Settle streaks and Crowd Wisdom from one deterministic daily snapshot."""
+        next_state = self._copy_state(daily_state)
+        previous_keepers = prev_streak_keepers or set()
+        transition = EndOfDayTransition()
+
+        if apply_streak_resets:
+            for user_id, player in initial_player_states.items():
+                state = next_state.get(user_id)
+                is_correct = state is not None and state.is_correct
+                is_resting = state is not None and state.is_resting
+                if (
+                    not is_correct
+                    and not is_resting
+                    and user_id not in previous_keepers
+                    and player.answer_streak > 0
+                ):
+                    state = next_state.setdefault(user_id, DailyPlayerState())
+                    state.streak_delta = -player.answer_streak
+                    transition.streak_resets[user_id] = player.answer_streak
+
+        if apply_crowd_wisdom:
+            correct_solvers, active_participants = self._count_active_players(
+                next_state
+            )
+            transition.correct_solvers = correct_solvers
+            transition.active_participants = active_participants
+            if active_participants > 0:
+                multiplier = self._score_calculator.get_crowd_wisdom_multiplier(
+                    correct_solvers, active_participants
+                )
+                transition.crowd_wisdom_multiplier = multiplier
+                awarded = already_awarded_crowd_wisdom or set()
+                if multiplier > 0:
+                    for user_id, state in next_state.items():
+                        if (
+                            not state.is_correct
+                            or user_id in awarded
+                            or "crowd_wisdom" in state.bonuses
+                        ):
+                            continue
+                        bonus = self._score_calculator.calculate_crowd_wisdom_bonus(
+                            state.score_earned,
+                            correct_solvers,
+                            active_participants,
+                            multiplier=multiplier,
+                        )
+                        if bonus > 0:
+                            state.score_earned += bonus
+                            state.bonuses["crowd_wisdom"] = bonus
+                            transition.crowd_wisdom_bonuses[user_id] = bonus
+
+        return ReducerResult(next_state, transition)
+
+    @staticmethod
+    def _count_active_players(
+        daily_state: Mapping[str, DailyPlayerState],
+    ) -> tuple[int, int]:
+        correct_solvers = sum(state.is_correct for state in daily_state.values())
+        active_participants = sum(
+            state.is_correct or state.is_resting or state.guesses_count > 0
+            for state in daily_state.values()
+        )
+        return correct_solvers, active_participants
 
     def is_retaliation_blocked(
         self,

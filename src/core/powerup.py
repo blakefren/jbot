@@ -216,6 +216,26 @@ class PowerUpManager(BaseManager):
         self._adopt_daily_state(result.daily_state)
         return result.transition
 
+    def reduce_end_of_day(
+        self,
+        initial_player_states: dict[str, object],
+        prev_streak_keepers: set[str] | None = None,
+        apply_streak_resets: bool = True,
+        apply_crowd_wisdom: bool = True,
+        already_awarded_crowd_wisdom: set[str] | None = None,
+    ):
+        """Apply the shared end-of-day settlement and retain its next state."""
+        result = self.reducer.reduce_end_of_day(
+            self.daily_state,
+            initial_player_states,
+            prev_streak_keepers=prev_streak_keepers,
+            apply_streak_resets=apply_streak_resets,
+            apply_crowd_wisdom=apply_crowd_wisdom,
+            already_awarded_crowd_wisdom=already_awarded_crowd_wisdom,
+        )
+        self._adopt_daily_state(result.daily_state)
+        return result.transition
+
     def _adopt_daily_state(self, next_state: dict[str, DailyPlayerState]) -> None:
         """Adopt a reducer snapshot without invalidating retained player-state references."""
         removed_player_ids = self.daily_state.keys() - next_state.keys()

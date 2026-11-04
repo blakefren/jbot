@@ -7,6 +7,7 @@ from src.core.guess_handler import AlreadyAnsweredCorrectlyError
 from src.core.data_manager import DataManager
 from src.core.subscriber import Subscriber
 from src.core.player import Player
+from src.core.state import DailyPlayerState
 
 
 class TestGameRunner(unittest.TestCase):
@@ -250,8 +251,9 @@ class TestGameRunner(unittest.TestCase):
         self.assertIsNone(self.game_runner.daily_q)
         self.assertIsNone(self.game_runner.daily_question_id)
         mock_manager.reset_daily_state.assert_called_once()
-        # Verify streaks were reset for unanswered players
-        self.mock_data_manager.reset_unanswered_streaks.assert_called_once_with(123)
+        # Reducer settlement determines which unanswered players need resets.
+        self.mock_data_manager.get_daily_snapshot.assert_called_once_with(123)
+        self.mock_data_manager.reset_streak.assert_not_called()
         # Verify stale rest multipliers were expired
         self.mock_data_manager.clear_stale_rest_multipliers.assert_called_once_with(123)
 
@@ -947,6 +949,11 @@ class TestGameRunner(unittest.TestCase):
             id="111", name="Alice", score=220
         )
         self.mock_data_manager.get_current_season.return_value = None
+        powerup_manager = self.game_runner.managers["powerup"]
+        powerup_manager.daily_state = {
+            "111": DailyPlayerState(is_correct=True, score_earned=120),
+            "222": DailyPlayerState(guesses_count=1),
+        }
 
         summary = self.game_runner.apply_crowd_wisdom_bonus()
 
@@ -967,6 +974,11 @@ class TestGameRunner(unittest.TestCase):
         self.mock_data_manager.get_player.return_value = Player(
             id="111", name="Alice", score=220
         )
+        powerup_manager = self.game_runner.managers["powerup"]
+        powerup_manager.daily_state = {
+            "111": DailyPlayerState(is_correct=True, score_earned=120),
+            "222": DailyPlayerState(guesses_count=1),
+        }
 
         summary = self.game_runner.apply_crowd_wisdom_bonus()
 

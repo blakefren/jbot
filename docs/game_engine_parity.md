@@ -376,23 +376,42 @@ discrepancy. The superseded `GameEventService` and `PowerUpEngine` mutable
 transition paths have now been removed; live and replay use the reducer as the
 sole daytime transition implementation.
 
+The reducer now also owns end-of-day settlement. `reduce_end_of_day()` applies
+streak resets with the previous-day grace-period context and calculates
+Crowd Wisdom from the same daily state used by replay. Live adapters persist
+the returned streak and bonus effects; replay applies the state transition
+without external side effects. Crowd Wisdom settlement is idempotent when
+given the already-awarded user IDs from persisted event history.
+
+Power-up validation has an explicit boundary: adapters validate Discord input,
+player existence, active-question and persistence constraints, while reducer
+transitions own deterministic state-dependent rules such as retaliation,
+resting-target, attack-limit, and streak-cost behavior. This avoids moving
+presentation and database validation into the pure domain transition.
+
 #### Remaining reducer TODOs
 
-- TODO: Migrate the remaining live "answered today" guards to reducer-owned
-  daily state: `GuessHandler` streak advancement and `PowerUpManager.rest()`.
-  First guarantee daily-state restoration before command handling, then remove
-  their database-date fallbacks and add restart/correction regression coverage.
-- TODO: Move answer matching, correct-answer rank, and ordinary point
-  calculation into a reducer-owned input/context so live and replay no longer
-  orchestrate those rules separately.
-- TODO: Add an explicit end-of-day reducer transition for streak resets and
-  grace-period handling.
-- TODO: Add an explicit deterministic end-of-day reducer transition for Crowd
-  Wisdom, shared by live award application and replay.
-- TODO: Decide whether command-level power-up eligibility checks should remain
-  adapter validation or become reducer rejection effects; if migrated, add
-  parity contracts for self-targeting, resting/already-targeted targets, and
-  per-day attack limits.
+- **P0 — deterministic event ordering:** Persist or derive a stable tie-breaker
+  for events with equal timestamps. Replay currently sorts by timestamp, while
+  events are assembled from separate guess and power-up queries.
+- **P1 — shared guess evaluation:** Move answer matching, correct-answer rank,
+  hint timing, guess count, streak preparation, and ordinary point calculation
+  into a shared guess-evaluation context used by live and replay.
+- **P1 — typed persistence effects:** Return explicit score, streak, season,
+  and event-persistence effects from reducer transitions, then verify that live
+  adapters consume every effect exactly once.
+- **P2 — answered-today authority:** Guarantee daily-state restoration before
+  command handling, then remove the database-date fallbacks from
+  `PowerUpManager` and migrate `GuessHandler` streak advancement with restart
+  and correction regression coverage.
+- **P2 — answer-correction contract:** Add a blocking source-of-truth test
+  matrix for corrected answers, including resting players, jinx/steal timing,
+  post-correction guesses, multiple alternative answers, and correction after
+  settlement.
+- **P3 — replay diagnostics:** Add an in-memory per-event transition trace for
+  verification reports and local forensic replay. It should show state
+  before/after and component effects without becoming a second authoritative
+  score ledger.
 
 ## Suggested domain invariants
 

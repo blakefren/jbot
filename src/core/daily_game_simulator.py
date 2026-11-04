@@ -170,26 +170,12 @@ class DailyGameSimulator:
         return result.transition
 
     def end_of_day(self):
-        # Crowd Wisdom is an end-of-day/post-resolution bonus.
-        self.apply_crowd_wisdom_bonus()
-
-        # Reset streaks for all players who didn't answer correctly and aren't resting.
-        # Grace period: if a player answered correctly (or rested) on the previous day,
-        # their streak is preserved even if they missed today.
-        # This covers both players who submitted wrong guesses (in daily_state with
-        # is_correct=False) and players who didn't guess at all (not in daily_state).
-        for user_id, player in self.initial_player_states.items():
-            state = self.daily_state.get(user_id)
-            is_correct = state is not None and state.is_correct
-            is_resting = state is not None and state.is_resting
-            has_grace = user_id in self.prev_streak_keepers
-            if (
-                not is_correct
-                and not is_resting
-                and not has_grace
-                and player.answer_streak > 0
-            ):
-                self.daily_state[user_id].streak_delta = -player.answer_streak
+        result = self.reducer.reduce_end_of_day(
+            self.daily_state,
+            self.initial_player_states,
+            prev_streak_keepers=self.prev_streak_keepers,
+        )
+        self.daily_state = defaultdict(DailyPlayerState, result.daily_state)
 
     def _get_crowd_wisdom_counts(self) -> tuple[int, int]:
         """
@@ -208,26 +194,15 @@ class DailyGameSimulator:
         return correct_solvers, active_participants
 
     def apply_crowd_wisdom_bonus(self):
-        """Apply crowd wisdom bonus after all daily events are resolved."""
-        correct_solvers, active_participants = self._get_crowd_wisdom_counts()
-        if active_participants <= 0:
-            return
-
-        multiplier = self.score_calculator.get_crowd_wisdom_multiplier(
-            correct_solvers, active_participants
+        """Apply Crowd Wisdom after all daily events are resolved."""
+        result = self.reducer.reduce_end_of_day(
+            self.daily_state,
+            self.initial_player_states,
+            prev_streak_keepers=self.prev_streak_keepers,
+            apply_streak_resets=False,
+            apply_crowd_wisdom=True,
         )
-        if multiplier <= 0:
-            return
-
-        for state in self.daily_state.values():
-            if not state.is_correct:
-                continue
-            bonus = self.score_calculator.calculate_crowd_wisdom_bonus(
-                state.score_earned, correct_solvers, active_participants
-            )
-            if bonus > 0:
-                state.score_earned += bonus
-                state.bonuses[ScoreCalculator.KEY_CROWD_WISDOM] = bonus
+        self.daily_state = defaultdict(DailyPlayerState, result.daily_state)
 
     def calculate_final_results(self):
         results = {}

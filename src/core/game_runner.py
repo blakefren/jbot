@@ -314,7 +314,29 @@ class GameRunner:
 
         # Reset streaks for players who didn't answer correctly
         if self.daily_question_id:
-            self.player_manager.reset_unanswered_streaks(self.daily_question_id)
+            powerup_manager = self.managers.get("powerup")
+            if powerup_manager:
+                snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
+                initial_players = (
+                    snapshot
+                    if snapshot is not None
+                    else self.player_manager.get_all_players()
+                )
+                previous_question_id = self.data_manager.get_previous_daily_question_id(
+                    self.daily_question_id
+                )
+                previous_keepers = (
+                    self.data_manager.get_streak_keepers(previous_question_id)
+                    if previous_question_id is not None
+                    else set()
+                )
+                transition = powerup_manager.reduce_end_of_day(
+                    initial_players,
+                    prev_streak_keepers=previous_keepers,
+                    apply_crowd_wisdom=False,
+                )
+                for user_id in transition.streak_resets:
+                    self.player_manager.reset_streak(user_id)
             # Expire rest multipliers that weren't consumed today
             self.data_manager.clear_stale_rest_multipliers(self.daily_question_id)
 
@@ -898,50 +920,42 @@ class GameRunner:
         Apply non-stealable crowd wisdom bonuses for today's correct solvers.
         Runs once per day at evening reveal time.
         """
-        summary = self._calculate_crowd_wisdom_summary()
         if not self.daily_question_id:
+            summary = self._calculate_crowd_wisdom_summary()
             self._crowd_wisdom_summary = summary
             return summary
 
-        multiplier = summary["multiplier"]
-        if multiplier <= 0:
-            self._crowd_wisdom_summary = summary
-            return summary
-
-        solver_ids = self.data_manager.get_daily_correct_solver_ids(
-            self.daily_question_id
+        powerup_manager = self.managers.get("powerup")
+        snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
+        initial_players = (
+            snapshot if snapshot is not None else self.player_manager.get_all_players()
         )
         already_awarded_user_ids = self.data_manager.get_crowd_wisdom_awarded_user_ids(
             self.daily_question_id
         )
-        snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
-        score_calculator = ScoreCalculator(self.config)
+        if powerup_manager is None:
+            summary = self._calculate_crowd_wisdom_summary()
+            self._crowd_wisdom_summary = summary
+            return summary
 
-        total_bonus = 0
-        for user_id in solver_ids:
-            if user_id in already_awarded_user_ids:
-                continue
-            player = self.player_manager.get_player(user_id)
-            if not player:
-                continue
-            snapshot_player = snapshot.get(user_id)
-            initial_score = getattr(snapshot_player, "score", 0)
-            points_earned_today = player.score - initial_score
-            bonus = score_calculator.calculate_crowd_wisdom_bonus(
-                points_earned_today,
-                summary["correct_solvers"],
-                summary["active_participants"],
-                multiplier=multiplier,
-            )
-            if bonus <= 0:
-                continue
+        transition = powerup_manager.reduce_end_of_day(
+            initial_players,
+            apply_streak_resets=False,
+            apply_crowd_wisdom=True,
+            already_awarded_crowd_wisdom=already_awarded_user_ids,
+        )
+        for user_id, bonus in transition.crowd_wisdom_bonuses.items():
             self.player_manager.update_score(user_id, bonus)
             self.data_manager.log_powerup_usage(
                 user_id, "crowd_wisdom", None, self.daily_question_id
             )
-            total_bonus += bonus
 
-        summary["total_bonus_points"] = total_bonus
+        summary = {
+            "multiplier": transition.crowd_wisdom_multiplier,
+            "correct_solvers": transition.correct_solvers,
+            "active_participants": transition.active_participants,
+            "total_bonus_points": sum(transition.crowd_wisdom_bonuses.values()),
+        }
         self._crowd_wisdom_summary = summary
         return summary
 
