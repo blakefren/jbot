@@ -1,6 +1,7 @@
 from discord.ext import commands
 import logging
 from src.cfg.main import ConfigReader
+from src.core.guess_display import format_guesses, truncate_discord_text
 
 from src.core.guess_handler import AlreadyAnsweredCorrectlyError, JinxedError
 
@@ -45,20 +46,12 @@ class Trivia(commands.Cog):
         # Retrieve all guesses for this player for the current question
         daily_question_id = self.bot.game.daily_question_id
         if not daily_question_id:
-            all_guesses = []
+            guesses = []
         else:
             guesses = self.bot.game.data_manager.read_guess_history(
                 user_id=player_id, daily_question_id=daily_question_id
             )
-            all_guesses = [g.get("guess_text") for g in guesses]
-
-        # Deduplicate and sort guesses
-        unique_guesses = sorted({(g or "").lower() for g in all_guesses})
-        guesses_text = (
-            "\n".join(f"{i+1}. {g}" for i, g in enumerate(unique_guesses))
-            if unique_guesses
-            else "No guesses yet."
-        )
+        guesses_text = format_guesses(guesses)
 
         # Send a confirmation message
         if is_correct:
@@ -69,9 +62,12 @@ class Trivia(commands.Cog):
 
             # Send the private confirmation
             await ctx.interaction.followup.send(
-                f"Correct! Nicely done.\n"
-                f"**Answer:** {self.bot.game.daily_q.answer}\n\n"
-                f"Guesses:\n{guesses_text}"
+                truncate_discord_text(
+                    f"Correct! Nicely done.\n"
+                    f"**Answer:** {self.bot.game.daily_q.answer}\n\n"
+                    f"Guesses:\n{guesses_text}",
+                    2000,
+                )
             )
             # Announce the correct answer publicly in the channel
             await ctx.channel.send(
@@ -80,7 +76,9 @@ class Trivia(commands.Cog):
         else:
             # Send the private confirmation for an incorrect answer
             await ctx.interaction.followup.send(
-                f"Sorry, that was incorrect.\n\nGuesses:\n{guesses_text}"
+                truncate_discord_text(
+                    f"Sorry, that was incorrect.\n\nGuesses:\n{guesses_text}", 2000
+                )
             )
 
 

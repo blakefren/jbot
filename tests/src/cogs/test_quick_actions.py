@@ -10,13 +10,7 @@ from src.cogs.quick_actions import (
 
 
 class TestGameActionView(unittest.IsolatedAsyncioTestCase):
-    """Tests for the GameActionView main button view.
-
-    Note: Direct testing of AnswerModal.on_submit() is challenging due to Discord.py's
-    TextInput property being read-only. The on_submit() logic (error handling, guess
-    processing, response formatting) is tested through integration tests and manual testing.
-    These tests focus on the button interaction and view/modal creation logic.
-    """
+    """Tests for the GameActionView main button view and answer modal."""
 
     async def asyncSetUp(self):
         """Set up async test fixtures."""
@@ -62,6 +56,69 @@ class TestGameActionView(unittest.IsolatedAsyncioTestCase):
         await button.callback(mock_interaction)
         # Verify modal is shown directly
         mock_interaction.response.send_modal.assert_called_once()
+
+    async def test_answer_button_limits_previous_guesses_placeholder(self):
+        self.mock_bot.game.daily_question_id = 42
+        self.mock_bot.game.data_manager.read_guess_history.return_value = [
+            {"guess_text": "wrong guess " + str(i)} for i in range(20)
+        ]
+        interaction = AsyncMock()
+        interaction.user.id = 123
+        view = GameActionView(self.mock_bot)
+        button = next(
+            item for item in view.children if item.custom_id == "trivia:answer"
+        )
+
+        await button.callback(interaction)
+
+        modal = interaction.response.send_modal.call_args.args[0]
+        self.assertIsInstance(modal, AnswerModal)
+        self.assertLessEqual(len(modal.answer_input.placeholder), 100)
+        self.assertIn("(truncated)", modal.answer_input.placeholder)
+        self.mock_bot.game.data_manager.read_guess_history.assert_called_once_with(
+            user_id=123, daily_question_id=42
+        )
+
+    async def test_answer_modal_placeholder_boundary_and_long_single_guess(self):
+        self.mock_bot.game.daily_question_id = 42
+        prefix = "Your previous guesses:\n1. "
+        for guess_length in (100 - len(prefix), 500):
+            with self.subTest(guess_length=guess_length):
+                self.mock_bot.game.data_manager.read_guess_history.return_value = [
+                    {"guess_text": "x" * guess_length}
+                ]
+                modal = AnswerModal(self.mock_bot, "Question", 123)
+                placeholder = modal.answer_input.placeholder
+                self.assertLessEqual(len(placeholder), 100)
+                self.assertEqual("(truncated)" in placeholder, guess_length == 500)
+
+    async def test_answer_modal_long_history_still_sends_feedback_and_announcement(
+        self,
+    ):
+        self.mock_bot.game.daily_question_id = 42
+        self.mock_bot.game.daily_q.answer = "correct"
+        self.mock_bot.game.data_manager.read_guess_history.return_value = [
+            {"guess_text": f"guess {i:03d} " + "x" * 100} for i in range(30)
+        ]
+        for is_correct in (False, True):
+            with self.subTest(is_correct=is_correct):
+                self.mock_bot.game.handle_guess.return_value = (is_correct, 30, 100, [])
+                interaction = AsyncMock()
+                interaction.user.id = 123
+                interaction.user.display_name = "Player"
+                modal = AnswerModal(self.mock_bot, "Question", 123)
+                modal.answer_input._value = "guess"
+
+                await modal.on_submit(interaction)
+
+                message = interaction.followup.send.call_args.args[0]
+                self.assertLessEqual(len(message), 2000)
+                self.assertIn("(truncated)", message)
+                self.assertIn("Correct!" if is_correct else "incorrect", message)
+                if is_correct:
+                    interaction.channel.send.assert_awaited_once()
+                else:
+                    interaction.channel.send.assert_not_awaited()
 
     async def test_jinx_button_shows_selection(self):
         """Test jinx button shows player selection view."""

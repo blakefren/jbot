@@ -93,6 +93,37 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
             "Sorry, that was incorrect.\n\nGuesses:\n1. wrong answer"
         )
 
+    async def test_answer_command_long_history_still_sends_feedback(self):
+        self.mock_game_runner.daily_q = MagicMock(answer="correct")
+        self.mock_game_runner.daily_question_id = 1
+        self.mock_data_manager.read_guess_history.return_value = [
+            {"guess_text": f"guess {i:03d} " + "x" * 100} for i in range(30)
+        ]
+
+        for is_correct in (False, True):
+            with self.subTest(is_correct=is_correct):
+                self.mock_game_runner.handle_guess.return_value = (
+                    is_correct,
+                    30,
+                    100,
+                    [],
+                )
+                ctx = AsyncMock()
+                ctx.author.id = 123
+
+                await self.trivia_cog.answer.callback(
+                    self.trivia_cog, ctx, guess="guess"
+                )
+
+                message = ctx.interaction.followup.send.call_args.args[0]
+                self.assertLessEqual(len(message), 2000)
+                self.assertIn("(truncated)", message)
+                self.assertIn("Correct!" if is_correct else "incorrect", message)
+                if is_correct:
+                    ctx.channel.send.assert_awaited_once()
+                else:
+                    ctx.channel.send.assert_not_awaited()
+
     async def test_answer_command_no_question(self):
         """Test the answer command when there is no active question."""
         await self.asyncSetUp()

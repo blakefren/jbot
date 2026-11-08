@@ -2,6 +2,7 @@ import discord
 import logging
 from discord.ext import commands
 from src.cfg.main import ConfigReader
+from src.core.guess_display import format_guesses, truncate_discord_text
 from src.core.guess_handler import AlreadyAnsweredCorrectlyError, JinxedError
 from src.core.powerup import PowerUpError
 
@@ -11,7 +12,7 @@ class AnswerModal(discord.ui.Modal):
 
     The question text is shown in the channel message; players click the Answer button
     and type their answer here when ready. Previous guesses for this question are
-    displayed as a read-only field for reference.
+    displayed in the input placeholder for reference.
     """
 
     def __init__(self, bot, question_text: str, player_id: int):
@@ -26,13 +27,11 @@ class AnswerModal(discord.ui.Modal):
             guesses = bot.game.data_manager.read_guess_history(
                 user_id=player_id, daily_question_id=daily_question_id
             )
-            all_guesses = [g.get("guess_text") for g in guesses]
-            # Deduplicate and sort guesses
-            unique_guesses = sorted({(g or "").lower() for g in all_guesses})
             guesses_placeholder = (
-                "Your previous guesses:\n"
-                + "\n".join(f"{i+1}. {g}" for i, g in enumerate(unique_guesses))
-                if unique_guesses
+                truncate_discord_text(
+                    "Your previous guesses:\n" + format_guesses(guesses), 100
+                )
+                if guesses
                 else "Type your answer here..."
             )
         else:
@@ -92,20 +91,12 @@ class AnswerModal(discord.ui.Modal):
         # Retrieve all guesses for this player for the current question
         daily_question_id = self.bot.game.daily_question_id
         if not daily_question_id:
-            all_guesses = []
+            guesses = []
         else:
             guesses = self.bot.game.data_manager.read_guess_history(
                 user_id=player_id, daily_question_id=daily_question_id
             )
-            all_guesses = [g.get("guess_text") for g in guesses]
-
-        # Deduplicate and sort guesses
-        unique_guesses = sorted({(g or "").lower() for g in all_guesses})
-        guesses_text = (
-            "\n".join(f"{i+1}. {g}" for i, g in enumerate(unique_guesses))
-            if unique_guesses
-            else "No guesses yet."
-        )
+        guesses_text = format_guesses(guesses)
 
         # Send confirmation message
         if is_correct:
@@ -116,9 +107,12 @@ class AnswerModal(discord.ui.Modal):
 
             # Send the private confirmation
             await interaction.followup.send(
-                f"Correct! Nicely done.\n"
-                f"**Answer:** {self.bot.game.daily_q.answer}\n\n"
-                f"Guesses:\n{guesses_text}",
+                truncate_discord_text(
+                    f"Correct! Nicely done.\n"
+                    f"**Answer:** {self.bot.game.daily_q.answer}\n\n"
+                    f"Guesses:\n{guesses_text}",
+                    2000,
+                ),
                 ephemeral=True,
             )
             # Announce the correct answer publicly in the channel
@@ -130,7 +124,9 @@ class AnswerModal(discord.ui.Modal):
         else:
             # Send the private confirmation for an incorrect answer
             await interaction.followup.send(
-                f"Sorry, that was incorrect.\n\nGuesses:\n{guesses_text}",
+                truncate_discord_text(
+                    f"Sorry, that was incorrect.\n\nGuesses:\n{guesses_text}", 2000
+                ),
                 ephemeral=True,
             )
 

@@ -18,9 +18,10 @@ A trivia question is posted every morning. Guess as early as you can — answeri
 
 ## 💬 How to Answer
 
-Use `/answer <your guess>`. Your reply is **private** — only you see whether you were right or wrong. A correct answer posts a public announcement in the channel.
+Use the **Answer** button or `/answer <your guess>`. Your reply is **private** — only you see whether you were right or wrong. A correct answer posts a public announcement in the channel.
 
 - You can guess as many times as you want
+- Previous guesses are shown for reference, but long lists are truncated to fit Discord's limits
 - Matching is **case-insensitive and fuzzy** — close spelling counts
 - Once you answer correctly, you're done **guessing** — but you can still use a power-up
 
