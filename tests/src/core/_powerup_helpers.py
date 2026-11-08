@@ -13,6 +13,7 @@ def make_config(
     retro_steal_cost=5,
     jinx_share_ratio=0.25,
     jinx_wrong_guess_penalty=5,
+    rest_multiplier=0.2,
 ):
     """Return a MagicMock ConfigReader pre-loaded with standard test values."""
     cfg = MagicMock()
@@ -27,7 +28,7 @@ def make_config(
         "JBOT_BONUS_BEFORE_HINT": "10",
         "JBOT_BONUS_FASTEST_CSV": "10,5,1",
         "JBOT_BONUS_TRY_CSV": "20,10,5",
-        "JBOT_REST_MULTIPLIER": "0.2",
+        "JBOT_REST_MULTIPLIER": str(rest_multiplier),
         "JBOT_EMOJI_FASTEST": "🥇",
         "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
         "JBOT_EMOJI_FIRST_TRY": "🎯",

@@ -137,6 +137,25 @@ class TestRestBehavior(_PowerUpManagerTests):
         self.assertEqual(self.players["1"].score, 120)
         self.data_manager.clear_pending_multiplier.assert_called_once_with("1")
 
+    def test_configured_rest_multiplier_is_applied(self):
+        """A non-default documented rest multiplier affects live scoring."""
+        config = _make_config(rest_multiplier=0.35)
+        manager = PowerUpManager(self.player_manager, self.data_manager, config)
+
+        manager.rest("1", "q1", "Correct Answer")
+        self.data_manager.increment_pending_multiplier.assert_called_once_with(
+            "1", 0.35
+        )
+
+        manager.reset_daily_state()
+        self.data_manager.get_pending_multiplier.return_value = 0.35
+        messages = manager.on_guess(
+            GuessContext(1, "P1", "ans", True, points_earned=100)
+        )
+
+        self.assertEqual(self.players["1"].score, 135)
+        self.assertTrue(any("+35" in message for message in messages))
+
     def test_rest_does_not_lift_attacker_silence(self):
         """When a jinx is cancelled by the target resting, the attacker remains silenced."""
         self.manager.jinx("1", "2", "q1")

@@ -69,7 +69,7 @@ class DailyGameReducer:
             config.get("JBOT_JINX_WRONG_GUESS_PENALTY", "5")
         )
         self.rest_bonus_per_day = float(
-            config.get("JBOT_REST_BONUS_PER_DAY", "0.2") or "0.2"
+            config.get("JBOT_REST_MULTIPLIER", "0.2") or "0.2"
         )
         self.steal_streak_cost = int(config.get("JBOT_STEAL_STREAK_COST", "3") or "3")
         self.retro_steal_streak_cost = int(

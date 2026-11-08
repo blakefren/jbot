@@ -34,7 +34,7 @@ class TestRetaliationBlocking(unittest.TestCase):
             "JBOT_EMOJI_BEFORE_HINT": "💡",
             "JBOT_EMOJI_FASTEST": "⚡",
             "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
-            "JBOT_REST_BONUS_PER_DAY": "0.2",
+            "JBOT_REST_MULTIPLIER": "0.2",
             "JBOT_STEAL_STREAK_COST": "3",
             "JBOT_RETRO_STEAL_STREAK_COST": "5",
             "JBOT_JINX_SHARE_RATIO": "0.25",
