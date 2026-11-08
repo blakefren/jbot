@@ -6,8 +6,10 @@ on:
     paths:
       - 'src/core/daily_game_simulator.py'
       - 'src/core/events.py'
+      - 'src/core/game_reducer.py'
       - 'src/core/guess_handler.py'
       - 'src/core/player.py'
+      - 'src/core/powerup.py'
       - 'src/core/scoring.py'
       - 'src/core/state.py'
       - 'scripts/simulate_powerups.py'
@@ -18,8 +20,10 @@ on:
     paths:
       - 'src/core/daily_game_simulator.py'
       - 'src/core/events.py'
+      - 'src/core/game_reducer.py'
       - 'src/core/guess_handler.py'
       - 'src/core/player.py'
+      - 'src/core/powerup.py'
       - 'src/core/scoring.py'
       - 'src/core/state.py'
       - 'scripts/simulate_powerups.py'
