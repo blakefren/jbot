@@ -1228,7 +1228,7 @@ class GameRunner:
             "daily_state_new": scorer_new.daily_state if not dry_run else {},
         }
 
-    def verify_daily_play(self, daily_question_id: int) -> list[dict]:
+    def verify_daily_play(self, daily_question_id: int) -> list[dict] | None:
         """
         Verifies that the database end state for a completed day matches what the
         DailyGameSimulator would predict from the recorded events and the start-of-day
@@ -1240,7 +1240,8 @@ class GameRunner:
         Returns:
             A list of dicts, one per player with discrepancies.  Each dict has:
                 player_id, player_name, diffs (dict of field → {expected, actual})
-            Returns an empty list when everything matches or verification cannot run.
+            Returns None when verification cannot run, an empty list when all
+            checked players match, or a list of player discrepancies.
         """
         snapshot = self.data_manager.get_daily_snapshot(daily_question_id)
         if not snapshot:
@@ -1248,7 +1249,7 @@ class GameRunner:
                 "verify_daily_play: no snapshot found for daily_question_id=%d, skipping.",
                 daily_question_id,
             )
-            return []
+            return None
 
         question_info = self.data_manager.get_daily_question_by_id(daily_question_id)
         if not question_info:
@@ -1256,7 +1257,7 @@ class GameRunner:
                 "verify_daily_play: daily question %d not found in DB, skipping.",
                 daily_question_id,
             )
-            return []
+            return None
         daily_q, _ = question_info
 
         answers = [daily_q.answer] + self.data_manager.get_alternative_answers(

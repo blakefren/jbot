@@ -66,20 +66,20 @@ class TestVerifyDailyPlay(unittest.TestCase):
         )
         self.mock_data_manager.get_snapshot_season_id.return_value = season_id
 
-    def test_no_snapshot_returns_empty(self):
-        """When no snapshot exists, verify_daily_play returns []."""
+    def test_no_snapshot_returns_none(self):
+        """When no snapshot exists, verification is reported as skipped."""
         self.mock_data_manager.get_daily_snapshot.return_value = {}
         result = self.game_runner.verify_daily_play(1)
-        self.assertEqual(result, [])
+        self.assertIsNone(result)
 
-    def test_no_question_returns_empty(self):
-        """When the question cannot be found, verify_daily_play returns []."""
+    def test_no_question_returns_none(self):
+        """When the question cannot be found, verification is skipped."""
         self.mock_data_manager.get_daily_snapshot.return_value = {
             "p1": self._make_player("p1", 100, 2)
         }
         self.mock_data_manager.get_daily_question_by_id.return_value = None
         result = self.game_runner.verify_daily_play(1)
-        self.assertEqual(result, [])
+        self.assertIsNone(result)
 
     def test_scores_match_no_diffs(self):
         """When DB state matches simulator prediction, returns empty list."""

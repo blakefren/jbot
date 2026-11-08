@@ -251,6 +251,23 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
 
         self.bot._log_task_error.assert_not_called()
 
+    @patch("src.core.discord.RolesGameMode")
+    @patch("src.core.discord.logging.info")
+    async def test_evening_task_does_not_report_skipped_verification_as_success(
+        self, mock_info, _mock_roles_game_mode_cls
+    ):
+        self.bot.game.daily_question_id = 1
+        self.bot.game.verify_daily_play.return_value = None
+
+        await self.evening_task_coro(self.bot, silent=True)
+
+        info_messages = [str(call.args[0]) for call in mock_info.call_args_list]
+        self.assertFalse(
+            any("all scores verified OK" in message for message in info_messages)
+        )
+        self.bot.game.format_verify_report.assert_not_called()
+        self.bot._notify_admins.assert_not_awaited()
+
     async def test_evening_message_task_update_scores_fails(self):
         """Verify task stops if updating scores fails."""
         # This test is no longer relevant as update_scores is removed

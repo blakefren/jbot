@@ -392,7 +392,11 @@ class DiscordBot(commands.Bot):
         try:
             if daily_question_id:
                 diffs = self.game.verify_daily_play(daily_question_id)
-                if diffs:
+                if diffs is None:
+                    logging.warning(
+                        "verify_daily_play: verification skipped; prerequisite data unavailable."
+                    )
+                elif diffs:
                     report = self.game.format_verify_report(daily_question_id, diffs)
                     logging.warning(
                         "verify_daily_play: discrepancies found:\n%s", report

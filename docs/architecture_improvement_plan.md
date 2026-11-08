@@ -8,7 +8,7 @@ Make one review-sized change at a time; favor behavior-preserving simplification
 
 1. **Rest configuration** (S, completed): The reducer now reads documented `JBOT_REST_MULTIPLIER`; the typo key had no production configuration/documentation references, so no compatibility alias was added. A nondefault live-scoring regression test covers rest and the next correct guess.
 2. **CI simulation trigger** (S, completed): Reducer and power-up changes now trigger the simulation workflow for pushes and pull requests.
-3. **Verification status** (S): Distinguish a skipped verification from a successful match, and test the caller's reporting.
+3. **Verification status** (S, completed): Skipped verification now returns `None`, distinct from a clean empty diff list, and the evening task does not report skips as success.
 4. **Answer correction IDs** (S/M): Make correction storage, live lookup, verification, and restoration consistently use the intended question identifier. Test with distinct question and daily-question IDs, including correction and restart. Inspect existing data and compatibility before deciding on a migration.
 5. **Replay ordering** (investigation S, implementation M or larger): Reproduce same-second guess/power-up ordering with real SQLite. Design a durable cross-type order for new events and a deterministic fallback for historical events; timestamps and separate table IDs cannot recover the original order of old ties. Review any schema migration and preload semantics separately before implementation.
 
