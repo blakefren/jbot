@@ -362,6 +362,7 @@ class GameRunner:
             config=self.config,
             answer_checker=self.answer_checker,
             season_manager=self.season_manager,
+            question_db_id=self.question_db_id,
         )
 
     def add_subscriber(self, subscriber: Subscriber):
@@ -815,8 +816,8 @@ class GameRunner:
         padded_answer = question.answer.center(len(question.answer) + pad_size * 2, " ")
         base_msg = f"Answer: ||**{padded_answer}**||\n"
 
-        if self.daily_question_id:
-            alts = self.data_manager.get_alternative_answers(self.daily_question_id)
+        if self.question_db_id is not None:
+            alts = self.data_manager.get_alternative_answers(self.question_db_id)
             if alts:
                 alts_str = ", ".join(f"||**{a}**||" for a in alts)
                 base_msg += f"(Also accepted: {alts_str})\n"
@@ -1074,7 +1075,20 @@ class GameRunner:
 
         # 1. Get Data
         hint_ts = self.data_manager.get_hint_sent_timestamp(daily_question_id)
-        existing_alts = self.data_manager.get_alternative_answers(daily_question_id)
+        if daily_question_id == self.daily_question_id and self.question_db_id:
+            question_db_id = self.question_db_id
+        else:
+            question_info = self.data_manager.get_daily_question_by_id(
+                daily_question_id
+            )
+            if not question_info:
+                return {
+                    "status": "error",
+                    "message": "Daily question not found.",
+                }
+            daily_q, question_db_id = question_info
+
+        existing_alts = self.data_manager.get_alternative_answers(question_db_id)
         old_answers = [daily_q.answer] + existing_alts
         new_answers = old_answers + [new_answer]
 
@@ -1133,7 +1147,7 @@ class GameRunner:
 
         if not dry_run:
             self.data_manager.add_alternative_answer(
-                daily_question_id, new_answer, admin_id
+                question_db_id, new_answer, admin_id
             )
             # Mark guesses as correct in the database if they match the new answer
             self._mark_newly_correct_guesses(daily_question_id, new_answer)
@@ -1258,10 +1272,10 @@ class GameRunner:
                 daily_question_id,
             )
             return None
-        daily_q, _ = question_info
+        daily_q, question_db_id = question_info
 
         answers = [daily_q.answer] + self.data_manager.get_alternative_answers(
-            daily_question_id
+            question_db_id
         )
         hint_ts = self.data_manager.get_hint_sent_timestamp(daily_question_id)
         events = self._fetch_daily_events(daily_question_id)

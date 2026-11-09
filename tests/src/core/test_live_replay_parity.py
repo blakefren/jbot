@@ -188,6 +188,7 @@ class TestLiveReplayParity(unittest.TestCase):
             daily_question_id=self.question_id,
             managers={"powerup": self.powerup_manager},
             config=self.config,
+            question_db_id=self.question_id,
         )
         self.events = []
         self.messages: list[str] = []
@@ -287,6 +288,7 @@ class TestLiveReplayParity(unittest.TestCase):
             daily_question_id=self.question_id,
             managers={"powerup": self.powerup_manager},
             config=self.config,
+            question_db_id=self.question_id,
         )
 
     def _assert_live_replay_parity(self) -> None:

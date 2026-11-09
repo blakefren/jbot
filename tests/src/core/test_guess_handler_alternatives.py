@@ -1,6 +1,10 @@
 import unittest
+from datetime import date
 from unittest.mock import MagicMock
 from src.core.guess_handler import GuessHandler
+from src.core.data_manager import DataManager
+from src.core.player_manager import PlayerManager
+from db.database import Database
 from data.readers.question import Question
 
 
@@ -9,6 +13,7 @@ class TestGuessHandlerAlternatives(unittest.TestCase):
         self.data_manager = MagicMock()
         self.daily_question = Question("Q", "Original Answer", "C", 100)
         self.daily_question_id = 1
+        self.question_db_id = 42
         self.player_manager = MagicMock()
         self.player_manager.get_player.return_value = None
         self.managers = {}
@@ -29,6 +34,7 @@ class TestGuessHandlerAlternatives(unittest.TestCase):
             self.daily_question,
             self.daily_question_id,
             self.managers,
+            question_db_id=self.question_db_id,
         )
 
         # Mock config
@@ -57,6 +63,58 @@ class TestGuessHandlerAlternatives(unittest.TestCase):
         is_correct, _, _, _ = self.guess_handler.handle_guess(1, "p1", "Wrong")
         self.assertFalse(is_correct)
 
+    def test_database_lookup_uses_question_id_not_daily_question_id(self):
+        db = Database(":memory:")
+        data_manager = DataManager(db)
+        try:
+            db.execute_update(
+                "INSERT INTO questions (id, question_text, answer_text, category, value) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (42, "Q", "Original Answer", "C", 100),
+            )
+            db.execute_update(
+                "INSERT INTO daily_questions (id, question_id, sent_at) VALUES (?, ?, ?)",
+                (7, 42, date.today()),
+            )
+            db.execute_update(
+                "INSERT INTO players (id, name) VALUES (?, ?)", ("admin", "Admin")
+            )
+            data_manager.add_alternative_answer(42, "Alt Answer", "admin")
+
+            config = MagicMock()
+            config_values = {
+                "JBOT_BONUS_TRY_CSV": "20,10,5",
+                "JBOT_BONUS_FASTEST_CSV": "10,5,1",
+                "JBOT_BONUS_BEFORE_HINT": "10",
+                "JBOT_BONUS_STREAK_PER_DAY": "5",
+                "JBOT_BONUS_STREAK_CAP": "25",
+                "JBOT_EMOJI_FIRST_TRY": "🎯",
+                "JBOT_EMOJI_BEFORE_HINT": "🧠",
+                "JBOT_EMOJI_FASTEST": "🥇",
+                "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
+                "JBOT_EMOJI_STREAK": "🔥",
+            }
+            config.get.side_effect = lambda key, default=None: config_values.get(
+                key, default
+            )
+            handler = GuessHandler(
+                data_manager,
+                PlayerManager(data_manager),
+                self.daily_question,
+                daily_question_id=7,
+                managers={},
+                config=config,
+                question_db_id=42,
+            )
+
+            is_correct, _, _, _ = handler.handle_guess("player", "Player", "Alt Answer")
+
+            self.assertTrue(is_correct)
+            history = data_manager.read_guess_history("player")
+            self.assertEqual(history[0]["daily_question_id"], 7)
+        finally:
+            db.close()
+
     # ------------------------------------------------------------------
     # Regression: Bug A — stale alternative_answers after /admin add_answer
     # ------------------------------------------------------------------
@@ -80,6 +138,7 @@ class TestGuessHandlerAlternatives(unittest.TestCase):
             self.daily_question,
             self.daily_question_id,
             self.managers,
+            question_db_id=self.question_db_id,
         )
         handler.config = MagicMock()
         handler.config.get.side_effect = lambda k, d=None: d
@@ -108,6 +167,7 @@ class TestGuessHandlerAlternatives(unittest.TestCase):
             self.daily_question,
             self.daily_question_id,
             self.managers,
+            question_db_id=self.question_db_id,
         )
         handler.config = MagicMock()
         handler.config.get.side_effect = lambda k, d=None: d

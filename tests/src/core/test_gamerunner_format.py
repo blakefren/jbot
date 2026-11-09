@@ -12,6 +12,7 @@ class TestGameRunnerFormatAnswer(unittest.TestCase):
         self.mock_dm = MagicMock()
         self.runner = GameRunner(self.mock_qs, self.mock_dm)
         self.runner.daily_question_id = 123
+        self.runner.question_db_id = 456
         self.question = Question("Q", "Main Answer", "C", 100)
 
     def test_format_answer_no_alts(self):
@@ -27,6 +28,7 @@ class TestGameRunnerFormatAnswer(unittest.TestCase):
         self.assertIn("Also accepted", result)
         self.assertIn("Alt1", result)
         self.assertIn("Alt2", result)
+        self.mock_dm.get_alternative_answers.assert_called_once_with(456)
 
 
 class TestGetActiveLeaderboard(unittest.TestCase):

@@ -39,11 +39,13 @@ class GuessHandler:
         config: ConfigReader = None,
         answer_checker: AnswerChecker = None,
         season_manager=None,
+        question_db_id: int | None = None,
     ):
         self.data_manager = data_manager
         self.player_manager = player_manager
         self.daily_q = daily_question
         self.daily_question_id = daily_question_id
+        self.question_db_id = question_db_id
         self.managers = managers
         self.fuzzy_threshold = fuzzy_threshold
         self.reminder_time = reminder_time
@@ -52,9 +54,9 @@ class GuessHandler:
         self._checker = answer_checker or AnswerChecker()
         self.season_manager = season_manager
 
-        if self.data_manager:
+        if self.data_manager and self.question_db_id is not None:
             self.alternative_answers = self.data_manager.get_alternative_answers(
-                self.daily_question_id
+                self.question_db_id
             )
         else:
             self.alternative_answers = []
@@ -137,9 +139,9 @@ class GuessHandler:
         # Check alternative answers if primary answer is incorrect.
         # Always reload from DB so answers added via /admin add_answer mid-day
         # are recognized without requiring a bot restart.
-        if not is_correct:
+        if not is_correct and self.question_db_id is not None:
             current_alts = self.data_manager.get_alternative_answers(
-                self.daily_question_id
+                self.question_db_id
             )
             for alt_answer in current_alts:
                 alt_a = str(alt_answer).strip().lower()

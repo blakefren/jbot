@@ -105,6 +105,7 @@ class TestVerifyDailyPlay(unittest.TestCase):
 
         result = self.game_runner.verify_daily_play(1)
         self.assertEqual(result, [])
+        self.mock_data_manager.get_alternative_answers.assert_called_with(42)
 
     def test_score_mismatch_detected(self):
         """When the DB score doesn't match expected, a diff is returned."""

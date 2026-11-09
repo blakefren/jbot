@@ -19,6 +19,11 @@ class TestRecalculateScores(unittest.TestCase):
             question="Q", answer="800-899", category="C", clue_value=100
         )
         self.game_runner.daily_question_id = 1
+        self.game_runner.question_db_id = 42
+        self.mock_data_manager.get_daily_question_by_id.return_value = (
+            self.game_runner.daily_q,
+            self.game_runner.question_db_id,
+        )
 
         # Mock config
         self.game_runner.config = MagicMock()
@@ -96,10 +101,36 @@ class TestRecalculateScores(unittest.TestCase):
 
         # Check DB calls
         self.mock_data_manager.add_alternative_answer.assert_called_with(
-            1, "800", "admin1"
+            42, "800", "admin1"
         )
+        self.mock_data_manager.get_alternative_answers.assert_called_with(42)
         self.game_runner.player_manager.update_score.assert_called_with("p1", 140)
         self.game_runner.player_manager.set_streak.assert_called_with("p1", 1)
+
+    def test_recalculate_old_question_resolves_canonical_question_id(self):
+        self.game_runner.daily_q = None
+        self.game_runner.daily_question_id = None
+        self.game_runner.question_db_id = None
+        self.mock_data_manager.get_most_recent_daily_question.return_value = (
+            Question(question="Q", answer="A", category="C", clue_value=100),
+            7,
+            date.today(),
+        )
+        self.mock_data_manager.get_daily_question_by_id.return_value = (
+            Question(question="Q", answer="A", category="C", clue_value=100),
+            42,
+        )
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = []
+        self.mock_data_manager.get_powerup_usages_for_question.return_value = []
+        self.mock_data_manager.get_alternative_answers.return_value = []
+
+        result = self.game_runner.recalculate_scores_for_new_answer("Alt", "admin1")
+
+        self.assertEqual(result["status"], "success")
+        self.mock_data_manager.get_alternative_answers.assert_called_with(42)
+        self.mock_data_manager.add_alternative_answer.assert_called_with(
+            42, "Alt", "admin1"
+        )
 
     def test_recalculation_consumes_newly_applied_rest_multiplier(self):
         """A correction consumes rest only when the new replay applies it."""
@@ -229,6 +260,10 @@ class TestRecalculateScores(unittest.TestCase):
             recent_question_id,
             recent_date,
         )
+        self.mock_data_manager.get_daily_question_by_id.return_value = (
+            recent_question,
+            42,
+        )
 
         # Setup guesses
         guesses = [
@@ -273,6 +308,10 @@ class TestRecalculateScores(unittest.TestCase):
             recent_question,
             recent_question_id,
             recent_date,
+        )
+        self.mock_data_manager.get_daily_question_by_id.return_value = (
+            recent_question,
+            42,
         )
 
         # Setup minimal guesses
@@ -342,7 +381,7 @@ class TestRecalculateScores(unittest.TestCase):
 
         # Verify the alternative answer was added
         self.mock_data_manager.add_alternative_answer.assert_called_with(
-            1, "800", "admin1"
+            42, "800", "admin1"
         )
 
         # Verify mark_matching_guesses_as_correct was called with correct parameters

@@ -61,6 +61,7 @@ class TestGameRunnerRestore(unittest.TestCase):
         # Verify snapshot is preferred over get_all_players
         self.mock_data_manager.get_daily_snapshot.assert_called_with(123)
         self.mock_data_manager.get_all_players.assert_not_called()
+        self.mock_data_manager.get_alternative_answers.assert_called_with(999)
 
         # Verify Simulator Initialization
         MockSimulator.assert_called_once()

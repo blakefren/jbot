@@ -183,6 +183,16 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn(self.mock_question.answer, formatted_a)
         self.assertIn("||", formatted_a)  # Spoiler tags
 
+    def test_format_answer_looks_up_alternatives_by_question_id(self):
+        self.game_runner.daily_question_id = 7
+        self.game_runner.question_db_id = 42
+        self.mock_data_manager.get_alternative_answers.return_value = ["Alt Answer"]
+
+        formatted = self.game_runner.format_answer(self.mock_question)
+
+        self.mock_data_manager.get_alternative_answers.assert_called_with(42)
+        self.assertIn("Alt Answer", formatted)
+
     def test_get_morning_message_content(self):
         """Test generating the morning message content."""
         # Case 1: No daily question
