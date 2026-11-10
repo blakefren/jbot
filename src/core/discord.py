@@ -690,7 +690,7 @@ async def discord_bot_async(
     player_manager: "PlayerManager",
 ):
     """Main function to initialize and run the bot."""
-    from src.core.gemini_manager import GeminiManager
+    from src.core.gemini_manager import DEFAULT_GEMINI_MODEL, GeminiManager
 
     gemini_manager = None
     try:
@@ -698,7 +698,7 @@ async def discord_bot_async(
         if gemini_api_key:
             gemini_manager = GeminiManager(
                 api_key=gemini_api_key,
-                model=config.get("GEMINI_MODEL", "gemini-pro-latest"),
+                model=config.get("GEMINI_MODEL", DEFAULT_GEMINI_MODEL),
                 fallback_model=config.get("GEMINI_FALLBACK_MODEL") or None,
             )
     except ValueError as e:

@@ -1,6 +1,12 @@
 import unittest
 from unittest.mock import patch, MagicMock, call
-from src.core.gemini_manager import GeminiManager, _RETRY_DELAYS
+from google.genai import errors
+from src.core.gemini_manager import (
+    DEFAULT_GEMINI_FALLBACK_MODEL,
+    DEFAULT_GEMINI_MODEL,
+    GeminiManager,
+    _RETRY_DELAYS,
+)
 
 
 class TestGeminiManager(unittest.TestCase):
@@ -25,6 +31,12 @@ class TestGeminiManager(unittest.TestCase):
                 api_key="key", model="gemini-primary", fallback_model="gemini-fallback"
             )
         self.assertEqual(mgr.fallback_model, "gemini-fallback")
+
+    def test_default_models(self):
+        with patch("src.core.gemini_manager.genai.Client"):
+            mgr = GeminiManager(api_key="key")
+        self.assertEqual(mgr.model, DEFAULT_GEMINI_MODEL)
+        self.assertEqual(mgr.fallback_model, DEFAULT_GEMINI_FALLBACK_MODEL)
 
     def test_generate_content_success(self):
         mock_response = MagicMock()
@@ -99,6 +111,43 @@ class TestGeminiManager(unittest.TestCase):
         self.assertEqual(
             mock_client.models.generate_content.call_count, max_attempts + 1
         )
+
+    @patch("src.core.gemini_manager.time.sleep")
+    def test_not_found_uses_fallback_without_retrying(self, mock_sleep):
+        response = MagicMock(text="Fallback result")
+        self.mock_client.models.generate_content.side_effect = [
+            errors.ClientError(
+                404, {"error": {"code": 404, "message": "Model not found"}}
+            ),
+            response,
+        ]
+
+        result = self.gemini_manager.generate_content("Hello")
+
+        self.assertEqual(result, "Fallback result")
+        self.assertEqual(
+            self.mock_client.models.generate_content.call_args_list,
+            [
+                call(model="gemini-test", contents="Hello", config=None),
+                call(
+                    model=self.gemini_manager.fallback_model,
+                    contents="Hello",
+                    config=None,
+                ),
+            ],
+        )
+        mock_sleep.assert_not_called()
+
+    @patch("src.core.gemini_manager.time.sleep")
+    def test_not_found_without_fallback_returns_none_without_retrying(self, mock_sleep):
+        self.gemini_manager.fallback_model = None
+        self.mock_client.models.generate_content.side_effect = errors.ClientError(
+            404, {"error": {"code": 404, "message": "Model not found"}}
+        )
+
+        self.assertIsNone(self.gemini_manager.generate_content("Hello"))
+        self.assertEqual(self.mock_client.models.generate_content.call_count, 1)
+        mock_sleep.assert_not_called()
 
     @patch("src.core.gemini_manager.time.sleep")
     def test_generate_content_fallback_also_fails_returns_none(self, mock_sleep):

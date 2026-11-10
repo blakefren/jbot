@@ -5,19 +5,21 @@ Manager for interacting with the Gemini API using the google-genai library.
 import time
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 import logging
 
 # Seconds to wait between retries (one value per gap between attempts)
 _RETRY_DELAYS = (5, 10)
+DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
+DEFAULT_GEMINI_FALLBACK_MODEL = "gemini-3.5-flash-lite"
 
 
 class GeminiManager:
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-pro-latest",
-        fallback_model: str = "gemini-flash-latest",
+        model: str = DEFAULT_GEMINI_MODEL,
+        fallback_model: str | None = DEFAULT_GEMINI_FALLBACK_MODEL,
     ):
         if not api_key:
             raise ValueError("Gemini API key is required.")
@@ -36,8 +38,8 @@ class GeminiManager:
         Generates content using the Gemini API.
 
         Retries up to len(_RETRY_DELAYS)+1 times on the primary model before
-        falling back to fallback_model (if configured). Returns None if all
-        attempts fail.
+        falling back to fallback_model (if configured). A 404 skips retries.
+        Returns None if all attempts fail.
 
         Note: This is a blocking call. Callers from async Discord tasks should
         wrap this via asyncio.to_thread() to prevent blocking the event loop.
@@ -63,6 +65,12 @@ class GeminiManager:
                 return response.text
             except Exception as e:
                 last_error = e
+                if isinstance(e, errors.ClientError) and e.code == 404:
+                    logging.warning(
+                        f"Primary model {self.model} was not found or does not "
+                        f"support generation: {e}. Skipping retries."
+                    )
+                    break
                 if attempt < len(_RETRY_DELAYS):
                     delay = _RETRY_DELAYS[attempt]
                     logging.warning(

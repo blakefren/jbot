@@ -152,6 +152,14 @@ The `sources.toml` file in the root directory controls:
 - Dataset-specific settings (like Jeopardy score substitution)
 - AI-generated riddle sources via Gemini
 
+Gemini uses `GEMINI_MODEL` and `GEMINI_FALLBACK_MODEL` from `.env` (or Railway
+environment variables). The fallback is attempted immediately if the primary
+model returns 404, or after retries for other failures; leave the fallback
+value empty to disable it. See [Google's model list](https://ai.google.dev/gemini-api/docs/models)
+and verify your account has access when choosing models. Updating `.env.template`
+does not update existing `.env` files or Railway variables. If hint generation
+fails and the source has no hint, the reminder is sent without one.
+
 ### Jeopardy!
 
 [Download](https://github.com/jwolle1/jeopardy_clue_dataset) the Jeopardy question bank.
