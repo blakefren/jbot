@@ -6,10 +6,19 @@ from src.core.player import Player
 from src.core.subscriber import Subscriber
 import os
 import logging
+from threading import RLock
 import pytz
 
 # Project root for file paths
 _PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+_NEXT_EVENT_SEQUENCE = """
+    SELECT COALESCE(MAX(event_sequence), 0) + 1 FROM (
+        SELECT event_sequence FROM guesses WHERE daily_question_id = ?
+        UNION ALL
+        SELECT event_sequence FROM powerup_usage WHERE question_id = ?
+    )
+"""
 
 
 # TODO: review for SQL injection risks.
@@ -30,6 +39,7 @@ class DataManager:
             timezone: The timezone to use for date/time operations.
         """
         self._db = db
+        self.game_action_lock = RLock()
         try:
             self.timezone = pytz.timezone(timezone)
         except pytz.UnknownTimeZoneError:
@@ -462,7 +472,7 @@ class DataManager:
 
         # 3. Re-NULL preload rows so they get re-hydrated with the new question.
         self._db.execute_update(
-            "UPDATE powerup_usage SET question_id = NULL "
+            "UPDATE powerup_usage SET question_id = NULL, event_sequence = NULL "
             "WHERE question_id = ? AND powerup_type IN ('jinx_preload', 'steal_preload')",
             (daily_question_id,),
         )
@@ -498,10 +508,12 @@ class DataManager:
         )
 
         query = """
-            INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct)
-            VALUES (?, ?, ?, ?)
-        """
-        self._db.execute_update(query, (question_id, player_id, guess, is_correct))
+            INSERT INTO guesses
+                (daily_question_id, player_id, guess_text, is_correct, event_sequence)
+            VALUES (?, ?, ?, ?, (""" + _NEXT_EVENT_SEQUENCE + "))"
+        self._db.execute_update(
+            query, (question_id, player_id, guess, is_correct, question_id, question_id)
+        )
 
     def log_messaging_event(
         self, direction, method, recipient_or_sender, content, status="success"
@@ -942,14 +954,27 @@ class DataManager:
         question_id: int = None,
     ):
         """Logs a powerup usage."""
-        query = "INSERT INTO powerup_usage (user_id, powerup_type, target_user_id, question_id) VALUES (?, ?, ?, ?)"
+        query = """
+            INSERT INTO powerup_usage
+                (user_id, powerup_type, target_user_id, question_id, event_sequence)
+            VALUES (?, ?, ?, ?, CASE WHEN ? IS NULL THEN NULL ELSE (
+        """ + _NEXT_EVENT_SEQUENCE + ") END)"
         self._db.execute_update(
-            query, (user_id, powerup_type, target_user_id, question_id)
+            query,
+            (
+                user_id,
+                powerup_type,
+                target_user_id,
+                question_id,
+                question_id,
+                question_id,
+                question_id,
+            ),
         )
 
     def get_powerup_usages_for_question(self, question_id: int) -> list[dict]:
         """Retrieves powerup usages for a specific question."""
-        query = "SELECT * FROM powerup_usage WHERE question_id = ?"
+        query = "SELECT * FROM powerup_usage WHERE question_id = ? ORDER BY used_at, id"
         results = self._db.execute_query(query, (question_id,))
         return results
 
@@ -978,13 +1003,14 @@ class DataManager:
         pending = self._db.execute_query(
             "SELECT * FROM powerup_usage"
             " WHERE question_id IS NULL AND powerup_type IN ('jinx_preload', 'steal_preload')"
+            " ORDER BY id"
         )
-        if pending:
-            ids = [row["id"] for row in pending]
-            placeholders = ",".join("?" * len(ids))
+        for row in pending:
             self._db.execute_update(
-                f"UPDATE powerup_usage SET question_id = ? WHERE id IN ({placeholders})",
-                (question_id, *ids),
+                "UPDATE powerup_usage SET question_id = ?, event_sequence = ("
+                + _NEXT_EVENT_SEQUENCE
+                + ") WHERE id = ? AND question_id IS NULL",
+                (question_id, question_id, question_id, row["id"]),
             )
         return list(pending) if pending else []
 
@@ -1019,9 +1045,7 @@ class DataManager:
 
     def get_guesses_for_daily_question(self, daily_question_id: int) -> list[dict]:
         """Retrieves all guesses for a specific daily question."""
-        query = (
-            "SELECT * FROM guesses WHERE daily_question_id = ? ORDER BY guessed_at ASC"
-        )
+        query = "SELECT * FROM guesses WHERE daily_question_id = ? ORDER BY guessed_at ASC, id ASC"
         return self._db.execute_query(query, (daily_question_id,))
 
     def get_hint_sent_timestamp(self, daily_question_id: int) -> Optional[str]:

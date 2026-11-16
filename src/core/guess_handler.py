@@ -6,6 +6,7 @@ from src.core.scoring import ScoreCalculator
 from src.core.answer_checker import AnswerChecker
 from src.cfg.main import ConfigReader
 from src.core.events import GuessContext
+from src.core.base_manager import serialize_game_action
 
 
 class AlreadyAnsweredCorrectlyError(Exception):
@@ -90,6 +91,7 @@ class GuessHandler:
                 return True
         return False
 
+    @serialize_game_action
     def handle_guess(
         self, player_id: int, player_name: str, guess: str
     ) -> tuple[bool, int, int, list[str]]:

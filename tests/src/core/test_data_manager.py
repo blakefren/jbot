@@ -1807,6 +1807,36 @@ class TestPendingPowerupDataManager(unittest.TestCase):
             user_id, powerup_type, target_user_id, question_id
         )
 
+    def test_game_events_share_sequence_with_hydrated_preloads(self):
+        question = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        daily_question_id = self.data_manager.log_daily_question(question)
+        self._insert_preload("attacker", "jinx_preload", "target")
+        self.data_manager.apply_pending_powerups(daily_question_id)
+        self.data_manager.log_player_guess(
+            "target", "Target", daily_question_id, "wrong", False
+        )
+        self.data_manager.log_powerup_usage("target", "rest", None, daily_question_id)
+
+        powerups = self.data_manager.get_powerup_usages_for_question(daily_question_id)
+        guesses = self.data_manager.get_guesses_for_daily_question(daily_question_id)
+        self.assertEqual([row["event_sequence"] for row in powerups], [1, 3])
+        self.assertEqual(guesses[0]["event_sequence"], 2)
+
+    def test_legacy_events_remain_unsequenced_before_new_events(self):
+        question = Question("Q?", "A", "Cat", 100, "test", "Hint")
+        daily_question_id = self.data_manager.log_daily_question(question)
+        self.db.execute_update(
+            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct) "
+            "VALUES (?, ?, ?, ?)",
+            (daily_question_id, "target", "old", False),
+        )
+        self.data_manager.log_player_guess(
+            "target", "Target", daily_question_id, "new", False
+        )
+
+        guesses = self.data_manager.get_guesses_for_daily_question(daily_question_id)
+        self.assertEqual([row["event_sequence"] for row in guesses], [None, 1])
+
     def test_get_pending_powerup_returns_row(self):
         """get_pending_powerup returns a row when a NULL-qid preload exists."""
         self._insert_preload("attacker", "jinx_preload", "target")
@@ -1979,17 +2009,19 @@ class TestRollbackQuestionDay(unittest.TestCase):
 
         # Confirm the row now has a non-NULL question_id.
         rows = self.db.execute_query(
-            "SELECT question_id FROM powerup_usage WHERE powerup_type = 'jinx_preload'"
+            "SELECT question_id, event_sequence FROM powerup_usage WHERE powerup_type = 'jinx_preload'"
         )
         self.assertEqual(rows[0]["question_id"], self.dq_id)
+        self.assertEqual(rows[0]["event_sequence"], 1)
 
         # Roll back — should re-NULL the preload so it can be re-hydrated.
         self.dm.rollback_question_day(self.dq_id)
 
         rows = self.db.execute_query(
-            "SELECT question_id FROM powerup_usage WHERE powerup_type = 'jinx_preload'"
+            "SELECT question_id, event_sequence FROM powerup_usage WHERE powerup_type = 'jinx_preload'"
         )
         self.assertIsNone(rows[0]["question_id"])
+        self.assertIsNone(rows[0]["event_sequence"])
 
     def test_rollback_does_not_re_null_non_preload_powerups(self):
         # Normal daytime powerup (e.g. steal with a real question_id) should NOT

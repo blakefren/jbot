@@ -56,8 +56,16 @@ class DailyGameSimulator:
                                      Set to False for midday state restoration.
         """
 
-        # Sort events strictly by timestamp, normalizing to datetime for comparison
-        self.events.sort(key=lambda event: parse_timestamp(event.timestamp))
+        self.events.sort(
+            key=lambda event: (
+                event.event_sequence is not None,
+                (
+                    event.event_sequence
+                    if event.event_sequence is not None
+                    else parse_timestamp(event.timestamp)
+                ),
+            )
+        )
 
         for event in self.events:
             if isinstance(event, PowerUpEvent):

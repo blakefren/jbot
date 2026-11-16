@@ -5,7 +5,7 @@ Implements power-up actions: jinx, steal, and rest.
 
 import logging
 from src.cfg.main import ConfigReader
-from src.core.base_manager import BaseManager
+from src.core.base_manager import BaseManager, serialize_game_action
 from src.core.data_manager import DataManager
 from src.core.events import GuessContext, PowerUpEvent
 from src.core.player_manager import PlayerManager
@@ -313,6 +313,7 @@ class PowerUpManager(BaseManager):
                 f"You can't retaliate against <@{target_id}> today after being attacked!"
             )
 
+    @serialize_game_action
     def hydrate_pending_powerups(self, question_id: int):
         """
         Applies overnight pre-loaded powerups to the current day's daily_state.
@@ -371,6 +372,7 @@ class PowerUpManager(BaseManager):
                     streak_deducted,
                 )
 
+    @serialize_game_action
     def jinx(self, attacker_id: str, target_id: str, question_id: int = None) -> str:
         """
         Jinx another player — parasitic link.
@@ -532,6 +534,7 @@ class PowerUpManager(BaseManager):
             f"You can't answer until the hint is revealed!"
         )
 
+    @serialize_game_action
     def steal(self, thief_id: str, target_id: str, question_id: int = None) -> str:
         """
         Steal points from another player.
@@ -703,6 +706,7 @@ class PowerUpManager(BaseManager):
             f"to rob <@{target_id}>! If they answer correctly, you'll steal their bonuses."
         )
 
+    @serialize_game_action
     def rest(
         self, player_id: str, question_id: int, question_answer: str
     ) -> tuple[str, str]:

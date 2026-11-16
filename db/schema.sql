@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS guesses (
     guess_text TEXT NOT NULL,
     is_correct BOOLEAN NOT NULL,
     guessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    event_sequence INTEGER,
     FOREIGN KEY (daily_question_id) REFERENCES daily_questions (id),
     FOREIGN KEY (player_id) REFERENCES players (id)
 );
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS powerup_usage (
     target_user_id TEXT,
     question_id INTEGER,
     used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    event_sequence INTEGER,
     FOREIGN KEY (user_id) REFERENCES players (id),
     FOREIGN KEY (target_user_id) REFERENCES players (id),
     FOREIGN KEY (question_id) REFERENCES daily_questions (id)

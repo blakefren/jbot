@@ -7,6 +7,7 @@ from typing import Any
 class GameEvent:
     timestamp: datetime
     user_id: str
+    event_sequence: int | None = field(default=None, kw_only=True)
 
 
 @dataclass

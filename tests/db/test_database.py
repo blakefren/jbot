@@ -38,6 +38,63 @@ class TestDatabase(unittest.TestCase):
         self.assertIn("guesses", table_names)
         self.assertIn("messages", table_names)
 
+    def test_existing_database_gets_nullable_event_sequence_columns(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "legacy.db")
+            with open(
+                os.path.join(project_root, "db", "schema.sql"), encoding="utf-8"
+            ) as file:
+                legacy_schema = file.read().replace("    event_sequence INTEGER,\n", "")
+            connection = sqlite3.connect(path)
+            with connection:
+                connection.executescript(legacy_schema)
+                connection.execute(
+                    "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct) "
+                    "VALUES (1, 'p1', 'guess', 0)"
+                )
+            connection.close()
+
+            db = Database(path)
+            try:
+                for table in ("guesses", "powerup_usage"):
+                    columns = db.execute_query(f"PRAGMA table_info({table})")
+                    self.assertIn("event_sequence", [row["name"] for row in columns])
+                self.assertIsNone(
+                    db.execute_query("SELECT event_sequence FROM guesses")[0][
+                        "event_sequence"
+                    ]
+                )
+            finally:
+                db.close()
+
+            db = Database(path)
+            db.close()
+
+    def test_event_sequences_persist_across_database_restart(self):
+        from src.core.data_manager import DataManager
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "restart.db")
+            db = Database(path)
+            manager = DataManager(db)
+            manager.log_powerup_usage("p1", "jinx", "p2", 1)
+            manager.log_player_guess("p2", "Player", 1, "guess", False)
+            db.close()
+
+            db = Database(path)
+            try:
+                manager = DataManager(db)
+                self.assertEqual(
+                    manager.get_powerup_usages_for_question(1)[0]["event_sequence"],
+                    1,
+                )
+                self.assertEqual(
+                    manager.get_guesses_for_daily_question(1)[0]["event_sequence"],
+                    2,
+                )
+            finally:
+                db.close()
+
     def test_execute_update_insert(self):
         """Test inserting data with execute_update."""
         query = "INSERT INTO players (id, name) VALUES (?, ?)"

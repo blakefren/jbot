@@ -216,3 +216,26 @@ class TestGameRunnerRestore(unittest.TestCase):
         self.assertEqual(powerup_event.powerup_type, "steal")
         self.assertEqual(powerup_event.target_user_id, "p1")
         self.assertIsInstance(powerup_event.timestamp, datetime)
+
+    def test_fetch_daily_events_preserves_recorded_event_sequence(self):
+        self.mock_data_manager.get_guesses_for_daily_question.return_value = [
+            {
+                "guessed_at": "2023-01-01 10:00:00",
+                "player_id": "p1",
+                "guess_text": "A",
+                "event_sequence": 2,
+            }
+        ]
+        self.mock_data_manager.get_powerup_usages_for_question.return_value = [
+            {
+                "used_at": "2023-01-01 10:00:00",
+                "user_id": "p2",
+                "powerup_type": "steal",
+                "target_user_id": "p1",
+                "event_sequence": 1,
+            }
+        ]
+
+        events = self.game_runner._fetch_daily_events(123)
+
+        self.assertEqual([event.event_sequence for event in events], [1, 2])

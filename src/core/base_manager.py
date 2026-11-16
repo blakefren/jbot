@@ -1,5 +1,17 @@
 from abc import ABC, abstractmethod
+from contextlib import nullcontext
+from functools import wraps
 from src.core.events import GuessContext
+
+
+def serialize_game_action(method):
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        lock = getattr(self.data_manager, "game_action_lock", None)
+        with lock if lock is not None else nullcontext():
+            return method(self, *args, **kwargs)
+
+    return wrapped
 
 
 class BaseManager(ABC):

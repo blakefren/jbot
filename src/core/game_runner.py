@@ -386,14 +386,39 @@ class GameRunner:
         events = []
         for g in guesses:
             ts = parse_timestamp(g["guessed_at"])
-            events.append(GuessEvent(ts, g["player_id"], g["guess_text"]))
+            events.append(
+                GuessEvent(
+                    ts,
+                    g["player_id"],
+                    g["guess_text"],
+                    event_sequence=g.get("event_sequence"),
+                )
+            )
 
         for p in powerups:
             ts = parse_timestamp(p["used_at"])
             target = p["target_user_id"]
-            events.append(PowerUpEvent(ts, p["user_id"], p["powerup_type"], target))
+            events.append(
+                PowerUpEvent(
+                    ts,
+                    p["user_id"],
+                    p["powerup_type"],
+                    target,
+                    event_sequence=p.get("event_sequence"),
+                )
+            )
 
-        return events
+        return sorted(
+            events,
+            key=lambda event: (
+                event.event_sequence is not None,
+                (
+                    event.event_sequence
+                    if event.event_sequence is not None
+                    else event.timestamp
+                ),
+            ),
+        )
 
     def restore_game_state(self):
         """

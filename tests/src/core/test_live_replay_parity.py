@@ -7,14 +7,21 @@ changing production workflows or requiring Discord/SQLite infrastructure.
 
 import copy
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
+from threading import Event
+from unittest.mock import patch
 
 from data.readers.question import Question
+from db.database import Database
 from src.core.daily_game_simulator import DailyGameSimulator
+from src.core.data_manager import DataManager
 from src.core.events import GuessEvent, PowerUpEvent
+from src.core.game_runner import GameRunner
 from src.core.guess_handler import GuessHandler
 from src.core.player import Player
-from src.core.powerup import PowerUpManager
+from src.core.player_manager import PlayerManager
+from src.core.powerup import PowerUpError, PowerUpManager
 from src.core.state import DailyPlayerState
 from tests.src.core._powerup_helpers import make_config
 
@@ -576,6 +583,158 @@ class TestLiveReplayParity(unittest.TestCase):
         self._guess("2", "4")
 
         self._assert_live_replay_parity()
+
+
+class TestSQLiteLiveReplayOrdering(unittest.TestCase):
+    def setUp(self):
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+        self.player_manager = PlayerManager(self.data_manager)
+        self.data_manager.create_player("1", "Attacker")
+        self.data_manager.create_player("2", "Target")
+        self.data_manager.set_streak("1", 8)
+        self.data_manager.set_streak("2", 3)
+        self.question = Question("What is 2 + 2?", "4", "Math", 100)
+        self.question_id = self.data_manager.log_daily_question(self.question)
+        self.initial_players = self.data_manager.get_daily_snapshot(self.question_id)
+        self.config = make_config(steal_cost=2, retro_steal_cost=4)
+        self.powerups = PowerUpManager(
+            self.player_manager, self.data_manager, self.config
+        )
+        self.guesses = GuessHandler(
+            self.data_manager,
+            self.player_manager,
+            self.question,
+            self.question_id,
+            {"powerup": self.powerups},
+            config=self.config,
+        )
+
+    def tearDown(self):
+        self.db.close()
+
+    def assert_replay_matches_live(self):
+        timestamp = "2023-01-01 10:00:00"
+        self.db.execute_update(
+            "UPDATE guesses SET guessed_at = ? WHERE daily_question_id = ?",
+            (timestamp, self.question_id),
+        )
+        self.db.execute_update(
+            "UPDATE powerup_usage SET used_at = ? WHERE question_id = ?",
+            (timestamp, self.question_id),
+        )
+        runner = object.__new__(GameRunner)
+        runner.data_manager = self.data_manager
+        events = runner._fetch_daily_events(self.question_id)
+        simulator = DailyGameSimulator(
+            self.question,
+            [self.question.answer],
+            None,
+            events,
+            self.initial_players,
+            self.config,
+        )
+        results = simulator.run(apply_end_of_day=False)
+        for player_id, result in results.items():
+            player = self.player_manager.get_player(player_id)
+            self.assertEqual(player.score, result["final_score"])
+            self.assertEqual(player.answer_streak, result["final_streak"])
+        return events
+
+    def test_jinx_before_guess_same_second_matches_live(self):
+        self.powerups.jinx("1", "2", self.question_id)
+        self.guesses.handle_guess("2", "Target", "4")
+
+        events = self.assert_replay_matches_live()
+
+        self.assertIsInstance(events[0], PowerUpEvent)
+        self.assertIsInstance(events[1], GuessEvent)
+
+    def test_retroactive_steal_after_guess_same_second_matches_live(self):
+        self.guesses.handle_guess("2", "Target", "4")
+        self.powerups.steal("1", "2", self.question_id)
+
+        events = self.assert_replay_matches_live()
+
+        self.assertIsInstance(events[0], GuessEvent)
+        self.assertIsInstance(events[1], PowerUpEvent)
+
+    def test_correct_guesses_same_second_preserve_fastest_order(self):
+        self.guesses.handle_guess("2", "Target", "4")
+        self.guesses.handle_guess("1", "Attacker", "4")
+
+        events = self.assert_replay_matches_live()
+
+        self.assertEqual([event.user_id for event in events], ["2", "1"])
+
+    def test_wrong_guess_then_rest_same_second_matches_live(self):
+        self.guesses.handle_guess("2", "Target", "wrong")
+        self.powerups.rest("2", self.question_id, self.question.answer)
+
+        events = self.assert_replay_matches_live()
+
+        self.assertIsInstance(events[0], GuessEvent)
+        self.assertIsInstance(events[1], PowerUpEvent)
+
+    def test_hydrated_preload_precedes_same_second_guess(self):
+        self.powerups.jinx("1", "2", None)
+        self.powerups.reset_daily_state()
+        self.powerups.hydrate_pending_powerups(self.question_id)
+        self.guesses.handle_guess("2", "Target", "4")
+
+        events = self.assert_replay_matches_live()
+
+        self.assertEqual([event.event_sequence for event in events], [1, 2])
+        self.assertEqual(events[0].powerup_type, "jinx_preload")
+
+    def test_rejected_retaliation_does_not_change_event_order(self):
+        self.powerups.jinx("1", "2", self.question_id)
+        with self.assertRaises(PowerUpError):
+            self.powerups.steal("2", "1", self.question_id)
+        self.guesses.handle_guess("2", "Target", "4")
+
+        events = self.assert_replay_matches_live()
+
+        self.assertEqual([event.event_sequence for event in events], [1, 2])
+
+    def test_jinx_and_guess_are_serialized_across_threads(self):
+        transition_started = Event()
+        release_transition = Event()
+        guess_started = Event()
+        guess_finished = Event()
+        reduce_powerup = self.powerups._reduce_powerup
+
+        def delayed_reduction(*args, **kwargs):
+            transition_started.set()
+            if not release_transition.wait(5):
+                raise TimeoutError("jinx transition was not released")
+            return reduce_powerup(*args, **kwargs)
+
+        def submit_guess():
+            guess_started.set()
+            try:
+                return self.guesses.handle_guess("2", "Target", "4")
+            finally:
+                guess_finished.set()
+
+        with patch.object(
+            self.powerups, "_reduce_powerup", side_effect=delayed_reduction
+        ):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                jinx = executor.submit(self.powerups.jinx, "1", "2", self.question_id)
+                try:
+                    self.assertTrue(transition_started.wait(5))
+                    guess = executor.submit(submit_guess)
+                    self.assertTrue(guess_started.wait(5))
+                    self.assertFalse(guess_finished.wait(0.1))
+                finally:
+                    release_transition.set()
+                jinx.result(timeout=5)
+                guess.result(timeout=5)
+
+        events = self.assert_replay_matches_live()
+        self.assertIsInstance(events[0], PowerUpEvent)
+        self.assertIsInstance(events[1], GuessEvent)
 
 
 if __name__ == "__main__":

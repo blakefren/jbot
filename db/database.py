@@ -57,6 +57,18 @@ class Database:
         self.conn = None
         self._connect()
         self._create_tables()
+        self._ensure_event_sequence_columns()
+
+    def _ensure_event_sequence_columns(self):
+        for table in ("guesses", "powerup_usage"):
+            columns = {
+                row[1] for row in self.conn.execute(f"PRAGMA table_info({table})")
+            }
+            if columns and "event_sequence" not in columns:
+                with self.conn:
+                    self.conn.execute(
+                        f"ALTER TABLE {table} ADD COLUMN event_sequence INTEGER"
+                    )
 
     def _connect(self):
         """
