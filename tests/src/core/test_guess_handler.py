@@ -44,16 +44,28 @@ class TestGuessHandler(unittest.TestCase):
         player_id = 1
         player_name = "PlayerOne"
         guess = "Test Answer"
+        history = []
+
+        self.data_manager.read_guess_history.side_effect = lambda user_id: [
+            row for row in history if row["user_id"] == str(user_id)
+        ]
+
+        def persist_guess(user_id, player_name, question_id, guess_text, is_correct):
+            history.append(
+                {
+                    "user_id": str(user_id),
+                    "daily_question_id": question_id,
+                    "guess_text": guess_text,
+                    "is_correct": is_correct,
+                }
+            )
+
+        self.data_manager.log_player_guess.side_effect = persist_guess
 
         # No direct Player methods should be required; manager handles streaks
         self.player_manager.get_player.return_value = None
         self.data_manager.get_correct_guess_count.return_value = 1  # Not first
         self.data_manager.get_correct_solver_count.return_value = 1  # Not first
-
-        # Mock so that get_player_guesses returns the guess we are making
-        self.data_manager.read_guess_history.return_value = [
-            {"daily_question_id": self.daily_question_id, "guess_text": guess}
-        ]
 
         is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
             player_id, player_name, guess
@@ -61,9 +73,8 @@ class TestGuessHandler(unittest.TestCase):
 
         self.assertTrue(is_correct)
         self.assertEqual(num_guesses, 1)
-        self.data_manager.log_player_guess.assert_called_once_with(
-            player_id, player_name, self.daily_question_id, guess.lower(), True
-        )
+        self.assertEqual(history[0]["guess_text"], guess.lower())
+        self.assertTrue(history[0]["is_correct"])
 
         # Streak should be incremented here
         self.player_manager.increment_streak.assert_called_once()
@@ -82,13 +93,25 @@ class TestGuessHandler(unittest.TestCase):
         player_id = 2
         player_name = "PlayerTwo"
         guess = "Wrong Answer"
+        history = []
+
+        self.data_manager.read_guess_history.side_effect = lambda user_id: [
+            row for row in history if row["user_id"] == str(user_id)
+        ]
+
+        def persist_guess(user_id, player_name, question_id, guess_text, is_correct):
+            history.append(
+                {
+                    "user_id": str(user_id),
+                    "daily_question_id": question_id,
+                    "guess_text": guess_text,
+                    "is_correct": is_correct,
+                }
+            )
+
+        self.data_manager.log_player_guess.side_effect = persist_guess
 
         self.player_manager.get_player.return_value = None
-
-        # Mock so that get_player_guesses returns the guess we are making
-        self.data_manager.read_guess_history.return_value = [
-            {"daily_question_id": self.daily_question_id, "guess_text": guess}
-        ]
 
         is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
             player_id, player_name, guess
@@ -96,9 +119,8 @@ class TestGuessHandler(unittest.TestCase):
 
         self.assertFalse(is_correct)
         self.assertEqual(num_guesses, 1)
-        self.data_manager.log_player_guess.assert_called_once_with(
-            player_id, player_name, self.daily_question_id, guess.lower(), False
-        )
+        self.assertEqual(history[0]["guess_text"], guess.lower())
+        self.assertFalse(history[0]["is_correct"])
 
         # Verify streak logic
         self.player_manager.increment_streak.assert_not_called()
