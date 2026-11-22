@@ -11,105 +11,66 @@ from db.database import Database
 
 class TestDataManager(unittest.TestCase):
     def test_get_player(self):
-        """Test retrieving a single player."""
-        self.db.execute_query = MagicMock(
-            return_value=[
-                {
-                    "id": "1",
-                    "name": "Alice",
-                    "score": 42,
-                    "answer_streak": 3,
-                    "pending_rest_multiplier": 0.0,
-                }
-            ]
-        )
-        player = self.data_manager.get_player("1")
-        self.assertIsNotNone(player)
-        self.assertEqual(player.name, "Alice")
-        self.assertEqual(player.score, 42)
-        self.assertEqual(player.pending_rest_multiplier, 0.0)
+        """Read persisted player fields and return None for an unknown ID."""
+        self.data_manager.create_player("1", "Alice")
+        self.data_manager.adjust_player_score("1", 42)
+        self.data_manager.set_streak("1", 3)
 
-        # Test not found
-        self.db.execute_query = MagicMock(return_value=[])
-        player = self.data_manager.get_player("999")
-        self.assertIsNone(player)
+        player = self.data_manager.get_player("1")
+        self.assertEqual(
+            (player.name, player.score, player.answer_streak), ("Alice", 42, 3)
+        )
+        self.assertEqual(player.pending_rest_multiplier, 0.0)
+        self.assertIsNone(self.data_manager.get_player("999"))
 
     def test_create_player(self):
-        """Test creating a new player."""
-        self.db.execute_update = MagicMock()
+        """Create a player with the schema's default state."""
         self.data_manager.create_player("1", "Alice")
-        self.db.execute_update.assert_called_once_with(
-            """
-            INSERT INTO players (id, name, score, season_score, answer_streak,
-                                lifetime_questions, lifetime_correct, lifetime_first_answers, lifetime_best_streak)
-            VALUES (?, ?, 0, 0, 0, 0, 0, 0, 0)
-        """,
-            ("1", "Alice"),
+        player = self.data_manager.get_player("1")
+        self.assertEqual(
+            (player.name, player.score, player.answer_streak), ("Alice", 0, 0)
         )
 
     def test_update_player_name(self):
-        """Test updating a player's name."""
-        self.db.execute_update = MagicMock()
+        """Persist a changed player name."""
+        self.data_manager.create_player("1", "Alice")
         self.data_manager.update_player_name("1", "New Name")
-        self.db.execute_update.assert_called_once_with(
-            "UPDATE players SET name = ? WHERE id = ?", ("New Name", "1")
-        )
+        self.assertEqual(self.data_manager.get_player("1").name, "New Name")
 
     def test_increment_streak(self):
-        """Test incrementing a player's streak."""
-        self.db.execute_update = MagicMock()
+        """Increment a persisted streak."""
+        self.data_manager.create_player("1", "Alice")
         self.data_manager.increment_streak("1")
-        self.db.execute_update.assert_called_once_with(
-            "UPDATE players SET answer_streak = answer_streak + 1 WHERE id = ?", ("1",)
-        )
+        self.assertEqual(self.data_manager.get_player("1").answer_streak, 1)
 
     def test_reset_streak(self):
-        """Test resetting a player's streak."""
-        self.db.execute_update = MagicMock()
+        """Reset a persisted streak."""
+        self.data_manager.create_player("1", "Alice")
+        self.data_manager.set_streak("1", 4)
         self.data_manager.reset_streak("1")
-        self.db.execute_update.assert_called_once_with(
-            "UPDATE players SET answer_streak = 0 WHERE id = ?", ("1",)
-        )
+        self.assertEqual(self.data_manager.get_player("1").answer_streak, 0)
 
     def test_increment_pending_multiplier(self):
-        """Test incrementing a player's pending rest multiplier."""
-        self.db.execute_update = MagicMock()
+        """Accumulate a persisted rest multiplier."""
+        self.data_manager.create_player("1", "Alice")
         self.data_manager.increment_pending_multiplier("1", 0.2)
-        self.db.execute_update.assert_called_once_with(
-            "UPDATE players SET pending_rest_multiplier = pending_rest_multiplier + ? WHERE id = ?",
-            (0.2, "1"),
-        )
+        self.data_manager.increment_pending_multiplier("1", 0.3)
+        self.assertAlmostEqual(self.data_manager.get_pending_multiplier("1"), 0.5)
 
     def test_load_players(self):
-        """Test DataManager.load_players returns correct player dict."""
-        # Mock the database execute_query method
-        self.db.execute_query = lambda query: [
-            {
-                "id": "1",
-                "name": "Alice",
-                "score": 42,
-                "answer_streak": 3,
-                "pending_rest_multiplier": 1.2,
-            },
-            {
-                "id": "2",
-                "name": "Bob",
-                "score": 0,
-                "answer_streak": 0,
-                "pending_rest_multiplier": 0.0,
-            },
-        ]
+        """Load persisted players into the domain model."""
+        self.data_manager.create_player("1", "Alice")
+        self.data_manager.adjust_player_score("1", 42)
+        self.data_manager.set_streak("1", 3)
+        self.data_manager.increment_pending_multiplier("1", 1.2)
+        self.data_manager.create_player("2", "Bob")
+
         players = self.data_manager.load_players()
         self.assertEqual(players["1"].name, "Alice")
         self.assertEqual(players["1"].score, 42)
         self.assertEqual(players["1"].answer_streak, 3)
         self.assertEqual(players["1"].pending_rest_multiplier, 1.2)
         self.assertEqual(players["2"].pending_rest_multiplier, 0.0)
-
-        # Test empty DB
-        self.db.execute_query = lambda query: []
-        players = self.data_manager.load_players()
-        self.assertEqual(players, {})
 
     def setUp(self):
         """Set up for test cases."""
@@ -286,20 +247,17 @@ class TestDataManager(unittest.TestCase):
         self.assertEqual(message_from_db[0]["status"], "success")
 
     def test_get_player_ids_with_role(self):
-        """Test retrieving player IDs for a given role."""
-        role_name = "Winner"
-        # Mock the DB response
-        self.data_manager._db.execute_query = lambda query, params: [
-            {"player_id": "123"},
-            {"player_id": "456"},
-        ]
-        player_ids = self.data_manager.get_player_ids_with_role(role_name)
-        self.assertEqual(player_ids, {"123", "456"})
+        """Resolve assigned roles from persisted relationships."""
+        self.data_manager.create_player("123", "Alice")
+        self.data_manager.create_player("456", "Bob")
+        self.data_manager.assign_role_to_player("123", "Winner")
+        self.data_manager.assign_role_to_player("456", "Winner")
+        self.data_manager.assign_role_to_player("123", "Other")
 
-        # Test with no results
-        self.data_manager._db.execute_query = lambda query, params: []
-        player_ids = self.data_manager.get_player_ids_with_role(role_name)
-        self.assertEqual(player_ids, set())
+        self.assertEqual(
+            self.data_manager.get_player_ids_with_role("Winner"), {"123", "456"}
+        )
+        self.assertEqual(self.data_manager.get_player_ids_with_role("Missing"), set())
 
     def test_read_guess_history(self):
         # Log questions and guesses
@@ -408,57 +366,49 @@ class TestDataManager(unittest.TestCase):
         self.assertEqual(result[0]["reason"], reason)
 
     def test_assign_role_to_player(self):
-        """Test assigning a role to a player."""
+        """Create a role and persist the player-role relationship."""
         player_id = "player1"
         role_name = "New Role"
-
-        # Mock DB methods
-        self.data_manager._db.execute_query = MagicMock(return_value=[])
-        self.data_manager._db.execute_update = MagicMock(return_value=(None, 1))
-
+        self.data_manager.create_player(player_id, "Player")
         self.data_manager.assign_role_to_player(player_id, role_name)
-
-        # Verify role was created and assigned
-        self.assertEqual(self.data_manager._db.execute_update.call_count, 2)
+        rows = self.db.execute_query(
+            "SELECT r.name FROM roles r JOIN player_roles pr ON pr.role_id = r.id "
+            "WHERE pr.player_id = ?",
+            (player_id,),
+        )
+        self.assertEqual([row["name"] for row in rows], [role_name])
 
     def test_clear_player_roles(self):
-        """Test clearing all player roles."""
-        # Mock DB method
-        self.data_manager._db.execute_update = MagicMock(return_value=(None, 1))
+        """Remove persisted player-role relationships."""
+        self.data_manager.create_player("player1", "Player")
+        self.data_manager.assign_role_to_player("player1", "Role")
         self.data_manager.clear_player_roles()
-        self.assertEqual(self.data_manager._db.execute_update.call_count, 1)
+        rows = self.db.execute_query("SELECT * FROM player_roles")
+        self.assertEqual(rows, [])
 
     def test_get_all_subscribers(self):
-        """Test getting all subscribers from the database."""
-        self.data_manager._db.execute_query = MagicMock(
-            return_value=[
-                {"id": 1, "display_name": "Sub1", "is_channel": True},
-                {"id": 2, "display_name": "Sub2", "is_channel": False},
-            ]
-        )
+        """Load subscribers saved through the data layer."""
+        self.data_manager.save_subscriber(Subscriber("1", "Sub1", True))
+        self.data_manager.save_subscriber(Subscriber("2", "Sub2", False))
         subscribers = self.data_manager.get_all_subscribers()
         self.assertEqual(len(subscribers), 2)
-        self.assertIn(Subscriber(1, "Sub1", True), subscribers)
-        self.assertIn(Subscriber(2, "Sub2", False), subscribers)
+        self.assertIn(Subscriber("1", "Sub1", True), subscribers)
+        self.assertIn(Subscriber("2", "Sub2", False), subscribers)
 
     def test_save_subscriber(self):
-        """Test saving a subscriber to the database."""
-        subscriber = Subscriber(1, "Sub1", True)
-        self.data_manager._db.execute_update = MagicMock()
+        """Persist a subscriber."""
+        subscriber = Subscriber("1", "Sub1", True)
         self.data_manager.save_subscriber(subscriber)
-        self.data_manager._db.execute_update.assert_called_once_with(
-            "INSERT OR REPLACE INTO subscribers (id, display_name, is_channel) VALUES (?, ?, ?)",  # noqa: E501
-            (1, "Sub1", True),
-        )
+        rows = self.db.execute_query("SELECT * FROM subscribers WHERE id = ?", ("1",))
+        self.assertEqual(rows[0]["display_name"], "Sub1")
 
     def test_delete_subscriber(self):
-        """Test deleting a subscriber from the database."""
-        subscriber = Subscriber(1, "Sub1", True)
-        self.data_manager._db.execute_update = MagicMock()
+        """Delete a persisted subscriber."""
+        subscriber = Subscriber("1", "Sub1", True)
+        self.data_manager.save_subscriber(subscriber)
         self.data_manager.delete_subscriber(subscriber)
-        self.data_manager._db.execute_update.assert_called_once_with(
-            "DELETE FROM subscribers WHERE id = ?", (1,)
-        )
+        rows = self.db.execute_query("SELECT * FROM subscribers WHERE id = ?", ("1",))
+        self.assertEqual(rows, [])
 
     def test_initialize_database(self):
         """Test that initialize_database reads and executes the schema."""
@@ -474,46 +424,38 @@ class TestDataManager(unittest.TestCase):
             )
 
     def test_get_all_players(self):
-        """Test get_all_players delegates to load_players."""
-        self.data_manager._db.execute_query = MagicMock(
-            return_value=[
-                {
-                    "id": "1",
-                    "name": "Alice",
-                    "score": 10,
-                    "answer_streak": 2,
-                    "pending_rest_multiplier": 0.0,
-                }
-            ]
-        )
+        """Return all persisted players keyed by ID."""
+        self.data_manager.create_player("1", "Alice")
+        self.data_manager.set_streak("1", 2)
         players = self.data_manager.get_all_players()
         self.assertEqual(len(players), 1)
         self.assertEqual(players["1"].name, "Alice")
+        self.assertEqual(players["1"].answer_streak, 2)
 
     def test_adjust_player_score(self):
-        """Test adjusting a player's score directly in the database."""
-        self.data_manager._db.execute_update = MagicMock()
+        """Persist a score adjustment."""
+        self.data_manager.create_player("player1", "Player")
         self.data_manager.adjust_player_score("player1", 50)
-        self.data_manager._db.execute_update.assert_called_once_with(
-            "UPDATE players SET score = score + ? WHERE id = ?", (50, "player1")
-        )
+        self.assertEqual(self.data_manager.get_player("player1").score, 50)
 
     def test_log_messaging_event_incoming_ignored(self):
         """Test that incoming messages are not logged."""
-        self.data_manager._db.execute_update = MagicMock()
         self.data_manager.log_messaging_event(
             "incoming", "discord", "12345", "Hello", "success"
         )
-        self.data_manager._db.execute_update.assert_not_called()
+        self.assertEqual(self.db.execute_query("SELECT * FROM messages"), [])
 
     def test_get_player_scores(self):
-        """Test retrieving player scores ordered by score."""
-        self.data_manager._db.execute_query = MagicMock(
-            return_value=[
-                {"id": "1", "name": "Alice", "score": 100},
-                {"id": "2", "name": "Bob", "score": 50},
-            ]
-        )
+        """Return active players ordered by their persisted scores."""
+        self.data_manager.create_player("1", "Alice")
+        self.data_manager.create_player("2", "Bob")
+        question = Question("Q", "A", "C", 100)
+        daily_question_id = self.data_manager.log_daily_question(question)
+        self.data_manager.adjust_player_score("1", 100)
+        self.data_manager.adjust_player_score("2", 50)
+        self.data_manager.log_player_guess("1", "Alice", daily_question_id, "A", True)
+        self.data_manager.log_player_guess("2", "Bob", daily_question_id, "B", False)
+
         scores = self.data_manager.get_player_scores()
         self.assertEqual(len(scores), 2)
         self.assertEqual(scores[0]["score"], 100)
@@ -600,124 +542,89 @@ class TestDataManager(unittest.TestCase):
         self.assertNotIn("old_stealer", player_ids)
 
     def test_get_player_streaks(self):
-        """Test retrieving player streaks ordered by streak."""
-        self.data_manager._db.execute_query = MagicMock(
-            return_value=[
-                {"id": "1", "name": "Alice", "answer_streak": 5},
-                {"id": "2", "name": "Bob", "answer_streak": 3},
-            ]
-        )
+        """Return active persisted streaks ordered from longest to shortest."""
+        self.data_manager.create_player("1", "Alice")
+        self.data_manager.set_streak("1", 5)
+        self.data_manager.create_player("2", "Bob")
+        self.data_manager.set_streak("2", 3)
+        self.data_manager.create_player("3", "Charlie")
+
         streaks = self.data_manager.get_player_streaks()
         self.assertEqual(len(streaks), 2)
         self.assertEqual(streaks[0]["answer_streak"], 5)
         self.assertEqual(streaks[1]["answer_streak"], 3)
 
     def test_get_question_by_id_not_found(self):
-        """Test get_question_by_id returns None when not found."""
-        self.data_manager._db.execute_query = MagicMock(return_value=[])
+        """Return None when the canonical question ID is absent."""
         result = self.data_manager.get_question_by_id(999)
         self.assertIsNone(result)
 
     def test_get_question_by_id_found(self):
-        """Test get_question_by_id returns a Question when found."""
-        self.data_manager._db.execute_query = MagicMock(
-            return_value=[
-                {
-                    "id": 1,
-                    "question_text": "Test Q",
-                    "answer_text": "Test A",
-                    "category": "Test Cat",
-                    "value": 100,
-                    "source": "test",
-                    "hint_text": "Test Hint",
-                }
-            ]
+        """Read a question persisted through the real schema."""
+        self.data_manager.log_daily_question(
+            Question("Test Q", "Test A", "Test Cat", 100, "test", "Test Hint")
         )
-        result = self.data_manager.get_question_by_id(1)
+        question_id = self.db.execute_query("SELECT id FROM questions")[0]["id"]
+
+        result = self.data_manager.get_question_by_id(question_id)
         self.assertIsNotNone(result)
         self.assertEqual(result.question, "Test Q")
         self.assertEqual(result.answer, "Test A")
 
     def test_get_todays_daily_question_question_not_found(self):
-        """Test get_todays_daily_question returns None when question record is missing."""
-
-        # Mock to return a daily_question entry but no corresponding question
-        def mock_query(query, params=None):
-            if "daily_questions" in query:
-                return [{"id": 1, "question_id": 999}]
-            return []  # Question not found
-
-        self.data_manager._db.execute_query = mock_query
+        """Return None for a daily-question row with a missing question record."""
+        self.db.execute_update(
+            "INSERT INTO daily_questions (question_id, sent_at) VALUES (?, ?)",
+            (999, date.today()),
+        )
         result = self.data_manager.get_todays_daily_question()
         self.assertIsNone(result)
 
     def test_assign_role_to_player_existing_role(self):
-        """Test assigning an existing role to a player."""
-
-        def mock_query(query, params=None):
-            if "SELECT id FROM roles" in query:
-                return [{"id": 5}]  # Existing role found
-            return []
-
-        self.data_manager._db.execute_query = mock_query
-        self.data_manager._db.execute_update = MagicMock()
-
+        """Reusing a persisted role does not create duplicates."""
+        self.data_manager.create_player("player1", "Player")
         self.data_manager.assign_role_to_player("player1", "Existing Role")
-
-        # Should only call execute_update once (to assign role, not create it)
-        self.assertEqual(self.data_manager._db.execute_update.call_count, 1)
+        self.data_manager.assign_role_to_player("player1", "Existing Role")
+        role_count = self.db.execute_query(
+            "SELECT COUNT(*) AS count FROM roles WHERE name = ?", ("Existing Role",)
+        )[0]["count"]
+        assignment_count = self.db.execute_query(
+            "SELECT COUNT(*) AS count FROM player_roles WHERE player_id = ?",
+            ("player1",),
+        )[0]["count"]
+        self.assertEqual(role_count, 1)
+        self.assertEqual(assignment_count, 1)
 
     def test_get_most_recent_daily_question(self):
-        """Test retrieving the most recent daily question."""
-        from datetime import date, timedelta
-
-        # Mock database to return a daily question from yesterday
+        """Retrieve a persisted historical daily question and its date."""
         yesterday = date.today() - timedelta(days=1)
+        question = Question("Test Q", "Test A", "Test Cat", 100)
+        expected_daily_question_id = self.data_manager.log_daily_question(question)
+        self.db.execute_update(
+            "UPDATE daily_questions SET sent_at = ? WHERE id = ?",
+            (yesterday, expected_daily_question_id),
+        )
 
-        def mock_query(query, params=None):
-            if "daily_questions" in query and "ORDER BY id DESC" in query:
-                return [{"id": 5, "question_id": 10, "sent_at": yesterday.isoformat()}]
-            elif "questions" in query and "id = ?" in query:
-                return [
-                    {
-                        "question_text": "Test Q",
-                        "answer_text": "Test A",
-                        "category": "Test Cat",
-                        "value": 100,
-                        "source": "test",
-                        "hint_text": "Test Hint",
-                    }
-                ]
-            return []
-
-        self.data_manager._db.execute_query = mock_query
         result = self.data_manager.get_most_recent_daily_question()
 
         self.assertIsNotNone(result)
         self.assertEqual(len(result), 3)  # question, id, date
         question, daily_question_id, sent_date = result
         self.assertEqual(question.question, "Test Q")
-        self.assertEqual(daily_question_id, 5)
+        self.assertEqual(daily_question_id, expected_daily_question_id)
         self.assertEqual(sent_date, yesterday)
 
     def test_get_most_recent_daily_question_no_questions(self):
-        """Test get_most_recent_daily_question returns None when no questions exist."""
-        self.data_manager._db.execute_query = MagicMock(return_value=[])
+        """Return None when there are no daily questions."""
         result = self.data_manager.get_most_recent_daily_question()
         self.assertIsNone(result)
 
     def test_get_most_recent_daily_question_question_not_found(self):
-        """Test get_most_recent_daily_question returns None when question record is missing."""
-        from datetime import date
-
-        def mock_query(query, params=None):
-            if "daily_questions" in query:
-                return [
-                    {"id": 1, "question_id": 999, "sent_at": date.today().isoformat()}
-                ]
-            return []  # Question not found
-
-        self.data_manager._db.execute_query = mock_query
+        """Return None when the latest daily row references no question."""
+        self.db.execute_update(
+            "INSERT INTO daily_questions (question_id, sent_at) VALUES (?, ?)",
+            (999, date.today()),
+        )
         result = self.data_manager.get_most_recent_daily_question()
         self.assertIsNone(result)
 

@@ -268,11 +268,6 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         self.bot.game.format_verify_report.assert_not_called()
         self.bot._notify_admins.assert_not_awaited()
 
-    async def test_evening_message_task_update_scores_fails(self):
-        """Verify task stops if updating scores fails."""
-        # This test is no longer relevant as update_scores is removed
-        pass
-
     @patch("src.core.discord.RolesGameMode")
     async def test_evening_message_task_update_roles_fails(
         self, mock_roles_game_mode_cls

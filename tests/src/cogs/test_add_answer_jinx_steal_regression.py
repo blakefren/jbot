@@ -14,16 +14,16 @@ PowerUpManager.daily_state.
 
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime
-import discord
 
 from src.cogs.admin import Admin
-from src.core.powerup import PowerUpManager, PowerUpError
+from src.core.game_runner import GameRunner
+from src.core.powerup import PowerUpManager
 from src.core.player_manager import PlayerManager
 from src.core.data_manager import DataManager
 from src.core.state import DailyPlayerState
 from data.readers.question import Question
 from db.database import Database
+from tests.src.core._powerup_helpers import make_config
 
 
 class TestAddAnswerJinxStealRegression(unittest.IsolatedAsyncioTestCase):
@@ -204,82 +204,104 @@ class TestAddAnswerJinxStealRegression(unittest.IsolatedAsyncioTestCase):
         self.ctx.interaction.followup.send.assert_called()
 
 
-class TestJinxAfterAddAnswer(unittest.TestCase):
-    """
-    Integration tests verifying that jinx works correctly after add_answer.
-    """
+class TestJinxStealAfterAddAnswer(unittest.IsolatedAsyncioTestCase):
+    """Exercise answer correction through Admin, SQLite, and live power-ups."""
 
-    def setUp(self):
-        """Set up database, managers, and question."""
+    async def asyncSetUp(self):
         self.db = Database(":memory:")
-
         self.data_manager = DataManager(self.db)
         self.player_manager = PlayerManager(self.data_manager)
-        self.powerup_manager = PowerUpManager(self.player_manager, self.data_manager)
 
-        # Insert test players using execute_update
-        self.db.execute_update(
-            "INSERT INTO players (user_id, name, score, answer_streak) VALUES (?, ?, ?, ?)",
-            ("attacker_123", "Attacker", 100, 5),
+        for player_id, name, score, streak in (
+            ("12345", "Admin", 0, 0),
+            ("attacker", "Attacker", 100, 8),
+            ("target", "Target", 100, 0),
+        ):
+            self.data_manager.create_player(player_id, name)
+            self.player_manager.update_score(player_id, score)
+            self.player_manager.set_streak(player_id, streak)
+
+        self.question = Question(
+            question="A test question",
+            answer="Original",
+            category="Test",
+            clue_value=100,
         )
-        self.db.execute_update(
-            "INSERT INTO players (user_id, name, score, answer_streak) VALUES (?, ?, ?, ?)",
-            ("target_123", "Target", 50, 3),
+        self.daily_question_id = self.data_manager.log_daily_question(self.question)
+        self.question_db_id = self.db.execute_query(
+            "SELECT question_id FROM daily_questions WHERE id = ?",
+            (self.daily_question_id,),
+        )[0]["question_id"]
+        self.data_manager.log_player_guess(
+            "target", "Target", self.daily_question_id, "Accepted spelling", False
         )
 
-    def test_jinx_recognizes_retroactively_corrected_target(self):
-        """
-        After a player is retroactively marked correct via add_answer,
-        jinx should recognize them as already answered (retroactive scenario).
-        """
-        question_id = 1
+        self.config = make_config(retro_steal_cost=4)
+        self.config.get_bool.return_value = False
+        with patch("src.core.game_runner.ConfigReader", return_value=self.config):
+            self.game = GameRunner(
+                MagicMock(), self.data_manager, player_manager=self.player_manager
+            )
+        self.game.daily_q = self.question
+        self.game.daily_question_id = self.daily_question_id
+        self.game.question_db_id = self.question_db_id
+        self.game.restore_game_state()
 
-        # Initially, target_123 is NOT marked correct in daily_state
-        self.assertEqual(self.powerup_manager.daily_state.get("target_123"), None)
+        self.bot = MagicMock()
+        self.bot.game = self.game
+        self.bot.morning_message_task.is_running.return_value = False
+        self.bot.evening_message_task.is_running.return_value = False
+        self.cog = Admin(self.bot)
 
-        # Simulate add_answer syncing the daily_state (like the fix does)
-        new_state = DailyPlayerState(
-            is_correct=True, score_earned=200, bonuses={"try": 20}
+        self.ctx = MagicMock()
+        self.ctx.author.id = 12345
+        self.ctx.interaction.response.defer = AsyncMock()
+        self.ctx.interaction.followup.send = AsyncMock()
+        self.ctx.channel.send = AsyncMock()
+
+    async def asyncTearDown(self):
+        self.db.close()
+
+    async def _apply_answer_correction(self):
+        powerup_manager = self.game.managers["powerup"]
+        self.assertFalse(powerup_manager.daily_state["target"].is_correct)
+
+        await self.cog.add_answer.callback(
+            self.cog, self.ctx, answer_text="Accepted spelling", apply=True
         )
-        self.powerup_manager.daily_state["target_123"] = new_state
 
-        # Now jinx should see target as having answered
-        target_state = self.powerup_manager.daily_state.get("target_123")
-        self.assertIsNotNone(target_state)
-        self.assertTrue(target_state.is_correct)
+        corrected_guess = self.data_manager.get_guesses_for_daily_question(
+            self.daily_question_id
+        )[0]
+        self.assertTrue(corrected_guess["is_correct"])
+        self.assertTrue(powerup_manager.daily_state["target"].is_correct)
+        return powerup_manager
 
-        # When jinx checks if it should be retroactive:
-        # In powerup.py, line ~440: if self._get_daily_state(target_id).is_correct:
-        # This should now return True and trigger retroactive jinx
-        attacker_state = self.powerup_manager._get_daily_state("attacker_123")
-        self.assertIsNotNone(attacker_state)
+    async def test_jinx_after_correction_is_retroactive(self):
+        powerup_manager = await self._apply_answer_correction()
+        target_score = self.player_manager.get_player("target").score
+        attacker_score = self.player_manager.get_player("attacker").score
 
-    def test_steal_recognizes_retroactively_corrected_target(self):
-        """
-        After a player is retroactively marked correct via add_answer,
-        steal should recognize them as already answered (retroactive scenario).
-        """
-        question_id = 1
+        message = powerup_manager.jinx("attacker", "target", self.daily_question_id)
 
-        # Initially, target_123 is NOT marked correct in daily_state
-        self.assertEqual(self.powerup_manager.daily_state.get("target_123"), None)
-
-        # Simulate add_answer syncing the daily_state
-        new_state = DailyPlayerState(
-            is_correct=True, score_earned=150, bonuses={"before_hint": 10}
+        self.assertIn("already answered", message)
+        self.assertLess(self.player_manager.get_player("target").score, target_score)
+        self.assertGreater(
+            self.player_manager.get_player("attacker").score, attacker_score
         )
-        self.powerup_manager.daily_state["target_123"] = new_state
 
-        # Now steal should see target as having answered
-        target_state = self.powerup_manager.daily_state.get("target_123")
-        self.assertIsNotNone(target_state)
-        self.assertTrue(target_state.is_correct)
+    async def test_steal_after_correction_is_retroactive(self):
+        powerup_manager = await self._apply_answer_correction()
+        target_score = self.player_manager.get_player("target").score
+        attacker_score = self.player_manager.get_player("attacker").score
 
-        # When steal checks if it should be retroactive:
-        # In powerup.py, line ~525: if target_state.is_correct:
-        # This should now return True and trigger retroactive steal
-        thief_state = self.powerup_manager._get_daily_state("attacker_123")
-        self.assertIsNotNone(thief_state)
+        message = powerup_manager.steal("attacker", "target", self.daily_question_id)
+
+        self.assertIn("already answered", message)
+        self.assertLess(self.player_manager.get_player("target").score, target_score)
+        self.assertGreater(
+            self.player_manager.get_player("attacker").score, attacker_score
+        )
 
 
 if __name__ == "__main__":

@@ -356,14 +356,6 @@ class TestGameRunner(unittest.TestCase):
                 player_id, "Test Player", "any guess"
             )
 
-    def test_update_scores(self):
-        """Test that scores are updated correctly for players with correct answers."""
-        pass
-
-    def test_update_scores_for_new_player(self):
-        """Test that a new player's score is updated correctly."""
-        pass
-
     def test_handle_guess(self):
         """Test handling a player's guess."""
         self.mock_data_manager.get_todays_daily_question.return_value = None
@@ -938,14 +930,6 @@ class TestGameRunner(unittest.TestCase):
 
         # Should fall back to stored name
         self.assertIn("**Alice**", content)
-
-    def test_update_scores_no_daily_question_id(self):
-        """Test update_scores logs warning when no daily_question_id."""
-        pass
-
-    def test_update_scores_fallback_on_exception(self):
-        """Test update_scores falls back to default score on exception."""
-        pass
 
     def test_apply_crowd_wisdom_bonus(self):
         self.game_runner.daily_question_id = 123

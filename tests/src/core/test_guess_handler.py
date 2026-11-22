@@ -3,7 +3,11 @@ from datetime import date
 from unittest.mock import MagicMock, patch
 from src.core.events import GuessContext
 from src.core.guess_handler import GuessHandler, AlreadyAnsweredCorrectlyError
+from src.core.data_manager import DataManager
+from src.core.player_manager import PlayerManager
+from db.database import Database
 from data.readers.question import Question
+from tests.src.core._powerup_helpers import make_config
 
 
 class TestGuessHandler(unittest.TestCase):
@@ -433,100 +437,101 @@ class TestGuessHandler(unittest.TestCase):
         self.assertIn("lifetime_first_answers", lifetime_calls)
 
     def test_fastest_badge_counts_unique_players_not_total_guesses(self):
-        """
-        Regression test for fastest badge bug:
-        When Player A has multiple correct guesses, Player B's rank should be
-        calculated based on unique players (2nd), not total guess records (3rd).
-
-        Scenario:
-        - Player A submits wrong answer, then correct answer (2 guess records, 1 correct)
-        - Player B is about to submit correct answer
-        - Player B should be ranked 2nd fastest (not 3rd)
-        - Bonus calculation should reflect rank 2
-        """
-        from db.database import Database
+        """Award rank two after one player's wrong and correct guesses."""
         from src.core.data_manager import DataManager
-        from datetime import date
+        from src.core.player_manager import PlayerManager
+        from db.database import Database
+        from tests.src.core._powerup_helpers import make_config
 
-        # Use real in-memory database for accurate query testing
         db = Database(":memory:")
-        data_manager = DataManager(db)
-        data_manager.initialize_database()
+        try:
+            data_manager = DataManager(db)
+            player_manager = PlayerManager(data_manager)
+            for player_id, name in (("1", "PlayerA"), ("2", "PlayerB")):
+                player_manager.get_or_create_player(player_id, name)
 
-        # Setup: Create question record
-        question_id = 1
-        db.execute_update(
-            "INSERT INTO questions (id, question_text, answer_text, category, value) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (question_id, "Test Q", "Test Answer", "Test", 100),
-        )
+            question = Question("Test Q", "Test Answer", "Test", 100)
+            daily_question_id = data_manager.log_daily_question(question)
+            _, _, question_db_id = data_manager.get_todays_daily_question()
+            config = make_config()
 
-        # Create daily_question record
-        daily_question_id = 100
-        db.execute_update(
-            "INSERT INTO daily_questions (id, question_id, sent_at) "
-            "VALUES (?, ?, ?)",
-            (daily_question_id, question_id, date.today()),
-        )
+            def make_handler():
+                return GuessHandler(
+                    data_manager,
+                    player_manager,
+                    question,
+                    daily_question_id,
+                    managers={},
+                    config=config,
+                    question_db_id=question_db_id,
+                )
 
-        # Create player records
-        player_a_id = "1"
-        player_b_id = "2"
-        db.execute_update(
-            "INSERT INTO players (id, name) VALUES (?, ?)", (player_a_id, "PlayerA")
-        )
-        db.execute_update(
-            "INSERT INTO players (id, name) VALUES (?, ?)", (player_b_id, "PlayerB")
-        )
-
-        # Player A submits wrong answer (will be ignored for correct count)
-        db.execute_update(
-            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct) "
-            "VALUES (?, ?, ?, ?)",
-            (daily_question_id, player_a_id, "wrong answer", 0),
-        )
-
-        # Player A submits correct answer (counts as 1 correct solver)
-        db.execute_update(
-            "INSERT INTO guesses (daily_question_id, player_id, guess_text, is_correct) "
-            "VALUES (?, ?, ?, ?)",
-            (daily_question_id, player_a_id, "test answer", 1),
-        )
-
-        # Verify: get_correct_guess_count returns 1 (correct guess records)
-        total_correct_records = data_manager.get_correct_guess_count(daily_question_id)
-        self.assertEqual(
-            total_correct_records, 1, "Should count 1 correct guess record for Player A"
-        )
-
-        # Verify: get_correct_solver_count returns 1 (unique players)
-        unique_correct_players = data_manager.get_correct_solver_count(
-            daily_question_id
-        )
-        self.assertEqual(
-            unique_correct_players,
-            1,
-            "Should count 1 unique player with correct answer",
-        )
-
-        # Now simulate Player B submitting correct answer
-        # Player B's rank should be: unique_correct_players + 1 = 1 + 1 = 2 (2nd fastest)
-        player_b_rank = unique_correct_players + 1
-
-        self.assertEqual(
-            player_b_rank, 2, "Player B should be ranked 2nd fastest (not 3rd)"
-        )
-
-        # Verify that fastest bonus list would apply correctly for rank 2
-        # Assuming standard config: [20, 10, 5] for ranks 1-3
-        bonus_fastest_list = [20, 10, 5]
-        if 0 < player_b_rank <= len(bonus_fastest_list):
-            expected_bonus = bonus_fastest_list[player_b_rank - 1]
-            self.assertEqual(
-                expected_bonus,
-                10,
-                "Rank 2 should get 10 point bonus (not 5 for rank 3)",
+            handler = make_handler()
+            handler.handle_guess("1", "PlayerA", "wrong answer")
+            handler.handle_guess("1", "PlayerA", "Test Answer")
+            _, _, player_b_points, player_b_messages = make_handler().handle_guess(
+                "2", "PlayerB", "Test Answer"
             )
+
+            self.assertEqual(player_b_points, 135)
+            self.assertTrue(
+                any("2nd Fastest" in message for message in player_b_messages)
+            )
+            self.assertEqual(len(data_manager.read_guess_history("1")), 2)
+        finally:
+            db.close()
+
+
+class TestGuessHandlerSQLiteWorkflow(unittest.TestCase):
+    def setUp(self):
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+        self.player_manager = PlayerManager(self.data_manager)
+        self.player_manager.get_or_create_player("1", "Player")
+        question = Question("Question", "Answer", "Test", 100)
+        self.daily_question_id = self.data_manager.log_daily_question(question)
+        question_data = self.data_manager.get_todays_daily_question()
+        self.question_db_id = question_data[2]
+        self.handler = GuessHandler(
+            self.data_manager,
+            self.player_manager,
+            question,
+            self.daily_question_id,
+            managers={},
+            config=make_config(),
+            question_db_id=self.question_db_id,
+        )
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_correct_guess_persists_history_score_and_streak(self):
+        is_correct, guess_count, points, _ = self.handler.handle_guess(
+            "1", "Player", "Answer"
+        )
+
+        history = self.data_manager.read_guess_history("1")
+        player = self.player_manager.get_player("1")
+        self.assertTrue(is_correct)
+        self.assertEqual(guess_count, 1)
+        self.assertTrue(history[0]["is_correct"])
+        self.assertGreater(points, 0)
+        self.assertEqual(player.score, points)
+        self.assertEqual(player.answer_streak, 1)
+
+    def test_wrong_guess_persists_without_score_or_streak(self):
+        is_correct, guess_count, points, _ = self.handler.handle_guess(
+            "1", "Player", "Wrong"
+        )
+
+        history = self.data_manager.read_guess_history("1")
+        player = self.player_manager.get_player("1")
+        self.assertFalse(is_correct)
+        self.assertEqual(guess_count, 1)
+        self.assertFalse(history[0]["is_correct"])
+        self.assertEqual(points, 0)
+        self.assertEqual(player.score, 0)
+        self.assertEqual(player.answer_streak, 0)
 
 
 if __name__ == "__main__":
