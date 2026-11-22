@@ -18,6 +18,7 @@ from src.core.discord import (
     EVENING_TIME,
     PREP_TIME,
     TIMEZONE,
+    discord_bot_async,
 )
 from src.core.subscriber import Subscriber
 
@@ -63,6 +64,28 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         self.morning_task_coro = DiscordBot.morning_message_task.coro
         self.reminder_task_coro = DiscordBot.reminder_message_task.coro
         self.evening_task_coro = DiscordBot.evening_message_task.coro
+
+    @patch("src.core.discord.os.listdir")
+    async def test_setup_hook_loads_cogs_and_continues_after_load_error(
+        self, mock_listdir
+    ):
+        mock_listdir.return_value = [
+            "trivia.py",
+            "broken.py",
+            "__init__.py",
+            "notes.txt",
+        ]
+        self.bot.load_extension = AsyncMock(side_effect=[None, RuntimeError("bad cog")])
+        self.bot.tree.sync = AsyncMock()
+
+        await DiscordBot.setup_hook(self.bot)
+
+        self.assertEqual(self.bot.load_extension.await_count, 2)
+        self.assertEqual(
+            [call.args[0] for call in self.bot.load_extension.await_args_list],
+            ["cogs.trivia", "cogs.broken"],
+        )
+        self.bot.tree.sync.assert_awaited_once()
 
     # --- Morning Task Tests ---
 
@@ -146,6 +169,76 @@ class TestDiscordBotTasks(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.bot._broadcast_announcement.await_count, 2)
         self.assertEqual(self.bot._log_task_error.call_count, 2)
         self.bot._send_daily_message_to_all_subscribers.assert_awaited_once()
+
+    async def test_on_ready_registers_views_starts_tasks_and_sets_late_question(self):
+        import datetime
+
+        self.bot.ready_event_fired = False
+        self.bot.user = MagicMock(id=123)
+        self.bot.game.daily_q = None
+        question = MagicMock(id="question-hash")
+        self.bot.game.set_daily_question.side_effect = lambda: setattr(
+            self.bot.game, "daily_q", question
+        )
+        task_names = (
+            "prepare_daily_question_task",
+            "morning_message_task",
+            "reminder_message_task",
+            "evening_message_task",
+        )
+        for task_name in task_names:
+            getattr(self.bot, task_name).is_running.return_value = False
+
+        with (
+            patch("src.core.discord.os.path.exists", return_value=False),
+            patch("src.core.discord.GameActionView") as view_class,
+            patch(
+                "src.core.discord.MORNING_TIME",
+                datetime.time.min.replace(tzinfo=TIMEZONE),
+            ),
+            patch(
+                "src.core.discord.EVENING_TIME",
+                datetime.time.max.replace(tzinfo=TIMEZONE),
+            ),
+        ):
+            await DiscordBot.on_ready(self.bot)
+
+        view_class.assert_called_once_with(self.bot)
+        self.bot.add_view.assert_called_once_with(view_class.return_value)
+        for task_name in task_names:
+            getattr(self.bot, task_name).start.assert_called_once()
+        self.bot.game.set_daily_question.assert_called_once()
+        self.assertIs(self.bot.game.daily_q, question)
+
+    async def test_on_ready_restores_restart_announcement_and_removes_file(self):
+        self.bot.ready_event_fired = True
+        self.bot.user = MagicMock(id=123)
+        self.bot.game.daily_q = MagicMock()
+        channel = AsyncMock()
+        channel.send = AsyncMock()
+        user = MagicMock(mention="<@456>")
+        self.bot.get_channel.return_value = channel
+        self.bot.fetch_user.return_value = user
+        for task_name in (
+            "prepare_daily_question_task",
+            "morning_message_task",
+            "reminder_message_task",
+            "evening_message_task",
+        ):
+            getattr(self.bot, task_name).is_running.return_value = True
+
+        with (
+            patch("src.core.discord.os.path.exists", return_value=True),
+            patch("src.core.discord.os.remove") as remove,
+            patch("builtins.open", unittest.mock.mock_open(read_data="123,456")),
+            patch("src.core.discord.GameActionView"),
+        ):
+            await DiscordBot.on_ready(self.bot)
+
+        self.bot.get_channel.assert_called_once_with(123)
+        self.bot.fetch_user.assert_awaited_once_with(456)
+        channel.send.assert_awaited_once_with("Bot is back online, <@456>.")
+        remove.assert_called_once()
 
     async def test_reminder_message_task_success(self):
         """Verify the reminder task runs successfully."""
@@ -341,6 +434,39 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
         self.bot.fetch_user.assert_awaited_once_with(123)
         mock_user.send.assert_awaited_once_with("Hello")
         self.bot.data_manager.log_messaging_event.assert_called_once()
+
+    async def test_send_message_failure_is_logged(self):
+        self.bot.fetch_user.side_effect = RuntimeError("Discord unavailable")
+
+        await self.bot.send_message("Hello", target_id=123)
+
+        self.bot.data_manager.log_messaging_event.assert_called_once_with(
+            direction="outgoing",
+            method="Discord",
+            recipient_or_sender="123",
+            content="Hello",
+            status="failed - Discord unavailable",
+        )
+
+    async def test_notify_admins_skips_bad_ids_and_sends_valid_ids(self):
+        self.bot.config.get.return_value = "123, bad-id, 456"
+        self.bot.send_message = AsyncMock()
+
+        await DiscordBot._notify_admins(self.bot, "Important update")
+
+        self.assertEqual(self.bot.send_message.await_count, 2)
+        self.bot.send_message.assert_any_await(
+            "Important update",
+            is_channel=False,
+            target_id=123,
+            success_status="admin_alert",
+        )
+        self.bot.send_message.assert_any_await(
+            "Important update",
+            is_channel=False,
+            target_id=456,
+            success_status="admin_alert",
+        )
 
     async def test_send_message_to_channel(self):
         """Test sending a message to a channel by ID."""
@@ -609,6 +735,97 @@ class TestDiscordBotMethods(unittest.IsolatedAsyncioTestCase):
         await self.bot.on_command_error(ctx, error)
 
         self.bot.send_message.assert_not_awaited()
+
+    async def test_on_command_error_bad_argument_and_permission_branches(self):
+        from discord.ext import commands
+
+        ctx = MagicMock()
+        ctx.command.name = "test_cmd"
+        self.bot.send_message = AsyncMock()
+        self.bot.on_command_error = DiscordBot.on_command_error.__get__(
+            self.bot, DiscordBot
+        )
+
+        await self.bot.on_command_error(ctx, commands.BadArgument("bad value"))
+        self.assertIn("couldn't understand", self.bot.send_message.await_args.args[0])
+
+        self.bot.send_message.reset_mock()
+        await self.bot.on_command_error(ctx, commands.CheckFailure())
+        self.assertIn(
+            "don't meet the requirements", self.bot.send_message.await_args.args[0]
+        )
+
+    async def test_on_command_error_unexpected_failure_is_logged(self):
+        from discord.ext import commands
+
+        ctx = MagicMock()
+        ctx.command.name = "test_cmd"
+        ctx.author.id = 42
+        self.bot.send_message = AsyncMock()
+        self.bot.on_command_error = DiscordBot.on_command_error.__get__(
+            self.bot, DiscordBot
+        )
+
+        await self.bot.on_command_error(
+            ctx, commands.CommandInvokeError(RuntimeError("storage failure"))
+        )
+
+        self.assertIn("unexpected error", self.bot.send_message.await_args.args[0])
+        self.bot.data_manager.log_messaging_event.assert_called_once()
+
+    @patch("src.core.discord.DiscordBot")
+    @patch("src.core.discord.GameRunner")
+    @patch("src.core.discord.QuestionSelector")
+    @patch("src.core.gemini_manager.GeminiManager")
+    async def test_discord_bot_async_builds_gemini_backed_runtime(
+        self, mock_gemini, mock_selector, mock_game, mock_bot
+    ):
+        config = MagicMock()
+        config.get_gemini_api_key.return_value = "test-key"
+        config.get.side_effect = lambda key, default=None: {
+            "GEMINI_MODEL": "test-model",
+            "GEMINI_FALLBACK_MODEL": "fallback-model",
+            "JBOT_DISCORD_BOT_TOKEN": "test-token",
+        }.get(key, default)
+        config.parse_question_sources.return_value = ["source"]
+        mock_bot.return_value.run = AsyncMock()
+        data_manager = MagicMock()
+        player_manager = MagicMock()
+
+        await discord_bot_async(config, data_manager, player_manager)
+
+        mock_gemini.assert_called_once_with(
+            api_key="test-key", model="test-model", fallback_model="fallback-model"
+        )
+        mock_selector.assert_called_once_with(
+            sources=["source"], gemini_manager=mock_gemini.return_value
+        )
+        mock_game.assert_called_once_with(
+            mock_selector.return_value, data_manager, player_manager
+        )
+        mock_bot.assert_called_once_with(
+            "test-token", mock_game.return_value, config, player_manager
+        )
+        mock_bot.return_value.run.assert_awaited_once()
+
+    @patch("src.core.discord.DiscordBot")
+    @patch("src.core.discord.GameRunner")
+    @patch("src.core.discord.QuestionSelector")
+    @patch("src.core.gemini_manager.GeminiManager")
+    async def test_discord_bot_async_continues_without_gemini_key(
+        self, mock_gemini, mock_selector, mock_game, mock_bot
+    ):
+        config = MagicMock()
+        config.get_gemini_api_key.side_effect = ValueError("missing key")
+        config.get.return_value = "test-token"
+        config.parse_question_sources.return_value = []
+        mock_bot.return_value.run = AsyncMock()
+
+        await discord_bot_async(config, MagicMock(), MagicMock())
+
+        mock_gemini.assert_not_called()
+        mock_selector.assert_called_once_with(sources=[], gemini_manager=None)
+        mock_bot.return_value.run.assert_awaited_once()
 
 
 class TestDiscordBotBackup(unittest.TestCase):

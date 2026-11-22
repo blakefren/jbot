@@ -6,6 +6,8 @@ changing production workflows or requiring Discord/SQLite infrastructure.
 """
 
 import copy
+import os
+import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
@@ -14,6 +16,7 @@ from unittest.mock import patch
 
 from data.readers.question import Question
 from db.database import Database
+from src.core.answer_checker import AnswerChecker
 from src.core.daily_game_simulator import DailyGameSimulator
 from src.core.data_manager import DataManager
 from src.core.events import GuessEvent, PowerUpEvent
@@ -735,6 +738,89 @@ class TestSQLiteLiveReplayOrdering(unittest.TestCase):
         events = self.assert_replay_matches_live()
         self.assertIsInstance(events[0], PowerUpEvent)
         self.assertIsInstance(events[1], GuessEvent)
+
+
+class TestSQLiteRestartAndSettlement(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_path = os.path.join(self.temp_dir.name, "jbot.db")
+        self.db = Database(self.db_path)
+        self.data_manager = DataManager(self.db)
+        self.player_manager = PlayerManager(self.data_manager)
+        self.player_manager.get_or_create_player("attacker", "Attacker")
+        self.player_manager.get_or_create_player("target", "Target")
+        self.player_manager.set_streak("attacker", 8)
+        self.player_manager.set_streak("target", 3)
+        self.question = Question("Question", "Answer", "Test", 100)
+        self.daily_question_id = self.data_manager.log_daily_question(self.question)
+        _, _, self.question_db_id = self.data_manager.get_todays_daily_question()
+        self.config = make_config(steal_cost=2, retro_steal_cost=4)
+        self.powerups = PowerUpManager(
+            self.player_manager, self.data_manager, self.config
+        )
+
+    def tearDown(self):
+        if self.db.conn is not None:
+            self.db.close()
+        self.temp_dir.cleanup()
+
+    def test_preload_guess_restart_replay_and_settlement(self):
+        self.powerups.jinx("attacker", "target", None)
+        self.powerups.reset_daily_state()
+        self.powerups.hydrate_pending_powerups(self.daily_question_id)
+        handler = GuessHandler(
+            self.data_manager,
+            self.player_manager,
+            self.question,
+            self.daily_question_id,
+            {"powerup": self.powerups},
+            config=self.config,
+            question_db_id=self.question_db_id,
+        )
+        handler.handle_guess("target", "Target", "Answer")
+        expected_daily_state = copy.deepcopy(self.powerups.daily_state)
+
+        self.db.close()
+        self.db = Database(self.db_path)
+        self.data_manager = DataManager(self.db)
+        self.player_manager = PlayerManager(self.data_manager)
+        self.question, self.question_db_id = self.data_manager.get_daily_question_by_id(
+            self.daily_question_id
+        )
+        self.powerups = PowerUpManager(
+            self.player_manager, self.data_manager, self.config
+        )
+
+        runner = object.__new__(GameRunner)
+        runner.data_manager = self.data_manager
+        runner.player_manager = self.player_manager
+        runner.daily_q = self.question
+        runner.daily_question_id = self.daily_question_id
+        runner.question_db_id = self.question_db_id
+        runner.config = self.config
+        runner.answer_checker = AnswerChecker()
+        runner.managers = {"powerup": self.powerups}
+        runner.restore_game_state()
+
+        self.assertEqual(self.powerups.daily_state, expected_daily_state)
+        powerup_rows = self.data_manager.get_powerup_usages_for_question(
+            self.daily_question_id
+        )
+        guess_rows = self.data_manager.get_guesses_for_daily_question(
+            self.daily_question_id
+        )
+        self.assertEqual(powerup_rows[0]["event_sequence"], 1)
+        self.assertEqual(guess_rows[0]["event_sequence"], 2)
+
+        runner.season_manager = type(
+            "SeasonStub", (), {"get_season_end_announcement": lambda _self: None}
+        )()
+        runner.pending_evening_announcements = []
+        runner.end_daily_game()
+
+        self.assertEqual(self.player_manager.get_player("attacker").answer_streak, 0)
+        self.assertEqual(self.player_manager.get_player("target").answer_streak, 4)
+        self.assertIsNone(runner.daily_question_id)
 
 
 if __name__ == "__main__":

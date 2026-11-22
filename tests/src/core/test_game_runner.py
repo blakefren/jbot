@@ -1280,73 +1280,16 @@ class TestGameRunner(unittest.TestCase):
         self.assertIn("Alice", leaderboard)
         self.assertIn("🧠", leaderboard)
 
+    def test_handle_guess_no_question(self):
+        self.game_runner.daily_q = None
+        self.assertEqual(
+            self.game_runner.handle_guess(1, "Player1", "test"),
+            (False, 0, 0, []),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
-
-
-# --- Additional POWERUP mode tests ---
-from unittest.mock import MagicMock
-from src.core.game_runner import GameRunner
-
-
-class DummyDataManagerPowerup:
-    def log_player_guess(self, *a, **kw):
-        pass
-
-    def get_guess_metrics(self, *a, **kw):
-        return {"players": {"1": {"score": 100, "bet": 0, "under_attack": False}}}
-
-    def read_guess_history(self, *a, **kw):
-        return []
-
-    def get_all_subscribers(self):
-        """Return empty subscribers set for testing."""
-        return set()
-
-    def get_correct_guess_count(self, daily_question_id):
-        return 0
-
-    def get_player(self, discord_id):
-        return None
-
-    def get_last_correct_guess_date(self, player_id):
-        return None
-
-    def reset_streak(self, player_id):
-        pass
-
-    def create_player(self, player_id, player_name):
-        pass
-
-    def adjust_player_score(self, player_id, amount):
-        pass
-
-    def increment_streak(self, player_id):
-        pass
-
-    def get_alternative_answers(self, question_id):
-        return []
-
-
-class DummyQuestionSelectorPowerup:
-    def __init__(self):
-        self.questions = []
-
-    def get_random_question(self, exclude_hashes=None):
-        q = MagicMock()
-        q.id = "q1"
-        q.answer = "test"
-        return q
-
-
-def test_handle_guess_no_question():
-    data_manager = DummyDataManagerPowerup()
-    selector = DummyQuestionSelectorPowerup()
-    game = GameRunner(selector, data_manager)
-    game.daily_q = None
-    result, num_guesses, points, bonuses = game.handle_guess(1, "Player1", "test")
-    assert result is False
 
 
 class TestRegenerateHintIfMissing(unittest.TestCase):
