@@ -34,4 +34,4 @@ jobs:
 
     - name: Enforce coverage floor
       if: success() && github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'coverage-exempt')
-      run: python -m coverage report --fail-under=80
+      run: python -m coverage report --fail-under=90
