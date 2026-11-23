@@ -1,4 +1,5 @@
 import unittest
+import sqlite3
 from datetime import date
 from unittest.mock import MagicMock, patch
 from src.core.events import GuessContext
@@ -554,6 +555,57 @@ class TestGuessHandlerSQLiteWorkflow(unittest.TestCase):
         self.assertEqual(points, 0)
         self.assertEqual(player.score, 0)
         self.assertEqual(player.answer_streak, 0)
+
+    def test_correct_guess_database_error_rolls_back_all_writes(self):
+        def fail_guess_log(*args, **kwargs):
+            self.db.execute_update("INSERT INTO missing_table VALUES (1)")
+
+        with patch.object(
+            self.data_manager, "log_player_guess", side_effect=fail_guess_log
+        ):
+            with self.assertRaises(sqlite3.OperationalError):
+                self.handler.handle_guess("1", "Player", "Answer")
+
+        player = self.player_manager.get_player("1")
+        self.assertEqual(self.data_manager.read_guess_history("1"), [])
+        self.assertEqual(player.score, 0)
+        self.assertEqual(player.answer_streak, 0)
+        self.assertEqual(player.lifetime_questions, 0)
+        self.assertEqual(player.lifetime_correct, 0)
+
+    def test_powerup_state_restores_when_guess_transaction_fails(self):
+        from src.core.powerup import PowerUpManager
+
+        self.data_manager.increment_pending_multiplier("1", 0.2)
+        powerups = PowerUpManager(self.player_manager, self.data_manager, make_config())
+        handler = GuessHandler(
+            self.data_manager,
+            self.player_manager,
+            self.handler.daily_q,
+            self.daily_question_id,
+            {"powerup": powerups},
+            config=make_config(),
+        )
+
+        def fail_after_rest_transition(*args, **kwargs):
+            self.assertTrue(powerups.daily_state["1"].is_correct)
+            self.assertGreater(powerups.daily_state["1"].score_earned, 0)
+            self.db.execute_update("INSERT INTO missing_table VALUES (1)")
+
+        with patch.object(
+            self.data_manager,
+            "log_powerup_usage",
+            side_effect=fail_after_rest_transition,
+        ):
+            with self.assertRaises(sqlite3.OperationalError):
+                handler.handle_guess("1", "Player", "Answer")
+
+        player = self.player_manager.get_player("1")
+        self.assertEqual(self.data_manager.read_guess_history("1"), [])
+        self.assertEqual(player.score, 0)
+        self.assertEqual(player.answer_streak, 0)
+        self.assertEqual(player.pending_rest_multiplier, 0.2)
+        self.assertEqual(powerups.daily_state, {})
 
 
 if __name__ == "__main__":

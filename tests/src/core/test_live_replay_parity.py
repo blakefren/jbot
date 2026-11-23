@@ -9,6 +9,7 @@ import copy
 import os
 import tempfile
 import unittest
+from contextlib import nullcontext
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from threading import Event
@@ -72,6 +73,9 @@ class InMemoryDataManager:
         self.pending_powerups: list[dict] = []
         self.alternative_answers: list[str] = []
         self.hint_sent = False
+
+    def transaction(self):
+        return nullcontext()
 
     def get_today(self) -> date:
         return self.today

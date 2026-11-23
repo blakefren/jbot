@@ -109,6 +109,25 @@ class GuessHandler:
         if not self.daily_q:
             return False, 0, 0, []  # No active question
 
+        manager_snapshots = []
+        for manager in self.managers.values():
+            if getattr(type(manager), "snapshot_transaction_state", None):
+                manager_snapshots.append(
+                    (manager, manager.snapshot_transaction_state())
+                )
+
+        try:
+            with self.data_manager.transaction():
+                return self._handle_guess_transaction(player_id, player_name, guess)
+        except BaseException:
+            for manager, snapshot in manager_snapshots:
+                manager.restore_transaction_state(snapshot)
+            raise
+
+    def _handle_guess_transaction(
+        self, player_id: int, player_name: str, guess: str
+    ) -> tuple[bool, int, int, list[str]]:
+
         # Check if the player has already answered correctly today
         if self.has_answered_correctly_today(player_id):
             raise AlreadyAnsweredCorrectlyError()

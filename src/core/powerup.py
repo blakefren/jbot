@@ -4,6 +4,7 @@ Implements power-up actions: jinx, steal, and rest.
 """
 
 import logging
+from copy import deepcopy
 from src.cfg.main import ConfigReader
 from src.core.base_manager import BaseManager, serialize_game_action
 from src.core.data_manager import DataManager
@@ -110,6 +111,12 @@ class PowerUpManager(BaseManager):
             # Fallback for safety if passed a dict (e.g. from old tests)
             # But we should update tests too.
             pass
+
+    def snapshot_transaction_state(self) -> dict[str, DailyPlayerState]:
+        return deepcopy(self.daily_state)
+
+    def restore_transaction_state(self, snapshot: dict[str, DailyPlayerState]) -> None:
+        self._adopt_daily_state(snapshot)
 
     def can_answer(self, player_id: str, hint_sent: bool = False) -> tuple[bool, str]:
         """
