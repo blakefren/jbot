@@ -13,6 +13,7 @@ PowerUpManager.daily_state.
 """
 
 import unittest
+import sqlite3
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.cogs.admin import Admin
@@ -301,6 +302,43 @@ class TestJinxStealAfterAddAnswer(unittest.IsolatedAsyncioTestCase):
         self.assertLess(self.player_manager.get_player("target").score, target_score)
         self.assertGreater(
             self.player_manager.get_player("attacker").score, attacker_score
+        )
+
+    async def test_answer_correction_failure_rolls_back_all_database_changes(self):
+        target_before = self.player_manager.get_player("target")
+        original_log_score_adjustment = self.data_manager.log_score_adjustment
+
+        def log_then_fail(*args, **kwargs):
+            original_log_score_adjustment(*args, **kwargs)
+            raise sqlite3.OperationalError("injected correction failure")
+
+        with patch.object(
+            self.data_manager,
+            "log_score_adjustment",
+            side_effect=log_then_fail,
+        ):
+            with self.assertRaisesRegex(
+                sqlite3.OperationalError, "injected correction failure"
+            ):
+                self.game.recalculate_scores_for_new_answer(
+                    "Accepted spelling", "admin"
+                )
+
+        self.assertEqual(
+            self.data_manager.get_alternative_answers(self.question_db_id), []
+        )
+        guesses = self.data_manager.get_guesses_for_daily_question(
+            self.daily_question_id
+        )
+        self.assertFalse(guesses[0]["is_correct"])
+        target_after = self.player_manager.get_player("target")
+        self.assertEqual(target_after.score, target_before.score)
+        self.assertEqual(target_after.answer_streak, target_before.answer_streak)
+        self.assertEqual(
+            self.db.execute_query(
+                "SELECT * FROM score_adjustments WHERE player_id = ?", ("target",)
+            ),
+            [],
         )
 
 

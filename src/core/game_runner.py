@@ -19,6 +19,7 @@ from src.core.scoring import ScoreCalculator
 from src.core.daily_game_simulator import DailyGameSimulator
 from src.core.events import GuessEvent, PowerUpEvent
 from src.core.answer_checker import AnswerChecker
+from src.core.base_manager import serialize_game_action
 from src.core.utils import parse_timestamp
 from src.core.season_manager import SeasonManager
 from src.core.leaderboard import LeaderboardRow, LeaderboardRenderer
@@ -1075,6 +1076,7 @@ class GameRunner:
                 f"Marked {num_updated} previously incorrect guesses as correct"
             )
 
+    @serialize_game_action
     def recalculate_scores_for_new_answer(
         self, new_answer: str, admin_id: str, dry_run: bool = False
     ) -> dict:
@@ -1163,19 +1165,13 @@ class GameRunner:
         total_refunded = 0
         details = []
         pending_multiplier_clear_ids: set[str] = set()
+        player_updates = []
 
         # Check if correcting an old question
         days_old = (self.data_manager.get_today() - question_date).days
         age_warning = ""
         if days_old > 0:
             age_warning = f" (Warning: This question is {days_old} day(s) old)"
-
-        if not dry_run:
-            self.data_manager.add_alternative_answer(
-                question_db_id, new_answer, admin_id
-            )
-            # Mark guesses as correct in the database if they match the new answer
-            self._mark_newly_correct_guesses(daily_question_id, new_answer)
 
         for user_id, new_res in results_new.items():
             old_res = results_old.get(user_id, {"score_earned": 0, "streak_delta": 0})
@@ -1189,21 +1185,14 @@ class GameRunner:
 
             if score_diff != 0 or streak_diff != 0:
                 if not dry_run:
-                    if score_diff != 0:
-                        self.player_manager.update_score(user_id, score_diff)
-
+                    new_streak = None
                     if streak_diff != 0:
                         current_player = self.player_manager.get_player(user_id)
                         if current_player:
-                            new_streak = current_player.answer_streak + streak_diff
-                            self.player_manager.set_streak(user_id, max(0, new_streak))
-
-                    self.data_manager.log_score_adjustment(
-                        user_id,
-                        admin_id,
-                        score_diff,
-                        f"Correction for answer: {new_answer}",
-                    )
+                            new_streak = max(
+                                0, current_player.answer_streak + streak_diff
+                            )
+                    player_updates.append((user_id, score_diff, new_streak))
 
                 total_refunded += score_diff
                 updated_players += 1
@@ -1254,8 +1243,26 @@ class GameRunner:
                 pending_multiplier_clear_ids.add(uid)
 
         if not dry_run:
-            for user_id in pending_multiplier_clear_ids:
-                self.data_manager.clear_pending_multiplier(user_id)
+            with self.data_manager.transaction():
+                self.data_manager.add_alternative_answer(
+                    question_db_id, new_answer, admin_id
+                )
+                self._mark_newly_correct_guesses(daily_question_id, new_answer)
+
+                for user_id, score_diff, new_streak in player_updates:
+                    if score_diff != 0:
+                        self.player_manager.update_score(user_id, score_diff)
+                    if new_streak is not None:
+                        self.player_manager.set_streak(user_id, new_streak)
+                    self.data_manager.log_score_adjustment(
+                        user_id,
+                        admin_id,
+                        score_diff,
+                        f"Correction for answer: {new_answer}",
+                    )
+
+                for user_id in pending_multiplier_clear_ids:
+                    self.data_manager.clear_pending_multiplier(user_id)
 
         return {
             "status": "success",
