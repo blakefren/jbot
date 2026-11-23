@@ -967,6 +967,48 @@ class TestSQLiteRestartAndSettlement(unittest.TestCase):
         self.assertEqual(runner.verify_daily_play(self.daily_question_id), [])
         self.assertIsNone(runner.daily_question_id)
 
+    def test_end_of_day_failure_rolls_back_persistence_and_manager_state(self):
+        self.data_manager.increment_pending_multiplier("attacker", 0.4)
+        self.powerups.daily_state = {
+            "attacker": DailyPlayerState(guesses_count=1),
+        }
+        state_before = self.powerups.snapshot_transaction_state()
+
+        runner = object.__new__(GameRunner)
+        runner.data_manager = self.data_manager
+        runner.player_manager = self.player_manager
+        runner.daily_q = self.question
+        runner.daily_question_id = self.daily_question_id
+        runner.question_db_id = self.question_db_id
+        runner.guess_handler = object()
+        runner.managers = {"powerup": self.powerups}
+        runner.season_manager = type(
+            "SeasonStub", (), {"get_season_end_announcement": lambda _self: None}
+        )()
+        runner.pending_evening_announcements = []
+        runner._crowd_wisdom_summary = None
+
+        clear_stale_multipliers = self.data_manager.clear_stale_rest_multipliers
+
+        def clear_then_fail(question_id):
+            clear_stale_multipliers(question_id)
+            raise RuntimeError("injected end-of-day failure")
+
+        with patch.object(
+            self.data_manager,
+            "clear_stale_rest_multipliers",
+            side_effect=clear_then_fail,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected end-of-day failure"):
+                runner.end_daily_game()
+
+        self.assertEqual(self.player_manager.get_player("attacker").answer_streak, 8)
+        self.assertEqual(self.player_manager.get_player("target").answer_streak, 3)
+        self.assertEqual(self.data_manager.get_pending_multiplier("attacker"), 0.4)
+        self.assertEqual(self.powerups.daily_state, state_before)
+        self.assertEqual(runner.daily_question_id, self.daily_question_id)
+        self.assertIs(runner.daily_q, self.question)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -299,11 +299,55 @@ class GameRunner:
 
         self._setup_new_question()
 
+    @serialize_game_action
     def end_daily_game(self):
         """
         Ends the daily game by clearing the current question and resetting manager states.
         """
         logging.info("Ending daily game.")
+
+        if self.daily_question_id:
+            powerup_manager = self.managers.get("powerup")
+            state_snapshot = (
+                powerup_manager.snapshot_transaction_state()
+                if powerup_manager
+                else None
+            )
+            try:
+                with self.data_manager.transaction():
+                    if powerup_manager:
+                        snapshot = self.data_manager.get_daily_snapshot(
+                            self.daily_question_id
+                        )
+                        initial_players = (
+                            snapshot
+                            if snapshot is not None
+                            else self.player_manager.get_all_players()
+                        )
+                        previous_question_id = (
+                            self.data_manager.get_previous_daily_question_id(
+                                self.daily_question_id
+                            )
+                        )
+                        previous_keepers = (
+                            self.data_manager.get_streak_keepers(previous_question_id)
+                            if previous_question_id is not None
+                            else set()
+                        )
+                        transition = powerup_manager.reduce_end_of_day(
+                            initial_players,
+                            prev_streak_keepers=previous_keepers,
+                            apply_crowd_wisdom=False,
+                        )
+                        for user_id in transition.streak_resets:
+                            self.player_manager.reset_streak(user_id)
+                    self.data_manager.clear_stale_rest_multipliers(
+                        self.daily_question_id
+                    )
+            except BaseException:
+                if powerup_manager:
+                    powerup_manager.restore_transaction_state(state_snapshot)
+                raise
 
         # Check for end-of-season announcement (fires on the last day, evening)
         try:
@@ -312,34 +356,6 @@ class GameRunner:
                 self.pending_evening_announcements.append(end_msg)
         except Exception as e:
             logging.warning(f"Season end announcement check failed: {e}")
-
-        # Reset streaks for players who didn't answer correctly
-        if self.daily_question_id:
-            powerup_manager = self.managers.get("powerup")
-            if powerup_manager:
-                snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
-                initial_players = (
-                    snapshot
-                    if snapshot is not None
-                    else self.player_manager.get_all_players()
-                )
-                previous_question_id = self.data_manager.get_previous_daily_question_id(
-                    self.daily_question_id
-                )
-                previous_keepers = (
-                    self.data_manager.get_streak_keepers(previous_question_id)
-                    if previous_question_id is not None
-                    else set()
-                )
-                transition = powerup_manager.reduce_end_of_day(
-                    initial_players,
-                    prev_streak_keepers=previous_keepers,
-                    apply_crowd_wisdom=False,
-                )
-                for user_id in transition.streak_resets:
-                    self.player_manager.reset_streak(user_id)
-            # Expire rest multipliers that weren't consumed today
-            self.data_manager.clear_stale_rest_multipliers(self.daily_question_id)
 
         self.daily_q = None
         self.daily_question_id = None
