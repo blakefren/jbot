@@ -7,6 +7,7 @@ changing production workflows or requiring Discord/SQLite infrastructure.
 
 import copy
 import os
+import sqlite3
 import tempfile
 import unittest
 from contextlib import nullcontext
@@ -703,6 +704,114 @@ class TestSQLiteLiveReplayOrdering(unittest.TestCase):
         events = self.assert_replay_matches_live()
 
         self.assertEqual([event.event_sequence for event in events], [1, 2])
+
+    def test_jinx_failure_rolls_back_usage_and_daily_state(self):
+        log_powerup_usage = self.data_manager.log_powerup_usage
+
+        def fail_after_logging(*args, **kwargs):
+            log_powerup_usage(*args, **kwargs)
+            self.db.execute_update("INSERT INTO missing_table VALUES (1)")
+
+        with patch.object(
+            self.data_manager, "log_powerup_usage", side_effect=fail_after_logging
+        ):
+            with self.assertRaises(sqlite3.OperationalError):
+                self.powerups.jinx("1", "2", self.question_id)
+
+        self.assertEqual(
+            self.data_manager.get_powerup_usages_for_question(self.question_id), []
+        )
+        self.assertEqual(self.powerups.daily_state, {})
+
+    def test_steal_failure_rolls_back_usage_streak_and_daily_state(self):
+        set_streak = self.player_manager.set_streak
+
+        def fail_after_streak_update(*args, **kwargs):
+            set_streak(*args, **kwargs)
+            self.db.execute_update("INSERT INTO missing_table VALUES (1)")
+
+        with patch.object(
+            self.player_manager, "set_streak", side_effect=fail_after_streak_update
+        ):
+            with self.assertRaises(sqlite3.OperationalError):
+                self.powerups.steal("1", "2", self.question_id)
+
+        self.assertEqual(
+            self.data_manager.get_powerup_usages_for_question(self.question_id), []
+        )
+        self.assertEqual(self.player_manager.get_player("1").answer_streak, 8)
+        self.assertEqual(self.powerups.daily_state, {})
+
+    def test_rest_failure_rolls_back_usage_multiplier_and_daily_state(self):
+        increment_multiplier = self.data_manager.increment_pending_multiplier
+
+        def fail_after_multiplier_update(*args, **kwargs):
+            increment_multiplier(*args, **kwargs)
+            self.db.execute_update("INSERT INTO missing_table VALUES (1)")
+
+        with patch.object(
+            self.data_manager,
+            "increment_pending_multiplier",
+            side_effect=fail_after_multiplier_update,
+        ):
+            with self.assertRaises(sqlite3.OperationalError):
+                self.powerups.rest("2", self.question_id, self.question.answer)
+
+        self.assertEqual(
+            self.data_manager.get_powerup_usages_for_question(self.question_id), []
+        )
+        self.assertEqual(self.data_manager.get_pending_multiplier("2"), 0.0)
+        self.assertEqual(self.powerups.daily_state, {})
+
+    def test_hydration_failure_rolls_back_promotion_and_daily_state(self):
+        self.powerups.jinx("1", "2", None)
+        self.powerups.reset_daily_state()
+        reduce_powerup = self.powerups._reduce_powerup
+
+        def fail_after_reduction(*args, **kwargs):
+            result = reduce_powerup(*args, **kwargs)
+            self.db.execute_update("INSERT INTO missing_table VALUES (1)")
+            return result
+
+        with patch.object(
+            self.powerups, "_reduce_powerup", side_effect=fail_after_reduction
+        ):
+            with self.assertRaises(sqlite3.OperationalError):
+                self.powerups.hydrate_pending_powerups(self.question_id)
+
+        pending = self.data_manager.get_pending_powerup("1")
+        self.assertIsNotNone(pending)
+        self.assertIsNone(pending["question_id"])
+        self.assertEqual(self.powerups.daily_state, {})
+
+    def test_snapshot_rollback_failure_preserves_database_and_daily_state(self):
+        self.guesses.handle_guess("1", "Attacker", "4")
+        player_before = self.player_manager.get_player("1")
+        score_before = player_before.score
+        streak_before = player_before.answer_streak
+        state_before = self.powerups.snapshot_transaction_state()
+        rollback_question_day = self.data_manager.rollback_question_day
+
+        def fail_after_snapshot_restore(question_id):
+            rollback_question_day(question_id)
+            self.db.execute_update("INSERT INTO missing_table VALUES (1)")
+
+        with patch.object(
+            self.data_manager,
+            "rollback_question_day",
+            side_effect=fail_after_snapshot_restore,
+        ):
+            with self.assertRaises(sqlite3.OperationalError):
+                self.powerups.rollback_to_snapshot(self.question_id)
+
+        player_after = self.player_manager.get_player("1")
+        self.assertEqual(player_after.score, score_before)
+        self.assertEqual(player_after.answer_streak, streak_before)
+        self.assertEqual(len(self.data_manager.read_guess_history("1")), 1)
+        self.assertEqual(
+            self.powerups.daily_state,
+            state_before,
+        )
 
     def test_jinx_and_guess_are_serialized_across_threads(self):
         transition_started = Event()

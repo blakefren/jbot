@@ -5,6 +5,7 @@ Implements power-up actions: jinx, steal, and rest.
 
 import logging
 from copy import deepcopy
+from functools import wraps
 from src.cfg.main import ConfigReader
 from src.core.base_manager import BaseManager, serialize_game_action
 from src.core.data_manager import DataManager
@@ -12,6 +13,20 @@ from src.core.events import GuessContext, PowerUpEvent
 from src.core.player_manager import PlayerManager
 from src.core.game_reducer import DailyGameReducer
 from src.core.state import DailyPlayerState
+
+
+def _transactional_powerup_action(method):
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        state_snapshot = self.snapshot_transaction_state()
+        try:
+            with self.data_manager.transaction():
+                return method(self, *args, **kwargs)
+        except BaseException:
+            self.restore_transaction_state(state_snapshot)
+            raise
+
+    return wrapped
 
 
 class PowerUpError(Exception):
@@ -80,6 +95,8 @@ class PowerUpManager(BaseManager):
         self.daily_state.clear()
         logging.info("PowerUpManager daily state reset.")
 
+    @serialize_game_action
+    @_transactional_powerup_action
     def rollback_to_snapshot(self, old_question_id: int):
         """
         Rolls back DB-persisted state to the snapshot for old_question_id, then
@@ -321,6 +338,7 @@ class PowerUpManager(BaseManager):
             )
 
     @serialize_game_action
+    @_transactional_powerup_action
     def hydrate_pending_powerups(self, question_id: int):
         """
         Applies overnight pre-loaded powerups to the current day's daily_state.
@@ -380,6 +398,7 @@ class PowerUpManager(BaseManager):
                 )
 
     @serialize_game_action
+    @_transactional_powerup_action
     def jinx(self, attacker_id: str, target_id: str, question_id: int = None) -> str:
         """
         Jinx another player — parasitic link.
@@ -542,6 +561,7 @@ class PowerUpManager(BaseManager):
         )
 
     @serialize_game_action
+    @_transactional_powerup_action
     def steal(self, thief_id: str, target_id: str, question_id: int = None) -> str:
         """
         Steal points from another player.
@@ -714,6 +734,7 @@ class PowerUpManager(BaseManager):
         )
 
     @serialize_game_action
+    @_transactional_powerup_action
     def rest(
         self, player_id: str, question_id: int, question_answer: str
     ) -> tuple[str, str]:
