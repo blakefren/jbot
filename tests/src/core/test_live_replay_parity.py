@@ -820,6 +820,7 @@ class TestSQLiteRestartAndSettlement(unittest.TestCase):
 
         self.assertEqual(self.player_manager.get_player("attacker").answer_streak, 0)
         self.assertEqual(self.player_manager.get_player("target").answer_streak, 4)
+        self.assertEqual(runner.verify_daily_play(self.daily_question_id), [])
         self.assertIsNone(runner.daily_question_id)
 
 

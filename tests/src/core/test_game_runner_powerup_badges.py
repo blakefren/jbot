@@ -1,19 +1,16 @@
 import unittest
-from unittest.mock import MagicMock
-from src.core.game_runner import GameRunner
-from src.core.data_manager import DataManager
+from unittest.mock import MagicMock, patch
+
 from data.readers.question import Question
+from db.database import Database
+from src.core.data_manager import DataManager
+from src.core.game_runner import GameRunner
+from src.core.player_manager import PlayerManager
 
 
 class TestGameRunnerPowerupBadges(unittest.TestCase):
     def setUp(self):
-        self.mock_qs = MagicMock()
-        self.mock_dm = MagicMock(spec=DataManager)
-        self.runner = GameRunner(self.mock_qs, self.mock_dm)
-        self.runner.daily_question_id = 123
-
-        # Mock config to ensure emojis are what we expect
-        self.runner.config = MagicMock()
+        self.config = MagicMock()
         self.defaults = {
             "JBOT_EMOJI_JINXED": "🥶",
             "JBOT_EMOJI_SILENCED": "🤐",
@@ -30,230 +27,121 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
             "JBOT_BONUS_STREAK_PER_DAY": "5",
             "JBOT_BONUS_STREAK_CAP": "25",
             "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
+            "JBOT_FIRST_PLACE_ROLE_NAME": "",
         }
-        self.runner.config.get.side_effect = (
-            lambda key, default=None: self.defaults.get(key)
+        self.config.get.side_effect = lambda key, default=None: self.defaults.get(
+            key, default
+        )
+        self.config.is_seasons_enabled.return_value = False
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+        self.player_manager = PlayerManager(self.data_manager)
+        for player_id, name, score in (
+            ("p1", "Player1", 100),
+            ("p2", "Player2", 90),
+            ("p3", "Player3", 80),
+        ):
+            self.player_manager.get_or_create_player(player_id, name)
+            self.player_manager.update_score(player_id, score)
+        self.daily_question_id = self.data_manager.log_daily_question(
+            Question("Question", "Answer", "Test", 100)
+        )
+        with patch("src.core.game_runner.ConfigReader", return_value=self.config):
+            self.runner = GameRunner(
+                MagicMock(), self.data_manager, player_manager=self.player_manager
+            )
+        self.runner.daily_question_id = self.daily_question_id
+
+    def tearDown(self):
+        self.db.close()
+
+    def _guess(self, player_id, answer="Answer", correct=True):
+        self.data_manager.log_player_guess(
+            player_id, player_id, self.daily_question_id, answer, correct
         )
 
-        # Setup basic player scores
-        self.mock_dm.get_player_scores.return_value = [
-            {"id": "p1", "name": "Player1", "score": 100},
-            {"id": "p2", "name": "Player2", "score": 90},
-            {"id": "p3", "name": "Player3", "score": 80},
-        ]
-        self.mock_dm.get_player_streaks.return_value = []
+    def _powerup(self, powerup_type, user_id, target_id=None):
+        self.data_manager.log_powerup_usage(
+            user_id, powerup_type, target_id, self.daily_question_id
+        )
 
-        # Mock daily bonus helpers to return empty/None
-        self.mock_dm.read_guess_history.return_value = []
-        self.mock_dm.get_hint_sent_timestamp.return_value = None
-        self.mock_dm.get_first_try_solvers.return_value = []
+    @staticmethod
+    def _player_line(leaderboard, player_name):
+        return next(line for line in leaderboard.splitlines() if player_name in line)
 
     def test_leaderboard_jinx_badges(self):
-        # p1 jinxed p2 - both answered correctly
-        self.mock_dm.get_powerup_usages_for_question.return_value = [
-            {"powerup_type": "jinx", "user_id": "p1", "target_user_id": "p2"}
-        ]
-        # Mock that both players answered correctly today
-        self.mock_dm.read_guess_history.return_value = [
-            {
-                "daily_question_id": 123,
-                "player_id": "p1",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:00:00",
-            },
-            {
-                "daily_question_id": 123,
-                "player_id": "p2",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:05:00",
-            },
-        ]
+        self._powerup("jinx", "p1", "p2")
+        self._guess("p1")
+        self._guess("p2")
 
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # p1 should have silenced emoji (attacker)
-        self.assertIn("Player1", leaderboard)
-        self.assertIn("🤐", leaderboard)  # p1 badge
-
-        # p2 should have jinxed emoji (victim)
-        self.assertIn("Player2", leaderboard)
-        self.assertIn("🥶", leaderboard)  # p2 badge
+        self.assertIn("🤐", self._player_line(leaderboard, "Player1"))
+        self.assertIn("🥶", self._player_line(leaderboard, "Player2"))
 
     def test_leaderboard_steal_badges(self):
-        # p1 stole from p2 - both answered correctly
-        self.mock_dm.get_powerup_usages_for_question.return_value = [
-            {"powerup_type": "steal", "user_id": "p1", "target_user_id": "p2"}
-        ]
-        # Mock that both players answered correctly today
-        self.mock_dm.read_guess_history.return_value = [
-            {
-                "daily_question_id": 123,
-                "player_id": "p1",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:00:00",
-            },
-            {
-                "daily_question_id": 123,
-                "player_id": "p2",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:05:00",
-            },
-        ]
+        self._powerup("steal", "p1", "p2")
+        self._guess("p1")
+        self._guess("p2")
 
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # p1 should have stealing emoji
-        self.assertIn("💰", leaderboard)
-
-        # p2 should have stolen from emoji
-        self.assertIn("💸", leaderboard)
+        self.assertIn("💰", self._player_line(leaderboard, "Player1"))
+        self.assertIn("💸", self._player_line(leaderboard, "Player2"))
 
     def test_leaderboard_steal_badge_attacker_did_not_answer(self):
-        """Steal badge should appear for attacker even if they never answered that day."""
-        # p1 stole from p2, but p1 never guessed
-        self.mock_dm.get_powerup_usages_for_question.return_value = [
-            {"powerup_type": "steal", "user_id": "p1", "target_user_id": "p2"}
-        ]
-        # Only p2 answered correctly today; p1 did not answer at all
-        self.mock_dm.read_guess_history.return_value = [
-            {
-                "daily_question_id": 123,
-                "player_id": "p2",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:05:00",
-            },
-        ]
+        self._powerup("steal", "p1", "p2")
+        self._guess("p2")
 
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # p1 should still have the stealing emoji
-        lines = leaderboard.split("\n")
-        p1_line = next((line for line in lines if "Player1" in line), None)
-        self.assertIsNotNone(p1_line, "Player1 should be in leaderboard")
-        self.assertIn(
-            "💰", p1_line, "Attacker should show stealing badge even without answering"
-        )
-
-        # p2 should have stolen_from emoji
-        p2_line = next((line for line in lines if "Player2" in line), None)
-        self.assertIsNotNone(p2_line, "Player2 should be in leaderboard")
-        self.assertIn("💸", p2_line)
+        self.assertIn("💰", self._player_line(leaderboard, "Player1"))
+        self.assertIn("💸", self._player_line(leaderboard, "Player2"))
 
     def test_leaderboard_jinx_late_badge(self):
-        """jinx_late should produce the same silenced/jinxed badges as a regular jinx."""
-        self.mock_dm.get_powerup_usages_for_question.return_value = [
-            {"powerup_type": "jinx_late", "user_id": "p1", "target_user_id": "p2"}
-        ]
-        self.mock_dm.read_guess_history.return_value = [
-            {
-                "daily_question_id": 123,
-                "player_id": "p1",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:00:00",
-            },
-            {
-                "daily_question_id": 123,
-                "player_id": "p2",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:05:00",
-            },
-        ]
+        self._powerup("jinx_late", "p1", "p2")
+        self._guess("p1")
+        self._guess("p2")
+
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
-        lines = leaderboard.split("\n")
-        p1_line = next(l for l in lines if "Player1" in l)
-        p2_line = next(l for l in lines if "Player2" in l)
-        self.assertIn("🤐", p1_line)
-        self.assertIn("🥶", p2_line)
+
+        self.assertIn("🤐", self._player_line(leaderboard, "Player1"))
+        self.assertIn("🥶", self._player_line(leaderboard, "Player2"))
 
     def test_leaderboard_jinx_preload_badge(self):
-        """jinx_preload should produce the same silenced/jinxed badges as a regular jinx."""
-        self.mock_dm.get_powerup_usages_for_question.return_value = [
-            {"powerup_type": "jinx_preload", "user_id": "p1", "target_user_id": "p2"}
-        ]
-        self.mock_dm.read_guess_history.return_value = [
-            {
-                "daily_question_id": 123,
-                "player_id": "p1",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:00:00",
-            },
-            {
-                "daily_question_id": 123,
-                "player_id": "p2",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:05:00",
-            },
-        ]
+        self._powerup("jinx_preload", "p1", "p2")
+        self._guess("p1")
+        self._guess("p2")
+
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
-        lines = leaderboard.split("\n")
-        p1_line = next(l for l in lines if "Player1" in l)
-        p2_line = next(l for l in lines if "Player2" in l)
-        self.assertIn("🤐", p1_line)
-        self.assertIn("🥶", p2_line)
+
+        self.assertIn("🤐", self._player_line(leaderboard, "Player1"))
+        self.assertIn("🥶", self._player_line(leaderboard, "Player2"))
 
     def test_leaderboard_rest_badge(self):
-        # p1 used rest
-        self.mock_dm.get_powerup_usages_for_question.return_value = [
-            {"powerup_type": "rest", "user_id": "p1", "target_user_id": None}
-        ]
+        self._powerup("rest", "p1")
 
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # p1 should have rest emoji
-        self.assertIn("😴", leaderboard)
+        self.assertIn("😴", self._player_line(leaderboard, "Player1"))
 
     def test_leaderboard_no_badges_if_not_show_daily_bonuses(self):
-        # p1 used rest
-        self.mock_dm.get_powerup_usages_for_question.return_value = [
-            {"powerup_type": "rest", "user_id": "p1", "target_user_id": None}
-        ]
+        self._powerup("rest", "p1")
 
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=False)
 
-        # Should NOT have rest emoji
         self.assertNotIn("😴", leaderboard)
 
     def test_leaderboard_duplicate_steal_blocked(self):
-        """Test that when a second steal attempt is blocked, the target doesn't get duplicate badges."""
-        # Only p1's steal was successful - p2's was blocked
-        # Database should only have one steal record for target p3
-        self.mock_dm.get_powerup_usages_for_question.return_value = [
-            {"powerup_type": "steal", "user_id": "p1", "target_user_id": "p3"}
-        ]
-        # Mock that all players answered correctly today
-        self.mock_dm.read_guess_history.return_value = [
-            {
-                "daily_question_id": 123,
-                "player_id": "p1",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:00:00",
-            },
-            {
-                "daily_question_id": 123,
-                "player_id": "p2",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:01:00",
-            },
-            {
-                "daily_question_id": 123,
-                "player_id": "p3",
-                "is_correct": True,
-                "guessed_at": "2024-01-01 10:02:00",
-            },
-        ]
+        self._powerup("steal", "p1", "p3")
+        self._guess("p1")
+        self._guess("p2")
+        self._guess("p3")
 
         leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
 
-        # p3 should have stolen from emoji exactly once
-        # Count occurrences of the emoji in p3's line
-        lines = leaderboard.split("\n")
-        p3_line = next((line for line in lines if "Player3" in line), None)
-        self.assertIsNotNone(p3_line, "Player3 should be in leaderboard")
+        self.assertEqual(self._player_line(leaderboard, "Player3").count("💸"), 1)
 
-        # Count the number of 💸 emojis in p3's line - should be exactly 1
-        stolen_from_count = p3_line.count("💸")
-        self.assertEqual(
-            stolen_from_count,
-            1,
-            f"Expected exactly 1 💸 badge, found {stolen_from_count}",
-        )
+
+if __name__ == "__main__":
+    unittest.main()
