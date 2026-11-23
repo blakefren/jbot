@@ -942,6 +942,7 @@ class GameRunner:
             "active_participants": active_participants,
         }
 
+    @serialize_game_action
     def apply_crowd_wisdom_bonus(self) -> dict:
         """
         Apply non-stealable crowd wisdom bonuses for today's correct solvers.
@@ -953,29 +954,39 @@ class GameRunner:
             return summary
 
         powerup_manager = self.managers.get("powerup")
-        snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
-        initial_players = (
-            snapshot if snapshot is not None else self.player_manager.get_all_players()
-        )
-        already_awarded_user_ids = self.data_manager.get_crowd_wisdom_awarded_user_ids(
-            self.daily_question_id
-        )
         if powerup_manager is None:
             summary = self._calculate_crowd_wisdom_summary()
             self._crowd_wisdom_summary = summary
             return summary
 
-        transition = powerup_manager.reduce_end_of_day(
-            initial_players,
-            apply_streak_resets=False,
-            apply_crowd_wisdom=True,
-            already_awarded_crowd_wisdom=already_awarded_user_ids,
-        )
-        for user_id, bonus in transition.crowd_wisdom_bonuses.items():
-            self.player_manager.update_score(user_id, bonus)
-            self.data_manager.log_powerup_usage(
-                user_id, "crowd_wisdom", None, self.daily_question_id
-            )
+        state_snapshot = powerup_manager.snapshot_transaction_state()
+        try:
+            with self.data_manager.transaction():
+                snapshot = self.data_manager.get_daily_snapshot(self.daily_question_id)
+                initial_players = (
+                    snapshot
+                    if snapshot is not None
+                    else self.player_manager.get_all_players()
+                )
+                already_awarded_user_ids = (
+                    self.data_manager.get_crowd_wisdom_awarded_user_ids(
+                        self.daily_question_id
+                    )
+                )
+                transition = powerup_manager.reduce_end_of_day(
+                    initial_players,
+                    apply_streak_resets=False,
+                    apply_crowd_wisdom=True,
+                    already_awarded_crowd_wisdom=already_awarded_user_ids,
+                )
+                for user_id, bonus in transition.crowd_wisdom_bonuses.items():
+                    self.player_manager.update_score(user_id, bonus)
+                    self.data_manager.log_powerup_usage(
+                        user_id, "crowd_wisdom", None, self.daily_question_id
+                    )
+        except BaseException:
+            powerup_manager.restore_transaction_state(state_snapshot)
+            raise
 
         summary = {
             "multiplier": transition.crowd_wisdom_multiplier,

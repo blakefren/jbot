@@ -813,6 +813,37 @@ class TestSQLiteLiveReplayOrdering(unittest.TestCase):
             state_before,
         )
 
+    def test_crowd_wisdom_failure_rolls_back_score_usage_and_daily_state(self):
+        self.powerups.daily_state = {
+            "1": DailyPlayerState(is_correct=True, score_earned=100),
+            "2": DailyPlayerState(guesses_count=1),
+        }
+        state_before = self.powerups.snapshot_transaction_state()
+        game = object.__new__(GameRunner)
+        game.data_manager = self.data_manager
+        game.player_manager = self.player_manager
+        game.daily_question_id = self.question_id
+        game.managers = {"powerup": self.powerups}
+        game._crowd_wisdom_summary = None
+        log_powerup_usage = self.data_manager.log_powerup_usage
+
+        def log_then_fail(*args, **kwargs):
+            log_powerup_usage(*args, **kwargs)
+            raise RuntimeError("injected crowd-wisdom failure")
+
+        with patch.object(
+            self.data_manager, "log_powerup_usage", side_effect=log_then_fail
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected crowd-wisdom failure"):
+                game.apply_crowd_wisdom_bonus()
+
+        self.assertEqual(self.player_manager.get_player("1").score, 0)
+        self.assertEqual(
+            self.data_manager.get_powerup_usages_for_question(self.question_id), []
+        )
+        self.assertEqual(self.powerups.daily_state, state_before)
+        self.assertIsNone(game._crowd_wisdom_summary)
+
     def test_jinx_and_guess_are_serialized_across_threads(self):
         transition_started = Event()
         release_transition = Event()
