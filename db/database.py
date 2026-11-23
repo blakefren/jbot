@@ -1,7 +1,9 @@
 import sqlite3
 import os
 import logging
+from contextlib import contextmanager
 from datetime import date, datetime
+from threading import RLock
 
 
 # Register adapters/converters for Python 3.12+ compatibility
@@ -55,9 +57,61 @@ class Database:
 
         self.db_path = db_path
         self.conn = None
+        self._transaction_lock = RLock()
+        self._transaction_depth = 0
         self._connect()
         self._create_tables()
         self._ensure_event_sequence_columns()
+
+    @contextmanager
+    def transaction(self):
+        """Group database operations into one commit or rollback boundary.
+
+        Nested calls use SQLite savepoints. The reentrant lock keeps operations
+        on this shared connection within the same transaction across threads.
+        """
+        if self.conn is None:
+            raise AttributeError("Database connection is closed")
+
+        with self._transaction_lock:
+            depth = self._transaction_depth
+            savepoint = f"jbot_transaction_{depth}"
+            if depth == 0:
+                self.conn.execute("BEGIN IMMEDIATE")
+            else:
+                self.conn.execute(f"SAVEPOINT {savepoint}")
+            self._transaction_depth = depth + 1
+
+            try:
+                yield
+                if depth == 0:
+                    self.conn.commit()
+                else:
+                    self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            except BaseException:
+                try:
+                    if depth == 0:
+                        self.conn.rollback()
+                    else:
+                        self.conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                        self.conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+                except sqlite3.Error:
+                    logging.exception("Failed to roll back database transaction")
+                raise
+            finally:
+                self._transaction_depth = depth
+
+    @contextmanager
+    def _connection_scope(self):
+        """Serialize use of the shared connection and auto-commit only standalone calls."""
+        with self._transaction_lock:
+            if self.conn is None:
+                raise AttributeError("Database connection is closed")
+            if self._transaction_depth:
+                yield self.conn
+            else:
+                with self.conn:
+                    yield self.conn
 
     def _ensure_event_sequence_columns(self):
         for table in ("guesses", "powerup_usage"):
@@ -140,16 +194,15 @@ class Database:
         Returns:
             list: A list of rows as dictionaries.
         """
-        if self.conn is None:
-            # Mirror test expectation: using the DB after close should raise AttributeError
-            raise AttributeError("Database connection is closed")
         try:
-            with self.conn:
-                cursor = self.conn.cursor()
+            with self._connection_scope() as connection:
+                cursor = connection.cursor()
                 cursor.execute(query, params)
                 return [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as e:
             logging.error(f"Error executing query: {e}")
+            if self._transaction_depth:
+                raise
             return []
 
     def get_conn(self):
@@ -170,15 +223,15 @@ class Database:
             int: The number of rows affected.
             int: The ID of the newly inserted row.
         """
-        if self.conn is None:
-            raise AttributeError("Database connection is closed")
         try:
-            with self.conn:
-                cursor = self.conn.cursor()
+            with self._connection_scope() as connection:
+                cursor = connection.cursor()
                 cursor.execute(query, params)
                 return cursor.rowcount, cursor.lastrowid
         except sqlite3.Error as e:
             logging.error(f"Error executing update: {e}")
+            if self._transaction_depth:
+                raise
             return 0, None
 
     def execute_script(self, script: str):
@@ -188,13 +241,15 @@ class Database:
         Args:
             script (str): The SQL script to execute.
         """
-        if self.conn is None:
-            raise AttributeError("Database connection is closed")
         try:
-            with self.conn:
-                self.conn.executescript(script)
+            if self._transaction_depth:
+                raise RuntimeError("execute_script cannot run inside a transaction")
+            with self._connection_scope() as connection:
+                connection.executescript(script)
         except sqlite3.Error as e:
             logging.error(f"Error executing script: {e}")
+            if self._transaction_depth:
+                raise
 
 
 if __name__ == "__main__":

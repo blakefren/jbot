@@ -61,6 +61,10 @@ class DataManager:
             schema = f.read()
         self._db.execute_script(schema)
 
+    def transaction(self):
+        """Return a transaction context for grouping DataManager operations."""
+        return self._db.transaction()
+
     def backup_database(self, dest_path: str):
         """
         Creates a safe backup of the database to dest_path.

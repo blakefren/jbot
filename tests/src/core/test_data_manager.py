@@ -88,6 +88,14 @@ class TestDataManager(unittest.TestCase):
         self.data_manager.backup_database("/some/path/backup.db")
         self.db.backup.assert_called_once_with("/some/path/backup.db")
 
+    def test_transaction_rolls_back_data_manager_operations(self):
+        with self.assertRaisesRegex(RuntimeError, "abort action"):
+            with self.data_manager.transaction():
+                self.data_manager.create_player("rollback", "Rollback")
+                raise RuntimeError("abort action")
+
+        self.assertIsNone(self.data_manager.get_player("rollback"))
+
     def test_log_daily_question(self):
         question = Question(
             category="TESTING",

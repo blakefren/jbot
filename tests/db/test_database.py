@@ -157,6 +157,82 @@ class TestDatabase(unittest.TestCase):
         )
         self.assertEqual(len(result), 0)
 
+    def test_transaction_commits_multiple_executor_calls_together(self):
+        with self.db.transaction():
+            self.db.execute_update(
+                "INSERT INTO players (id, name) VALUES (?, ?)", ("tx_player", "Tx")
+            )
+            rows_inside = self.db.execute_query(
+                "SELECT name FROM players WHERE id = ?", ("tx_player",)
+            )
+            self.assertEqual(rows_inside[0]["name"], "Tx")
+
+        rows_after = self.db.execute_query(
+            "SELECT name FROM players WHERE id = ?", ("tx_player",)
+        )
+        self.assertEqual(rows_after[0]["name"], "Tx")
+
+    def test_transaction_rolls_back_body_exception(self):
+        with self.assertRaisesRegex(RuntimeError, "abort action"):
+            with self.db.transaction():
+                self.db.execute_update(
+                    "INSERT INTO players (id, name) VALUES (?, ?)",
+                    ("rollback_player", "Rollback"),
+                )
+                raise RuntimeError("abort action")
+
+        self.assertEqual(
+            self.db.execute_query(
+                "SELECT * FROM players WHERE id = ?", ("rollback_player",)
+            ),
+            [],
+        )
+
+    def test_transaction_sql_error_propagates_and_rolls_back(self):
+        with self.assertRaises(sqlite3.Error):
+            with self.db.transaction():
+                self.db.execute_update(
+                    "INSERT INTO players (id, name) VALUES (?, ?)",
+                    ("rollback_player", "Rollback"),
+                )
+                self.db.execute_update(
+                    "INSERT INTO table_that_does_not_exist VALUES (1)"
+                )
+
+        self.assertEqual(
+            self.db.execute_query(
+                "SELECT * FROM players WHERE id = ?", ("rollback_player",)
+            ),
+            [],
+        )
+
+    def test_nested_transaction_uses_savepoint(self):
+        with self.db.transaction():
+            self.db.execute_update(
+                "INSERT INTO players (id, name) VALUES (?, ?)", ("outer", "Outer")
+            )
+            with self.assertRaisesRegex(ValueError, "rollback inner"):
+                with self.db.transaction():
+                    self.db.execute_update(
+                        "INSERT INTO players (id, name) VALUES (?, ?)",
+                        ("inner", "Inner"),
+                    )
+                    raise ValueError("rollback inner")
+            self.db.execute_update(
+                "INSERT INTO players (id, name) VALUES (?, ?)", ("outer2", "Outer2")
+            )
+
+        rows = self.db.execute_query(
+            "SELECT id FROM players WHERE id IN ('outer', 'inner', 'outer2') ORDER BY id"
+        )
+        self.assertEqual([row["id"] for row in rows], ["outer", "outer2"])
+
+    def test_standalone_sql_error_keeps_legacy_result_behavior(self):
+        result = self.db.execute_update(
+            "INSERT INTO table_that_does_not_exist VALUES (1)"
+        )
+        self.assertEqual(result, (0, None))
+
     def test_close_connection(self):
         """Test that the database connection can be closed."""
         self.db.close()
