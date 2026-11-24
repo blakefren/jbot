@@ -1,6 +1,7 @@
 import csv
 import os
 import re
+from contextlib import nullcontext
 
 from collections import defaultdict
 from datetime import date, datetime
@@ -23,6 +24,10 @@ from src.core.base_manager import serialize_game_action
 from src.core.utils import parse_timestamp
 from src.core.season_manager import SeasonManager
 from src.core.leaderboard import LeaderboardRow, LeaderboardRenderer
+
+
+class _QuestionSetupFailed(Exception):
+    pass
 
 
 class GameRunner:
@@ -119,75 +124,92 @@ class GameRunner:
 
         Returns True on success, False if no valid question or logging fails.
         """
-        # --- Rollback (skip path only) ---
         # Capture before anything overwrites self.daily_question_id.
         old_question_id = self.daily_question_id if force_new else None
-        if old_question_id is not None:
-            powerup_manager = self.managers.get("powerup")
-            if powerup_manager:
-                powerup_manager.rollback_to_snapshot(old_question_id)
 
-        self.daily_q = self._get_valid_question()
-        if not (self.daily_q and self.daily_q.is_valid):
+        new_daily_q = self._get_valid_question()
+        if not (new_daily_q and new_daily_q.is_valid):
             return False
 
-        original_hint = self.daily_q.hint
-        logging.info(f"Generating hint for question {self.daily_q.id}...")
+        original_hint = new_daily_q.hint
+        logging.info(f"Generating hint for question {new_daily_q.id}...")
         try:
-            new_hint = self.question_selector.get_hint_from_gemini(self.daily_q)
+            new_hint = self.question_selector.get_hint_from_gemini(new_daily_q)
             if new_hint:
-                self.daily_q.hint = new_hint
+                new_daily_q.hint = new_hint
                 logging.info(
-                    f"Successfully generated hint for question {self.daily_q.id}."
+                    f"Successfully generated hint for question {new_daily_q.id}."
                 )
             elif original_hint:
                 logging.warning(
-                    f"Hint generation returned empty result for question {self.daily_q.id}. Using original hint."
+                    f"Hint generation returned empty result for question {new_daily_q.id}. Using original hint."
                 )
             else:
                 logging.warning(
-                    f"Hint generation returned empty result for question {self.daily_q.id} and no original hint available."
+                    f"Hint generation returned empty result for question {new_daily_q.id} and no original hint available."
                 )
         except Exception as e:
             if original_hint:
                 logging.error(
-                    f"Error generating hint for question {self.daily_q.id}: {e}. Using original hint."
+                    f"Error generating hint for question {new_daily_q.id}: {e}. Using original hint."
                 )
             else:
                 logging.error(
-                    f"Error generating hint for question {self.daily_q.id}: {e}. No original hint available."
+                    f"Error generating hint for question {new_daily_q.id}: {e}. No original hint available."
                 )
 
-        self.daily_question_id = self.data_manager.log_daily_question(
-            self.daily_q, force_new=force_new
-        )
+        action_lock = getattr(self.data_manager, "game_action_lock", None)
+        manager_snapshots = []
+        with action_lock if action_lock is not None else nullcontext():
+            for manager in self.managers.values():
+                if getattr(type(manager), "snapshot_transaction_state", None):
+                    manager_snapshots.append(
+                        (manager, manager.snapshot_transaction_state())
+                    )
+
+            try:
+                with self.data_manager.transaction():
+                    if old_question_id is not None:
+                        powerup_manager = self.managers.get("powerup")
+                        if powerup_manager:
+                            powerup_manager.rollback_to_snapshot(old_question_id)
+
+                    new_daily_question_id = self.data_manager.log_daily_question(
+                        new_daily_q, force_new=force_new
+                    )
+                    new_question_db_id = None
+                    daily_question_data = self.data_manager.get_todays_daily_question()
+                    if daily_question_data:
+                        (
+                            new_daily_q,
+                            new_daily_question_id,
+                            new_question_db_id,
+                        ) = daily_question_data
+
+                    if new_daily_question_id is None:
+                        raise _QuestionSetupFailed
+
+                    for manager in self.managers.values():
+                        if hasattr(manager, "reset_daily_state"):
+                            manager.reset_daily_state()
+                    powerup_manager = self.managers.get("powerup")
+                    if powerup_manager:
+                        powerup_manager.hydrate_pending_powerups(new_daily_question_id)
+            except _QuestionSetupFailed:
+                for manager, state_snapshot in manager_snapshots:
+                    manager.restore_transaction_state(state_snapshot)
+                logging.error("Failed to log new daily question.")
+                return False
+            except BaseException:
+                for manager, state_snapshot in manager_snapshots:
+                    manager.restore_transaction_state(state_snapshot)
+                raise
+
+        self.daily_q = new_daily_q
+        self.daily_question_id = new_daily_question_id
+        self.question_db_id = new_question_db_id
         self._crowd_wisdom_summary = None
-
-        # Refresh from DB — recovers the canonical daily_question_id and
-        # question_db_id, and handles race conditions where log returns None
-        # but the record was already inserted.
-        daily_question_data = self.data_manager.get_todays_daily_question()
-        if daily_question_data:
-            (
-                self.daily_q,
-                self.daily_question_id,
-                self.question_db_id,
-            ) = daily_question_data
-
-        if self.daily_question_id is None:
-            logging.error("Failed to log new daily question.")
-            return False
-
         logging.info(f"Daily question set with ID: {self.daily_question_id}")
-
-        # Clear any in-memory powerup state from the previous (or skipped) question,
-        # then promote overnight pre-loads to the new question ID.
-        for manager in self.managers.values():
-            if hasattr(manager, "reset_daily_state"):
-                manager.reset_daily_state()
-        powerup_manager = self.managers.get("powerup")
-        if powerup_manager:
-            powerup_manager.hydrate_pending_powerups(self.daily_question_id)
 
         self._build_guess_handler()
         return True

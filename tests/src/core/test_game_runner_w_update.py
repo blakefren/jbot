@@ -105,8 +105,8 @@ class TestGameRunnerResetQuestion(unittest.TestCase):
 
         # Assert
         self.assertFalse(result)
-        self.assertEqual(self.game_runner.daily_q, new_question)  # Still updated
-        self.assertIsNone(self.game_runner.daily_question_id)
+        self.assertEqual(self.game_runner.daily_q, initial_question)
+        self.assertEqual(self.game_runner.daily_question_id, 1)
 
     def test_reset_clears_stale_powerup_state(self):
         """After a skip, daily powerup state from the old question is cleared."""

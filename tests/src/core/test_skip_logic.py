@@ -1,6 +1,7 @@
 import unittest
+import sqlite3
 from datetime import date, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from src.core.data_manager import DataManager
 from src.core.guess_handler import GuessHandler
 from src.core.player_manager import PlayerManager
@@ -52,6 +53,43 @@ class TestSkipLogic(unittest.TestCase):
         today_q, today_dq_id, _ = self.data_manager.get_todays_daily_question()
         self.assertEqual(today_dq_id, dq_id2)
         self.assertEqual(today_q.question, "Q2")
+
+    def test_log_daily_question_rolls_back_when_snapshot_insert_fails(self):
+        question = Question(
+            question="Snapshot failure Q",
+            answer="A",
+            category="C",
+            clue_value=100,
+            data_source="test",
+            hint="h",
+        )
+        execute_update = self.db.execute_update
+
+        def fail_snapshot_insert(query, params=()):
+            if "INSERT INTO daily_player_states" in query:
+                raise sqlite3.OperationalError("injected snapshot failure")
+            return execute_update(query, params)
+
+        with patch.object(self.db, "execute_update", side_effect=fail_snapshot_insert):
+            with self.assertRaisesRegex(
+                sqlite3.OperationalError, "injected snapshot failure"
+            ):
+                self.data_manager.log_daily_question(question)
+
+        self.assertEqual(
+            self.db.execute_query(
+                "SELECT * FROM questions WHERE question_hash = ?",
+                (str(question.id),),
+            ),
+            [],
+        )
+        self.assertEqual(
+            self.db.execute_query(
+                "SELECT * FROM daily_questions WHERE question_id NOT NULL"
+            ),
+            [],
+        )
+        self.assertEqual(self.db.execute_query("SELECT * FROM daily_player_states"), [])
 
     def test_guess_handler_streak_preservation_on_skip(self):
         # 1. Set up Q1

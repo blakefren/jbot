@@ -1009,6 +1009,57 @@ class TestSQLiteRestartAndSettlement(unittest.TestCase):
         self.assertEqual(runner.daily_question_id, self.daily_question_id)
         self.assertIs(runner.daily_q, self.question)
 
+    def test_skip_setup_failure_restores_old_question_and_preload(self):
+        self.powerups.jinx("attacker", "target", None)
+        state_before = self.powerups.snapshot_transaction_state()
+        replacement = Question("Replacement", "New answer", "Test", 100)
+
+        class SelectorStub:
+            @staticmethod
+            def get_hint_from_gemini(question):
+                return question.hint
+
+        runner = object.__new__(GameRunner)
+        runner.data_manager = self.data_manager
+        runner.player_manager = self.player_manager
+        runner.question_selector = SelectorStub()
+        runner.daily_q = self.question
+        runner.daily_question_id = self.daily_question_id
+        runner.question_db_id = self.question_db_id
+        runner.managers = {"powerup": self.powerups}
+        runner._crowd_wisdom_summary = None
+        runner._get_valid_question = lambda: replacement
+        runner._build_guess_handler = lambda: None
+
+        reduce_powerup = self.powerups._reduce_powerup
+
+        def reduce_then_fail(*args, **kwargs):
+            result = reduce_powerup(*args, **kwargs)
+            self.db.execute_update("INSERT INTO missing_table VALUES (1)")
+            return result
+
+        with patch.object(
+            self.powerups, "_reduce_powerup", side_effect=reduce_then_fail
+        ):
+            with self.assertRaises(sqlite3.OperationalError):
+                runner.reset_daily_question()
+
+        current_question = self.data_manager.get_todays_daily_question()
+        self.assertEqual(current_question[1], self.daily_question_id)
+        self.assertEqual(runner.daily_question_id, self.daily_question_id)
+        self.assertIs(runner.daily_q, self.question)
+        self.assertEqual(self.powerups.daily_state, state_before)
+        pending = self.data_manager.get_pending_powerup("attacker")
+        self.assertIsNotNone(pending)
+        self.assertIsNone(pending["question_id"])
+        self.assertEqual(
+            self.db.execute_query(
+                "SELECT * FROM questions WHERE question_hash = ?",
+                (str(replacement.id),),
+            ),
+            [],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

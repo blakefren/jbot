@@ -227,6 +227,17 @@ class DataManager:
             force_new (bool): If True, will replace today's question if one exists.
             mark_as_used_only (bool): If True, only adds to questions table (marking as used) but not daily_questions.
         """
+        with self._db.transaction():
+            return self._log_daily_question(
+                question, force_new=force_new, mark_as_used_only=mark_as_used_only
+            )
+
+    def _log_daily_question(
+        self,
+        question: Question,
+        force_new: bool = False,
+        mark_as_used_only: bool = False,
+    ):
         # First, ensure the question exists in the 'questions' table
         question_query = "SELECT id FROM questions WHERE question_hash = ?"
         existing_question = self._db.execute_query(question_query, (str(question.id),))
@@ -338,26 +349,23 @@ class DataManager:
 
         for player in players.values():
             ss = season_data.get(player.id, {})
-            try:
-                self._db.execute_update(
-                    query,
-                    (
-                        daily_question_id,
-                        player.id,
-                        player.score,
-                        player.answer_streak,
-                        season_id,
-                        ss.get("points", 0),
-                        ss.get("questions_answered", 0),
-                        ss.get("correct_answers", 0),
-                        ss.get("first_answers", 0),
-                        ss.get("current_streak", 0),
-                        ss.get("best_streak", 0),
-                        player.pending_rest_multiplier,
-                    ),
-                )
-            except Exception as e:
-                logging.error(f"Failed to snapshot player {player.id}: {e}")
+            self._db.execute_update(
+                query,
+                (
+                    daily_question_id,
+                    player.id,
+                    player.score,
+                    player.answer_streak,
+                    season_id,
+                    ss.get("points", 0),
+                    ss.get("questions_answered", 0),
+                    ss.get("correct_answers", 0),
+                    ss.get("first_answers", 0),
+                    ss.get("current_streak", 0),
+                    ss.get("best_streak", 0),
+                    player.pending_rest_multiplier,
+                ),
+            )
 
     def get_daily_snapshot(self, daily_question_id: int) -> dict[str, Player]:
         """
