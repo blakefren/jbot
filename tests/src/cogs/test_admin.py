@@ -291,8 +291,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         mock_player_after_refund = MagicMock()
         mock_player_after_refund.score = 150
 
-        player_manager.get_or_create_player.return_value = mock_player_before_refund
-        player_manager.get_player.return_value = mock_player_after_refund
+        player_manager.refund_player.return_value = mock_player_after_refund
 
         # Call the refund command
         await self.cog.refund.callback(
@@ -300,16 +299,14 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         )
 
         # Assertions
-        player_manager.update_score.assert_called_once_with(str(member.id), amount)
-        self.bot.data_manager.log_score_adjustment.assert_called_once_with(
-            player_id=str(member.id),
-            admin_id=str(self.ctx.author.id),
-            amount=amount,
-            reason=reason,
+        player_manager.refund_player.assert_called_once_with(
+            str(member.id),
+            member.display_name,
+            amount,
+            None,
+            str(self.ctx.author.id),
+            reason,
         )
-
-        # Verify get_or_create_player was called
-        player_manager.get_or_create_player.assert_called_once()
 
         # Check the final message
         expected_message = f"Refunded {member.mention}: +{amount} (Score: {mock_player_after_refund.score}). Reason: {reason}"
@@ -325,15 +322,20 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         reason = "Test refund"
 
         player_manager = self.bot.player_manager
-        mock_player_before_refund = MagicMock()
-        player_manager.get_or_create_player.return_value = mock_player_before_refund
-        player_manager.get_player.return_value = None  # Player not found after refund
+        player_manager.refund_player.return_value = None
 
         await self.cog.refund.callback(
             self.cog, self.ctx, member, amount, reason=reason
         )
 
-        player_manager.update_score.assert_called_once_with(str(member.id), amount)
+        player_manager.refund_player.assert_called_once_with(
+            str(member.id),
+            member.display_name,
+            amount,
+            None,
+            str(self.ctx.author.id),
+            reason,
+        )
         self.ctx.send.assert_called_once_with(
             f"Could not find player {member.display_name} after refund."
         )

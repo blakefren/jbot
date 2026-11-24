@@ -109,3 +109,30 @@ class PlayerManager:
                 self.data_manager.update_player_name(pid, player_name)
                 player.name = player_name
         return player
+
+    def refund_player(
+        self,
+        player_id: str,
+        player_name: str,
+        amount: int,
+        streak: int | None,
+        admin_id: str,
+        reason: str,
+    ) -> Player | None:
+        """Apply a refund and audit it as one database operation."""
+        pid = self._normalize_id(player_id)
+        with self.data_manager.transaction():
+            self.get_or_create_player(pid, player_name)
+            self.update_score(pid, amount)
+            if streak is not None:
+                self.set_streak(pid, streak)
+
+            player = self.get_player(pid)
+            if player:
+                self.data_manager.log_score_adjustment(
+                    player_id=pid,
+                    admin_id=admin_id,
+                    amount=amount,
+                    reason=reason,
+                )
+            return player

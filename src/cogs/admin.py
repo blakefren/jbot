@@ -29,27 +29,17 @@ class Admin(commands.Cog):
     ):
         """(admin) Refunds score/streak to a player."""
         player_manager = self.bot.player_manager
-        player = player_manager.get_or_create_player(
-            str(member.id), member.display_name
+        player = player_manager.refund_player(
+            str(member.id),
+            member.display_name,
+            amount,
+            streak,
+            str(ctx.author.id),
+            reason,
         )
-
-        player_manager.update_score(str(member.id), amount)
-
-        if streak is not None:
-            player_manager.set_streak(str(member.id), streak)
-
-        player = player_manager.get_player(str(member.id))
         if not player:
             await ctx.send(f"Could not find player {member.display_name} after refund.")
             return
-
-        # Log the adjustment using DataManager
-        self.bot.data_manager.log_score_adjustment(
-            player_id=str(member.id),
-            admin_id=str(ctx.author.id),
-            amount=amount,
-            reason=reason,
-        )
 
         msg = f"Refunded {member.mention}: {amount:+} (Score: {player.score}"
         if streak is not None:

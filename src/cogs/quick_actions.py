@@ -658,30 +658,20 @@ class RefundModal(discord.ui.Modal):
 
         try:
             player_manager = self.bot.player_manager
-            player = player_manager.get_or_create_player(
-                str(self.member.id), self.member.display_name
+            player = player_manager.refund_player(
+                str(self.member.id),
+                self.member.display_name,
+                amount,
+                streak,
+                str(interaction.user.id),
+                reason,
             )
-
-            player_manager.update_score(str(self.member.id), amount)
-
-            if streak is not None:
-                player_manager.set_streak(str(self.member.id), streak)
-
-            player = player_manager.get_player(str(self.member.id))
             if not player:
                 await interaction.followup.send(
                     f"❌ Could not find player {self.member.display_name} after refund.",
                     ephemeral=True,
                 )
                 return
-
-            # Log the adjustment
-            self.bot.data_manager.log_score_adjustment(
-                player_id=str(self.member.id),
-                admin_id=str(interaction.user.id),
-                amount=amount,
-                reason=reason,
-            )
 
             msg = (
                 f"✅ Refunded {self.member.mention}: {amount:+} (Score: {player.score}"

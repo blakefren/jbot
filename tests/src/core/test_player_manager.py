@@ -1,5 +1,6 @@
 import unittest
 from datetime import date
+from unittest.mock import patch
 
 from db.database import Database
 from src.core.data_manager import DataManager
@@ -141,6 +142,41 @@ class TestPlayerManager(unittest.TestCase):
         player = self.data_manager.get_player("123")
         self.assertEqual(player.score, 0)
         self.assertEqual(player.season_score, 0)
+
+    def test_refund_rolls_back_player_and_season_updates_if_audit_fails(self):
+        player_id = "refund-player"
+        self.data_manager.create_player(player_id, "Player")
+        season_id = self.data_manager.create_season(
+            "Current", date.today().isoformat(), date.today().isoformat()
+        )
+        self.manager.update_score(player_id, 100)
+        self.manager.set_streak(player_id, 3)
+        original_log = self.data_manager.log_score_adjustment
+
+        def log_then_fail(*args, **kwargs):
+            original_log(*args, **kwargs)
+            raise RuntimeError("injected refund failure")
+
+        with patch.object(
+            self.data_manager, "log_score_adjustment", side_effect=log_then_fail
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected refund failure"):
+                self.manager.refund_player(
+                    player_id, "Player", 25, 4, "admin", "Correction"
+                )
+
+        player = self.data_manager.get_player(player_id)
+        season_score = self.data_manager.get_player_season_score(player_id, season_id)
+        self.assertEqual((player.score, player.season_score), (100, 100))
+        self.assertEqual(player.answer_streak, 3)
+        self.assertEqual((season_score.points, season_score.current_streak), (100, 3))
+        self.assertEqual(
+            self.db.execute_query(
+                "SELECT * FROM score_adjustments WHERE player_id = ?",
+                (player_id,),
+            ),
+            [],
+        )
 
     def test_normalize_none_to_empty_id(self):
         self.assertEqual(self.manager._normalize_id(None), "")
