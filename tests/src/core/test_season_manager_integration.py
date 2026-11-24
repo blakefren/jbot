@@ -245,6 +245,38 @@ class TestSeasonManagerIntegrationFinalize(unittest.TestCase):
             self.assertIsNone(score.final_rank)
             self.assertIsNone(score.trophy)
 
+    def test_rollover_failure_preserves_previous_season_and_player_state(self):
+        self.dm.update_season_score("p1", self.season_id, points=300)
+        self.db.execute_update(
+            "UPDATE players SET season_score = 300, answer_streak = 7, "
+            "pending_rest_multiplier = 0.4 WHERE id = ?",
+            ("p1",),
+        )
+        reset_player_season_scores = self.dm.reset_all_player_season_scores
+
+        def reset_then_fail():
+            reset_player_season_scores()
+            raise RuntimeError("injected rollover failure")
+
+        with patch.object(
+            self.dm,
+            "reset_all_player_season_scores",
+            side_effect=reset_then_fail,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected rollover failure"):
+                self.sm.check_season_transition(date(2026, 2, 1))
+
+        self.assertTrue(self.dm.get_season_by_id(self.season_id).is_active)
+        self.assertEqual(len(self.dm.get_all_seasons()), 1)
+        player = self.dm.get_player("p1")
+        self.assertEqual(
+            (player.season_score, player.answer_streak, player.pending_rest_multiplier),
+            (300, 7, 0.4),
+        )
+        self.assertEqual(
+            self.dm.get_player_season_score("p1", self.season_id).points, 300
+        )
+
     def test_finalize_season_missing_id_does_not_raise(self):
         self.sm.finalize_season(9999)
 

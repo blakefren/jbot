@@ -94,11 +94,11 @@ class SeasonManager:
             self.logger.info(
                 f"Season {current_season.season_name} ended on {current_season.end_date}"
             )
-            self.finalize_season(current_season.season_id)
+            with self.data_manager.transaction():
+                self.finalize_season(current_season.season_id)
+                new_season = self._create_new_season(current_date)
 
             msgs = []
-            new_season = self._create_new_season(current_date)
-
             if self.config.get_season_announce_start():
                 challenge = self.data_manager.get_season_challenge(new_season.season_id)
                 msgs.append(self.build_new_season_announcement(new_season, challenge))
@@ -131,24 +131,24 @@ class SeasonManager:
                 start_date, duration
             )
 
-        season_id = self.data_manager.create_season(season_name, start_str, end_str)
-        self.logger.info(
-            f"Created new season: {season_name} ({start_str} to {end_str})"
-        )
+        with self.data_manager.transaction():
+            season_id = self.data_manager.create_season(season_name, start_str, end_str)
+            self.logger.info(
+                f"Created new season: {season_name} ({start_str} to {end_str})"
+            )
 
-        # Reset all player season scores to 0
-        self._reset_player_season_scores()
+            self._reset_player_season_scores()
 
-        # Create challenge for the season (if enabled)
-        try:
-            from src.core.challenge_manager import ChallengeManager
+            try:
+                from src.core.challenge_manager import ChallengeManager
 
-            challenge_mgr = ChallengeManager(self.data_manager, self.config)
-            challenge_mgr.create_season_challenge(season_id)
-        except Exception as e:
-            self.logger.warning(f"Could not create season challenge: {e}")
+                challenge_mgr = ChallengeManager(self.data_manager, self.config)
+                with self.data_manager.transaction():
+                    challenge_mgr.create_season_challenge(season_id)
+            except Exception as e:
+                self.logger.warning(f"Could not create season challenge: {e}")
 
-        return self.data_manager.get_season_by_id(season_id)
+            return self.data_manager.get_season_by_id(season_id)
 
     def _calculate_calendar_season(self, ref_date: date) -> tuple[str, str, str]:
         """

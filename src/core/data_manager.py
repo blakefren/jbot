@@ -929,27 +929,23 @@ class DataManager:
         """
         Assigns a role to a player in the database, creating the role if it doesn't exist.
         """
-        # This method combines getting/creating the role and assigning it.
-        # It's not transactional, but for this use case, it's acceptable.
-
-        # Get role_id from role_name
-        role_id_row = self._db.execute_query(
-            "SELECT id FROM roles WHERE name = ?", (role_name,)
-        )
-        if role_id_row:
-            role_id = role_id_row[0]["id"]
-        else:
-            # If role doesn't exist, create it
-            _, role_id = self._db.execute_update(
-                "INSERT INTO roles (name, description) VALUES (?, ?)",
-                (role_name, f"Dynamically created role for {role_name}"),
+        with self._db.transaction():
+            role_id_row = self._db.execute_query(
+                "SELECT id FROM roles WHERE name = ?", (role_name,)
             )
+            if role_id_row:
+                role_id = role_id_row[0]["id"]
+            else:
+                _, role_id = self._db.execute_update(
+                    "INSERT INTO roles (name, description) VALUES (?, ?)",
+                    (role_name, f"Dynamically created role for {role_name}"),
+                )
 
-        if role_id:
-            self._db.execute_update(
-                "INSERT OR IGNORE INTO player_roles (player_id, role_id) VALUES (?, ?)",
-                (player_id, role_id),
-            )
+            if role_id:
+                self._db.execute_update(
+                    "INSERT OR IGNORE INTO player_roles (player_id, role_id) VALUES (?, ?)",
+                    (player_id, role_id),
+                )
 
     def clear_player_roles(self):
         """
@@ -1395,17 +1391,18 @@ class DataManager:
         Returns:
             season_id of the newly created season
         """
-        # Deactivate any currently active seasons
-        self._db.execute_update("UPDATE seasons SET is_active = 0 WHERE is_active = 1")
-
-        query = """
-            INSERT INTO seasons (season_name, start_date, end_date, is_active)
-            VALUES (?, ?, ?, 1)
-        """
-        _, lastrowid = self._db.execute_update(
-            query, (season_name, start_date, end_date)
-        )
-        return lastrowid if lastrowid is not None else 0
+        with self._db.transaction():
+            self._db.execute_update(
+                "UPDATE seasons SET is_active = 0 WHERE is_active = 1"
+            )
+            query = """
+                INSERT INTO seasons (season_name, start_date, end_date, is_active)
+                VALUES (?, ?, ?, 1)
+            """
+            _, lastrowid = self._db.execute_update(
+                query, (season_name, start_date, end_date)
+            )
+            return lastrowid if lastrowid is not None else 0
 
     def get_season_by_id(self, season_id: int):
         """Get a specific season by ID."""
@@ -1449,27 +1446,22 @@ class DataManager:
         return [SeasonScore.from_db_row(row) for row in result]
 
     def get_player_season_score(self, player_id: str, season_id: int):
-        """Get a specific player's season score."""
+        """Get a player's score record for a season, if one exists."""
         from src.core.season import SeasonScore
 
-        query = """
-            SELECT * FROM season_scores
-            WHERE player_id = ? AND season_id = ?
-        """
-        result = self._db.execute_query(query, (player_id, season_id))
-        if result:
-            return SeasonScore.from_db_row(result[0])
-        return None
+        result = self._db.execute_query(
+            "SELECT * FROM season_scores WHERE player_id = ? AND season_id = ?",
+            (player_id, season_id),
+        )
+        return SeasonScore.from_db_row(result[0]) if result else None
 
     def initialize_player_season_score(self, player_id: str, season_id: int):
-        """Create a season_scores record for a player if it doesn't exist."""
-        existing = self.get_player_season_score(player_id, season_id)
-        if not existing:
-            query = """
-                INSERT INTO season_scores (player_id, season_id)
-                VALUES (?, ?)
-            """
-            self._db.execute_update(query, (player_id, season_id))
+        """Ensure a player has a season-score row."""
+        query = """
+            INSERT OR IGNORE INTO season_scores (player_id, season_id)
+            VALUES (?, ?)
+        """
+        self._db.execute_update(query, (player_id, season_id))
 
     def update_season_score(self, player_id: str, season_id: int, **kwargs):
         """

@@ -22,6 +22,10 @@ class RolesGameMode(BaseManager):
         pass
 
     def assign_roles(self):
+        with self.data_manager.transaction():
+            self._assign_roles()
+
+    def _assign_roles(self):
         """
         Assigns roles to players based on their scores.
         Uses season scores when a season is active, falls back to all-time scores.

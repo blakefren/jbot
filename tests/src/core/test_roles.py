@@ -1,6 +1,6 @@
 # tests/bot/managers/test_roles.py
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from src.core.roles import RolesGameMode
 from src.core.data_manager import DataManager
 from src.core.season import SeasonScore
@@ -177,6 +177,56 @@ class TestRolesGameMode(unittest.TestCase):
         self.data_manager.get_player_scores.assert_called_once()
         self.data_manager.assign_role_to_player.assert_called_once_with(
             "1", "first place"
+        )
+
+
+class TestRolesGameModeAtomicity(unittest.TestCase):
+    def setUp(self):
+        self.db = Database(db_path=":memory:")
+        self.data_manager = DataManager(self.db)
+        self.data_manager.create_player("1", "Alice")
+        self.data_manager.create_player("2", "Bob")
+        self.data_manager.assign_role_to_player("2", "previous place")
+        self.config = MagicMock()
+        self.config.is_seasons_enabled.return_value = False
+        self.config.get.return_value = "first place"
+        self.roles = RolesGameMode(self.data_manager, self.config)
+
+    def tearDown(self):
+        self.db.close()
+
+    def test_assignment_failure_preserves_previous_role_mappings(self):
+        self.data_manager.get_player_scores = MagicMock(
+            return_value=[
+                {"id": "1", "score": 100},
+                {"id": "2", "score": 50},
+            ]
+        )
+        assign_role = self.data_manager.assign_role_to_player
+
+        def assign_then_fail(player_id, role_name):
+            assign_role(player_id, role_name)
+            raise RuntimeError("injected role refresh failure")
+
+        with patch.object(
+            self.data_manager,
+            "assign_role_to_player",
+            side_effect=assign_then_fail,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected role refresh failure"):
+                self.roles.assign_roles()
+
+        roles = self.db.execute_query(
+            "SELECT r.name FROM player_roles pr "
+            "JOIN roles r ON r.id = pr.role_id WHERE pr.player_id = ?",
+            ("2",),
+        )
+        self.assertEqual([row["name"] for row in roles], ["previous place"])
+        self.assertEqual(
+            self.db.execute_query(
+                "SELECT * FROM roles WHERE name = ?", ("first place",)
+            ),
+            [],
         )
 
 
