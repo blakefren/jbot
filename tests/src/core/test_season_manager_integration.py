@@ -9,7 +9,7 @@ mismatches are caught automatically.
 
 import unittest
 from datetime import date
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from db.database import Database
 from src.core.data_manager import DataManager
@@ -224,6 +224,26 @@ class TestSeasonManagerIntegrationFinalize(unittest.TestCase):
         self.assertEqual(
             self.dm.get_player_season_score("p3", self.season_id).trophy, "bronze"
         )
+
+    def test_finalize_season_failure_rolls_back_rankings_and_deactivation(self):
+        self.dm.update_season_score("p1", self.season_id, points=300)
+        self.dm.update_season_score("p2", self.season_id, points=200)
+        self.dm.update_season_score("p3", self.season_id, points=100)
+        end_season = self.dm.end_season
+
+        def deactivate_then_fail(season_id):
+            end_season(season_id)
+            raise RuntimeError("injected finalization failure")
+
+        with patch.object(self.dm, "end_season", side_effect=deactivate_then_fail):
+            with self.assertRaisesRegex(RuntimeError, "injected finalization failure"):
+                self.sm.finalize_season(self.season_id)
+
+        self.assertTrue(self.dm.get_season_by_id(self.season_id).is_active)
+        for player_id in ("p1", "p2", "p3"):
+            score = self.dm.get_player_season_score(player_id, self.season_id)
+            self.assertIsNone(score.final_rank)
+            self.assertIsNone(score.trophy)
 
     def test_finalize_season_missing_id_does_not_raise(self):
         self.sm.finalize_season(9999)

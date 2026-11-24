@@ -208,19 +208,20 @@ class SeasonManager:
         Args:
             season_id: ID of the season to finalize
         """
-        season = self.data_manager.get_season_by_id(season_id)
-        if not season:
-            self.logger.error(f"Cannot finalize season {season_id} - not found")
-            return
+        with self.data_manager.transaction():
+            season = self.data_manager.get_season_by_id(season_id)
+            if not season:
+                self.logger.error(f"Cannot finalize season {season_id} - not found")
+                return
 
-        self.logger.info(f"Finalizing season: {season.season_name}")
+            self.logger.info(f"Finalizing season: {season.season_name}")
 
-        # Calculate rankings and award trophies
-        trophy_positions = self.config.get_season_trophy_positions()
-        self.data_manager.finalize_season_rankings(season_id, trophy_positions)
+            # Calculate rankings and award trophies
+            trophy_positions = self.config.get_season_trophy_positions()
+            self.data_manager.finalize_season_rankings(season_id, trophy_positions)
 
-        # Mark season as inactive
-        self.data_manager.end_season(season_id)
+            # Mark season as inactive
+            self.data_manager.end_season(season_id)
 
         self.logger.info(f"Season {season.season_name} finalized")
 
