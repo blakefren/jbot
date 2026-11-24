@@ -94,6 +94,10 @@ class TestDataManagerSeasonCRUD(unittest.TestCase):
     def test_get_all_seasons_empty(self):
         self.assertEqual(self.dm.get_all_seasons(), [])
 
+    def test_get_all_seasons_rejects_untrusted_ordering(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported season ordering"):
+            self.dm.get_all_seasons("start_date DESC; DROP TABLE seasons")
+
     def test_end_season_marks_inactive(self):
         season_id = _create_season(self.dm)
         self.dm.end_season(season_id)
@@ -163,6 +167,12 @@ class TestDataManagerSeasonScores(unittest.TestCase):
         score = self.dm.get_player_season_score("p1", self.season_id)
         self.assertEqual(score.points, 0)
 
+    def test_update_season_score_rejects_unknown_field(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported season score field"):
+            self.dm.update_season_score("p1", self.season_id, **{"points = 1;--": 5})
+
+        self.assertIsNone(self.dm.get_player_season_score("p1", self.season_id))
+
     # --- increment_season_stat ---
 
     def test_increment_season_stat(self):
@@ -183,6 +193,14 @@ class TestDataManagerSeasonScores(unittest.TestCase):
         score = self.dm.get_player_season_score("p1", self.season_id)
         self.assertIsNotNone(score)
         self.assertEqual(score.questions_answered, 1)
+
+    def test_increment_season_stat_rejects_unknown_stat(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported season stat"):
+            self.dm.increment_season_stat(
+                "p1", self.season_id, "points = points + 100;--"
+            )
+
+        self.assertIsNone(self.dm.get_player_season_score("p1", self.season_id))
 
     # --- get_season_scores ---
 
@@ -425,6 +443,14 @@ class TestDataManagerLifetimeStats(unittest.TestCase):
         self.dm.increment_lifetime_stat("p1", "lifetime_correct", 5)
         player = self.dm.get_player("p1")
         self.assertEqual(player.lifetime_correct, 5)
+
+    def test_increment_lifetime_stat_rejects_unknown_stat(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported player stat"):
+            self.dm.increment_lifetime_stat("p1", "score = score + 100;--")
+
+    def test_update_lifetime_stats_rejects_unknown_field(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported player field"):
+            self.dm.update_lifetime_stats("p1", **{"score = 1;--": 5})
 
 
 class TestDataManagerGetStreakKeepers(unittest.TestCase):

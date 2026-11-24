@@ -20,8 +20,65 @@ _NEXT_EVENT_SEQUENCE = """
     )
 """
 
+_SEASON_ORDERINGS = frozenset(
+    f"{column} {direction}"
+    for column in ("season_id", "season_name", "start_date", "end_date")
+    for direction in ("ASC", "DESC")
+)
+_SEASON_SCORE_FIELDS = frozenset(
+    {
+        "points",
+        "questions_answered",
+        "correct_answers",
+        "first_answers",
+        "current_streak",
+        "best_streak",
+        "shields_used",
+        "double_points_used",
+        "challenge_progress",
+        "final_rank",
+        "trophy",
+    }
+)
+_SEASON_STAT_FIELDS = frozenset(
+    {
+        "points",
+        "questions_answered",
+        "correct_answers",
+        "first_answers",
+        "current_streak",
+        "best_streak",
+        "shields_used",
+        "double_points_used",
+    }
+)
+_PLAYER_UPDATE_FIELDS = frozenset(
+    {
+        "name",
+        "score",
+        "season_score",
+        "answer_streak",
+        "pending_rest_multiplier",
+        "lifetime_questions",
+        "lifetime_correct",
+        "lifetime_first_answers",
+        "lifetime_best_streak",
+    }
+)
+_PLAYER_INCREMENT_FIELDS = frozenset(
+    {
+        "score",
+        "season_score",
+        "answer_streak",
+        "pending_rest_multiplier",
+        "lifetime_questions",
+        "lifetime_correct",
+        "lifetime_first_answers",
+        "lifetime_best_streak",
+    }
+)
 
-# TODO: review for SQL injection risks.
+
 class DataManager:
     """
     Handles all database interactions for the bot.
@@ -1416,6 +1473,8 @@ class DataManager:
 
     def get_all_seasons(self, order_by: str = "start_date DESC"):
         """Get all seasons, ordered by specified column."""
+        if order_by not in _SEASON_ORDERINGS:
+            raise ValueError(f"Unsupported season ordering: {order_by}")
         from src.core.season import Season
 
         query = f"SELECT * FROM seasons ORDER BY {order_by}"
@@ -1472,6 +1531,11 @@ class DataManager:
         """
         if not kwargs:
             return
+        invalid_fields = kwargs.keys() - _SEASON_SCORE_FIELDS
+        if invalid_fields:
+            raise ValueError(
+                f"Unsupported season score field(s): {', '.join(sorted(invalid_fields))}"
+            )
 
         # Ensure record exists
         self.initialize_player_season_score(player_id, season_id)
@@ -1491,6 +1555,8 @@ class DataManager:
         self, player_id: str, season_id: int, stat_name: str, amount: int = 1
     ):
         """Atomically increment a season stat."""
+        if stat_name not in _SEASON_STAT_FIELDS:
+            raise ValueError(f"Unsupported season stat: {stat_name}")
         self.initialize_player_season_score(player_id, season_id)
 
         query = f"""
@@ -1620,6 +1686,11 @@ class DataManager:
         """
         if not kwargs:
             return
+        invalid_fields = kwargs.keys() - _PLAYER_UPDATE_FIELDS
+        if invalid_fields:
+            raise ValueError(
+                f"Unsupported player field(s): {', '.join(sorted(invalid_fields))}"
+            )
 
         # Build UPDATE statement dynamically
         set_clauses = ", ".join(f"{key} = ?" for key in kwargs.keys())
@@ -1634,6 +1705,8 @@ class DataManager:
 
     def increment_lifetime_stat(self, player_id: str, stat_name: str, amount: int = 1):
         """Atomically increment a lifetime stat."""
+        if stat_name not in _PLAYER_INCREMENT_FIELDS:
+            raise ValueError(f"Unsupported player stat: {stat_name}")
         query = f"""
             UPDATE players
             SET {stat_name} = {stat_name} + ?
