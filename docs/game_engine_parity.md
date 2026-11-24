@@ -391,9 +391,11 @@ presentation and database validation into the pure domain transition.
 
 #### Remaining reducer TODOs
 
-- **P0 — deterministic event ordering:** Persist or derive a stable tie-breaker
-  for events with equal timestamps. Replay currently sorts by timestamp, while
-  events are assembled from separate guess and power-up queries.
+Deterministic event ordering is implemented: guesses and power-ups use a shared
+per-question `event_sequence`, preloads are sequenced during hydration, and replay
+sorts by sequence when available. Legacy unsequenced rows still fall back to the
+documented timestamp ordering.
+
 - **P1 — shared guess evaluation:** Move answer matching, correct-answer rank,
   hint timing, guess count, streak preparation, and ordinary point calculation
   into a shared guess-evaluation context used by live and replay.

@@ -45,7 +45,7 @@ The bot is deployed to [Railway](https://railway.app) with GitHub auto-deploys. 
 
 - **Code**: Railway builds the Docker image from the `main` branch on each push.
 - **Database**: Stored on a Railway volume at `/data/jbot.db`. On startup, `entrypoint.sh` restores the latest replica from the bucket; on shutdown/crash, Litestream has already been streaming WAL changes continuously.
-- **Datasets**: TODO — not yet available in the image or volume. Need to implement S3-based dataset upload/download (see [Datasets](#datasets)).
+- **Datasets**: `entrypoint.sh` runs `scripts/sync_datasets.py`; when S3 settings are configured, missing files are downloaded into `JBOT_DATASETS_DIR/datasets/`. Existing local files are skipped. Local development still requires manually downloaded datasets; see [Datasets](#datasets).
 - **Replication**: Litestream streams WAL changes to a Railway Bucket (S3-compatible) in real time.
 
 ### Initial Setup
