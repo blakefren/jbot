@@ -26,7 +26,7 @@ Make one review-sized change at a time; favor behavior-preserving simplification
 	- [x] **#4 Question creation and skipping:** question rows and player snapshots are atomic; skip rollback, replacement logging/snapshot, manager reset, and preload hydration share one transaction. Selection and Gemini calls remain outside it.
 	- [x] **#5 Admin refunds:** slash command and quick-action modal share `PlayerManager.refund_player()`, which commits score, streak, season totals, and audit logging together.
 	- [x] **Season finalization:** ranking/trophy updates and marking the season inactive commit together; an injected failure verifies the finalization state rolls back.
-	- [x] **Post-audit follow-ups:** season rollover (finalize/create/reset) and role refresh (clear/reassign, including role creation) are transactional and covered by failure-injection tests. New-season challenge creation remains best-effort, with its insert isolated transactionally.
+	- [x] **Post-audit follow-ups:** season rollover (finalize/create/reset) and role refresh (clear/reassign, including role creation) are transactional and covered by failure-injection tests.
 Plan migrations and operational recovery separately.
 7. **Workflow integration tests** (M, complete): Real SQLite workflows cover correct/wrong guess persistence, rank-two fastest scoring, answer correction followed by retroactive jinx/steal, same-second jinx/steal/rest ordering, concurrent action serialization, preload hydration, file-backed restart/replay, leaderboard power-up badges, and end-of-day settlement with `verify_daily_play`. Slash/button parity tests compare shared guess outcomes, forward/retroactive jinx and steal visibility, rest messaging/state, refund persistence, answer-correction formatting/state sync, and skip outcomes. Discord/Gemini remain mocked at the external boundary. Injected DB write failures cover guess, power-up, answer-correction, crowd-wisdom, end-of-day settlement, question snapshot, skip/preload, refund, season-finalization, season-rollover, and role-refresh rollback.
 8. **Test audit** (complete; ongoing maintenance): Replaced the invalid-SQL add-answer regression with real Admin/GameRunner/SQLite/power-up behavior; removed five empty tests and the no-op GameRunner fake adapter; converted DataManager CRUD, role, subscriber, question, lookup, PlayerManager, and leaderboard badge tests from SQL-result mocks to stored-state assertions; made guess history stateful in handler tests and changed fastest-rank to exercise production scoring. `test_data_manager.py` no longer replaces SQL executors. The remaining DataManager/PlayerManager/GameRunner/PowerUpManager mocks in the cog, Discord, game-runner, power-up, guess-handler, season and challenge tests were later replaced with real in-memory SQLite stacks (shared helpers: `RealStack`/`make_stack` in `tests/src/core/_powerup_helpers.py` and `build_game_stack` in `tests/src/cogs/_game_stack.py`). Remaining mocks are deliberate external Discord/Gemini/`ConfigReader`/question-source boundaries, failure injection via `patch.object` on real objects, or unit orchestration seams with corresponding SQLite workflow coverage. One exception remains: `TestDiscordBotBackup` in `test_discord.py` still mocks `data_manager` (see the backup bug below). `coverage.py` and `scripts/run_coverage.bat` enforce a 90% combined line/branch PR floor (last run: 1116 tests, 92% total); the lowest-covered modules are `game.py` (77%), `logging_config.py` (80%), `discord.py` (81%), `quick_actions.py` (84%) and `cfg/main.py` (84%). The `coverage-exempt` PR label skips only that floor, never tests or reporting; create the label once in GitHub. Continue reviewing mocks as new tests are added.
@@ -50,7 +50,7 @@ S/M/L describe expected human review effort, not risk. Ordering and persistence 
 Items 1–9 are complete as written (with the corrections noted inline), with these exceptions:
 
 - `TestDiscordBotBackup` in `test_discord.py` still mocks `data_manager`; the production bug behind it (Fix first #1) is unfixed.
-- The season-challenge progress-tracking cluster is deliberately kept (see Open by decision).
+- The season-challenge cluster has been removed (see Season challenges (removed)).
 - Ownership Direction is a set of design directions, not tasks.
 
 Done in this pass: live/replay parity tests moved onto real SQLite (fixing seven failures caused by a test fake missing `get_current_season`); `JBOT_REST_MULTIPLIER` aligned across code, simulation script and tests; read-side ordering edge cases fixed (item 5); remaining database mocks replaced with real stacks (item 8); dead code removed (item 9). Final state: 1116 tests passing, 92% combined coverage, Black clean. The 28-day `scripts/simulate_powerups.py` was not re-run after these changes (compile check only).
@@ -74,15 +74,15 @@ Done in this pass: live/replay parity tests moved onto real SQLite (fixing seven
 - `set_daily_question` runs under `asyncio.to_thread` while holding the global action lock, so commands wait during setup. No deadlock was found; lock order is consistent. `restore_game_state` on the restart path is not under the action lock.
 - Simulation runtime: a 3-day `simulate_powerups.py` run took 3.5 min at HEAD against 1.4 min before the transaction work (`7e307ae^`). The CPU was shared during those runs, so the timing is unreliable. A 28-day run did not finish in about 10 minutes, and the CI simulation workflow has no timeout. Needs a clean measurement.
 - Docs and config:
-  - `database_access_architecture.md` does not mention `transaction()` and still recommends mocking DataManager.
+  - `database_access_architecture.md` now covers real-instance testing and `transaction()`.
   - `.coveragerc` has `source = db` and excludes every line containing `pass` from coverage.
   - The `coverage-exempt` label must be created by hand in GitHub (done).
 - `RolesGameMode.on_guess` has a signature that does not match `BaseManager`.
 - The 48 legacy alternative-answer rows (37 colliding with a different canonical ID) can still skew replay of those old days. Per item 4, no action unless historical lookups matter.
 
-### Open by decision
+### Season challenges (removed)
 
-- Season challenge progress tracking is never called in production; these are only reached by tests: `check_challenge_progress`, `_get_challenge_goal`, `update_challenge_progress`, `get_challenge_display`, `get_all_challenge_completions`. Challenges are created and announced, but progress is never recorded, evaluated or shown.
+- Season challenges were removed: `ChallengeManager`, the `SeasonChallenge` model, the challenge CRUD in `DataManager`, the announcement line, the admin "Challenge:" output, and the `SeasonScore.challenge_progress` field. Schema objects were kept deliberately (`season_challenges` table and `seasons.challenge_progress` column) and no migration was applied; a future migration can drop them.
 - Kept deliberately: the schema columns `shields_used` and `double_points_used`, and `DataManager.initialize_database()`.
 
 ## Test harness
