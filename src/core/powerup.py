@@ -9,7 +9,12 @@ from functools import wraps
 from src.cfg.main import ConfigReader
 from src.core.base_manager import BaseManager, serialize_game_action
 from src.core.data_manager import DataManager
-from src.core.events import GuessContext, PowerUpEvent
+from src.core.events import (
+    GuessContext,
+    PowerUpEvent,
+    PowerUpOutcome,
+    RestOutcome,
+)
 from src.core.player_manager import PlayerManager
 from src.core.game_reducer import DailyGameReducer
 from src.core.state import DailyPlayerState
@@ -19,9 +24,24 @@ def _transactional_powerup_action(method):
     @wraps(method)
     def wrapped(self, *args, **kwargs):
         state_snapshot = self.snapshot_transaction_state()
+        target_id = None
+        if method.__name__ in {"jinx", "steal"}:
+            target_id = kwargs.get("target_id")
+            if target_id is None and len(args) >= 2:
+                target_id = args[1]
+        target_was_correct = (
+            state_snapshot.get(str(target_id)).is_correct
+            if target_id is not None and str(target_id) in state_snapshot
+            else False
+        )
         try:
             with self.data_manager.transaction():
-                return method(self, *args, **kwargs)
+                result = method(self, *args, **kwargs)
+                if method.__name__ in {"jinx", "steal"}:
+                    return PowerUpOutcome(str(result), public=target_was_correct)
+                if method.__name__ == "rest" and isinstance(result, tuple):
+                    return RestOutcome(result[0], result[1])
+                return result
         except BaseException:
             self.restore_transaction_state(state_snapshot)
             raise
@@ -784,6 +804,15 @@ class PowerUpManager(BaseManager):
         )
         pending_mult = self.data_manager.get_pending_multiplier(player_id)
         multiplier_display = 1.0 + pending_mult
+
+        get_current_season = getattr(self.data_manager, "get_current_season", None)
+        initialize_season_score = getattr(
+            self.data_manager, "initialize_player_season_score", None
+        )
+        if callable(get_current_season) and callable(initialize_season_score):
+            current_season = get_current_season()
+            if current_season:
+                initialize_season_score(player_id, current_season.season_id)
 
         whiff_parts = []
         if whiffed_jinx_id:

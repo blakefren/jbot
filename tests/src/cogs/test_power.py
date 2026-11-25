@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock
 from src.cogs.power import Power
 from src.core.discord import DiscordBot
+from src.core.events import PowerUpOutcome
 
 
 class TestPowerCog(unittest.IsolatedAsyncioTestCase):
@@ -40,7 +41,7 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
     async def test_jinx_target_already_answered_is_public(self):
         # When target has already answered, result should be public (ephemeral=False)
         mock_manager = MagicMock()
-        mock_manager.jinx.return_value = "Late jinx!"
+        mock_manager.jinx.return_value = PowerUpOutcome("Late jinx!", public=True)
         target_state = MagicMock()
         target_state.is_correct = True
         mock_manager.daily_state = {"456": target_state}
@@ -100,7 +101,7 @@ class TestPowerCog(unittest.IsolatedAsyncioTestCase):
     async def test_steal_target_already_answered_is_public(self):
         # Target already answered → retroactive steal resolves immediately, must be public
         mock_manager = MagicMock()
-        mock_manager.steal.return_value = "Retro steal!"
+        mock_manager.steal.return_value = PowerUpOutcome("Retro steal!", public=True)
         target_state = MagicMock()
         target_state.is_correct = True
         mock_manager.daily_state = {"456": target_state}

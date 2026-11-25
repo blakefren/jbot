@@ -1313,6 +1313,11 @@ class GameRunner:
                 for user_id in pending_multiplier_clear_ids:
                     self.data_manager.clear_pending_multiplier(user_id)
 
+            powerup_manager = self.managers.get("powerup")
+            if powerup_manager:
+                for user_id, player_state in scorer_new.daily_state.items():
+                    powerup_manager.daily_state[user_id] = player_state
+
         return {
             "status": "success",
             "updated_players": updated_players,

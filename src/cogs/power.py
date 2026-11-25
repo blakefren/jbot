@@ -25,17 +25,13 @@ class Power(commands.Cog):
         if manager:
             try:
                 target_id = str(target.id)
-                target_state = manager.daily_state.get(target_id)
-                target_already_answered = (
-                    target_state is not None and target_state.is_correct
-                )
                 result = manager.jinx(
                     str(ctx.author.id), target_id, self.bot.game.daily_question_id
                 )
                 await self.bot.send_message(
                     result,
                     interaction=ctx.interaction,
-                    ephemeral=not target_already_answered,
+                    ephemeral=not getattr(result, "public", False),
                 )
             except PowerUpError as e:
                 await self.bot.send_message(
@@ -64,20 +60,6 @@ class Power(commands.Cog):
                     self.bot.game.daily_q.answer,
                 )
 
-                # Initialize season score if seasons are enabled
-                # (ensures player appears on season leaderboard even with 0 points)
-                if (
-                    self.bot.game.season_manager
-                    and self.bot.game.season_manager.enabled
-                ):
-                    current_season = (
-                        self.bot.game.season_manager.get_or_create_current_season()
-                    )
-                    if current_season:
-                        self.bot.game.data_manager.initialize_player_season_score(
-                            str(ctx.author.id), current_season.season_id
-                        )
-
                 # Send public announcement to the channel
                 if ctx.interaction:
                     await self.bot.send_message(public_msg, interaction=ctx.interaction)
@@ -101,17 +83,13 @@ class Power(commands.Cog):
         if manager:
             try:
                 target_id = str(target.id)
-                target_state = manager.daily_state.get(target_id)
-                target_already_answered = (
-                    target_state is not None and target_state.is_correct
-                )
                 result = manager.steal(
                     str(ctx.author.id), target_id, self.bot.game.daily_question_id
                 )
                 await self.bot.send_message(
                     result,
                     interaction=ctx.interaction,
-                    ephemeral=not target_already_answered,
+                    ephemeral=not getattr(result, "public", False),
                 )
             except PowerUpError as e:
                 await self.bot.send_message(

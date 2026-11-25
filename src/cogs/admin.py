@@ -4,6 +4,11 @@ import discord
 from discord.ext import commands
 
 from src.core.subscriber import Subscriber
+from src.core.guess_display import (
+    format_answer_correction_applied,
+    format_answer_correction_preview,
+    is_answer_revealed,
+)
 
 
 class Admin(commands.Cog):
@@ -108,15 +113,7 @@ class Admin(commands.Cog):
             return
 
         # Determine if answer has been revealed
-        is_revealed = False
-        try:
-            morning_task = self.bot.morning_message_task
-            evening_task = self.bot.evening_message_task
-            if morning_task.is_running() and evening_task.is_running():
-                if morning_task.next_iteration < evening_task.next_iteration:
-                    is_revealed = True
-        except Exception:
-            pass
+        is_revealed = is_answer_revealed(self.bot)
 
         # Build the message body (shared between dry-run and applied)
         if is_revealed:
@@ -134,47 +131,13 @@ class Admin(commands.Cog):
         use_season = self.bot.game.season_manager.enabled
 
         if apply:
-            # Sync the newly-calculated daily_state back to PowerUpManager so that
-            # retroactive jinx/steal targeting works correctly after add_answer
-            daily_state_new = result.get("daily_state_new", {})
-            powerup_manager = self.bot.game.managers.get("powerup")
-            if powerup_manager and daily_state_new:
-                for user_id, player_state in daily_state_new.items():
-                    powerup_manager.daily_state[user_id] = player_state
-
-            # Public message only — tag affected players
-            public_msg = f"**Score Adjustment:**\n{header}{summary}"
-            if result.get("details"):
-                public_msg += "\n\n**Details:**\n"
-                for d in result["details"]:
-                    badges = "".join(d["badges"])
-                    sb = d["season_score_before"] if use_season else d["score_before"]
-                    sa = d["season_score_after"] if use_season else d["score_after"]
-                    public_msg += (
-                        f"<@{d['user_id']}>: {sb} -> {sa} ({d['diff']:+}) {badges}\n"
-                    )
-            if result.get("rest_cleared_players"):
-                mentions = " ".join(
-                    f"<@{r['user_id']}>" for r in result["rest_cleared_players"]
-                )
-                public_msg += (
-                    f"\nRest revoked — got it right with the new answer: {mentions}"
-                )
+            public_msg = format_answer_correction_applied(
+                result, answer_text, is_revealed, use_season
+            )
             await ctx.interaction.followup.send("Done.", ephemeral=True)
             await ctx.channel.send(public_msg)
         else:
-            # Ephemeral dry-run message only — no mentions
-            dry_msg = f"**[DRY RUN]** No changes applied. Run with `apply=True` to execute.\n{header}{summary}"
-            if result.get("details"):
-                dry_msg += "\n\n**Details:**\n"
-                for d in result["details"]:
-                    badges = "".join(d["badges"])
-                    sb = d["season_score_before"] if use_season else d["score_before"]
-                    sa = d["season_score_after"] if use_season else d["score_after"]
-                    dry_msg += f"{d['name']}: {sb} -> {sa} ({d['diff']:+}) {badges}\n"
-            if result.get("rest_cleared_players"):
-                names = ", ".join(r["name"] for r in result["rest_cleared_players"])
-                dry_msg += f"\nRest revoked (newly correct with new answer): {names}"
+            dry_msg = format_answer_correction_preview(result, answer_text, is_revealed)
             await ctx.interaction.followup.send(dry_msg)
 
     @admin.command(name="resend", description="Resend a scheduled message.")

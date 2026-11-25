@@ -2,7 +2,14 @@ import discord
 import logging
 from discord.ext import commands
 from src.cfg.main import ConfigReader
-from src.core.guess_display import format_guesses, truncate_discord_text
+from src.core.guess_display import (
+    format_answer_correction_applied,
+    format_answer_correction_preview,
+    is_answer_revealed,
+    format_guesses,
+    process_guess,
+    truncate_discord_text,
+)
 from src.core.guess_handler import AlreadyAnsweredCorrectlyError, JinxedError
 from src.core.powerup import PowerUpError
 
@@ -53,88 +60,21 @@ class AnswerModal(discord.ui.Modal):
 
         guess = str(self.answer_input.value).strip()
 
-        if not self.bot.game.daily_q:
-            await interaction.followup.send(
-                "There is no active question.", ephemeral=True
-            )
-            return
-
-        try:
-            player_id = interaction.user.id
-            player_name = interaction.user.display_name
-            (
-                is_correct,
-                num_guesses,
-                points_earned,
-                bonus_messages,
-            ) = self.bot.game.handle_guess(player_id, player_name, guess)
-        except AlreadyAnsweredCorrectlyError:
-            await interaction.followup.send("You already solved today.", ephemeral=True)
-            return
-        except JinxedError as e:
-            emoji_silenced = ConfigReader().get("JBOT_EMOJI_SILENCED", "🤐")
-            await interaction.followup.send(
-                f"{emoji_silenced} {e.message}", ephemeral=True
-            )
-            return
-        except Exception as e:
-            logging.error(f"Error handling guess from modal: {e}")
-            await interaction.followup.send(
-                "An error occurred while processing your answer. Please try again later.",
-                ephemeral=True,
-            )
-            return
-
-        # TODO: a lot of this logic is duplicated from trivia.py and could be
-        # refactored into a shared utility function.
-
-        # Retrieve all guesses for this player for the current question
-        daily_question_id = self.bot.game.daily_question_id
-        if not daily_question_id:
-            guesses = []
-        else:
-            guesses = self.bot.game.data_manager.read_guess_history(
-                user_id=player_id, daily_question_id=daily_question_id
-            )
-        guesses_text = format_guesses(guesses)
-
-        # Send confirmation message
-        if is_correct:
-            # Construct bonus string
-            bonus_str = ""
-            if bonus_messages:
-                bonus_str = "\n" + "\n".join(f"{msg}" for msg in bonus_messages)
-
-            # Send the private confirmation
-            await interaction.followup.send(
-                truncate_discord_text(
-                    f"Correct! Nicely done.\n"
-                    f"**Answer:** {self.bot.game.daily_q.answer}\n\n"
-                    f"Guesses:\n{guesses_text}",
-                    2000,
-                ),
-                ephemeral=True,
-            )
-            # Announce the correct answer publicly in the channel
-            channel = interaction.channel
-            if channel:
-                await channel.send(
-                    f"{interaction.user.mention} solved it in {num_guesses}! (+**{points_earned}** pts){bonus_str}"
-                )
-        else:
-            # Send the private confirmation for an incorrect answer
-            await interaction.followup.send(
-                truncate_discord_text(
-                    f"Sorry, that was incorrect.\n\nGuesses:\n{guesses_text}", 2000
-                ),
-                ephemeral=True,
-            )
+        outcome = process_guess(
+            self.bot.game,
+            interaction.user.id,
+            interaction.user.display_name,
+            guess,
+            interaction.user.mention,
+        )
+        await interaction.followup.send(outcome.private_message, ephemeral=True)
+        if outcome.public_message and interaction.channel:
+            await interaction.channel.send(outcome.public_message)
 
 
-async def _send_power_result(
-    interaction: discord.Interaction, result: str, public: bool
-):
+async def _send_power_result(interaction: discord.Interaction, result: str):
     """Deliver a power-up result without replying to the (ephemeral) menu message."""
+    public = getattr(result, "public", False)
     if public and interaction.channel:
         await interaction.channel.send(result)
         await interaction.edit_original_response(content="✅ Done.", view=None)
@@ -202,14 +142,10 @@ class JinxSelectView(discord.ui.View):
                 )
                 return
 
-            target_state = manager.daily_state.get(target_id)
-            target_already_answered = (
-                target_state is not None and target_state.is_correct
-            )
             result = manager.jinx(
                 str(interaction.user.id), target_id, self.bot.game.daily_question_id
             )
-            await _send_power_result(interaction, result, target_already_answered)
+            await _send_power_result(interaction, result)
         except PowerUpError as e:
             await interaction.followup.send(str(e), ephemeral=True)
         except Exception as e:
@@ -279,14 +215,10 @@ class StealSelectView(discord.ui.View):
                 )
                 return
 
-            target_state = manager.daily_state.get(target_id)
-            target_already_answered = (
-                target_state is not None and target_state.is_correct
-            )
             result = manager.steal(
                 str(interaction.user.id), target_id, self.bot.game.daily_question_id
             )
-            await _send_power_result(interaction, result, target_already_answered)
+            await _send_power_result(interaction, result)
         except PowerUpError as e:
             await interaction.followup.send(str(e), ephemeral=True)
         except Exception as e:
@@ -333,17 +265,6 @@ class RestConfirmationView(discord.ui.View):
                 self.bot.game.daily_question_id,
                 self.bot.game.daily_q.answer,
             )
-
-            # Initialize season score if seasons are enabled
-            # (ensures player appears on season leaderboard even with 0 points)
-            if self.bot.game.season_manager and self.bot.game.season_manager.enabled:
-                current_season = (
-                    self.bot.game.season_manager.get_or_create_current_season()
-                )
-                if current_season:
-                    self.bot.game.data_manager.initialize_player_season_score(
-                        str(interaction.user.id), current_season.season_id
-                    )
 
             # Send public announcement
             channel = interaction.channel
@@ -429,16 +350,7 @@ class AddAnswerConfirmationView(discord.ui.View):
                 )
                 return
 
-            # Determine if answer has been revealed
-            is_revealed = False
-            try:
-                morning_task = self.bot.morning_message_task
-                evening_task = self.bot.evening_message_task
-                if morning_task.is_running() and evening_task.is_running():
-                    if morning_task.next_iteration < evening_task.next_iteration:
-                        is_revealed = True
-            except Exception:
-                pass
+            is_revealed = is_answer_revealed(self.bot)
 
             # Build the message body
             if is_revealed:
@@ -455,31 +367,12 @@ class AddAnswerConfirmationView(discord.ui.View):
 
             use_season = self.bot.game.season_manager.enabled
 
-            # Sync the newly-calculated daily_state back to PowerUpManager
-            daily_state_new = result.get("daily_state_new", {})
-            powerup_manager = self.bot.game.managers.get("powerup")
-            if powerup_manager and daily_state_new:
-                for user_id, player_state in daily_state_new.items():
-                    powerup_manager.daily_state[user_id] = player_state
-
-            # Public message
-            public_msg = f"**Score Adjustment:**\n{header}{summary}"
-            if result.get("details"):
-                public_msg += "\n\n**Details:**\n"
-                for d in result["details"]:
-                    badges = "".join(d["badges"])
-                    sb = d["season_score_before"] if use_season else d["score_before"]
-                    sa = d["season_score_after"] if use_season else d["score_after"]
-                    public_msg += (
-                        f"<@{d['user_id']}>: {sb} -> {sa} ({d['diff']:+}) {badges}\n"
-                    )
-            if result.get("rest_cleared_players"):
-                mentions = " ".join(
-                    f"<@{r['user_id']}>" for r in result["rest_cleared_players"]
-                )
-                public_msg += (
-                    f"\nRest revoked — got it right with the new answer: {mentions}"
-                )
+            public_msg = format_answer_correction_applied(
+                result,
+                self.answer_text,
+                is_revealed,
+                use_season,
+            )
 
             await interaction.channel.send(public_msg)
             await interaction.followup.send(
@@ -536,29 +429,11 @@ class AddAnswerModal(discord.ui.Modal):
                 )
                 return
 
-            # Build the preview message
-            use_season = self.bot.game.season_manager.enabled
-
-            preview_msg = f"**[DRY RUN PREVIEW]**\nAnswer: `{answer_text}`\n\n"
-            preview_msg += f"Would update {result['updated_players']} players.\n"
-            preview_msg += f"Total points to refund: {result['total_refunded']}."
-
-            if result.get("age_warning"):
-                preview_msg = result["age_warning"] + "\n\n" + preview_msg
-
-            if result.get("details"):
-                preview_msg += "\n\n**Changes:**\n"
-                for d in result["details"]:
-                    badges = "".join(d["badges"])
-                    sb = d["season_score_before"] if use_season else d["score_before"]
-                    sa = d["season_score_after"] if use_season else d["score_after"]
-                    preview_msg += (
-                        f"{d['name']}: {sb} → {sa} ({d['diff']:+}) {badges}\n"
-                    )
-
-            if result.get("rest_cleared_players"):
-                names = ", ".join(r["name"] for r in result["rest_cleared_players"])
-                preview_msg += f"\n**Rest revoked (newly correct):** {names}"
+            preview_msg = format_answer_correction_preview(
+                result,
+                answer_text,
+                is_revealed=is_answer_revealed(self.bot),
+            )
 
             # Show preview with Apply/Cancel buttons
             view = AddAnswerConfirmationView(

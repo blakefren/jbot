@@ -1,4 +1,5 @@
 import unittest
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 from data.readers.question import Question
 from src.cogs.quick_actions import (
@@ -562,6 +563,25 @@ class TestQuickActionPowerupCallbacks(unittest.IsolatedAsyncioTestCase):
         interaction.channel.send.assert_awaited_once()
         interaction.followup.send.assert_awaited_once()
 
+    async def test_rest_initializes_season_score(self):
+        season_id = self.data_manager.create_season(
+            "Test Season", date.today().isoformat(), date.today().isoformat()
+        )
+
+        view = RestConfirmationView(self.bot)
+        button = next(
+            child
+            for child in view.children
+            if getattr(child, "custom_id", None) == "rest_confirm"
+        )
+        interaction = self.make_interaction()
+
+        await button.callback(interaction)
+
+        season_score = self.data_manager.get_player_season_score("attacker", season_id)
+        self.assertIsNotNone(season_score)
+        self.assertEqual(season_score.points, 0)
+
 
 class TestQuickActionAdminModals(unittest.IsolatedAsyncioTestCase):
     async def test_add_answer_modal_previews_before_apply(self):
@@ -586,8 +606,9 @@ class TestQuickActionAdminModals(unittest.IsolatedAsyncioTestCase):
             "Accepted spelling", "42", dry_run=True
         )
         preview = interaction.followup.send.call_args.args[0]
-        self.assertIn("DRY RUN PREVIEW", preview)
-        self.assertIn("Accepted spelling", preview)
+        self.assertIn("[DRY RUN]", preview)
+        self.assertIn("apply=True", preview)
+        self.assertNotIn("Accepted spelling", preview)
         self.assertIsInstance(
             interaction.followup.send.call_args.kwargs["view"],
             AddAnswerConfirmationView,
@@ -724,7 +745,7 @@ class TestQuickActionConfirmationCallbacks(unittest.IsolatedAsyncioTestCase):
         bot.game.recalculate_scores_for_new_answer.assert_called_once_with(
             "Accepted", "admin", dry_run=False
         )
-        self.assertIs(bot.game.managers["powerup"].daily_state["target"], state)
+        self.assertNotIn("target", bot.game.managers["powerup"].daily_state)
         public_message = interaction.channel.send.call_args.args[0]
         self.assertIn("||Accepted||", public_message)
         self.assertIn("<@target>: 0 -> 140 (+140)", public_message)

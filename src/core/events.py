@@ -21,6 +21,25 @@ class PowerUpEvent(GameEvent):
     target_user_id: str | None = None
 
 
+class PowerUpOutcome(str):
+    """String-compatible jinx/steal result with presentation metadata."""
+
+    def __new__(cls, message: str, public: bool = False):
+        outcome = super().__new__(cls, message)
+        outcome.public = public
+        return outcome
+
+
+class RestOutcome(tuple):
+    """Tuple-compatible rest result with named presentation fields."""
+
+    def __new__(cls, public_message: str, private_message: str):
+        outcome = super().__new__(cls, (public_message, private_message))
+        outcome.public_message = public_message
+        outcome.private_message = private_message
+        return outcome
+
+
 @dataclass
 class GuessContext:
     """

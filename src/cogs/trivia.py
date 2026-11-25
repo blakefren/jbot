@@ -1,7 +1,7 @@
 from discord.ext import commands
 import logging
 from src.cfg.main import ConfigReader
-from src.core.guess_display import format_guesses, truncate_discord_text
+from src.core.guess_display import process_guess
 
 from src.core.guess_handler import AlreadyAnsweredCorrectlyError, JinxedError
 
@@ -16,70 +16,16 @@ class Trivia(commands.Cog):
         # Defer the response to prevent timeouts, making it ephemeral so only the user sees it.
         await ctx.interaction.response.defer(ephemeral=True)
 
-        if not self.bot.game.daily_q:
-            await ctx.interaction.followup.send("There is no active question.")
-            return
-
-        try:
-            player_id = ctx.author.id
-            player_name = ctx.author.display_name
-            (
-                is_correct,
-                num_guesses,
-                points_earned,
-                bonus_messages,
-            ) = self.bot.game.handle_guess(player_id, player_name, guess)
-        except AlreadyAnsweredCorrectlyError:
-            await ctx.interaction.followup.send("You already solved today.")
-            return
-        except JinxedError as e:
-            emoji_silenced = ConfigReader().get("JBOT_EMOJI_SILENCED", "🤐")
-            await ctx.interaction.followup.send(f"{emoji_silenced} {e.message}")
-            return
-        except Exception as e:
-            logging.error(f"Error handling guess: {e}")
-            await ctx.interaction.followup.send(
-                "An error occurred while processing your answer. Please try again later."
-            )
-            return
-
-        # Retrieve all guesses for this player for the current question
-        daily_question_id = self.bot.game.daily_question_id
-        if not daily_question_id:
-            guesses = []
-        else:
-            guesses = self.bot.game.data_manager.read_guess_history(
-                user_id=player_id, daily_question_id=daily_question_id
-            )
-        guesses_text = format_guesses(guesses)
-
-        # Send a confirmation message
-        if is_correct:
-            # Construct bonus string
-            bonus_str = ""
-            if bonus_messages:
-                bonus_str = "\n" + "\n".join(f"{msg}" for msg in bonus_messages)
-
-            # Send the private confirmation
-            await ctx.interaction.followup.send(
-                truncate_discord_text(
-                    f"Correct! Nicely done.\n"
-                    f"**Answer:** {self.bot.game.daily_q.answer}\n\n"
-                    f"Guesses:\n{guesses_text}",
-                    2000,
-                )
-            )
-            # Announce the correct answer publicly in the channel
-            await ctx.channel.send(
-                f"{ctx.author.mention} solved it in {num_guesses}! (+**{points_earned}** pts){bonus_str}"
-            )
-        else:
-            # Send the private confirmation for an incorrect answer
-            await ctx.interaction.followup.send(
-                truncate_discord_text(
-                    f"Sorry, that was incorrect.\n\nGuesses:\n{guesses_text}", 2000
-                )
-            )
+        outcome = process_guess(
+            self.bot.game,
+            ctx.author.id,
+            ctx.author.display_name,
+            guess,
+            ctx.author.mention,
+        )
+        await ctx.interaction.followup.send(outcome.private_message)
+        if outcome.public_message:
+            await ctx.channel.send(outcome.public_message)
 
 
 async def setup(bot):

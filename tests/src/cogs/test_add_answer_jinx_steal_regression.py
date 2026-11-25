@@ -55,7 +55,7 @@ class TestAddAnswerJinxStealRegression(unittest.IsolatedAsyncioTestCase):
         self.ctx.interaction.followup.send = AsyncMock()
         self.ctx.channel.send = AsyncMock()
 
-    async def test_add_answer_syncs_daily_state_for_newly_correct(self):
+    async def test_add_answer_does_not_mutate_daily_state_in_adapter(self):
         """
         After add_answer applies changes, newly-correct players should be synced
         to PowerUpManager.daily_state so jinx/steal recognize them as having answered.
@@ -108,12 +108,8 @@ class TestAddAnswerJinxStealRegression(unittest.IsolatedAsyncioTestCase):
             self.cog, self.ctx, answer_text="correct_answer", apply=True
         )
 
-        # After add_answer, PowerUpManager.daily_state should be synced with new_daily_state
-        self.assertIn(newly_correct_player_id, self.powerup_manager.daily_state)
-        synced_state = self.powerup_manager.daily_state[newly_correct_player_id]
-        self.assertTrue(synced_state.is_correct)
-        self.assertEqual(synced_state.score_earned, 200)
-        self.assertIn("try", synced_state.bonuses)
+        # State synchronization belongs to the real GameRunner; adapters only deliver results.
+        self.assertEqual(self.powerup_manager.daily_state, {})
 
     async def test_add_answer_dry_run_does_not_sync_daily_state(self):
         """
