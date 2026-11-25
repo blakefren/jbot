@@ -398,27 +398,16 @@ class TestAdminSeasonCommand(unittest.IsolatedAsyncioTestCase):
         await self.cog.season.callback(self.cog, self.ctx)
         self.ctx.send.assert_called_once_with("No active season found.", ephemeral=True)
 
-    async def test_season_info_with_challenge(self):
-        """Default (no flags) returns season info card including challenge name."""
-        self.data_manager.create_season_challenge(
-            self.season_id, "Speed Demon", "Be fast", "⚡", {"type": "speed"}
-        )
-
+    async def test_season_info_card(self):
+        """Default (no flags) returns the season info card."""
         await self.cog.season.callback(self.cog, self.ctx)
 
         self.ctx.send.assert_called_once()
         msg = self.ctx.send.call_args[0][0]
         self.assertIn("April 2026", msg)
         self.assertIn("Day 5/30", msg)
-        self.assertIn("⚡ Speed Demon", msg)
         self.assertIn("Players:   3", msg)
-
-    async def test_season_info_no_challenge(self):
-        """Default (no flags) shows 'None' when no challenge is set."""
-        await self.cog.season.callback(self.cog, self.ctx)
-
-        msg = self.ctx.send.call_args[0][0]
-        self.assertIn("Challenge: None", msg)
+        self.assertNotIn("Challenge", msg)
 
     async def test_season_end_no_active_question(self):
         """end:True finalizes the season and reports the next season name."""

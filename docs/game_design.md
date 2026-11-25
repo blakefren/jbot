@@ -155,10 +155,6 @@ When seasons are enabled, the leaderboard defaults to **season score** — point
 
 Top finishers earn a permanent trophy (🥇🥈🥉) recorded on their lifetime profile. Trophies accumulate across seasons. Ties at any position are honored — two players tied for first both earn 🥇.
 
-### Seasonal Challenge
-
-Each season has a randomly selected **community challenge** — a goal all players share, such as maintaining a 7-day streak, answering before the hint 10 times, or being the first to answer 5 times. The challenge encourages varied play styles and gives a secondary achievement to pursue alongside score. Progress is visible on player profiles.
-
 ### What Resets vs. What Persists
 
 | Resets at Season End | Persists |
@@ -167,7 +163,6 @@ Each season has a randomly selected **community challenge** — a goal all playe
 | Current streak | Best-ever streak |
 | — | Lifetime correct answers |
 | — | Trophies |
-| — | Season challenge progress (finalized) |
 
 ---
 

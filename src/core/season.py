@@ -44,20 +44,12 @@ class SeasonScore:
     first_answers: int = 0
     current_streak: int = 0
     best_streak: int = 0
-    challenge_progress: dict | None = None  # JSON data for challenge tracking
     final_rank: Optional[int] = None  # Set when season ends
     trophy: Optional[str] = None  # "gold", "silver", "bronze", or None
-
-    def __post_init__(self):
-        """Initialize challenge_progress as empty dict if None."""
-        if self.challenge_progress is None:
-            self.challenge_progress = {}
 
     @classmethod
     def from_db_row(cls, row: dict) -> "SeasonScore":
         """Create SeasonScore from database row."""
-        import json
-
         return cls(
             player_id=row["player_id"],
             season_id=row["season_id"],
@@ -67,11 +59,6 @@ class SeasonScore:
             first_answers=row["first_answers"],
             current_streak=row["current_streak"],
             best_streak=row["best_streak"],
-            challenge_progress=(
-                json.loads(row["challenge_progress"])
-                if row["challenge_progress"]
-                else {}
-            ),
             final_rank=row["final_rank"],
             trophy=row["trophy"],
         )
@@ -86,32 +73,3 @@ class SeasonScore:
         elif self.trophy == "bronze":
             return "🥉"
         return ""
-
-
-@dataclass
-class SeasonChallenge:
-    """Represents a monthly challenge for a season."""
-
-    challenge_id: int
-    season_id: int
-    challenge_name: str  # e.g., "Speed Demon"
-    description: str  # e.g., "Answer 10 questions before hint"
-    badge_emoji: str  # e.g., "⚡"
-    completion_criteria: dict  # JSON criteria for completion
-
-    @classmethod
-    def from_db_row(cls, row: dict) -> "SeasonChallenge":
-        """Create SeasonChallenge from database row."""
-        import json
-
-        return cls(
-            challenge_id=row["challenge_id"],
-            season_id=row["season_id"],
-            challenge_name=row["challenge_name"],
-            description=row["description"],
-            badge_emoji=row["badge_emoji"],
-            completion_criteria=json.loads(row["completion_criteria"]),
-        )
-
-    def __str__(self) -> str:
-        return f"{self.badge_emoji} {self.challenge_name}: {self.description}"

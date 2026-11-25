@@ -33,7 +33,6 @@ _SEASON_SCORE_FIELDS = frozenset(
         "first_answers",
         "current_streak",
         "best_streak",
-        "challenge_progress",
         "final_rank",
         "trophy",
     }
@@ -1422,44 +1421,6 @@ class DataManager:
             )
 
             prev_score = season_score.points
-
-    def get_season_challenge(self, season_id: int):
-        """Get the challenge for a specific season."""
-        from src.core.season import SeasonChallenge
-
-        query = "SELECT * FROM season_challenges WHERE season_id = ?"
-        result = self._db.execute_query(query, (season_id,))
-        if result:
-            return SeasonChallenge.from_db_row(result[0])
-        return None
-
-    def create_season_challenge(
-        self,
-        season_id: int,
-        challenge_name: str,
-        description: str,
-        badge_emoji: str,
-        completion_criteria: dict,
-    ) -> int:
-        """Create a challenge for a season."""
-        import json
-
-        query = """
-            INSERT INTO season_challenges
-            (season_id, challenge_name, description, badge_emoji, completion_criteria)
-            VALUES (?, ?, ?, ?, ?)
-        """
-        _, lastrowid = self._db.execute_update(
-            query,
-            (
-                season_id,
-                challenge_name,
-                description,
-                badge_emoji,
-                json.dumps(completion_criteria),
-            ),
-        )
-        return lastrowid if lastrowid is not None else 0
 
     def update_lifetime_stats(self, player_id: str, **kwargs):
         """

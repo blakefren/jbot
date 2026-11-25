@@ -274,32 +274,12 @@ class TestSeasonManagerAnnouncements(_SeasonTestCase):
         msg = self.manager.build_season_end_announcement(season, [(gold, "Alice")])
         self.assertIn("1 player(s) competed", msg)
 
-    # ── build_new_season_announcement ─────────────────────────────────────────
-
-    def test_build_new_season_announcement_no_challenge(self):
+    def test_build_new_season_announcement(self):
         """New-season announcement includes season name and reset notice."""
         season = Season(2, "February 2026", date(2026, 2, 1), date(2026, 2, 28), True)
-        msg = self.manager.build_new_season_announcement(season, challenge=None)
+        msg = self.manager.build_new_season_announcement(season)
         self.assertIn("February 2026", msg)
         self.assertIn("Points reset", msg)
-        self.assertNotIn("Challenge", msg)
-
-    def test_build_new_season_announcement_with_challenge(self):
-        """Challenge name and description appear when challenge is provided."""
-        season_id = self.data_manager.create_season(
-            "February 2026", "2026-02-01", "2026-02-28"
-        )
-        self.data_manager.create_season_challenge(
-            season_id, "Speed Demon", "Answer first 10 times.", "🔥", {"count": 10}
-        )
-        season = self.data_manager.get_season_by_id(season_id)
-        challenge = self.data_manager.get_season_challenge(season_id)
-
-        msg = self.manager.build_new_season_announcement(season, challenge=challenge)
-
-        self.assertIn("Speed Demon", msg)
-        self.assertIn("🔥", msg)
-        self.assertIn("Answer first 10 times.", msg)
 
     # ── build_season_reminder ─────────────────────────────────────────────────
 

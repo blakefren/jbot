@@ -122,7 +122,7 @@ Power-ups can be queued overnight before the daily question is posted. Jinx and 
 
 ### Seasons
 
-Monthly seasons reset scores and track standings independently. The top players at the end of each season earn trophies. Each season also includes a rotating monthly challenge with a bonus objective. Seasons can be enabled or disabled via the `JBOT_ENABLE_SEASONS` flag in `.env`.
+Monthly seasons reset scores and track standings independently. The top players at the end of each season earn trophies. Seasons can be enabled or disabled via the `JBOT_ENABLE_SEASONS` flag in `.env`.
 
 ## Commands
 

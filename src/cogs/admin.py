@@ -259,23 +259,16 @@ class Admin(commands.Cog):
         if not end:
             # Info view
             current_day, total_days = season_manager.get_season_progress(current_season)
-            challenge = game.data_manager.get_season_challenge(current_season.season_id)
             player_count = len(
                 game.data_manager.get_season_scores(
                     current_season.season_id, limit=1000
                 )
-            )
-            challenge_str = (
-                f"{challenge.badge_emoji} {challenge.challenge_name}"
-                if challenge
-                else "None"
             )
             lines = [
                 f"**Season: {current_season.season_name}**",
                 f"ID:        {current_season.season_id}",
                 f"Dates:     {current_season.start_date} → {current_season.end_date}",
                 f"Progress:  Day {current_day}/{total_days}",
-                f"Challenge: {challenge_str}",
                 f"Players:   {player_count}",
             ]
             await ctx.send("\n".join(lines), ephemeral=True)

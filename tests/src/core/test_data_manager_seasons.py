@@ -10,7 +10,7 @@ from datetime import date
 
 from db.database import Database
 from src.core.data_manager import DataManager
-from src.core.season import Season, SeasonScore, SeasonChallenge
+from src.core.season import Season, SeasonScore
 
 
 def _setup_db() -> tuple[Database, DataManager]:
@@ -365,46 +365,6 @@ class TestDataManagerTrophies(unittest.TestCase):
     def test_get_trophy_counts_empty(self):
         counts = self.dm.get_trophy_counts("p1")
         self.assertEqual(counts, {"gold": 0, "silver": 0, "bronze": 0})
-
-
-class TestDataManagerSeasonChallenges(unittest.TestCase):
-    """Tests for season challenge CRUD."""
-
-    def setUp(self):
-        self.db, self.dm = _setup_db()
-        self.season_id = _create_season(self.dm)
-
-    def tearDown(self):
-        self.db.close()
-
-    def test_create_and_get_season_challenge(self):
-        challenge_id = self.dm.create_season_challenge(
-            self.season_id,
-            "Speed Demon",
-            "Answer 10 questions before hint",
-            "⚡",
-            {"type": "before_hint", "target": 10},
-        )
-        self.assertIsInstance(challenge_id, int)
-        self.assertGreater(challenge_id, 0)
-
-        challenge = self.dm.get_season_challenge(self.season_id)
-        self.assertIsNotNone(challenge)
-        self.assertIsInstance(challenge, SeasonChallenge)
-        self.assertEqual(challenge.challenge_name, "Speed Demon")
-        self.assertEqual(challenge.badge_emoji, "⚡")
-        self.assertEqual(challenge.completion_criteria["target"], 10)
-
-    def test_get_season_challenge_missing_returns_none(self):
-        result = self.dm.get_season_challenge(self.season_id)
-        self.assertIsNone(result)
-
-    def test_get_season_challenge_wrong_season_returns_none(self):
-        self.dm.create_season_challenge(
-            self.season_id, "Hard Worker", "Win 5 days", "💪", {"days": 5}
-        )
-        result = self.dm.get_season_challenge(9999)
-        self.assertIsNone(result)
 
 
 class TestDataManagerLifetimeStats(unittest.TestCase):

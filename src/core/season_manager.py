@@ -100,8 +100,7 @@ class SeasonManager:
 
             msgs = []
             if self.config.get_season_announce_start():
-                challenge = self.data_manager.get_season_challenge(new_season.season_id)
-                msgs.append(self.build_new_season_announcement(new_season, challenge))
+                msgs.append(self.build_new_season_announcement(new_season))
 
             return True, msgs
 
@@ -138,15 +137,6 @@ class SeasonManager:
             )
 
             self._reset_player_season_scores()
-
-            try:
-                from src.core.challenge_manager import ChallengeManager
-
-                challenge_mgr = ChallengeManager(self.data_manager, self.config)
-                with self.data_manager.transaction():
-                    challenge_mgr.create_season_challenge(season_id)
-            except Exception as e:
-                self.logger.warning(f"Could not create season challenge: {e}")
 
             return self.data_manager.get_season_by_id(season_id)
 
@@ -276,26 +266,22 @@ class SeasonManager:
 
         return "\n".join(lines)
 
-    def build_new_season_announcement(self, season: Season, challenge=None) -> str:
+    def build_new_season_announcement(self, season: Season) -> str:
         """
         Build the new-season welcome announcement message.
 
         Args:
             season: The new season that just started
-            challenge: Optional SeasonChallenge object
 
         Returns:
             Formatted announcement string
         """
-        lines = [
-            f"🎉 **{season.season_name} Season has begun!**",
-            "Points reset — everyone starts fresh. Good luck! 💪",
-        ]
-        if challenge:
-            lines.append(
-                f"\nChallenge this month: {challenge.badge_emoji} **{challenge.challenge_name}** — {challenge.description}"
-            )
-        return "\n".join(lines)
+        return "\n".join(
+            [
+                f"🎉 **{season.season_name} Season has begun!**",
+                "Points reset — everyone starts fresh. Good luck! 💪",
+            ]
+        )
 
     def build_season_reminder(self, season: Season, days_remaining: int) -> str:
         """

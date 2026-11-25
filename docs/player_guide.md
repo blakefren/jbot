@@ -157,10 +157,6 @@ Top 3 players at the end of each season earn a permanent trophy. Ties are allowe
 
 Use `/game leaderboard all_time:True` or `/game profile @player all_time:True` to see full trophy history.
 
-### Monthly Challenge ⚡
-
-Each season has a community challenge (e.g., "Answer 10 questions before the hint drops"). Progress is shown on `/game profile`. Completing it earns a special badge for the season.
-
 ---
 
 ## ❓ Questions or Issues?
