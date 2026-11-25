@@ -49,6 +49,7 @@ The project follows a strict "DataManager-Only" pattern:
 *   **PlayerManager**: Contains business logic, uses DataManager for data access
 *   **Never** import or instantiate `Database` directly in cogs or managers
 *   When adding new database operations, add methods to `DataManager`, not direct SQL in other classes
+*   Dynamic SQL identifiers (column/field/ordering names) must come from allowlists in `DataManager`, never from caller strings
 
 ### Scoring System
 *   **ScoreCalculator**: Located in `src/core/scoring.py`, centralizes all scoring calculations
@@ -80,7 +81,14 @@ The project follows a strict "DataManager-Only" pattern:
 *   **GeminiManager**: AI content generation (regular class instance, not a singleton)
 *   **RolesGameMode** (`src/core/roles.py`): Assigns DB roles based on score standings; called by `DiscordBot.apply_discord_roles()` in the evening task
 *   **DailyPlayerState** (`src/core/state.py`): In-memory dataclass holding all transient per-player state for the current question round (score earned, guesses, bonuses, jinx/steal/rest flags). Single source of truth during a round. `guesses_count` must be incremented for every submitted guess in both live handling and replay so retroactive jinxes can charge prior wrong guesses correctly. Jinx penalties must also be persisted to the attacker's score in live handling, not only recorded in transient state. Key field: `streak_delta` — tracks the net streak adjustment applied during the round (e.g. `-3` after a steal cost deduction), used by the simulator to avoid double-counting costs that were already persisted to the DB.
-*   Managers should use dependency injection via constructors. **Note:** some existing modules (`powerup.py`, `guess_handler.py`, `trivia.py`) still instantiate `ConfigReader` at module level — this is a known issue tracked in the code review doc.
+*   Managers should use dependency injection via constructors. Modules that accept an optional `config` (e.g. `powerup.py`, `guess_handler.py`) fall back to `ConfigReader()` inside `__init__`; pass the config explicitly in tests and new code instead of relying on that fallback.
+
+### Persistence, Transactions & Ordering
+*   **Transactions**: `Database.transaction()` / `DataManager.transaction()` group executor calls into one commit-or-rollback scope (nested scopes use savepoints; errors propagate inside a scope, while standalone calls keep the legacy "log and return empty" behavior). A complete gameplay action (guess, power-up, answer correction, crowd-wisdom award, end-of-day settlement, question setup/skip, refund, season rollover, role refresh) must commit in a single transaction, and in-memory manager state (`PowerUpManager.daily_state`) must be restored if persistence fails (`snapshot_transaction_state` / `restore_transaction_state`).
+*   **Serialization**: Gameplay actions run under `DataManager.game_action_lock` via `@serialize_game_action` (`src/core/base_manager.py`). It is a single-process lock; avoid holding it across slow or Discord/Gemini calls.
+*   **Event order**: Guesses and power-ups get a shared per-question `event_sequence` (assigned inside the insert, preloads when hydrated); replay sorts by it and falls back to timestamp, then guesses before power-ups, then row id for legacy rows. Any query or display that ranks same-second events (fastest answer, badges) must tie-break by id/sequence the same way, and "before hint" is `guessed_at <= hint timestamp` as in the simulator.
+*   **No reaching past DataManager**: Never use `data_manager._db` or a non-existent `data_manager.db` outside `DataManager`; add an accessor method instead (a missing accessor once silently broke nightly backups behind a mocked data manager).
+*   **Snapshots**: `get_daily_snapshot` returns `{}` (not `None`) when no rows exist; check with `if snapshot:` consistently.
 
 ## My Persona
 
@@ -94,7 +102,8 @@ As your partner, I will adhere to the following principles:
 *   **Context-Awareness**: I will strive to understand the project's goals and constraints before making suggestions. I will use the project overview and existing code to inform my decisions.
 *   **Collaborative Spirit**: I will present my suggestions as proposals, not mandates. I am open to feedback and discussion to find the best path forward.
 *   **Efficiency-Oriented**: I will look for ways to streamline our workflow, whether through writing scripts, automating repetitive tasks, or improving the project's architecture.
-*   **DB Backup Reminder**: At the start of sessions involving database changes (schema migrations, data fixes, score adjustments), ask: "Have you run `python scripts/restore_db.py` recently to get a fresh local copy of the production DB?"
+*   **Verify, Don't Assume**: When reviewing completed work or a plan, run the full suite and check claims against the code (callers, config keys across `src/` and `scripts/`, script paths, doc statements) instead of trusting summaries. Mocked tests can hide real defects, so look at what is mocked. State clearly what was not verified (for example long-running simulations).
+*   **DB Backup Reminder**: At the start of sessions involving database changes (schema migrations, data fixes, score adjustments), ask: "Have you run `python db/restore_db.py` recently to get a fresh local copy of the production DB?"
 
 ## Operating Procedures
 
@@ -109,6 +118,7 @@ As your partner, I will adhere to the following principles:
 *   **Configuration**: Configuration uses both `.env` and `sources.toml`:
     - **`.env`**: For environment-specific settings (tokens, scheduling, feature flags)
         - Always add new config keys to `.env.template` with descriptive comments
+        - Keep key names identical everywhere they are read: `src/`, `scripts/simulate_powerups.py` (which feeds the CI simulation), `.env.template`, tests, and docs. Grep all of them when adding or renaming a key (a stale `JBOT_REST_BONUS_PER_DAY` once left the simulation ignoring `JBOT_REST_MULTIPLIER`)
         - Ensure the `ConfigReader` in `src/cfg/main.py` can handle them
         - Use appropriate getter methods: `get()`, `get_bool()`, or add specialized getters
     - **`sources.toml`**: For question source configuration (in root directory)
@@ -130,18 +140,17 @@ As your partner, I will adhere to the following principles:
     - **Migration Safety**: `update_schema.py` compares current database against `schema.sql`, applies changes incrementally
     - **Verification**: After migration, run `python db/verify_schema.py` to ensure schema matches expectations
     - **Production Database**: The actual `jbot.db` is in the root directory (not in `db/`), gitignored for safety
-*   **Documentation**: I will check `docs/` for any architectural plans or investigation notes before implementing major features. `docs/player_guide.md` is the canonical player-facing reference and should be kept aligned with actual gameplay (scoring values, power-up mechanics, timing, commands) whenever those change.
+*   **Documentation**: I will check `docs/` for any architectural plans or investigation notes before implementing major features (`docs/architecture_improvement_plan.md` tracks current architecture work and open items; update it when completing or discovering items). `docs/player_guide.md` is the canonical player-facing reference and should be kept aligned with actual gameplay (scoring values, power-up mechanics, timing, commands) whenever those change.
 *   **Logging**: Use Python's standard `logging` module throughout (configured in `src/logging_config.py`). Log levels: INFO for normal operations, WARNING for recoverable issues, ERROR for failures. Include appropriate logging for debugging and monitoring when adding features.
 *   **Code Quality Tools**:
-    - **Coverage Reports**: Generated in `htmlcov_*/` directories per module
-    - **Linting**: GitHub Actions workflow at `.github/workflows/lint.yml`
-    - **Multiple Workflows**: CI workflows for tests, linting, and simulation
+    - **Coverage Reports**: `scripts/run_coverage.bat` prints a terminal report with missing lines and fails below 90%
+    - **Linting**: GitHub Actions workflow at `.github/workflows/lint.yml` (Black, auto-commits formatting fixes)
+    - **Multiple Workflows**: CI workflows for tests, linting, and simulation (`simulation.yml` runs `scripts/simulate_powerups.py` when reducer, power-up, scoring, state, events, simulator or `.env.template` files change)
     - Run tests locally with coverage to ensure adequate test coverage
-*   **Git Pre-Commit Hook**: The project uses `.git/hooks/pre-commit` to automatically format code and run tests before commits.
-    - Runs `python -m black .` to format all Python files with Black
-    - Runs `python -m unittest discover` to execute the test suite
-    - **Important**: The hook uses `python -m black` (not just `black`) to ensure it uses the Black version from the active Python environment (jbot conda env), not a potentially outdated system installation
-    - If modifying the hook, always ensure it uses the correct Python environment to avoid formatting inconsistencies
+*   **Formatting & Verification**: Run `python -m black .` and the full suite before finishing. The suite lives in `tests/` and is discovered with `python -m unittest discover -s . -p "test_*.py"`. In Windows PowerShell, `unittest` writes to stderr and PowerShell may display a `NativeCommandError`; judge success by the final `OK` / `FAILED` line. `scripts/simulate_powerups.py` is slow (a 28-day run can take many minutes); use `run_simulation(days=3, seed=1)` for quick checks.
+*   **Git Pre-Commit Hook**: A local `.git/hooks/pre-commit` (not versioned, so it may be missing in a fresh clone) is expected to run `python -m black .` and `python -m unittest discover`. Use `python -m black` (not bare `black`) so the active environment's Black version is used. If the hook is absent, run both commands manually.
+*   **Keeping Diffs Reviewable**: Edit files in place. Do not create temporary or parallel copies (`*_new.py`, `*_tmp.py`, `*_rewrite.py`) to replace a file; they show up as whole-file additions in the diff and can be left behind. When delegating to sub-agents, tell them to edit in place, give each a disjoint set of files, and keep rewrites scoped to what was asked.
+*   **Removing Dead Code**: Search for callers in `src/`, `scripts/`, `data/`, `db/` and docs, not just by name (same-named methods on different classes hide dead ones). Code reachable only from tests is dead unless it is a documented fixture or API; remove it together with its tests, and list intentionally retained leftovers in the plan doc. Do not drop schema columns without a migration plan.
 
 ## Production (Railway)
 
@@ -162,7 +171,7 @@ The bot is deployed to [Railway](https://railway.app) with GitHub auto-deploys.
     - `Database.__init__` uses the `db_path` parameter directly if absolute, otherwise resolves relative to project root
     - `ConfigReader.get_dataset_path()` resolves dataset paths from `sources.toml` relative to `JBOT_DATASETS_DIR` (or project root if unset)
     - Backups are stored in a `backups/` directory next to the database file
-*   **Data Migration**: Use `python scripts/railway_upload.py` to transfer datasets and/or the database to the Railway volume via SSH. Requires Railway CLI (`scoop install railway`, `railway login`, `railway link`).
+*   **Data Migration**: Question datasets are pulled from S3-compatible storage at startup by `scripts/sync_datasets.py`, and the database is restored from Litestream replication by `entrypoint.sh` (see `litestream.yml`). Use `python db/restore_db.py` to get a local copy of the production DB.
 *   **Monitoring**: `railway logs` for live logs, `railway ssh` for shell access.
 
 ## Testing Strategy
@@ -184,20 +193,26 @@ The project uses Python's `unittest` module as the primary testing framework.
 
 ### Database Testing Best Practices
 
-**CRITICAL**: For database-related functionality, prefer integration tests over mocks.
+**CRITICAL**: Do not mock the database layer. Use a real in-memory SQLite stack for anything that touches `DataManager`, `PlayerManager`, `GuessHandler`, `PowerUpManager`, `GameRunner`, `SeasonManager`, or cogs/Discord handlers built on them.
 
-*   **Integration Tests for DataManager**: When testing DataManager methods, use real in-memory databases (`:memory:`) with the actual schema from `db/schema.sql`
-*   **Why Mocks Fail**: Mocks don't execute actual SQL queries, so column name errors, syntax errors, and schema mismatches go undetected
-    - Example: `MagicMock(return_value=[{"answer": "test"}])` will pass even if the column is actually `answer_text`
-*   **When to Use Mocks**: Reserve mocking for external dependencies (Discord API, Gemini API), not the database
+*   **Real stack**: `Database(":memory:")` loads `db/schema.sql` in its constructor, then `DataManager(db)` and `PlayerManager(data_manager)`. Close the DB in `tearDown` / `addCleanup`.
+*   **Shared helpers** (prefer these over new inline setups):
+    - `tests/src/core/_powerup_helpers.py`: `make_config()`, and `make_stack(test, players, question=None)` → `RealStack` (DB + managers, seeded `(id, name, score, streak)` players, today's daily question, helpers such as `mark_answered_today`, `answer_on_earlier_day`, `send_hint`, `usages()`, and `players[...]` re-read from the DB).
+    - `tests/src/cogs/_game_stack.py`: `build_game_stack(test, players=..., seasons=..., start_day=...)` → real `GameRunner` + `PowerUpManager` over an in-memory DB; only `ConfigReader` and the question selector are doubles. Use it for cog and Discord tests.
+*   **Assert on stored state** (scores, streaks, `powerup_usage`, `guesses`, `score_adjustments`, messages), not on `mock.assert_called*`. Seed through real methods; set timestamps with `db.execute_update` when ordering matters (use recent dates for anything filtered by "last 28 days").
+*   **Why mocks fail**: Mocks don't run SQL, so column/schema mismatches and calls to attributes that don't exist (e.g. `data_manager.db`) go undetected. Hand-written `DataManager` fakes drift from the real class the same way; don't write them.
+*   **When to use mocks**: Discord objects, Gemini / the question source, `ConfigReader` (it reads `.env`), the clock, and failure injection via `patch.object(real_obj, "method", side_effect=...)` so the rest of the stack stays real. Justify any other mock as a unit orchestration seam in a short comment.
+*   **Failure/rollback tests**: For each new transactional workflow, inject a DB write failure and assert both persisted state and in-memory manager state roll back.
 *   **Test Pattern**:
     ```python
-    class TestDataManagerIntegration(unittest.TestCase):
+    class TestSomething(unittest.TestCase):
         def setUp(self):
             self.db = Database(":memory:")
-            self.data_manager = DataManager(self.db)
-            self.data_manager.initialize_database()  # Loads real schema
+            self.addCleanup(self.db.close)
+            self.data_manager = DataManager(self.db)  # schema already loaded
+            self.player_manager = PlayerManager(self.data_manager)
     ```
+    (`DataManager.initialize_database()` is redundant after `Database(...)`; it is kept only as a documented bootstrap.)
 *   **Schema Alignment**: Integration tests ensure SQL queries use correct column names from `db/schema.sql`
 *   **Test Coverage**: All DataManager methods that execute SQL should have integration test coverage
 
