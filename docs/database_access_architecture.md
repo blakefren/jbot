@@ -49,7 +49,7 @@ The jbot project follows a strict architectural pattern where **DataManager is t
 ### 3. Benefits
 
 - **Single Source of Truth**: All database logic is in one place
-- **Easier Testing**: Mock DataManager methods instead of database calls
+- **Easier Testing**: Tests run against a real in-memory SQLite database instead of mocks (see [Testing](#testing))
 - **Easier Refactoring**: If we change databases, only DataManager needs updates
 - **Better Error Handling**: Centralized error handling for DB operations
 - **Consistent Data Access**: All queries follow the same patterns
@@ -106,32 +106,45 @@ class SomeCog:
 
 ## Testing
 
-### Unit Tests
+Prefer real database instances over mocks. Mocks do not execute SQL, so column-name errors, syntax errors, and schema mismatches go undetected.
 
-When testing DataManager itself:
+### Database Tests
+
+When testing DataManager (or anything that runs SQL), use a real in-memory database built from `db/schema.sql`:
 ```python
 class TestDataManager(unittest.TestCase):
     def setUp(self):
-        self.db = Database(":memory:")  # Test uses real DB instance
+        self.db = Database(":memory:")  # Real DB instance, real schema
         self.data_manager = DataManager(self.db)
+        self.data_manager.initialize_database()
 
-    def test_something(self):
-        # Access the private _db for mocking if needed
-        self.data_manager._db.execute_query = MagicMock(...)
+    def test_create_player_persists(self):
+        self.data_manager.create_player("1", "Alice")
+        self.assertEqual(self.data_manager.get_player("1").name, "Alice")
 ```
 
-### Integration Tests
+Assert on stored state (re-read through DataManager), not on what a mocked query returned.
 
-When testing other components that use DataManager:
-```python
-def test_player_manager(self):
-    # Mock DataManager methods, not database
-    mock_data_manager = MagicMock()
-    mock_data_manager.get_player.return_value = Player(...)
+### Workflow Tests
 
-    player_manager = PlayerManager(mock_data_manager)
-    # Test player manager logic
-```
+When testing managers, cogs, or game flow, build a real stack and seed it:
+- `RealStack` / `make_stack` in `tests/src/core/_powerup_helpers.py`: `Database`, `DataManager`, and `PlayerManager` with seeded players and today's question.
+- `build_game_stack` in `tests/src/cogs/_game_stack.py`: adds a real `GameRunner` and `PowerUpManager`.
+
+Only these external boundaries should be mocked:
+- Discord API (channels, members, interactions)
+- Gemini API
+- `ConfigReader` and the question selector
+
+Use `patch.object` on real objects only to inject failures (for example, a DataManager write raising to verify rollback).
+
+### Transactions in Tests
+
+Gameplay actions that must succeed or fail together use `DataManager.transaction()`, which wraps `Database.transaction()` (rollback on error, nested savepoints supported). Failure-injection tests should exercise this boundary with a real database and then assert that nothing was persisted.
+
+## Transactions
+
+Use `DataManager.transaction()` as the boundary for a complete gameplay action (guess, power-up, refund, settlement, season rollover), not for individual statements. Inside the scope, call DataManager methods as usual; an exception rolls back every write made in the scope and propagates to the caller. Discord and Gemini calls stay outside the transaction.
 
 ## Future-Proofing
 
