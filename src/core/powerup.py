@@ -805,14 +805,11 @@ class PowerUpManager(BaseManager):
         pending_mult = self.data_manager.get_pending_multiplier(player_id)
         multiplier_display = 1.0 + pending_mult
 
-        get_current_season = getattr(self.data_manager, "get_current_season", None)
-        initialize_season_score = getattr(
-            self.data_manager, "initialize_player_season_score", None
-        )
-        if callable(get_current_season) and callable(initialize_season_score):
-            current_season = get_current_season()
-            if current_season:
-                initialize_season_score(player_id, current_season.season_id)
+        current_season = self.data_manager.get_current_season()
+        if current_season:
+            self.data_manager.initialize_player_season_score(
+                player_id, current_season.season_id
+            )
 
         whiff_parts = []
         if whiffed_jinx_id:
