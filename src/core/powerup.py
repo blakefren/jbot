@@ -87,7 +87,7 @@ class PowerUpManager(BaseManager):
         self.emoji_rest = _config.get("JBOT_EMOJI_REST", "😴")
         self.emoji_rest_wakeup = _config.get("JBOT_EMOJI_REST_WAKEUP", "⏰")
         self.emoji_streak = _config.get("JBOT_EMOJI_STREAK", "🔥")
-        self.rest_bonus_per_day = self.reducer.rest_bonus_per_day
+        self.rest_multiplier = self.reducer.rest_multiplier
         self.jinx_share_ratio = self.reducer.jinx_share_ratio
         # Transient state for the day
         self.daily_state: dict[str, DailyPlayerState] = {}

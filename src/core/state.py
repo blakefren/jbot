@@ -49,12 +49,3 @@ class DailyPlayerState:
             or self.stealing_from is not None
             or self.jinx_target is not None
         )
-
-    @property
-    def powerup_used_today(self) -> bool:
-        """
-        Determines if ANY powerup was used today (including rest).
-        Kept for backward compatibility, but most code should use
-        attack_powerup_used_today or check is_resting directly.
-        """
-        return self.is_resting or self.attack_powerup_used_today

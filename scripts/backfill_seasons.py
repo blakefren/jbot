@@ -15,7 +15,7 @@ import os
 import sys
 from datetime import datetime, date
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, List
 import argparse
 
 # Add src to path for imports
@@ -65,12 +65,6 @@ class SeasonAnalyzer:
         cursor.execute("SELECT name FROM players WHERE id = ?", (player_id,))
         result = cursor.fetchone()
         return result["name"] if result else f"Unknown ({player_id})"
-
-    def get_all_player_ids(self) -> List[str]:
-        """Get all known player IDs."""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT id FROM players")
-        return [row["id"] for row in cursor.fetchall()]
 
     def calculate_question_points(
         self, guesses: List[Dict], daily_question_id: int

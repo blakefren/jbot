@@ -1,9 +1,5 @@
 from discord.ext import commands
-import logging
-from src.cfg.main import ConfigReader
 from src.core.guess_display import process_guess
-
-from src.core.guess_handler import AlreadyAnsweredCorrectlyError, JinxedError
 
 
 class Trivia(commands.Cog):

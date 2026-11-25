@@ -1,84 +1,95 @@
 import unittest
 from unittest.mock import MagicMock, patch
 from src.core.game_runner import GameRunner
-from src.core.player import Player
+from src.core.data_manager import DataManager
+from src.core.player_manager import PlayerManager
+from db.database import Database
 from data.readers.question import Question
+from tests.src.core._powerup_helpers import make_config
 
 
 class TestVerifyDailyPlay(unittest.TestCase):
     """Tests for GameRunner.verify_daily_play and format_verify_report."""
 
-    def _make_player(self, pid, score, streak, season_score=0, name=None):
-        return Player(
-            id=pid,
-            name=name or pid,
-            score=score,
-            answer_streak=streak,
-            season_score=season_score,
-        )
-
     def setUp(self):
-        self.mock_question_selector = MagicMock()
-        self.mock_data_manager = MagicMock()
-        self.game_runner = GameRunner(
-            self.mock_question_selector, self.mock_data_manager
-        )
+        self.db = Database(":memory:")
+        self.addCleanup(self.db.close)
+        self.data_manager = DataManager(self.db)
+        self.player_manager = PlayerManager(self.data_manager)
 
         self.question = Question(
             question="What is 2+2?", answer="4", category="Math", clue_value=100
         )
 
-        # Config defaults matching scoring constants
-        self.game_runner.config = MagicMock()
-        defaults = {
-            "JBOT_BONUS_TRY_CSV": "20,10,5",
-            "JBOT_BONUS_FASTEST_CSV": "10,5,1",
-            "JBOT_BONUS_BEFORE_HINT": "10",
-            "JBOT_BONUS_STREAK_PER_DAY": "5",
-            "JBOT_BONUS_STREAK_CAP": "25",
-            "JBOT_EMOJI_FIRST_TRY": "🎯",
-            "JBOT_EMOJI_BEFORE_HINT": "🧠",
-            "JBOT_EMOJI_FASTEST": "🥇",
-            "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
-            "JBOT_EMOJI_STREAK": "🔥",
-            "JBOT_STEAL_STREAK_COST": "2",
-            "JBOT_RETRO_STEAL_STREAK_COST": "4",
-            "JBOT_RETRO_JINX_BONUS_RATIO": "0.5",
-        }
-        self.game_runner.config.get.side_effect = lambda k, d=None: defaults.get(k, d)
+        # ConfigReader reads .env, so a config double stands in for it.
+        self.config = make_config(steal_cost=2, retro_steal_cost=4)
+        self.config.is_seasons_enabled.return_value = False
+        # The question selector wraps datasets/Gemini and is unused by verification.
+        with patch("src.core.game_runner.ConfigReader", return_value=self.config):
+            self.game_runner = GameRunner(
+                MagicMock(), self.data_manager, player_manager=self.player_manager
+            )
 
-    def _setup_common_mocks(
-        self, snapshot, guess_events, powerup_events, season_id=None
-    ):
-        """Helper to configure DataManager mocks for a verification run."""
-        self.mock_data_manager.get_daily_snapshot.return_value = snapshot
-        self.mock_data_manager.get_daily_question_by_id.return_value = (
-            self.question,
-            42,
+        self.season_id = None
+        self.daily_question_id = None
+
+    def _add_player(self, pid, score, streak, season_points=None, name=None, rest=0.0):
+        """Seed a player as of the start of the day (captured by the snapshot)."""
+        self.data_manager.create_player(pid, name or pid)
+        self.data_manager.update_lifetime_stats(
+            pid, score=score, answer_streak=streak, pending_rest_multiplier=rest
         )
-        self.mock_data_manager.get_alternative_answers.return_value = []
-        self.mock_data_manager.get_hint_sent_timestamp.return_value = None
-        self.mock_data_manager.get_guesses_for_daily_question.return_value = (
-            guess_events
+        if season_points is not None:
+            if self.season_id is None:
+                self.season_id = self.data_manager.create_season(
+                    "Test Season", "2024-01-01", "2024-01-31"
+                )
+            self.data_manager.update_season_score(
+                pid, self.season_id, points=season_points
+            )
+
+    def _start_day(self):
+        """Log today's question; this snapshots every player added so far."""
+        self.daily_question_id = self.data_manager.log_daily_question(self.question)
+        return self.daily_question_id
+
+    def _guess(self, pid, text="4", guessed_at="2024-01-15 10:00:00"):
+        self.data_manager.log_player_guess(
+            pid, pid, self.daily_question_id, text, text == "4"
         )
-        self.mock_data_manager.get_powerup_usages_for_question.return_value = (
-            powerup_events
+        self.db.execute_update(
+            "UPDATE guesses SET guessed_at = ? WHERE id = (SELECT MAX(id) FROM guesses)",
+            (guessed_at,),
         )
-        self.mock_data_manager.get_snapshot_season_id.return_value = season_id
+
+    def _powerup(self, user_id, powerup_type, target_id, used_at):
+        self.data_manager.log_powerup_usage(
+            user_id, powerup_type, target_id, self.daily_question_id
+        )
+        self.db.execute_update(
+            "UPDATE powerup_usage SET used_at = ? WHERE id = (SELECT MAX(id) FROM powerup_usage)",
+            (used_at,),
+        )
+
+    def _set_db_state(self, pid, score, streak, season_points=None):
+        """Set the persisted end-of-day state that verification compares against."""
+        self.data_manager.update_lifetime_stats(pid, score=score, answer_streak=streak)
+        if season_points is not None:
+            self.data_manager.update_season_score(
+                pid, self.season_id, points=season_points
+            )
 
     def test_no_snapshot_returns_none(self):
         """When no snapshot exists, verification is reported as skipped."""
-        self.mock_data_manager.get_daily_snapshot.return_value = {}
-        result = self.game_runner.verify_daily_play(1)
+        question_id = self.data_manager.log_daily_question(self.question)  # no players
+        result = self.game_runner.verify_daily_play(question_id)
         self.assertIsNone(result)
 
     def test_no_question_returns_none(self):
         """When the question cannot be found, verification is skipped."""
-        self.mock_data_manager.get_daily_snapshot.return_value = {
-            "p1": self._make_player("p1", 100, 2)
-        }
-        self.mock_data_manager.get_daily_question_by_id.return_value = None
-        result = self.game_runner.verify_daily_play(1)
+        self._add_player("p1", 100, 2)
+        self.data_manager.create_daily_snapshot(999)  # snapshot with no question row
+        result = self.game_runner.verify_daily_play(999)
         self.assertIsNone(result)
 
     def test_scores_match_no_diffs(self):
@@ -87,46 +98,29 @@ class TestVerifyDailyPlay(unittest.TestCase):
         # Today they answer correctly on first try → score_earned = 100+20+10+10 + streak bonus
         # streak_length = 3, streak_bonus = 3*5 = 15
         # total = 155; final_score = 255; final_streak = 3
-        snapshot = {"p1": self._make_player("p1", 100, 2, name="Alice")}
-        guesses = [
-            {
-                "player_id": "p1",
-                "guess_text": "4",
-                "is_correct": True,
-                "guessed_at": "2024-01-15 10:00:00",
-            }
-        ]
-        self._setup_common_mocks(snapshot, guesses, [])
+        self._add_player("p1", 100, 2, name="Alice")
+        question_id = self._start_day()
+        # Only accepted through the stored alternative answer, so a match proves
+        # verification replays with the question's alternative answers.
+        _, question_db_id = self.data_manager.get_daily_question_by_id(question_id)
+        self.data_manager.add_alternative_answer(question_db_id, "quatre", "admin")
+        self._guess("p1", "quatre")
+        self._set_db_state("p1", 255, 3)
 
-        # DB state matches expected
-        self.mock_data_manager.get_all_players.return_value = {
-            "p1": self._make_player("p1", 255, 3)
-        }
-
-        result = self.game_runner.verify_daily_play(1)
+        result = self.game_runner.verify_daily_play(question_id)
         self.assertEqual(result, [])
-        self.mock_data_manager.get_alternative_answers.assert_called_with(42)
 
     def test_score_mismatch_detected(self):
         """When the DB score doesn't match expected, a diff is returned."""
-        snapshot = {"p1": self._make_player("p1", 100, 0, name="Alice")}
-        guesses = [
-            {
-                "player_id": "p1",
-                "guess_text": "4",
-                "is_correct": True,
-                "guessed_at": "2024-01-15 10:00:00",
-            }
-        ]
-        self._setup_common_mocks(snapshot, guesses, [])
+        self._add_player("p1", 100, 0, name="Alice")
+        question_id = self._start_day()
+        self._guess("p1")
 
         # score_earned = 100 + 20 + 10 + 10 = 140 (base+first_try+before_hint+fastest)
         # But DB only has 100 + 50 = 150 (wrong)
-        self.mock_data_manager.get_all_players.return_value = {
-            "p1": self._make_player("p1", 150, 1)  # expected 240
-        }
+        self._set_db_state("p1", 150, 1)  # expected 240
 
-        result = self.game_runner.verify_daily_play(1)
+        result = self.game_runner.verify_daily_play(question_id)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["player_id"], "p1")
         self.assertIn("score", result[0]["diffs"])
@@ -135,16 +129,14 @@ class TestVerifyDailyPlay(unittest.TestCase):
     def test_streak_mismatch_detected(self):
         """When the DB streak doesn't match expected, a diff is returned."""
         # P1 had streak=5; didn't answer today → streak should reset to 0.
-        snapshot = {"p1": self._make_player("p1", 500, 5, name="Bob")}
+        self._add_player("p1", 500, 5, name="Bob")
+        question_id = self._start_day()
         # No guesses → end_of_day resets streak
-        self._setup_common_mocks(snapshot, [], [])
 
-        # DB streak wasn't reset (bug scenario)
-        self.mock_data_manager.get_all_players.return_value = {
-            "p1": self._make_player("p1", 500, 5)  # should be 0
-        }
+        # DB streak wasn't reset (bug scenario): should be 0
+        self._set_db_state("p1", 500, 5)
 
-        result = self.game_runner.verify_daily_play(1)
+        result = self.game_runner.verify_daily_play(question_id)
         self.assertEqual(len(result), 1)
         self.assertIn("streak", result[0]["diffs"])
         self.assertEqual(result[0]["diffs"]["streak"]["expected"], 0)
@@ -152,30 +144,15 @@ class TestVerifyDailyPlay(unittest.TestCase):
 
     def test_season_score_mismatch_detected(self):
         """When the season score doesn't match, a diff is returned."""
-        snapshot = {
-            "p1": self._make_player("p1", 100, 0, season_score=50, name="Carol")
-        }
-        guesses = [
-            {
-                "player_id": "p1",
-                "guess_text": "4",
-                "is_correct": True,
-                "guessed_at": "2024-01-15 10:00:00",
-            }
-        ]
-        self._setup_common_mocks(snapshot, guesses, [], season_id=7)
+        self._add_player("p1", 100, 0, season_points=50, name="Carol")
+        question_id = self._start_day()
+        self._guess("p1")
 
         # score_earned = 140; expected season = 50 + 140 = 190
-        # DB has only 120 (bug)
-        mock_season_score = MagicMock()
-        mock_season_score.points = 120
-        self.mock_data_manager.get_player_season_score.return_value = mock_season_score
+        # DB has only 120 (bug); all-time matches
+        self._set_db_state("p1", 240, 1, season_points=120)
 
-        self.mock_data_manager.get_all_players.return_value = {
-            "p1": self._make_player("p1", 240, 1)  # all-time matches
-        }
-
-        result = self.game_runner.verify_daily_play(1)
+        result = self.game_runner.verify_daily_play(question_id)
         self.assertEqual(len(result), 1)
         self.assertIn("season_score", result[0]["diffs"])
         self.assertEqual(result[0]["diffs"]["season_score"]["expected"], 190)
@@ -183,58 +160,38 @@ class TestVerifyDailyPlay(unittest.TestCase):
 
     def test_no_season_skips_season_check(self):
         """When season_id is None, no season_score diff is reported."""
-        snapshot = {"p1": self._make_player("p1", 100, 0, name="Dan")}
-        guesses = [
-            {
-                "player_id": "p1",
-                "guess_text": "4",
-                "is_correct": True,
-                "guessed_at": "2024-01-15 10:00:00",
-            }
-        ]
-        self._setup_common_mocks(snapshot, guesses, [], season_id=None)
+        self._add_player("p1", 100, 0, name="Dan")
+        question_id = self._start_day()
+        self._guess("p1")
+        self._set_db_state("p1", 240, 1)
 
-        self.mock_data_manager.get_all_players.return_value = {
-            "p1": self._make_player("p1", 240, 1)
-        }
+        # A season that began after the snapshot must not be compared against.
+        self.season_id = self.data_manager.create_season(
+            "Late Season", "2024-01-01", "2024-01-31"
+        )
+        self.data_manager.update_season_score("p1", self.season_id, points=1)
 
-        result = self.game_runner.verify_daily_play(1)
+        result = self.game_runner.verify_daily_play(question_id)
         self.assertEqual(result, [])
-        self.mock_data_manager.get_player_season_score.assert_not_called()
 
     def test_multiple_players_partial_diffs(self):
         """Only players with diffs are included in the result."""
-        snapshot = {
-            "p1": self._make_player("p1", 100, 0, name="Alice"),
-            "p2": self._make_player("p2", 200, 3, name="Bob"),
-        }
-        guesses = [
-            {
-                "player_id": "p1",
-                "guess_text": "4",
-                "is_correct": True,
-                "guessed_at": "2024-01-15 10:00:00",
-            },
-            {
-                "player_id": "p2",
-                "guess_text": "4",
-                "is_correct": True,
-                "guessed_at": "2024-01-15 10:05:00",
-            },
-        ]
-        self._setup_common_mocks(snapshot, guesses, [])
+        self._add_player("p1", 100, 0, name="Alice")
+        self._add_player("p2", 200, 3, name="Bob")
+        question_id = self._start_day()
+        self._guess("p1", guessed_at="2024-01-15 10:00:00")
+        self._guess("p2", guessed_at="2024-01-15 10:05:00")
 
         # p1: streak=0→1, score_earned=100+20+10+10=140, final=240, streak=1
         # p2: streak=3→4, score_earned=100+20+10+5+20=155, final=355, streak=4
         # p1 matches; p2 has wrong score in DB
-        self.mock_data_manager.get_all_players.return_value = {
-            "p1": self._make_player("p1", 240, 1),  # correct
-            "p2": self._make_player("p2", 999, 4),  # score wrong
-        }
+        self._set_db_state("p1", 240, 1)  # correct
+        self._set_db_state("p2", 999, 4)  # score wrong
 
-        result = self.game_runner.verify_daily_play(1)
+        result = self.game_runner.verify_daily_play(question_id)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["player_id"], "p2")
+        self.assertEqual(result[0]["player_name"], "Bob")
 
     def test_format_verify_report(self):
         """format_verify_report produces a readable string with all diffs."""
@@ -290,89 +247,26 @@ class TestVerifyDailyPlay(unittest.TestCase):
         - Player A final: 268 - 42 = 226
         - Player B final: 0 + 42 = 42
         """
-        from src.core.events import GuessEvent, PowerUpEvent
-
         player_a_id = "player_a"
         player_b_id = "player_b"
 
         # Initial state: A has rest multiplier, B doesn't
-        snapshot = {
-            player_a_id: Player(
-                id=player_a_id,
-                name="Alice",
-                score=100,
-                answer_streak=0,
-                season_score=50,
-                pending_rest_multiplier=0.2,  # 20% rest bonus
-            ),
-            player_b_id: Player(
-                id=player_b_id,
-                name="Bob",
-                score=0,
-                answer_streak=0,
-                season_score=0,
-                pending_rest_multiplier=0.0,
-            ),
-        }
+        self._add_player(player_a_id, 100, 0, season_points=50, name="Alice", rest=0.2)
+        self._add_player(player_b_id, 0, 0, season_points=0, name="Bob")
+        question_id = self._start_day()
 
-        # Events: A guesses correctly, B jinxes retroactively
-        guess_events = [
-            {
-                "player_id": player_a_id,
-                "guess_text": "4",
-                "is_correct": True,
-                "guessed_at": "2024-01-15 10:00:00",
-            }
-        ]
-        powerup_events = [
-            {
-                "user_id": player_b_id,
-                "powerup_type": "jinx_late",
-                "target_user_id": player_a_id,
-                "used_at": "2024-01-15 10:05:00",  # After A answered
-            }
-        ]
-
-        self._setup_common_mocks(snapshot, guess_events, powerup_events, season_id=7)
+        # Events: A guesses correctly, B jinxes retroactively (after A answered)
+        self._guess(player_a_id)
+        self._powerup(player_b_id, "jinx_late", player_a_id, "2024-01-15 10:05:00")
 
         # DB state: Matches expected from simulator
         # A: 100 initial + 168 earned - 42 jinx = 226 final
         # B: 0 initial + 42 from jinx = 42 final
         # Season: A: 50 + 168 - 42 = 176; B: 0 + 42 = 42
-        mock_season_score_a = MagicMock()
-        mock_season_score_a.points = 176
-        mock_season_score_b = MagicMock()
-        mock_season_score_b.points = 42
+        self._set_db_state(player_a_id, 226, 1, season_points=176)
+        self._set_db_state(player_b_id, 42, 0, season_points=42)
 
-        def get_season_side_effect(player_id, season_id):
-            if player_id == player_a_id:
-                return mock_season_score_a
-            elif player_id == player_b_id:
-                return mock_season_score_b
-            return None
-
-        self.mock_data_manager.get_player_season_score.side_effect = (
-            get_season_side_effect
-        )
-
-        self.mock_data_manager.get_all_players.return_value = {
-            player_a_id: Player(
-                id=player_a_id,
-                name="Alice",
-                score=226,  # Matches expected
-                answer_streak=1,
-                season_score=176,
-            ),
-            player_b_id: Player(
-                id=player_b_id,
-                name="Bob",
-                score=42,  # Matches expected
-                answer_streak=0,
-                season_score=42,
-            ),
-        }
-
-        result = self.game_runner.verify_daily_play(1)
+        result = self.game_runner.verify_daily_play(question_id)
 
         # If rest bonus is correctly included in jinx, no diffs should be found
         self.assertEqual(

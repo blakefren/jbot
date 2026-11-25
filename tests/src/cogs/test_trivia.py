@@ -1,119 +1,85 @@
 import unittest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, call
-from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
-
-from src.core.discord import DiscordBot
+from data.readers.question import Question
 from src.cogs.trivia import Trivia
-from src.cfg.main import ConfigReader
-from src.core.game_runner import GameRunner
-from src.core.guess_handler import AlreadyAnsweredCorrectlyError
-from src.core.data_manager import DataManager
+from tests.src.cogs._game_stack import build_game_stack
 
 
 class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.mock_game_runner = MagicMock(spec=GameRunner)
-        self.mock_config_reader = MagicMock(spec=ConfigReader)
-        self.mock_data_manager = MagicMock(spec=DataManager)
-        self.mock_game_runner.data_manager = self.mock_data_manager
-        self.mock_game_runner.handle_guess = MagicMock()
-        self.mock_game_runner.question_selector = MagicMock()
+    def setUp(self):
+        self.stack = build_game_stack(self)
+        self.game = self.stack.game
+        self.data_manager = self.stack.data_manager
+        self.player_manager = self.stack.player_manager
+        self.cog = Trivia(SimpleNamespace(game=self.game))
 
-        self.bot = MagicMock(spec=DiscordBot)
-        self.bot.game = self.mock_game_runner
-        self.bot.config = self.mock_config_reader
-        self.bot.data_manager = self.mock_data_manager
-        self.bot.send_message = AsyncMock()
-        self.bot.is_owner = AsyncMock(return_value=True)
+    @staticmethod
+    def _ctx(user_id=123, name="Test User"):
+        ctx = AsyncMock()
+        ctx.author.id = user_id
+        ctx.author.display_name = name
+        ctx.author.mention = f"<@{user_id}>"
+        return ctx
 
-        # Mock tasks for when command
-        self.bot.morning_message_task = MagicMock()
-        self.bot.evening_message_task = MagicMock()
+    async def _answer(self, ctx, guess):
+        await self.cog.answer.callback(self.cog, ctx, guess=guess)
 
-        self.trivia_cog = Trivia(self.bot)
-
-    async def test_answer_command_correct(self):
-        """Test the answer command with a correct guess."""
-        await self.asyncSetUp()
-        mock_ctx = AsyncMock()
-        mock_ctx.author.id = 123
-        mock_ctx.author.display_name = "Test User"
-        mock_ctx.author.mention = "<@123>"
-
-        # Mock the return value of handle_guess to be (is_correct, num_guesses, points, bonuses)
-        self.mock_game_runner.handle_guess.return_value = (True, 1, 100, [])
-        self.mock_game_runner.daily_q = MagicMock(answer="Test Answer")
-        self.mock_game_runner.daily_question_id = 1
-        self.mock_data_manager.read_guess_history.return_value = [
-            {"guess_text": "test answer", "daily_question_id": 1}
+    def _stored_guesses(self, user_id=123):
+        return [
+            (g["guess_text"], bool(g["is_correct"]))
+            for g in self.data_manager.get_guesses_for_daily_question(
+                self.game.daily_question_id
+            )
+            if g["player_id"] == str(user_id)
         ]
 
-        await self.trivia_cog.answer.callback(
-            self.trivia_cog, mock_ctx, guess="test answer"
-        )
+    async def test_answer_command_correct(self):
+        ctx = self._ctx()
 
-        self.mock_game_runner.handle_guess.assert_called_once_with(
-            123, "Test User", "test answer"
-        )
+        await self._answer(ctx, "4")
 
-        # Check for the two calls to send_message
-        mock_ctx.interaction.followup.send.assert_called_once_with(
-            "Correct! Nicely done.\n"
-            "**Answer:** Test Answer\n\n"
-            "Guesses:\n1. test answer"
+        score = self.player_manager.get_player("123").score
+        self.assertGreater(score, 0)
+        self.assertEqual(self._stored_guesses(), [("4", True)])
+        ctx.interaction.followup.send.assert_called_once_with(
+            "Correct! Nicely done.\n**Answer:** 4\n\nGuesses:\n1. 4"
         )
-        mock_ctx.channel.send.assert_called_once_with(
-            f"{mock_ctx.author.mention} solved it in 1! (+**100** pts)"
+        ctx.channel.send.assert_called_once()
+        self.assertTrue(
+            ctx.channel.send.call_args.args[0].startswith(
+                f"<@123> solved it in 1! (+**{score}** pts)"
+            )
         )
 
     async def test_answer_command_incorrect(self):
-        """Test the answer command with an incorrect guess."""
-        await self.asyncSetUp()
-        mock_ctx = AsyncMock()
-        mock_ctx.author.id = 123
-        mock_ctx.author.display_name = "Test User"
+        ctx = self._ctx()
 
-        self.mock_game_runner.handle_guess.return_value = (False, 2, 0, [])
-        self.mock_game_runner.daily_q = MagicMock()
-        self.mock_game_runner.daily_question_id = 1
-        self.mock_data_manager.read_guess_history.return_value = [
-            {"guess_text": "wrong answer", "daily_question_id": 1}
-        ]
+        await self._answer(ctx, "wrong answer")
 
-        await self.trivia_cog.answer.callback(
-            self.trivia_cog, mock_ctx, guess="wrong answer"
-        )
-
-        self.mock_game_runner.handle_guess.assert_called_once_with(
-            123, "Test User", "wrong answer"
-        )
-        mock_ctx.interaction.followup.send.assert_called_once_with(
+        self.assertEqual(self._stored_guesses(), [("wrong answer", False)])
+        self.assertEqual(self.player_manager.get_player("123").score, 0)
+        ctx.interaction.followup.send.assert_called_once_with(
             "Sorry, that was incorrect.\n\nGuesses:\n1. wrong answer"
         )
+        ctx.channel.send.assert_not_called()
 
     async def test_answer_command_long_history_still_sends_feedback(self):
-        self.mock_game_runner.daily_q = MagicMock(answer="correct")
-        self.mock_game_runner.daily_question_id = 1
-        self.mock_data_manager.read_guess_history.return_value = [
-            {"guess_text": f"guess {i:03d} " + "x" * 100} for i in range(30)
-        ]
-
-        for is_correct in (False, True):
+        for user_id, guess, is_correct in ((123, "nope", False), (124, "4", True)):
             with self.subTest(is_correct=is_correct):
-                self.mock_game_runner.handle_guess.return_value = (
-                    is_correct,
-                    30,
-                    100,
-                    [],
-                )
-                ctx = AsyncMock()
-                ctx.author.id = 123
+                self.player_manager.get_or_create_player(str(user_id), "Player")
+                for i in range(30):
+                    self.data_manager.log_player_guess(
+                        str(user_id),
+                        "Player",
+                        self.game.daily_question_id,
+                        f"guess {i:03d} " + "x" * 100,
+                        False,
+                    )
+                ctx = self._ctx(user_id)
 
-                await self.trivia_cog.answer.callback(
-                    self.trivia_cog, ctx, guess="guess"
-                )
+                await self._answer(ctx, guess)
 
                 message = ctx.interaction.followup.send.call_args.args[0]
                 self.assertLessEqual(len(message), 2000)
@@ -125,144 +91,78 @@ class TestTriviaCog(unittest.IsolatedAsyncioTestCase):
                     ctx.channel.send.assert_not_awaited()
 
     async def test_answer_command_no_question(self):
-        """Test the answer command when there is no active question."""
-        await self.asyncSetUp()
-        mock_ctx = AsyncMock()
-        self.mock_game_runner.daily_q = None
+        stack = build_game_stack(self, start_day=False)
+        cog = Trivia(SimpleNamespace(game=stack.game))
+        ctx = self._ctx()
 
-        await self.trivia_cog.answer.callback(
-            self.trivia_cog, mock_ctx, guess="any answer"
-        )
+        await cog.answer.callback(cog, ctx, guess="any answer")
 
-        self.mock_game_runner.handle_guess.assert_not_called()
-        mock_ctx.interaction.followup.send.assert_called_once_with(
+        ctx.interaction.followup.send.assert_called_once_with(
             "There is no active question."
         )
+        self.assertEqual(stack.db.execute_query("SELECT * FROM guesses"), [])
 
     async def test_answer_command_already_answered_correctly(self):
-        """Test the answer command when the player has already answered correctly."""
-        await self.asyncSetUp()
-        mock_ctx = AsyncMock()
-        mock_ctx.author.id = 123
-        mock_ctx.author.display_name = "Test User"
-        self.mock_game_runner.daily_q = MagicMock()
+        await self._answer(self._ctx(), "4")
+        score = self.player_manager.get_player("123").score
+        ctx = self._ctx()
 
-        # Configure the mock to raise the custom exception
-        self.mock_game_runner.handle_guess.side_effect = AlreadyAnsweredCorrectlyError
+        await self._answer(ctx, "4")
 
-        await self.trivia_cog.answer.callback(
-            self.trivia_cog, mock_ctx, guess="any guess"
-        )
-
-        # Verify handle_guess was called
-        self.mock_game_runner.handle_guess.assert_called_once_with(
-            123, "Test User", "any guess"
-        )
-
-        # Check that the correct feedback is sent
-        mock_ctx.interaction.followup.send.assert_called_once_with(
+        ctx.interaction.followup.send.assert_called_once_with(
             "You already solved today."
         )
-
-        # Ensure no other messages were sent
-        mock_ctx.channel.send.assert_not_called()
+        ctx.channel.send.assert_not_called()
+        self.assertEqual(self._stored_guesses(), [("4", True)])
+        self.assertEqual(self.player_manager.get_player("123").score, score)
 
     async def test_answer_command_no_daily_question_id(self):
-        """Test the answer command when there's no daily_question_id."""
-        await self.asyncSetUp()
-        mock_ctx = AsyncMock()
-        mock_ctx.author.id = 123
-        mock_ctx.author.display_name = "Test User"
+        self.game.daily_question_id = None
+        ctx = self._ctx()
 
-        self.mock_game_runner.handle_guess.return_value = (True, 1, 100, [])
-        self.mock_game_runner.daily_q = MagicMock()
-        self.mock_game_runner.daily_question_id = None  # No daily_question_id
+        await self._answer(ctx, "4")
 
-        await self.trivia_cog.answer.callback(
-            self.trivia_cog, mock_ctx, guess="test answer"
+        ctx.interaction.followup.send.assert_called_once_with(
+            "Correct! Nicely done.\n**Answer:** 4\n\nGuesses:\nNo guesses yet."
         )
-
-        # Should still work, just with empty guesses
-        mock_ctx.interaction.followup.send.assert_called_once()
-        args = mock_ctx.interaction.followup.send.call_args[0][0]
-        assert "Correct!" in args
-        assert "**Answer:**" in args
-        assert "No guesses yet." in args
 
     async def test_answer_command_generic_exception(self):
-        """Test the answer command handles generic exceptions."""
-        await self.asyncSetUp()
-        mock_ctx = AsyncMock()
-        mock_ctx.author.id = 123
-        mock_ctx.author.display_name = "Test User"
-        self.mock_game_runner.daily_q = MagicMock()
+        ctx = self._ctx()
 
-        # Configure the mock to raise a generic exception
-        self.mock_game_runner.handle_guess.side_effect = Exception("Database error")
+        with patch.object(
+            self.game, "handle_guess", side_effect=Exception("Database error")
+        ):
+            await self._answer(ctx, "any guess")
 
-        await self.trivia_cog.answer.callback(
-            self.trivia_cog, mock_ctx, guess="any guess"
-        )
-
-        mock_ctx.interaction.followup.send.assert_called_once_with(
+        ctx.interaction.followup.send.assert_called_once_with(
             "An error occurred while processing your answer. Please try again later."
         )
 
     async def test_answer_command_multiple_guesses_deduplicated(self):
-        """Test that duplicate guesses are deduplicated and sorted."""
-        await self.asyncSetUp()
-        mock_ctx = AsyncMock()
-        mock_ctx.author.id = 123
-        mock_ctx.author.display_name = "Test User"
+        for guess in ("Apple", "Banana", "apple"):
+            await self._answer(self._ctx(), guess)
+        ctx = self._ctx()
 
-        self.mock_game_runner.handle_guess.return_value = (False, 3, 0, [])
-        self.mock_game_runner.daily_q = MagicMock()
-        self.mock_game_runner.daily_question_id = 1
-        # Return duplicate guesses that should be deduplicated
-        self.mock_data_manager.read_guess_history.return_value = [
-            {"guess_text": "Apple", "daily_question_id": 1},
-            {"guess_text": "Banana", "daily_question_id": 1},
-            {
-                "guess_text": "apple",
-                "daily_question_id": 1,
-            },  # Duplicate (case-insensitive)
-            {"guess_text": "Cherry", "daily_question_id": 1},
-        ]
+        await self._answer(ctx, "cherry")
 
-        await self.trivia_cog.answer.callback(self.trivia_cog, mock_ctx, guess="cherry")
-
-        mock_ctx.interaction.followup.send.assert_called_once()
-        args = mock_ctx.interaction.followup.send.call_args[0][0]
-        # Should be deduplicated and sorted
-        assert "apple" in args
-        assert "banana" in args
-        assert "cherry" in args
-
-    async def test_answer_command_filters_by_daily_question_id(self):
-        """Test that guesses are filtered by the current daily_question_id."""
-        await self.asyncSetUp()
-        mock_ctx = AsyncMock()
-        mock_ctx.author.id = 123
-        mock_ctx.author.display_name = "Test User"
-
-        self.mock_game_runner.handle_guess.return_value = (False, 1, 0, [])
-        self.mock_game_runner.daily_q = MagicMock()
-        self.mock_game_runner.daily_question_id = 2  # Current question ID
-        # Return guesses from multiple questions
-        self.mock_data_manager.read_guess_history.return_value = [
-            {"guess_text": "Old guess", "daily_question_id": 1},  # Different question
-            {"guess_text": "Current guess", "daily_question_id": 2},  # Current question
-        ]
-
-        await self.trivia_cog.answer.callback(
-            self.trivia_cog, mock_ctx, guess="current guess"
+        ctx.interaction.followup.send.assert_called_once_with(
+            "Sorry, that was incorrect.\n\nGuesses:\n1. apple\n2. banana\n3. cherry"
         )
 
-        mock_ctx.interaction.followup.send.assert_called_once()
-        args = mock_ctx.interaction.followup.send.call_args[0][0]
-        # Should only show guesses for the current question
-        assert "current guess" in args
-        assert "Old guess" not in args
+    async def test_answer_command_filters_by_daily_question_id(self):
+        await self._answer(self._ctx(), "Old guess")
+        self.data_manager.log_daily_question(
+            Question("Second question?", "Other", "Misc", 100), force_new=True
+        )
+        self.game.set_daily_question()
+        self.assertEqual(self.game.daily_question_id, 2)
+        ctx = self._ctx()
+
+        await self._answer(ctx, "Current guess")
+
+        message = ctx.interaction.followup.send.call_args.args[0]
+        self.assertIn("current guess", message)
+        self.assertNotIn("old guess", message.lower())
 
 
 class TestTriviaSetup(unittest.IsolatedAsyncioTestCase):

@@ -205,12 +205,6 @@ class Database:
                 raise
             return []
 
-    def get_conn(self):
-        """
-        Returns the database connection.
-        """
-        return self.conn
-
     def execute_update(self, query, params=()):
         """
         Executes an update, insert, or delete query.

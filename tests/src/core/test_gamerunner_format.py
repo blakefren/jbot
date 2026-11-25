@@ -1,117 +1,151 @@
 import unittest
-from unittest.mock import MagicMock
 from datetime import date
-from src.core.game_runner import GameRunner
-from src.core.season import Season, SeasonScore
+from unittest.mock import MagicMock, patch
+
 from data.readers.question import Question
+from db.database import Database
+from src.cfg.main import ConfigReader
+from src.core.data_manager import DataManager
+from src.core.game_runner import GameRunner
+from src.core.player_manager import PlayerManager
 
 
-class TestGameRunnerFormatAnswer(unittest.TestCase):
+def _make_config(seasons_enabled=False, auto_create=True):
+    # ConfigReader is an external boundary (reads .env / sources.toml)
+    cfg = MagicMock(spec=ConfigReader)
+    values = {"JBOT_EMOJI_STREAK": "🔥", "JBOT_TIMEZONE": "UTC"}
+    cfg.get.side_effect = lambda key, default=None: values.get(key, default)
+    cfg.is_seasons_enabled.return_value = seasons_enabled
+    cfg.get_season_mode.return_value = "calendar"
+    cfg.get_season_auto_create.return_value = auto_create
+    cfg.get_season_announce_start.return_value = False
+    cfg.get_season_announce_end.return_value = False
+    cfg.get_season_trophy_positions.return_value = 3
+    cfg.get_season_duration_days.return_value = 30
+    cfg.get_season_reminder_days.return_value = 3
+    return cfg
+
+
+class _RealStackTestCase(unittest.TestCase):
+    seasons_enabled = False
+    auto_create = True
+
     def setUp(self):
-        self.mock_qs = MagicMock()
-        self.mock_dm = MagicMock()
-        self.runner = GameRunner(self.mock_qs, self.mock_dm)
-        self.runner.daily_question_id = 123
-        self.runner.question_db_id = 456
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+        self.player_manager = PlayerManager(self.data_manager)
+        config = _make_config(self.seasons_enabled, self.auto_create)
+        with patch("src.core.game_runner.ConfigReader", return_value=config):
+            self.runner = GameRunner(
+                MagicMock(), self.data_manager, player_manager=self.player_manager
+            )
+
+    def tearDown(self):
+        self.db.close()
+
+
+class TestGameRunnerFormatAnswer(_RealStackTestCase):
+    def setUp(self):
+        super().setUp()
         self.question = Question("Q", "Main Answer", "C", 100)
+        self.runner.daily_question_id = self.data_manager.log_daily_question(
+            self.question
+        )
+        _, self.runner.question_db_id = self.data_manager.get_daily_question_by_id(
+            self.runner.daily_question_id
+        )
 
     def test_format_answer_no_alts(self):
-        self.mock_dm.get_alternative_answers.return_value = []
         result = self.runner.format_answer(self.question)
         self.assertIn("Main Answer", result)
         self.assertNotIn("Also accepted", result)
 
     def test_format_answer_with_alts(self):
-        self.mock_dm.get_alternative_answers.return_value = ["Alt1", "Alt2"]
+        for alt in ("Alt1", "Alt2"):
+            self.data_manager.add_alternative_answer(
+                self.runner.question_db_id, alt, "admin"
+            )
         result = self.runner.format_answer(self.question)
         self.assertIn("Main Answer", result)
         self.assertIn("Also accepted", result)
         self.assertIn("Alt1", result)
         self.assertIn("Alt2", result)
-        self.mock_dm.get_alternative_answers.assert_called_once_with(456)
 
 
-class TestGetActiveLeaderboard(unittest.TestCase):
-    """Tests for GameRunner.get_active_leaderboard season-awareness."""
-
+class _LeaderboardTestCase(_RealStackTestCase):
     def setUp(self):
-        self.mock_qs = MagicMock()
-        self.mock_dm = MagicMock()
-        self.runner = GameRunner(self.mock_qs, self.mock_dm)
-        self.runner.config = MagicMock()
-        self.runner.config.get.return_value = "🔥"
+        super().setUp()
+        # Pin the clock: March 2, 2026 is day 2 of 31 in the calendar season
+        today_patch = patch.object(
+            self.runner.season_manager, "_today", return_value=date(2026, 3, 2)
+        )
+        today_patch.start()
+        self.addCleanup(today_patch.stop)
 
-    def _make_season(self):
-        return Season(1, "March 2026", date(2026, 3, 1), date(2026, 3, 31), True)
+    def _seed_player(self, player_id="p1", name="Alice", score=150):
+        self.player_manager.get_or_create_player(player_id, name)
+        self.player_manager.update_score(player_id, score)
+        # The all-time leaderboard only lists players with recent activity
+        daily_question_id = self.data_manager.log_daily_question(
+            Question("Q", "A", "C", 100)
+        )
+        self.data_manager.log_player_guess(
+            player_id, name, daily_question_id, "A", True
+        )
 
+
+class TestGetActiveLeaderboardSeasonsDisabled(_LeaderboardTestCase):
     def test_seasons_disabled_calls_all_time(self):
         """When seasons are disabled, get_active_leaderboard returns all-time leaderboard."""
-        self.runner.season_manager = MagicMock()
-        self.runner.season_manager.enabled = False
-        self.runner.get_scores_leaderboard = MagicMock(return_value="All-Time LB")
+        self._seed_player()
 
         result = self.runner.get_active_leaderboard(guild=None)
 
-        self.assertEqual(result, "All-Time LB")
-        self.runner.season_manager.get_or_create_current_season.assert_not_called()
+        self.assertIn("Alice", result)
+        self.assertNotIn("Day ", result)
+        self.assertEqual(self.data_manager.get_all_seasons(), [])
+
+
+class TestGetActiveLeaderboardNoSeason(_LeaderboardTestCase):
+    seasons_enabled = True
+    auto_create = False
+
+    def test_seasons_enabled_no_active_season_falls_back_to_all_time(self):
+        """When seasons are enabled but no season exists, falls back to all-time."""
+        self._seed_player()
+
+        result = self.runner.get_active_leaderboard(guild=None)
+
+        self.assertIn("Alice", result)
+        self.assertNotIn("Day ", result)
+        self.assertEqual(self.data_manager.get_all_seasons(), [])
+
+
+class TestGetActiveLeaderboardSeasonsEnabled(_LeaderboardTestCase):
+    seasons_enabled = True
 
     def test_seasons_enabled_with_active_season_returns_season_lb(self):
         """When seasons are enabled and a season exists, returns formatted season leaderboard."""
-        season = self._make_season()
-        self.runner.season_manager = MagicMock()
-        self.runner.season_manager.enabled = True
-        self.runner.season_manager.get_or_create_current_season.return_value = season
-        self.runner.season_manager.get_season_progress.return_value = (2, 31)
-        score = MagicMock(spec=SeasonScore)
-        score.player_id = "p1"
-        score.points = 150
-        score.current_streak = 3
-        self.runner.season_manager.get_season_leaderboard.return_value = [
-            (score, "Alice")
-        ]
-        self.runner.get_scores_leaderboard = MagicMock()
+        self._seed_player()
+        season = self.runner.season_manager.get_or_create_current_season()
+        self.data_manager.update_season_score(
+            "p1", season.season_id, points=150, current_streak=3
+        )
 
         result = self.runner.get_active_leaderboard(guild=None)
 
         self.assertIn("March 2026", result)
         self.assertIn("Alice", result)
         self.assertIn("150", result)
-        self.runner.get_scores_leaderboard.assert_not_called()
-
-    def test_seasons_enabled_no_active_season_falls_back_to_all_time(self):
-        """When seasons are enabled but no season exists, falls back to all-time."""
-        self.runner.season_manager = MagicMock()
-        self.runner.season_manager.enabled = True
-        self.runner.season_manager.get_or_create_current_season.return_value = None
-        self.runner.get_scores_leaderboard = MagicMock(return_value="All-Time LB")
-
-        result = self.runner.get_active_leaderboard(guild=None)
-
-        self.assertEqual(result, "All-Time LB")
-        self.runner.get_scores_leaderboard.assert_called_once()
 
     def test_season_leaderboard_header_contains_day_progress(self):
         """Season leaderboard header shows current day and total days."""
-        season = self._make_season()
-        self.runner.season_manager = MagicMock()
-        self.runner.season_manager.enabled = True
-        self.runner.season_manager.get_or_create_current_season.return_value = season
-        self.runner.season_manager.get_season_progress.return_value = (2, 31)
-        self.runner.season_manager.get_season_leaderboard.return_value = []
-
         result = self.runner.get_active_leaderboard()
 
         self.assertIn("Day 2/31", result)
 
     def test_season_leaderboard_no_scores_message(self):
         """When the season exists but has no scores, returns appropriate message."""
-        season = self._make_season()
-        self.runner.season_manager = MagicMock()
-        self.runner.season_manager.enabled = True
-        self.runner.season_manager.get_or_create_current_season.return_value = season
-        self.runner.season_manager.get_season_progress.return_value = (1, 31)
-        self.runner.season_manager.get_season_leaderboard.return_value = []
-
         result = self.runner.get_active_leaderboard()
 
         self.assertIn("No scores this season yet", result)

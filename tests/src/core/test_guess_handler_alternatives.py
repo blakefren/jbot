@@ -1,122 +1,79 @@
 import unittest
-from datetime import date
-from unittest.mock import MagicMock
 from src.core.guess_handler import GuessHandler
-from src.core.data_manager import DataManager
-from src.core.player_manager import PlayerManager
-from db.database import Database
 from data.readers.question import Question
+from tests.src.core._powerup_helpers import make_config, make_stack
 
 
 class TestGuessHandlerAlternatives(unittest.TestCase):
     def setUp(self):
-        self.data_manager = MagicMock()
         self.daily_question = Question("Q", "Original Answer", "C", 100)
-        self.daily_question_id = 1
-        self.question_db_id = 42
-        self.player_manager = MagicMock()
-        self.player_manager.get_player.return_value = None
-        self.managers = {}
+        self.stack = make_stack(
+            self,
+            [("1", "p1", 0, 0), ("2", "p2", 0, 0), ("admin", "Admin", 0, 0)],
+        )
+        self.data_manager = self.stack.data_manager
+        self.player_manager = self.stack.player_manager
+        # A question stored without a daily entry keeps questions.id and
+        # daily_questions.id different, so lookups by the wrong id would fail.
+        self.data_manager.log_daily_question(
+            Question("Filler", "Filler", "C", 100), mark_as_used_only=True
+        )
+        self.daily_question_id = self.stack.new_question_day(self.daily_question)
+        self.question_db_id = self.stack.question_db_id
+        self.assertNotEqual(self.question_db_id, self.daily_question_id)
+        self.config = make_config()
 
-        # Mock alternative answers
-        self.data_manager.get_alternative_answers.return_value = ["Alt Answer", "800"]
-
-        # Mock required data_manager methods to return valid types
-        self.data_manager.get_correct_guess_count.return_value = 0
-        self.data_manager.get_correct_solver_count.return_value = 0
-        self.data_manager.read_guess_history.return_value = []
-        self.data_manager.get_hint_sent_timestamp.return_value = None
-        self.data_manager.get_last_correct_guess_date.return_value = None
-
-        self.guess_handler = GuessHandler(
+    def _make_handler(self):
+        return GuessHandler(
             self.data_manager,
             self.player_manager,
             self.daily_question,
             self.daily_question_id,
-            self.managers,
+            {},
+            config=self.config,
             question_db_id=self.question_db_id,
         )
 
-        # Mock config
-        self.guess_handler.config = MagicMock()
-        self.guess_handler.config.get.side_effect = lambda k, d=None: d
+    def _add_alternative(self, answer):
+        self.data_manager.add_alternative_answer(self.question_db_id, answer, "admin")
+
+    def _guess(self, handler, player_id, guess):
+        is_correct, _, _, _ = handler.handle_guess(player_id, f"p{player_id}", guess)
+        return is_correct
 
     def test_original_answer_still_works(self):
-        is_correct, _, _, _ = self.guess_handler.handle_guess(
-            1, "p1", "Original Answer"
-        )
-        self.assertTrue(is_correct)
+        self._add_alternative("Alt Answer")
+        self.assertTrue(self._guess(self._make_handler(), 1, "Original Answer"))
 
     def test_alternative_answer_works(self):
-        is_correct, _, _, _ = self.guess_handler.handle_guess(1, "p1", "Alt Answer")
-        self.assertTrue(is_correct)
+        self._add_alternative("Alt Answer")
+        self.assertTrue(self._guess(self._make_handler(), 1, "Alt Answer"))
 
     def test_alternative_answer_works_normalized(self):
-        is_correct, _, _, _ = self.guess_handler.handle_guess(1, "p1", "alt answer")
-        self.assertTrue(is_correct)
+        self._add_alternative("Alt Answer")
+        self.assertTrue(self._guess(self._make_handler(), 1, "alt answer"))
 
     def test_numeric_alternative_works(self):
-        is_correct, _, _, _ = self.guess_handler.handle_guess(1, "p1", "800")
-        self.assertTrue(is_correct)
+        self._add_alternative("800")
+        self.assertTrue(self._guess(self._make_handler(), 1, "800"))
 
     def test_wrong_answer_still_wrong(self):
-        is_correct, _, _, _ = self.guess_handler.handle_guess(1, "p1", "Wrong")
-        self.assertFalse(is_correct)
+        self._add_alternative("Alt Answer")
+        self.assertFalse(self._guess(self._make_handler(), 1, "Wrong"))
+        history = self.data_manager.read_guess_history("1")
+        self.assertFalse(history[0]["is_correct"])
 
     def test_database_lookup_uses_question_id_not_daily_question_id(self):
-        db = Database(":memory:")
-        data_manager = DataManager(db)
-        try:
-            db.execute_update(
-                "INSERT INTO questions (id, question_text, answer_text, category, value) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (42, "Q", "Original Answer", "C", 100),
-            )
-            db.execute_update(
-                "INSERT INTO daily_questions (id, question_id, sent_at) VALUES (?, ?, ?)",
-                (7, 42, date.today()),
-            )
-            db.execute_update(
-                "INSERT INTO players (id, name) VALUES (?, ?)", ("admin", "Admin")
-            )
-            data_manager.add_alternative_answer(42, "Alt Answer", "admin")
+        self._add_alternative("Alt Answer")
 
-            config = MagicMock()
-            config_values = {
-                "JBOT_BONUS_TRY_CSV": "20,10,5",
-                "JBOT_BONUS_FASTEST_CSV": "10,5,1",
-                "JBOT_BONUS_BEFORE_HINT": "10",
-                "JBOT_BONUS_STREAK_PER_DAY": "5",
-                "JBOT_BONUS_STREAK_CAP": "25",
-                "JBOT_EMOJI_FIRST_TRY": "🎯",
-                "JBOT_EMOJI_BEFORE_HINT": "🧠",
-                "JBOT_EMOJI_FASTEST": "🥇",
-                "JBOT_EMOJI_FASTEST_CSV": "🥇,🥈,🥉",
-                "JBOT_EMOJI_STREAK": "🔥",
-            }
-            config.get.side_effect = lambda key, default=None: config_values.get(
-                key, default
-            )
-            handler = GuessHandler(
-                data_manager,
-                PlayerManager(data_manager),
-                self.daily_question,
-                daily_question_id=7,
-                managers={},
-                config=config,
-                question_db_id=42,
-            )
+        self.assertTrue(self._guess(self._make_handler(), "1", "Alt Answer"))
 
-            is_correct, _, _, _ = handler.handle_guess("player", "Player", "Alt Answer")
-
-            self.assertTrue(is_correct)
-            history = data_manager.read_guess_history("player")
-            self.assertEqual(history[0]["daily_question_id"], 7)
-        finally:
-            db.close()
+        history = self.data_manager.read_guess_history("1")
+        self.assertTrue(history[0]["is_correct"])
+        self.assertEqual(history[0]["daily_question_id"], self.daily_question_id)
 
     # ------------------------------------------------------------------
-    # Regression: Bug A — stale alternative_answers after /admin add_answer
+    # Regression: Bug A - stale alternative_answers after /admin add_answer
     # ------------------------------------------------------------------
 
     def test_newly_added_alt_answer_recognized_without_rebuild(self):
@@ -131,28 +88,19 @@ class TestGuessHandlerAlternatives(unittest.TestCase):
         Fixed: handle_guess reloads alt answers from DB on every call.
         """
         # At construction time, no alt answers exist
-        self.data_manager.get_alternative_answers.return_value = []
-        handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_question,
-            self.daily_question_id,
-            self.managers,
-            question_db_id=self.question_db_id,
-        )
-        handler.config = MagicMock()
-        handler.config.get.side_effect = lambda k, d=None: d
+        handler = self._make_handler()
 
         # Simulate /admin add_answer updating the DB mid-game
-        self.data_manager.get_alternative_answers.return_value = ["New Alt Answer"]
+        self._add_alternative("New Alt Answer")
 
-        # Player guesses the new alt after it was added — should be credited
-        is_correct, _, _, _ = handler.handle_guess(1, "p1", "New Alt Answer")
+        # Player guesses the new alt after it was added - should be credited
         self.assertTrue(
-            is_correct,
+            self._guess(handler, 1, "New Alt Answer"),
             "Guess matching a newly-added alt answer must be recognised without "
             "rebuilding the GuessHandler",
         )
+        history = self.data_manager.read_guess_history("1")
+        self.assertTrue(history[0]["is_correct"])
 
     def test_stale_cached_list_is_not_used(self):
         """
@@ -160,32 +108,23 @@ class TestGuessHandlerAlternatives(unittest.TestCase):
         Verifies that adding a new alt answer to DB is sufficient for recognition.
         """
         # At construction time, alt answers contain one entry
-        self.data_manager.get_alternative_answers.return_value = ["Old Alt"]
-        handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_question,
-            self.daily_question_id,
-            self.managers,
-            question_db_id=self.question_db_id,
-        )
-        handler.config = MagicMock()
-        handler.config.get.side_effect = lambda k, d=None: d
+        self._add_alternative("Old Alt")
+        handler = self._make_handler()
 
         # Later, DB is updated to have a different alt (simulates add_answer)
-        self.data_manager.get_alternative_answers.return_value = ["New Alt Answer"]
+        self.stack.db.execute_update(
+            "DELETE FROM alternative_answers WHERE answer_text = ?", ("Old Alt",)
+        )
+        self._add_alternative("New Alt Answer")
 
-        # "Old Alt" is no longer in DB — should not match
-        is_old_correct, _, _, _ = handler.handle_guess(1, "p1", "Old Alt")
+        # "Old Alt" is no longer in DB - should not match
         self.assertFalse(
-            is_old_correct,
+            self._guess(handler, 1, "Old Alt"),
             "Old cached alt answer should not be used if it is no longer in DB",
         )
 
-        # "New Alt Answer" is in DB — should match
-        self.data_manager.read_guess_history.return_value = []  # reset for second call
-        is_new_correct, _, _, _ = handler.handle_guess(2, "p2", "New Alt Answer")
+        # "New Alt Answer" is in DB - should match
         self.assertTrue(
-            is_new_correct,
+            self._guess(handler, 2, "New Alt Answer"),
             "Newly added alt answer should be recognised via live DB reload",
         )

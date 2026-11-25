@@ -185,33 +185,6 @@ class DailyGameSimulator:
         )
         self.daily_state = defaultdict(DailyPlayerState, result.daily_state)
 
-    def _get_crowd_wisdom_counts(self) -> tuple[int, int]:
-        """
-        Returns (correct_solvers, active_participants) from replay state.
-
-        Note: this mirrors DataManager.get_daily_active_participant_count() criteria
-        but lives here to keep the simulator free of DataManager/DB dependencies.
-        """
-        correct_solvers = 0
-        active_participants = 0
-        for state in self.daily_state.values():
-            if state.is_correct:
-                correct_solvers += 1
-            if state.is_correct or state.is_resting or state.guesses_count > 0:
-                active_participants += 1
-        return correct_solvers, active_participants
-
-    def apply_crowd_wisdom_bonus(self):
-        """Apply Crowd Wisdom after all daily events are resolved."""
-        result = self.reducer.reduce_end_of_day(
-            self.daily_state,
-            self.initial_player_states,
-            prev_streak_keepers=self.prev_streak_keepers,
-            apply_streak_resets=False,
-            apply_crowd_wisdom=True,
-        )
-        self.daily_state = defaultdict(DailyPlayerState, result.daily_state)
-
     def calculate_final_results(self):
         results = {}
         for user_id, state in self.daily_state.items():

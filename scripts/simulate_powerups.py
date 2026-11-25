@@ -4,7 +4,6 @@ import sys
 import os
 import math
 from collections import defaultdict
-from dataclasses import dataclass
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -15,12 +14,9 @@ from src.core.events import GameEvent, GuessEvent, PowerUpEvent
 
 # --- Configuration ---
 SIMULATION_DAYS = 28  # 1 month for seasonal + quicker simulations
-PLAYERS_PER_CATEGORY = 10  # Number of players per category
 VERBOSE = False
 GUESS_ACCURACY = 0.90
 ANSWER_WINDOW_MINUTES = 60
-FAST_ANSWER_WINDOW_MINUTES = 5  # For Speedsters
-LATE_ANSWER_DELAY_HOURS = 6
 POWERUP_FAIL_RATE = 0.2  # Chance that powerup is used after target answers
 HINT_DELAY_HOURS = 4  # Hours after question start until hint is revealed
 
@@ -43,7 +39,7 @@ class MockQuestion:
 
 
 config = ConfigReader()
-REST_BONUS_PER_DAY = float(config.get("JBOT_REST_BONUS_PER_DAY", "0.2"))
+REST_MULTIPLIER = float(config.get("JBOT_REST_MULTIPLIER", "0.2"))
 
 # Streak day at which the bonus is fully capped (no more marginal value from streak).
 # Above this, rest/steal is preferred over protecting a streak that's already maxed out.
@@ -62,10 +58,6 @@ class Strategy:
 
     def decide_action(self, player_id: str, game_state: "GameState") -> list[GameEvent]:
         raise NotImplementedError
-
-    def _get_guess_text(self):
-        # Accuracy configured globally
-        return "answer" if random.random() < GUESS_ACCURACY else "wrong"
 
     def _pick_target_weighted(self, my_id, game_state, weight_func):
         others = [
@@ -547,7 +539,7 @@ def run_simulation(return_data=False, seed=None, on_day_complete=None, days=None
         # Increment pending multiplier for players who rested today (stacking)
         for pid in resting_pids:
             if pid in players:
-                players[pid].pending_rest_multiplier += REST_BONUS_PER_DAY
+                players[pid].pending_rest_multiplier += REST_MULTIPLIER
 
         # Carry resting set forward so tomorrow's strategies can target wakers.
         prev_resting_pids = resting_pids

@@ -1,245 +1,231 @@
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
 from src.cogs.game import Game
-from src.core.discord import DiscordBot
+from tests.src.cogs._game_stack import build_game_stack
 
 
 class TestGameCog(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.bot = MagicMock(spec=DiscordBot)
-        self.bot.game = MagicMock()
-        self.bot.player_manager = MagicMock()
-        self.bot.morning_message_task = MagicMock()
-        self.bot.reminder_message_task = MagicMock()
-        self.bot.evening_message_task = MagicMock()
-        self.bot.send_message = AsyncMock()
-
-        self.cog = Game(self.bot)
+    def setUp(self):
+        self._make_cog(build_game_stack(self, players=(("123", "Test"),)))
         self.ctx = AsyncMock()
         self.ctx.interaction = MagicMock()
+        self.ctx.guild = None
+        self.ctx.author.id = 123
+        self.ctx.author.display_name = "Test"
+
+    def _make_cog(self, stack):
+        self.stack = stack
+        self.bot = SimpleNamespace(
+            game=stack.game,
+            player_manager=stack.player_manager,
+            # Scheduler tasks are discord.ext.tasks loops, so they stay doubles.
+            morning_message_task=MagicMock(),
+            reminder_message_task=MagicMock(),
+            evening_message_task=MagicMock(),
+            send_message=AsyncMock(),
+        )
+        self.cog = Game(self.bot)
+
+    def _schedule(self, morning, reminder, evening):
+        for task, next_iteration in (
+            (self.bot.morning_message_task, morning),
+            (self.bot.reminder_message_task, reminder),
+            (self.bot.evening_message_task, evening),
+        ):
+            task.is_running.return_value = True
+            task.next_iteration = next_iteration
+
+    def _sent_text(self):
+        self.bot.send_message.assert_awaited_once()
+        return self.bot.send_message.await_args.args[0]
 
     async def test_status_tasks_not_running(self):
         self.bot.morning_message_task.is_running.return_value = False
         await self.cog.status.callback(self.cog, self.ctx)
-        self.bot.send_message.assert_awaited_once()
-        args, kwargs = self.bot.send_message.await_args
-        self.assertIn("Tasks are not running", args[0])
+        self.assertIn("Tasks are not running", self._sent_text())
 
     async def test_status_next_question(self):
-        self.bot.morning_message_task.is_running.return_value = True
-        self.bot.reminder_message_task.is_running.return_value = True
-        self.bot.evening_message_task.is_running.return_value = True
-
-        # Morning is sooner than reminder and evening (next day vs today)
-        self.bot.morning_message_task.next_iteration = datetime(
-            2025, 1, 1, 8, 0, tzinfo=timezone.utc
+        self._schedule(
+            datetime(2025, 1, 1, 8, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, 14, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, 20, 0, tzinfo=timezone.utc),
         )
-        self.bot.reminder_message_task.next_iteration = datetime(
-            2025, 1, 1, 14, 0, tzinfo=timezone.utc
-        )
-        self.bot.evening_message_task.next_iteration = datetime(
-            2025, 1, 1, 20, 0, tzinfo=timezone.utc
-        )
-
-        # Current time is before morning
-        # Actually the logic compares next_iteration.
-        # If morning < evening, it means morning comes first.
 
         await self.cog.status.callback(self.cog, self.ctx)
 
-        self.bot.send_message.assert_awaited_once()
-        args, kwargs = self.bot.send_message.await_args
-        self.assertIn("Next question", args[0])
+        text = self._sent_text()
+        self.assertIn("Next question", text)
+        self.assertNotIn("Today's Question:", text)
 
     async def test_status_answer_reveal(self):
         """Test status when it's time for answer reveal (evening < morning)."""
-        self.bot.morning_message_task.is_running.return_value = True
-        self.bot.reminder_message_task.is_running.return_value = True
-        self.bot.evening_message_task.is_running.return_value = True
-
-        # Evening is sooner than morning and reminder
-        self.bot.morning_message_task.next_iteration = datetime(
-            2025, 1, 2, 8, 0, tzinfo=timezone.utc
+        self._make_cog(build_game_stack(self, start_day=False))
+        self._schedule(
+            datetime(2025, 1, 2, 8, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 2, 14, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, 20, 0, tzinfo=timezone.utc),
         )
-        self.bot.reminder_message_task.next_iteration = datetime(
-            2025, 1, 2, 14, 0, tzinfo=timezone.utc
-        )
-        self.bot.evening_message_task.next_iteration = datetime(
-            2025, 1, 1, 20, 0, tzinfo=timezone.utc
-        )
-
-        # Ensure no active question so we don't trigger the question display logic
-        # which would cause string concatenation with a Mock if not handled
-        self.bot.game.daily_q = None
 
         await self.cog.status.callback(self.cog, self.ctx)
 
-        self.bot.send_message.assert_awaited_once()
-        args, kwargs = self.bot.send_message.await_args
-        self.assertIn("Answer reveal", args[0])
+        self.assertIn("Answer reveal", self._sent_text())
 
     async def test_status_with_active_question(self):
         """Test status showing the active question."""
-        self.bot.morning_message_task.is_running.return_value = True
-        self.bot.reminder_message_task.is_running.return_value = True
-        self.bot.evening_message_task.is_running.return_value = True
-
-        # Morning < Evening (Next question phase, but we want to show today's question if it exists)
-        # Wait, the logic in game.py says:
-        # if self.bot.game.daily_q and morning_time_next > evening_time_next:
-        # This implies we show the question if we are waiting for the answer reveal (evening).
-        # So morning > evening means evening comes first.
-
-        self.bot.morning_message_task.next_iteration = datetime(
-            2025, 1, 2, 8, 0, tzinfo=timezone.utc
+        self._schedule(
+            datetime(2025, 1, 2, 8, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 2, 14, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, 20, 0, tzinfo=timezone.utc),
         )
-        self.bot.reminder_message_task.next_iteration = datetime(
-            2025, 1, 2, 14, 0, tzinfo=timezone.utc
-        )
-        self.bot.evening_message_task.next_iteration = datetime(
-            2025, 1, 1, 20, 0, tzinfo=timezone.utc
-        )
-
-        self.bot.game.daily_q = MagicMock()
-        self.bot.game.format_question.return_value = "Formatted Question"
 
         await self.cog.status.callback(self.cog, self.ctx)
 
-        self.bot.send_message.assert_awaited_once()
-        args, kwargs = self.bot.send_message.await_args
-        self.assertIn("Today's Question:", args[0])
-        self.assertIn("Formatted Question", args[0])
+        text = self._sent_text()
+        self.assertIn("Today's Question:", text)
+        self.assertIn("What is 2 + 2?", text)
 
     async def test_status_with_player_stats(self):
         """Test status showing player stats."""
-        self.bot.morning_message_task.is_running.return_value = True
-        self.bot.reminder_message_task.is_running.return_value = True
-        self.bot.evening_message_task.is_running.return_value = True
-        self.bot.morning_message_task.next_iteration = datetime(
-            2025, 1, 1, 8, 0, tzinfo=timezone.utc
+        self.stack.player_manager.update_score("123", 100)
+        self.stack.player_manager.set_streak("123", 5)
+        self._schedule(
+            datetime(2025, 1, 1, 8, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, 14, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, 20, 0, tzinfo=timezone.utc),
         )
-        self.bot.reminder_message_task.next_iteration = datetime(
-            2025, 1, 1, 14, 0, tzinfo=timezone.utc
-        )
-        self.bot.evening_message_task.next_iteration = datetime(
-            2025, 1, 1, 20, 0, tzinfo=timezone.utc
-        )
-
-        mock_player = MagicMock()
-        mock_player.score = 100
-        mock_player.answer_streak = 5
-        self.bot.player_manager.get_player.return_value = mock_player
 
         await self.cog.status.callback(self.cog, self.ctx)
 
-        self.bot.send_message.assert_awaited_once()
-        args, kwargs = self.bot.send_message.await_args
-        self.assertIn("**Your Score:** 100", args[0])
-        self.assertIn("**Streak:** 5", args[0])
+        text = self._sent_text()
+        self.assertIn("**Your Score:** 100", text)
+        self.assertIn("**Streak:** 5", text)
 
     async def test_status_player_not_found(self):
         """Test status when player is not found."""
-        self.bot.morning_message_task.is_running.return_value = True
-        self.bot.reminder_message_task.is_running.return_value = True
-        self.bot.evening_message_task.is_running.return_value = True
-        self.bot.morning_message_task.next_iteration = datetime(
-            2025, 1, 1, 8, 0, tzinfo=timezone.utc
+        self.ctx.author.id = 999
+        self._schedule(
+            datetime(2025, 1, 1, 8, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, 14, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, 20, 0, tzinfo=timezone.utc),
         )
-        self.bot.reminder_message_task.next_iteration = datetime(
-            2025, 1, 1, 14, 0, tzinfo=timezone.utc
-        )
-        self.bot.evening_message_task.next_iteration = datetime(
-            2025, 1, 1, 20, 0, tzinfo=timezone.utc
-        )
-
-        self.bot.player_manager.get_player.return_value = None
 
         await self.cog.status.callback(self.cog, self.ctx)
 
-        self.bot.send_message.assert_awaited_once()
-        args, kwargs = self.bot.send_message.await_args
-        self.assertNotIn("**Your Score:**", args[0])
+        self.assertNotIn("**Your Score:**", self._sent_text())
 
     async def test_status_reminder_next(self):
         """Test status when reminder is the next event."""
-        self.bot.morning_message_task.is_running.return_value = True
-        self.bot.reminder_message_task.is_running.return_value = True
-        self.bot.evening_message_task.is_running.return_value = True
-
-        # Reminder is sooner than evening (morning already happened)
-        self.bot.morning_message_task.next_iteration = datetime(
-            2025, 1, 2, 8, 0, tzinfo=timezone.utc
+        self._make_cog(build_game_stack(self, start_day=False))
+        self._schedule(
+            datetime(2025, 1, 2, 8, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, 14, 0, tzinfo=timezone.utc),
+            datetime(2025, 1, 1, 20, 0, tzinfo=timezone.utc),
         )
-        self.bot.reminder_message_task.next_iteration = datetime(
-            2025, 1, 1, 14, 0, tzinfo=timezone.utc
-        )
-        self.bot.evening_message_task.next_iteration = datetime(
-            2025, 1, 1, 20, 0, tzinfo=timezone.utc
-        )
-
-        # No active question to avoid the format_question path
-        self.bot.game.daily_q = None
 
         await self.cog.status.callback(self.cog, self.ctx)
 
-        self.bot.send_message.assert_awaited_once()
-        args, kwargs = self.bot.send_message.await_args
-        self.assertIn("Reminder", args[0])
+        self.assertIn("Reminder", self._sent_text())
+
+    def _seed_scores(self):
+        player_manager = self.stack.player_manager
+        for player_id, name, score in (("p1", "Alice", 70), ("p2", "Bob", 90)):
+            player_manager.get_or_create_player(player_id, name)
+            player_manager.update_score(player_id, score)
+            # The all-time leaderboard only lists recently active players.
+            self.stack.data_manager.log_player_guess(
+                player_id, name, self.stack.game.daily_question_id, "x", False
+            )
+
+    def _seed_season(self):
+        today = date.today()
+        season_id = self.stack.data_manager.create_season(
+            "Test Season",
+            (today - timedelta(days=2)).isoformat(),
+            (today + timedelta(days=27)).isoformat(),
+        )
+        for player_id, points in (("p1", 30), ("p2", 50)):
+            self.stack.data_manager.initialize_player_season_score(player_id, season_id)
+            self.stack.data_manager.update_season_score(
+                player_id, season_id, points=points
+            )
+        return season_id
 
     async def test_leaderboard_seasons_disabled(self):
-        """Cog delegates to get_active_leaderboard and sends the result."""
-        self.bot.game.get_active_leaderboard.return_value = "All-Time LB"
+        self._seed_scores()
+
         await self.cog.leaderboard.callback(self.cog, self.ctx)
-        self.bot.game.get_active_leaderboard.assert_called_once_with(
-            self.ctx.guild, show_daily_bonuses=False, all_time=False
-        )
-        self.bot.send_message.assert_awaited_once_with(
-            "All-Time LB", interaction=self.ctx.interaction
+
+        text = self._sent_text()
+        self.assertLess(text.index("Bob"), text.index("Alice"))
+        self.assertIn("90", text)
+        self.assertNotIn("Season", text)
+        self.assertIs(
+            self.bot.send_message.await_args.kwargs["interaction"],
+            self.ctx.interaction,
         )
 
     async def test_leaderboard_seasons_enabled_shows_season(self):
-        """Cog passes show_daily_bonuses=False and all_time=False to get_active_leaderboard."""
-        self.bot.game.get_active_leaderboard.return_value = "March 2026 LB"
-        await self.cog.leaderboard.callback(self.cog, self.ctx)
-        self.bot.game.get_active_leaderboard.assert_called_once_with(
-            self.ctx.guild, show_daily_bonuses=False, all_time=False
+        self._make_cog(
+            build_game_stack(
+                self, players=(("p1", "Alice"), ("p2", "Bob")), seasons=True
+            )
         )
-        args, kwargs = self.bot.send_message.await_args
-        self.assertIn("March 2026", args[0])
-        self.assertNotIn("All-Time", args[0])
+        self._seed_season()
+
+        await self.cog.leaderboard.callback(self.cog, self.ctx)
+
+        text = self._sent_text()
+        self.assertIn("Test Season", text)
+        self.assertIn("Alice", text)
+        self.assertLess(text.index("Bob"), text.index("Alice"))
+        self.assertNotIn("All-Time", text)
 
     async def test_leaderboard_seasons_enabled_no_season_falls_back(self):
-        """Cog delegates fallback to get_active_leaderboard (no-season case)."""
-        self.bot.game.get_active_leaderboard.return_value = "All-Time LB"
-        await self.cog.leaderboard.callback(self.cog, self.ctx)
-        self.bot.game.get_active_leaderboard.assert_called_once()
-        self.bot.send_message.assert_awaited_once_with(
-            "All-Time LB", interaction=self.ctx.interaction
+        stack = build_game_stack(
+            self,
+            players=(("p1", "Alice"), ("p2", "Bob")),
+            seasons=True,
+            season_auto_create=False,
         )
+        self._make_cog(stack)
+        self._seed_scores()
+
+        await self.cog.leaderboard.callback(self.cog, self.ctx)
+
+        text = self._sent_text()
+        self.assertIn("Bob", text)
+        self.assertNotIn("Season", text)
 
     async def test_leaderboard_seasons_enabled_all_time_flag(self):
-        """Cog passes all_time=True to get_active_leaderboard when flag is set."""
-        self.bot.game.get_active_leaderboard.return_value = "All-Time Leaderboard"
-        await self.cog.leaderboard.callback(self.cog, self.ctx, all_time=True)
-        self.bot.game.get_active_leaderboard.assert_called_once_with(
-            self.ctx.guild, show_daily_bonuses=False, all_time=True
+        self._make_cog(
+            build_game_stack(
+                self, players=(("p1", "Alice"), ("p2", "Bob")), seasons=True
+            )
         )
-        args, kwargs = self.bot.send_message.await_args
-        self.assertIn("All-Time", args[0])
+        self._seed_season()
+        self._seed_scores()
+
+        await self.cog.leaderboard.callback(self.cog, self.ctx, all_time=True)
+
+        text = self._sent_text()
+        self.assertIn("All-Time", text)
+        self.assertNotIn("Test Season", text)
 
     async def test_profile(self):
-        self.bot.game.season_manager.enabled = False
-        self.ctx.author.id = 123
-        self.ctx.author.display_name = "Test"
-        self.bot.game.get_player_history.return_value = "History"
+        self.stack.game.handle_guess(123, "Test", "wrong")
+        self.stack.game.handle_guess(123, "Test", "4")
 
         await self.cog.profile.callback(self.cog, self.ctx)
 
-        self.bot.game.get_player_history.assert_called_once_with(123, "Test")
-        self.bot.send_message.assert_awaited_once_with(
-            "History", interaction=self.ctx.interaction, ephemeral=True
-        )
+        score = self.stack.player_manager.get_player("123").score
+        text = self._sent_text()
+        self.assertIn("-- Your stats, Test --", text)
+        self.assertIn(f"Score:         {score}", text)
+        self.assertIn("Correct:       1/2 (50.0%)", text)
+        self.assertIs(self.bot.send_message.await_args.kwargs["ephemeral"], True)
 
     async def test_game_group(self):
         """Test the game group command sends help."""
@@ -255,3 +241,7 @@ class TestGameCog(unittest.IsolatedAsyncioTestCase):
         mock_bot.add_cog = AsyncMock()
         await setup(mock_bot)
         mock_bot.add_cog.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -62,32 +62,6 @@ def parse_schema(schema_sql):
     return schema_dict
 
 
-def compare_schemas(current_schema_list, target_schema_sql):
-    """
-    Compares the current and target schemas and returns the differences.
-    """
-    current_schema_sql = ";\n".join(current_schema_list)
-    current_schema_dict = parse_schema(current_schema_sql)
-    target_schema_dict = parse_schema(target_schema_sql)
-
-    new_tables = {}
-    modified_tables = {}
-
-    for table_name, target_statement in target_schema_dict.items():
-        if table_name not in current_schema_dict:
-            new_tables[table_name] = target_statement
-        else:
-            current_statement = current_schema_dict[table_name]
-            # Simple string comparison after normalization
-            if current_statement != target_statement:
-                modified_tables[table_name] = {
-                    "current": current_statement,
-                    "target": target_statement,
-                }
-
-    return new_tables, modified_tables
-
-
 def get_db_columns(conn, table_name):
     """Retrieves the set of column names for a table from the database."""
     cursor = conn.cursor()
@@ -145,21 +119,6 @@ def parse_columns(create_statement):
             columns[col_name] = definition
 
     return columns
-
-
-def update_schema(conn, new_schema):
-    """Applies the new schema to the database."""
-    cursor = conn.cursor()
-    try:
-        cursor.executescript(new_schema)
-        conn.commit()
-        print("Database schema updated successfully.")
-    except sqlite3.Error as e:
-        print(f"An error occurred: {e}")
-        conn.rollback()
-
-
-import difflib
 
 
 def main():

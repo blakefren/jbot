@@ -1,6 +1,5 @@
 import discord
 import logging
-from discord.ext import commands
 from src.cfg.main import ConfigReader
 from src.core.guess_display import (
     format_answer_correction_applied,
@@ -10,7 +9,6 @@ from src.core.guess_display import (
     process_guess,
     truncate_discord_text,
 )
-from src.core.guess_handler import AlreadyAnsweredCorrectlyError, JinxedError
 from src.core.powerup import PowerUpError
 
 

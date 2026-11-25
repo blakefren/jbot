@@ -1,28 +1,33 @@
+import logging
 import unittest
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import discord
 
+from data.readers.question import Question
 from src.cogs.admin import Admin
-from src.core.player_manager import PlayerManager
-from src.core.game_runner import GameRunner
-from src.core.subscriber import Subscriber
-from db.database import Database
+from tests.src.cogs._game_stack import build_game_stack
 
 
 class TestAdminCog(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
+    def setUp(self):
+        self.stack = build_game_stack(
+            self,
+            question=Question("Test question?", "Test answer", "Test", 100, "Old hint"),
+        )
+        self.game = self.stack.game
+        self.data_manager = self.stack.data_manager
+        self.player_manager = self.stack.player_manager
+
+        # The Discord bot and its scheduler tasks are the external boundary.
         self.bot = MagicMock()
         self.bot.morning_message_task = AsyncMock()
         self.bot.reminder_message_task = AsyncMock()
         self.bot.evening_message_task = AsyncMock()
-        self.bot.tree = MagicMock()
-        self.bot.tree.sync = AsyncMock()
-
-        # Mocks for refund test
-        self.bot.game = MagicMock(spec=GameRunner)
-        self.bot.player_manager = MagicMock(spec=PlayerManager)
-        self.bot.data_manager = MagicMock()
-        self.bot.data_manager.db = MagicMock(spec=Database)
+        self.bot.game = self.game
+        self.bot.player_manager = self.player_manager
+        self.bot.data_manager = self.data_manager
 
         self.cog = Admin(self.bot)
 
@@ -32,15 +37,21 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         self.ctx.author = MagicMock()
         self.ctx.author.id = "admin_id_456"
 
-    async def test_resend_morning_silent(self):
-        """Tests resend command for morning message with silent=True."""
+    async def _resend(self, message_type, silent, regenerate_hint=False):
         await self.cog.resend.callback(
             self.cog,
             self.ctx,
-            message_type="morning",
-            silent=True,
-            regenerate_hint=False,
+            message_type=message_type,
+            silent=silent,
+            regenerate_hint=regenerate_hint,
         )
+
+    def _stored_hint(self):
+        return self.data_manager.get_todays_daily_question()[0].hint
+
+    async def test_resend_morning_silent(self):
+        """Tests resend command for morning message with silent=True."""
+        await self._resend("morning", silent=True)
 
         self.ctx.defer.assert_called_once()
         self.bot.morning_message_task.assert_called_once_with(silent=True)
@@ -52,13 +63,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_resend_morning_not_silent(self):
         """Tests resend command for morning message with silent=False."""
-        await self.cog.resend.callback(
-            self.cog,
-            self.ctx,
-            message_type="morning",
-            silent=False,
-            regenerate_hint=False,
-        )
+        await self._resend("morning", silent=False)
 
         self.ctx.defer.assert_called_once()
         self.bot.morning_message_task.assert_called_once_with(silent=False)
@@ -68,13 +73,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_resend_reminder_silent(self):
         """Tests resend command for reminder message with silent=True."""
-        await self.cog.resend.callback(
-            self.cog,
-            self.ctx,
-            message_type="reminder",
-            silent=True,
-            regenerate_hint=False,
-        )
+        await self._resend("reminder", silent=True)
 
         self.ctx.defer.assert_called_once()
         self.bot.morning_message_task.assert_not_called()
@@ -86,13 +85,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_resend_reminder_not_silent(self):
         """Tests resend command for reminder message with silent=False."""
-        await self.cog.resend.callback(
-            self.cog,
-            self.ctx,
-            message_type="reminder",
-            silent=False,
-            regenerate_hint=False,
-        )
+        await self._resend("reminder", silent=False)
 
         self.ctx.defer.assert_called_once()
         self.bot.morning_message_task.assert_not_called()
@@ -102,13 +95,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_resend_evening_silent(self):
         """Tests resend command for evening message with silent=True."""
-        await self.cog.resend.callback(
-            self.cog,
-            self.ctx,
-            message_type="evening",
-            silent=True,
-            regenerate_hint=False,
-        )
+        await self._resend("evening", silent=True)
 
         self.ctx.defer.assert_called_once()
         self.bot.morning_message_task.assert_not_called()
@@ -120,13 +107,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_resend_evening_not_silent(self):
         """Tests resend command for evening message with silent=False."""
-        await self.cog.resend.callback(
-            self.cog,
-            self.ctx,
-            message_type="evening",
-            silent=False,
-            regenerate_hint=False,
-        )
+        await self._resend("evening", silent=False)
 
         self.ctx.defer.assert_called_once()
         self.bot.morning_message_task.assert_not_called()
@@ -136,13 +117,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_resend_invalid_message_type(self):
         """Tests resend command with an invalid message type."""
-        await self.cog.resend.callback(
-            self.cog,
-            self.ctx,
-            message_type="invalid",
-            silent=False,
-            regenerate_hint=False,
-        )
+        await self._resend("invalid", silent=False)
 
         self.ctx.defer.assert_called_once()
         self.bot.morning_message_task.assert_not_called()
@@ -154,52 +129,24 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_resend_with_regenerate_hint_success(self):
         """Tests resend command with regenerate_hint=True."""
-        from data.readers.question import Question
+        question = self.game.daily_q
+        selector = self.stack.question_selector
+        selector.get_hint_from_gemini.reset_mock()
+        selector.get_hint_from_gemini.return_value = "New hint"
 
-        # Setup daily question
-        mock_question = Question(
-            question="Test question?",
-            answer="Test answer",
-            category="Test",
-            data_source="test",
-            hint="Old hint",
-        )
-        self.bot.game.daily_q = mock_question
-        self.bot.game.daily_question_id = 1
-        self.bot.game.question_selector = MagicMock()
-        self.bot.game.question_selector.get_hint_from_gemini = MagicMock(
-            return_value="New hint"
-        )
-
-        await self.cog.resend.callback(
-            self.cog,
-            self.ctx,
-            message_type="reminder",
-            silent=True,
-            regenerate_hint=True,
-        )
+        await self._resend("reminder", silent=True, regenerate_hint=True)
 
         self.ctx.defer.assert_called_once()
-        self.bot.game.question_selector.get_hint_from_gemini.assert_called_once_with(
-            mock_question
-        )
-        self.bot.data_manager.update_daily_question_hint.assert_called_once_with(
-            1, "New hint"
-        )
-        self.assertEqual(self.bot.game.daily_q.hint, "New hint")
+        selector.get_hint_from_gemini.assert_called_once_with(question)
+        self.assertEqual(self.game.daily_q.hint, "New hint")
+        self.assertEqual(self._stored_hint(), "New hint")
         self.bot.reminder_message_task.assert_called_once_with(silent=True)
 
     async def test_resend_with_regenerate_hint_no_question(self):
         """Tests resend with regenerate_hint=True when there's no active question."""
-        self.bot.game.daily_q = None
+        self.bot.game = build_game_stack(self, start_day=False).game
 
-        await self.cog.resend.callback(
-            self.cog,
-            self.ctx,
-            message_type="reminder",
-            silent=True,
-            regenerate_hint=True,
-        )
+        await self._resend("reminder", silent=True, regenerate_hint=True)
 
         self.ctx.defer.assert_called_once()
         self.ctx.send.assert_called_once_with(
@@ -209,108 +156,74 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
 
     async def test_resend_with_regenerate_hint_generation_fails(self):
         """Tests resend when hint generation returns None."""
-        from data.readers.question import Question
+        self.stack.question_selector.get_hint_from_gemini.return_value = None
 
-        mock_question = Question(
-            question="Test question?",
-            answer="Test answer",
-            category="Test",
-            data_source="test",
-            hint="Old hint",
-        )
-        self.bot.game.daily_q = mock_question
-        self.bot.game.question_selector = MagicMock()
-        self.bot.game.question_selector.get_hint_from_gemini = MagicMock(
-            return_value=None
-        )
-
-        await self.cog.resend.callback(
-            self.cog,
-            self.ctx,
-            message_type="reminder",
-            silent=True,
-            regenerate_hint=True,
-        )
+        await self._resend("reminder", silent=True, regenerate_hint=True)
 
         self.ctx.defer.assert_called_once()
         self.ctx.send.assert_called_once_with(
             "❌ Hint generation returned empty result.", ephemeral=True
         )
+        self.assertEqual(self._stored_hint(), "Old hint")
         self.bot.reminder_message_task.assert_not_called()
 
     async def test_resend_with_regenerate_hint_exception(self):
         """Tests resend when hint generation raises an exception."""
-        from data.readers.question import Question
-
-        mock_question = Question(
-            question="Test question?",
-            answer="Test answer",
-            category="Test",
-            data_source="test",
-            hint="Old hint",
-        )
-        self.bot.game.daily_q = mock_question
-        self.bot.game.question_selector = MagicMock()
-        self.bot.game.question_selector.get_hint_from_gemini = MagicMock(
-            side_effect=Exception("API Error")
+        self.stack.question_selector.get_hint_from_gemini.side_effect = Exception(
+            "API Error"
         )
 
-        await self.cog.resend.callback(
-            self.cog,
-            self.ctx,
-            message_type="reminder",
-            silent=True,
-            regenerate_hint=True,
-        )
+        await self._resend("reminder", silent=True, regenerate_hint=True)
 
         self.ctx.defer.assert_called_once()
-        # Check that error message contains the exception
         call_args = self.ctx.send.call_args[0][0]
         self.assertIn("❌ Error generating hint:", call_args)
         self.assertIn("API Error", call_args)
+        self.assertEqual(self._stored_hint(), "Old hint")
         self.bot.reminder_message_task.assert_not_called()
 
     async def test_refund_updates_player_data(self):
-        """
-        Test that the refund command correctly updates player data.
-        """
-        # Setup mocks
+        """The refund command updates the stored score and audits the adjustment."""
+        self.player_manager.get_or_create_player("player_id_123", "TestPlayer")
+        self.player_manager.update_score("player_id_123", 100)
         member = MagicMock(spec=discord.Member)
         member.id = "player_id_123"
         member.display_name = "TestPlayer"
         member.mention = "@TestPlayer"
 
-        amount = 50
-        reason = "Test refund"
-
-        # Configure the mock player_manager
-        player_manager = self.bot.player_manager
-
-        # We'll have it return a different mock each time to simulate the data changing.
-        mock_player_before_refund = MagicMock()
-        mock_player_after_refund = MagicMock()
-        mock_player_after_refund.score = 150
-
-        player_manager.refund_player.return_value = mock_player_after_refund
-
-        # Call the refund command
         await self.cog.refund.callback(
-            self.cog, self.ctx, member, amount, reason=reason
+            self.cog, self.ctx, member, 50, reason="Test refund"
         )
 
-        # Assertions
-        player_manager.refund_player.assert_called_once_with(
-            str(member.id),
-            member.display_name,
-            amount,
-            None,
-            str(self.ctx.author.id),
-            reason,
+        self.assertEqual(self.player_manager.get_player("player_id_123").score, 150)
+        adjustments = self.stack.db.execute_query(
+            "SELECT player_id, admin_id, amount, reason FROM score_adjustments"
+        )
+        self.assertEqual(
+            [tuple(row.values()) for row in adjustments],
+            [("player_id_123", "admin_id_456", 50, "Test refund")],
+        )
+        self.ctx.send.assert_called_once_with(
+            "Refunded @TestPlayer: +50 (Score: 150). Reason: Test refund"
         )
 
-        # Check the final message
-        expected_message = f"Refunded {member.mention}: +{amount} (Score: {mock_player_after_refund.score}). Reason: {reason}"
-        self.ctx.send.assert_called_once_with(expected_message)
+    async def test_refund_creates_missing_player_and_sets_streak(self):
+        member = MagicMock(spec=discord.Member)
+        member.id = "new_player"
+        member.display_name = "NewPlayer"
+        member.mention = "@NewPlayer"
+
+        await self.cog.refund.callback(
+            self.cog, self.ctx, member, 25, 4, reason="Make good"
+        )
+
+        player = self.player_manager.get_player("new_player")
+        self.assertEqual(
+            (player.name, player.score, player.answer_streak), ("NewPlayer", 25, 4)
+        )
+        self.ctx.send.assert_called_once_with(
+            "Refunded @NewPlayer: +25 (Score: 25, Streak: 4). Reason: Make good"
+        )
 
     async def test_refund_player_not_found_after_refund(self):
         """Test refund command when player cannot be found after refund."""
@@ -318,32 +231,25 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         member.id = "player_id_123"
         member.display_name = "TestPlayer"
 
-        amount = 50
-        reason = "Test refund"
+        with patch.object(self.player_manager, "get_player", return_value=None):
+            await self.cog.refund.callback(
+                self.cog, self.ctx, member, 50, reason="Test refund"
+            )
 
-        player_manager = self.bot.player_manager
-        player_manager.refund_player.return_value = None
-
-        await self.cog.refund.callback(
-            self.cog, self.ctx, member, amount, reason=reason
-        )
-
-        player_manager.refund_player.assert_called_once_with(
-            str(member.id),
-            member.display_name,
-            amount,
-            None,
-            str(self.ctx.author.id),
-            reason,
-        )
         self.ctx.send.assert_called_once_with(
-            f"Could not find player {member.display_name} after refund."
+            "Could not find player TestPlayer after refund."
+        )
+        self.assertEqual(
+            self.stack.db.execute_query("SELECT * FROM score_adjustments"), []
         )
 
-    # Feature and sync tests removed.
+    def _subscribers(self):
+        return {
+            (sub.sub_id, sub.display_name, sub.is_channel)
+            for sub in self.data_manager.get_all_subscribers()
+        }
 
-    @patch("src.cogs.admin.Subscriber")
-    async def test_subscribe_member(self, mock_subscriber):
+    async def test_subscribe_member(self):
         """Test subscribe command with a member."""
         member = MagicMock(spec=discord.Member)
         member.id = 123
@@ -354,32 +260,35 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         )
 
         self.ctx.defer.assert_called_once()
-        mock_subscriber.assert_called_once()
-        self.bot.game.add_subscriber.assert_called_once()
+        self.assertEqual(self._subscribers(), {(123, "TestMember", False)})
+        self.assertEqual(
+            {sub.sub_id for sub in self.game.get_subscribed_users()}, {123}
+        )
         self.ctx.send.assert_called_once_with(
-            f"Subscribed {member.display_name} to daily questions."
+            "Subscribed TestMember to daily questions."
         )
 
-    @patch("src.cogs.admin.Subscriber")
-    async def test_unsubscribe_member(self, mock_subscriber):
+    async def test_unsubscribe_member(self):
         """Test unsubscribe command with a member."""
         member = MagicMock(spec=discord.Member)
         member.id = 123
         member.display_name = "TestMember"
+        await self.cog.subscribe.callback(
+            self.cog, self.ctx, subscribe=True, member=member, channel=None
+        )
+        self.ctx.send.reset_mock()
 
         await self.cog.subscribe.callback(
             self.cog, self.ctx, subscribe=False, member=member, channel=None
         )
 
-        self.ctx.defer.assert_called_once()
-        mock_subscriber.assert_called_once()
-        self.bot.game.remove_subscriber.assert_called_once()
+        self.assertEqual(self._subscribers(), set())
+        self.assertEqual(self.game.get_subscribed_users(), set())
         self.ctx.send.assert_called_once_with(
-            f"Unsubscribed {member.display_name} from daily questions."
+            "Unsubscribed TestMember from daily questions."
         )
 
-    @patch("src.cogs.admin.Subscriber")
-    async def test_subscribe_channel(self, mock_subscriber):
+    async def test_subscribe_channel(self):
         """Test subscribe command with a channel."""
         channel = MagicMock(spec=discord.TextChannel)
         channel.id = 456
@@ -390,28 +299,28 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         )
 
         self.ctx.defer.assert_called_once()
-        mock_subscriber.assert_called_once()
-        self.bot.game.add_subscriber.assert_called_once()
+        self.assertEqual(self._subscribers(), {(456, "test-channel", True)})
         self.ctx.send.assert_called_once_with(
-            f"Subscribed {channel.name} to daily questions."
+            "Subscribed test-channel to daily questions."
         )
 
-    @patch("src.cogs.admin.Subscriber")
-    async def test_unsubscribe_channel(self, mock_subscriber):
+    async def test_unsubscribe_channel(self):
         """Test unsubscribe command with a channel."""
         channel = MagicMock(spec=discord.TextChannel)
         channel.id = 456
         channel.name = "test-channel"
+        await self.cog.subscribe.callback(
+            self.cog, self.ctx, subscribe=True, member=None, channel=channel
+        )
+        self.ctx.send.reset_mock()
 
         await self.cog.subscribe.callback(
             self.cog, self.ctx, subscribe=False, member=None, channel=channel
         )
 
-        self.ctx.defer.assert_called_once()
-        mock_subscriber.assert_called_once()
-        self.bot.game.remove_subscriber.assert_called_once()
+        self.assertEqual(self._subscribers(), set())
         self.ctx.send.assert_called_once_with(
-            f"Unsubscribed {channel.name} from daily questions."
+            "Unsubscribed test-channel from daily questions."
         )
 
     async def test_subscribe_no_target(self):
@@ -424,6 +333,7 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         self.ctx.send.assert_called_once_with(
             "Please provide a member or a channel to subscribe."
         )
+        self.assertEqual(self._subscribers(), set())
 
     async def test_subscribe_both_targets(self):
         """Test subscribe command with both member and channel."""
@@ -438,14 +348,23 @@ class TestAdminCog(unittest.IsolatedAsyncioTestCase):
         self.ctx.send.assert_called_once_with(
             "Please provide either a member or a channel, not both."
         )
+        self.assertEqual(self._subscribers(), set())
 
 
 class TestAdminSeasonCommand(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
-        self.bot = MagicMock()
-        self.bot.game = MagicMock()
-        self.bot.data_manager = MagicMock()
+    def setUp(self):
+        self.stack = build_game_stack(
+            self,
+            players=(("p1", "One"), ("p2", "Two"), ("p3", "Three")),
+            seasons=True,
+            start_day=False,
+        )
+        self.game = self.stack.game
+        self.data_manager = self.stack.data_manager
 
+        self.bot = MagicMock()
+        self.bot.game = self.game
+        self.bot.data_manager = self.data_manager
         self.cog = Admin(self.bot)
 
         self.ctx = MagicMock()
@@ -453,27 +372,21 @@ class TestAdminSeasonCommand(unittest.IsolatedAsyncioTestCase):
         self.ctx.send = AsyncMock()
         self.ctx.author = MagicMock()
 
-        # Default: seasons enabled, active season present, no active question
-        self.bot.game.season_manager.enabled = True
-        self.bot.game.daily_question_id = None
-
-        from src.core.season import Season
-        from datetime import date
-
-        self.mock_season = Season(
-            season_id=7,
-            season_name="April 2026",
-            start_date=date(2026, 4, 1),
-            end_date=date(2026, 4, 30),
-            is_active=True,
+        today = self.data_manager.get_today()
+        self.season_id = self.data_manager.create_season(
+            "April 2026",
+            (today - timedelta(days=4)).isoformat(),
+            (today + timedelta(days=25)).isoformat(),
         )
-        self.bot.game.data_manager.get_current_season.return_value = self.mock_season
-        self.bot.game.season_manager.get_season_progress.return_value = (5, 30)
-        self.bot.game.data_manager.get_season_scores.return_value = ["p1", "p2", "p3"]
+        for player_id in ("p1", "p2", "p3"):
+            self.data_manager.initialize_player_season_score(player_id, self.season_id)
+
+    def _season_is_active(self, season_id):
+        return self.data_manager.get_season_by_id(season_id).is_active
 
     async def test_season_info_disabled(self):
         """Returns error when seasons are disabled."""
-        self.bot.game.season_manager.enabled = False
+        self.game.season_manager.enabled = False
         await self.cog.season.callback(self.cog, self.ctx)
         self.ctx.send.assert_called_once_with(
             "Seasons are not enabled.", ephemeral=True
@@ -481,16 +394,15 @@ class TestAdminSeasonCommand(unittest.IsolatedAsyncioTestCase):
 
     async def test_season_info_no_active_season(self):
         """Returns error when no active season exists."""
-        self.bot.game.data_manager.get_current_season.return_value = None
+        self.data_manager.end_season(self.season_id)
         await self.cog.season.callback(self.cog, self.ctx)
         self.ctx.send.assert_called_once_with("No active season found.", ephemeral=True)
 
     async def test_season_info_with_challenge(self):
         """Default (no flags) returns season info card including challenge name."""
-        mock_challenge = MagicMock()
-        mock_challenge.badge_emoji = "⚡"
-        mock_challenge.challenge_name = "Speed Demon"
-        self.bot.game.data_manager.get_season_challenge.return_value = mock_challenge
+        self.data_manager.create_season_challenge(
+            self.season_id, "Speed Demon", "Be fast", "⚡", {"type": "speed"}
+        )
 
         await self.cog.season.callback(self.cog, self.ctx)
 
@@ -499,61 +411,45 @@ class TestAdminSeasonCommand(unittest.IsolatedAsyncioTestCase):
         self.assertIn("April 2026", msg)
         self.assertIn("Day 5/30", msg)
         self.assertIn("⚡ Speed Demon", msg)
-        self.assertIn("3", msg)  # player count
+        self.assertIn("Players:   3", msg)
 
     async def test_season_info_no_challenge(self):
         """Default (no flags) shows 'None' when no challenge is set."""
-        self.bot.game.data_manager.get_season_challenge.return_value = None
-
         await self.cog.season.callback(self.cog, self.ctx)
 
         msg = self.ctx.send.call_args[0][0]
-        self.assertIn("None", msg)
+        self.assertIn("Challenge: None", msg)
 
     async def test_season_end_no_active_question(self):
         """end:True finalizes the season and reports the next season name."""
-        from src.core.season import Season
-        from datetime import date
-
-        next_season = Season(8, "May 2026", date(2026, 5, 1), date(2026, 5, 31), True)
-        self.bot.game.season_manager.get_or_create_current_season.return_value = (
-            next_season
-        )
-
         await self.cog.season.callback(self.cog, self.ctx, end=True)
 
-        self.bot.game.season_manager.finalize_season.assert_called_once_with(7)
-        self.bot.game.season_manager.get_or_create_current_season.assert_called_once()
+        self.assertFalse(self._season_is_active(self.season_id))
+        next_season = self.data_manager.get_current_season()
+        self.assertNotEqual(next_season.season_id, self.season_id)
         msg = self.ctx.send.call_args[0][0]
         self.assertIn("April 2026", msg)
-        self.assertIn("May 2026", msg)
+        self.assertIn(next_season.season_name, msg)
 
     async def test_season_end_blocked_mid_day(self):
         """end:True is blocked when a question is active and force is False."""
-        self.bot.game.daily_question_id = 42
+        self.game.set_daily_question()
 
         await self.cog.season.callback(self.cog, self.ctx, end=True, force=False)
 
-        self.bot.game.season_manager.finalize_season.assert_not_called()
+        self.assertTrue(self._season_is_active(self.season_id))
         msg = self.ctx.send.call_args[0][0]
         self.assertIn("A question is active", msg)
 
     async def test_season_end_force_mid_day(self):
         """end:True force:True proceeds and logs a warning when question is active."""
-        self.bot.game.daily_question_id = 42
-        from src.core.season import Season
-        from datetime import date
+        self.game.set_daily_question()
 
-        next_season = Season(8, "May 2026", date(2026, 5, 1), date(2026, 5, 31), True)
-        self.bot.game.season_manager.get_or_create_current_season.return_value = (
-            next_season
-        )
-
-        with patch("src.cogs.admin.logging") as mock_log:
+        with self.assertLogs(level=logging.WARNING) as logs:
             await self.cog.season.callback(self.cog, self.ctx, end=True, force=True)
-            mock_log.warning.assert_called_once()
 
-        self.bot.game.season_manager.finalize_season.assert_called_once_with(7)
+        self.assertTrue(any("force-ending season" in line for line in logs.output))
+        self.assertFalse(self._season_is_active(self.season_id))
 
 
 class TestAdminSetup(unittest.IsolatedAsyncioTestCase):

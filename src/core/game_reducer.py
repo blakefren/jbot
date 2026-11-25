@@ -68,9 +68,7 @@ class DailyGameReducer:
         self.jinx_wrong_guess_penalty = int(
             config.get("JBOT_JINX_WRONG_GUESS_PENALTY", "5")
         )
-        self.rest_bonus_per_day = float(
-            config.get("JBOT_REST_MULTIPLIER", "0.2") or "0.2"
-        )
+        self.rest_multiplier = float(config.get("JBOT_REST_MULTIPLIER", "0.2") or "0.2")
         self.steal_streak_cost = int(config.get("JBOT_STEAL_STREAK_COST", "3") or "3")
         self.retro_steal_streak_cost = int(
             config.get("JBOT_RETRO_STEAL_STREAK_COST", "5") or "5"
@@ -249,7 +247,7 @@ class DailyGameReducer:
             return ReducerResult(
                 next_state,
                 PowerUpTransition(
-                    pending_rest_multiplier_increment=self.rest_bonus_per_day,
+                    pending_rest_multiplier_increment=self.rest_multiplier,
                     whiffed_jinx_id=whiffed_jinx_id,
                     whiffed_steal_id=whiffed_steal_id,
                 ),

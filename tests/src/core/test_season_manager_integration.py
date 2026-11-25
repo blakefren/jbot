@@ -326,30 +326,6 @@ class TestSeasonManagerIntegrationLeaderboard(unittest.TestCase):
         self.assertTrue(any("ghost" in name for name in names))
 
 
-class TestSeasonManagerIntegrationPlayerInit(unittest.TestCase):
-    """Tests for initialize_player_for_season."""
-
-    def setUp(self):
-        self.db, self.dm, self.sm, _ = _make_stack()
-        _create_player(self.dm, "p1", "Alice")
-        self.season_id = self.dm.create_season("Jan 2026", "2026-01-01", "2026-01-31")
-
-    def tearDown(self):
-        self.db.close()
-
-    def test_initialize_player_creates_season_score_row(self):
-        self.sm.initialize_player_for_season("p1", self.season_id)
-        score = self.dm.get_player_season_score("p1", self.season_id)
-        self.assertIsNotNone(score)
-        self.assertEqual(score.points, 0)
-
-    def test_initialize_player_idempotent(self):
-        self.sm.initialize_player_for_season("p1", self.season_id)
-        self.sm.initialize_player_for_season("p1", self.season_id)
-        score = self.dm.get_player_season_score("p1", self.season_id)
-        self.assertIsNotNone(score)
-
-
 class TestSeasonManagerIntegrationAnnouncements(unittest.TestCase):
     """Tests for announcement-building methods (no Discord, just string output)."""
 

@@ -33,8 +33,6 @@ _SEASON_SCORE_FIELDS = frozenset(
         "first_answers",
         "current_streak",
         "best_streak",
-        "shields_used",
-        "double_points_used",
         "challenge_progress",
         "final_rank",
         "trophy",
@@ -48,8 +46,6 @@ _SEASON_STAT_FIELDS = frozenset(
         "first_answers",
         "current_streak",
         "best_streak",
-        "shields_used",
-        "double_points_used",
     }
 )
 _PLAYER_UPDATE_FIELDS = frozenset(
@@ -775,6 +771,7 @@ class DataManager:
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
 
+        query += " ORDER BY g.guessed_at ASC, g.id ASC"
         return self._db.execute_query(query, params)
 
     def get_question_by_id(self, question_id: int) -> Optional[Question]:
@@ -1097,134 +1094,6 @@ class DataManager:
         """
         return self._db.execute_query(query, (daily_question_id,))
 
-    def get_guess_counts_per_player(self, daily_question_id: int) -> list[dict]:
-        """
-        Gets the number of unique guesses per player for the day.
-
-        Args:
-            daily_question_id (int): The ID of the daily question.
-
-        Returns:
-            list[dict]: A list of dictionaries with player 'name' and 'guess_count'.
-        """
-        query = """
-            SELECT p.name, COUNT(DISTINCT g.guess_text) as guess_count
-            FROM guesses g
-            JOIN players p ON g.player_id = p.id
-            WHERE g.daily_question_id = ?
-            GROUP BY g.player_id, p.name
-            ORDER BY guess_count DESC
-        """
-        return self._db.execute_query(query, (daily_question_id,))
-
-    def get_most_common_guesses(self, daily_question_id: int) -> list[dict]:
-        """
-        Finds the most common incorrect guesses for the day.
-
-        Args:
-            daily_question_id (int): The ID of the daily question.
-
-        Returns:
-            list[dict]: A list of dictionaries with 'guess_text' and 'count'.
-        """
-        query = """
-            SELECT guess_text, COUNT(*) as count
-            FROM guesses
-            WHERE daily_question_id = ? AND is_correct = 0
-            GROUP BY guess_text
-            ORDER BY count DESC
-            LIMIT 5
-        """
-        return self._db.execute_query(query, (daily_question_id,))
-
-    def get_craziest_guess(self, daily_question_id: int) -> Optional[dict]:
-        """
-        Finds the 'craziest' guess of the day (currently defined as the longest).
-
-        Args:
-            daily_question_id (int): The ID of the daily question.
-
-        Returns:
-            Optional[dict]: A dictionary with 'player_name' and 'guess_text', or None.
-        """
-        query = """
-            SELECT p.name as player_name, g.guess_text
-            FROM guesses g
-            JOIN players p ON g.player_id = p.id
-            WHERE g.daily_question_id = ?
-            ORDER BY LENGTH(g.guess_text) DESC
-            LIMIT 1
-        """
-        result = self._db.execute_query(query, (daily_question_id,))
-        return result[0] if result else None
-
-    def get_solvers_before_hint(self, daily_question_id: int) -> list[dict]:
-        """
-        Retrieves players who solved the question before the hint was sent.
-
-        Args:
-            daily_question_id (int): The ID of the daily question.
-
-        Returns:
-            list[dict]: A list of dictionaries with player 'id' and 'name'.
-        """
-        hint_timestamp = self.get_hint_sent_timestamp(daily_question_id)
-        if not hint_timestamp:
-            return []
-
-        query = """
-            SELECT p.id, p.name
-            FROM guesses g
-            JOIN players p ON g.player_id = p.id
-            WHERE g.daily_question_id = ? AND g.is_correct = 1 AND g.guessed_at < ?
-            GROUP BY p.id, p.name
-        """
-        return self._db.execute_query(query, (daily_question_id, hint_timestamp))
-
-    def get_solvers_after_hint(self, daily_question_id: int) -> list[dict]:
-        """
-        Retrieves players who only guessed after the hint was sent.
-
-        Args:
-            daily_question_id (int): The ID of the daily question.
-
-        Returns:
-            list[dict]: A list of dictionaries with player 'id' and 'name'.
-        """
-        hint_timestamp = self.get_hint_sent_timestamp(daily_question_id)
-        if not hint_timestamp:
-            return []
-
-        query = """
-            SELECT p.id, p.name
-            FROM players p
-            WHERE p.id IN (
-                -- Players who have a correct guess after the hint
-                SELECT DISTINCT g.player_id
-                FROM guesses g
-                WHERE g.daily_question_id = ? AND g.is_correct = 1 AND g.guessed_at > ?
-            ) AND p.id NOT IN (
-                -- Exclude players who had any guess (correct or incorrect) before the hint
-                SELECT DISTINCT g.player_id
-                FROM guesses g
-                WHERE g.daily_question_id = ? AND g.guessed_at < ?
-            )
-        """
-        return self._db.execute_query(
-            query,
-            (daily_question_id, hint_timestamp, daily_question_id, hint_timestamp),
-        )
-
-    def get_correct_guess_count(self, daily_question_id: int) -> int:
-        """
-        Returns the number of correct guesses for a specific daily question.
-        WARNING: This counts TOTAL guesses, including multiple from same player.
-        For determining answer_rank (fastest badge), use get_correct_solver_count() instead.
-        """
-        query = "SELECT COUNT(*) as count FROM guesses WHERE daily_question_id = ? AND is_correct = 1"
-        result = self._db.execute_query(query, (daily_question_id,))
-        return result[0]["count"] if result else 0
-
     def get_correct_solver_count(self, daily_question_id: int) -> int:
         """
         Returns the number of UNIQUE PLAYERS who have answered correctly for a daily question.
@@ -1268,17 +1137,6 @@ class DataManager:
         rows = self._db.execute_query(query, (daily_question_id, daily_question_id))
         return rows[0]["count"] if rows else 0
 
-    def has_crowd_wisdom_awards(self, daily_question_id: int) -> bool:
-        """Returns True if crowd wisdom awards were already applied for the day."""
-        query = """
-            SELECT 1
-            FROM powerup_usage
-            WHERE question_id = ? AND powerup_type = 'crowd_wisdom'
-            LIMIT 1
-        """
-        rows = self._db.execute_query(query, (daily_question_id,))
-        return bool(rows)
-
     def get_crowd_wisdom_awarded_user_ids(self, daily_question_id: int) -> set[str]:
         """Returns user IDs that already received crowd wisdom for the day."""
         query = """
@@ -1308,13 +1166,6 @@ class DataManager:
                 return datetime.strptime(date_str, "%Y-%m-%d").date()
             return date_str  # In case it's already a date object
         return None
-
-    def mark_guess_as_correct(self, guess_id: int):
-        """
-        Updates a specific guess to be marked as correct.
-        """
-        query = "UPDATE guesses SET is_correct = 1 WHERE id = ?"
-        self._db.execute_update(query, (guess_id,))
 
     def mark_matching_guesses_as_correct(
         self, daily_question_id: str, new_answer: str, match_func

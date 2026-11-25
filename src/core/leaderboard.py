@@ -6,7 +6,7 @@ LeaderboardRenderer (display).  Nothing outside these two classes should
 construct rows or format strings for the leaderboard.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # Discord renders most game emoji at 2 display-character widths.
 EMOJI_DISPLAY_WIDTH = 2

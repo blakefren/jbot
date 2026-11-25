@@ -8,7 +8,7 @@ class TestDailyPlayerState(unittest.TestCase):
         state = DailyPlayerState()
         self.assertEqual(state.score_earned, 0)
         self.assertFalse(state.is_resting)
-        self.assertFalse(state.powerup_used_today)
+        self.assertFalse(state.attack_powerup_used_today)
         self.assertEqual(state.bonuses, {})
 
     def test_aliases(self):
@@ -24,31 +24,31 @@ class TestDailyPlayerState(unittest.TestCase):
         state.bonuses = {"fastest": 5}
         self.assertEqual(state.bonuses, {"fastest": 5})
 
-    def test_powerup_used_today_resting(self):
+    def test_resting_is_not_an_attack_powerup(self):
         state = DailyPlayerState()
         state.is_resting = True
-        self.assertTrue(state.powerup_used_today)
+        self.assertFalse(state.attack_powerup_used_today)
 
-    def test_powerup_used_today_silenced(self):
+    def test_attack_powerup_used_today_silenced(self):
         state = DailyPlayerState()
         # silenced=True means this player USED a jinx on someone else
         state.silenced = True
-        self.assertTrue(state.powerup_used_today)
+        self.assertTrue(state.attack_powerup_used_today)
 
-    def test_powerup_used_today_stealing(self):
+    def test_attack_powerup_used_today_stealing(self):
         state = DailyPlayerState()
         # stealing_from set means this player USED a steal on someone else
         state.stealing_from = "p2"
-        self.assertTrue(state.powerup_used_today)
+        self.assertTrue(state.attack_powerup_used_today)
 
-    def test_powerup_used_today_passive_effects(self):
+    def test_attack_powerup_used_today_passive_effects(self):
         """Test that passive effects (being attacked) do not count as using a powerup."""
         state = DailyPlayerState()
 
         # Being jinxed by someone else
         state.jinxed_by = "p2"
-        self.assertFalse(state.powerup_used_today)
+        self.assertFalse(state.attack_powerup_used_today)
 
         # Being stolen from
         state.steal_attempt_by = "p2"
-        self.assertFalse(state.powerup_used_today)
+        self.assertFalse(state.attack_powerup_used_today)

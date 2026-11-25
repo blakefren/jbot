@@ -3,58 +3,30 @@ Tests for overnight powerup pre-loading (Feature A) and retroactive targeting (F
 """
 
 import unittest
-from datetime import date, datetime, timedelta
-from unittest.mock import MagicMock
+from datetime import datetime
 
+from data.readers.question import Question
 from src.core.daily_game_simulator import DailyGameSimulator
 from src.core.events import GuessContext, GuessEvent, PowerUpEvent
 from src.core.player import Player
 from src.core.powerup import PowerUpError, PowerUpManager
 from src.core.state import DailyPlayerState
 from tests.src.core._powerup_helpers import make_config as _make_config
+from tests.src.core._powerup_helpers import make_stack
 
 
-def _make_manager(players=None):
-    """Build a PowerUpManager with mocked dependencies."""
-    player_manager = MagicMock()
-    data_manager = MagicMock()
-
-    if players is None:
-        players = {
-            "attacker": Player(
-                id="attacker", name="Attacker", score=100, answer_streak=5
-            ),
-            "target": Player(id="target", name="Target", score=100, answer_streak=4),
-        }
-
-    player_manager.get_player.side_effect = lambda pid: players.get(pid)
-
-    def _update_score(pid, amount):
-        if pid in players:
-            players[pid].score += amount
-
-    def _set_streak(pid, val):
-        if pid in players:
-            players[pid].answer_streak = val
-
-    player_manager.update_score.side_effect = _update_score
-    player_manager.set_streak.side_effect = _set_streak
-
-    data_manager.get_last_correct_guess_date.return_value = date.today() - timedelta(
-        days=1
+def _make_manager(test_case):
+    """Build a PowerUpManager on a real in-memory database (attacker, target, third)."""
+    stack = make_stack(
+        test_case,
+        [
+            ("attacker", "Attacker", 100, 5),
+            ("target", "Target", 100, 4),
+            ("third", "Third", 100, 3),
+        ],
     )
-    data_manager.get_today.return_value = date.today()
-
-    # No pending powerups by default
-    data_manager.get_pending_powerup.return_value = None
-    data_manager.get_pending_powerup_for_target.return_value = None
-
-    return (
-        PowerUpManager(player_manager, data_manager, _make_config()),
-        player_manager,
-        data_manager,
-        players,
-    )
+    manager = PowerUpManager(stack.player_manager, stack.data_manager, _make_config())
+    return manager, stack
 
 
 # ---------------------------------------------------------------------------
@@ -64,60 +36,57 @@ def _make_manager(players=None):
 
 class TestOvernightJinx(unittest.TestCase):
     def test_overnight_jinx_logs_preload_type(self):
-        manager, pm, dm, players = _make_manager()
+        manager, stack = _make_manager(self)
         result = manager.jinx("attacker", "target", question_id=None)
-        dm.log_powerup_usage.assert_called_once_with(
-            "attacker", "jinx_preload", "target", None
-        )
+        self.assertEqual(stack.usages(), [("attacker", "jinx_preload", "target", None)])
         self.assertIn("queued for tomorrow", result)
 
     def test_overnight_jinx_silences_attacker_immediately(self):
-        manager, pm, dm, players = _make_manager()
+        manager, stack = _make_manager(self)
         manager.jinx("attacker", "target", question_id=None)
         self.assertTrue(manager._get_daily_state("attacker").silenced)
 
     def test_overnight_jinx_blocks_if_already_queued(self):
-        manager, pm, dm, players = _make_manager()
-        dm.get_pending_powerup.return_value = {"id": 1, "powerup_type": "jinx_preload"}
+        manager, stack = _make_manager(self)
+        stack.data_manager.log_powerup_usage("attacker", "jinx_preload", "third", None)
         with self.assertRaises(PowerUpError) as cm:
             manager.jinx("attacker", "target", question_id=None)
         self.assertIn("already have a powerup queued", str(cm.exception))
+        self.assertEqual(len(stack.usages()), 1)
 
     def test_overnight_jinx_blocks_duplicate_target(self):
-        manager, pm, dm, players = _make_manager()
-        dm.get_pending_powerup_for_target.return_value = {
-            "id": 2,
-            "powerup_type": "jinx_preload",
-        }
+        manager, stack = _make_manager(self)
+        stack.data_manager.log_powerup_usage("third", "jinx_preload", "target", None)
         with self.assertRaises(PowerUpError) as cm:
             manager.jinx("attacker", "target", question_id=None)
         self.assertIn("already being targeted", str(cm.exception))
+        self.assertEqual(len(stack.usages()), 1)
 
 
 class TestOvernightSteal(unittest.TestCase):
     def test_overnight_steal_logs_preload_type(self):
-        manager, pm, dm, players = _make_manager()
+        manager, stack = _make_manager(self)
         manager.steal("attacker", "target", question_id=None)
-        dm.log_powerup_usage.assert_called_once_with(
-            "attacker", "steal_preload", "target", None
+        self.assertEqual(
+            stack.usages(), [("attacker", "steal_preload", "target", None)]
         )
 
     def test_overnight_steal_does_not_deduct_streak_immediately(self):
-        manager, pm, dm, players = _make_manager()
-        initial_streak = players["attacker"].answer_streak  # 5
+        manager, stack = _make_manager(self)
+        initial_streak = stack.players["attacker"].answer_streak  # 5
         manager.steal("attacker", "target", question_id=None)
         # Streak deduction now happens at hydration, not here
-        self.assertEqual(players["attacker"].answer_streak, initial_streak)
+        self.assertEqual(stack.players["attacker"].answer_streak, initial_streak)
 
     def test_overnight_steal_message_shows_projected_cost(self):
-        manager, pm, dm, players = _make_manager()
+        manager, stack = _make_manager(self)
         result = manager.steal("attacker", "target", question_id=None)
         # Message should still mention the upcoming sacrifice
         self.assertIn("sacrifice", result.lower())
 
     def test_overnight_steal_sets_state_at_pretime(self):
         """State is set immediately at pre-load time for retaliation blocking."""
-        manager, pm, dm, players = _make_manager()
+        manager, stack = _make_manager(self)
         manager.steal("attacker", "target", question_id=None)
         # Daily_state is mutated at pre-load time for retaliation blocking
         attacker_state = manager._get_daily_state("attacker")
@@ -126,61 +95,60 @@ class TestOvernightSteal(unittest.TestCase):
         self.assertIn("attacker", target_state.attacked_by)
 
     def test_overnight_steal_blocks_if_already_queued(self):
-        manager, pm, dm, players = _make_manager()
-        dm.get_pending_powerup.return_value = {"id": 1, "powerup_type": "steal_preload"}
+        manager, stack = _make_manager(self)
+        stack.data_manager.log_powerup_usage("attacker", "steal_preload", "third", None)
         with self.assertRaises(PowerUpError) as cm:
             manager.steal("attacker", "target", question_id=None)
         self.assertIn("already have a powerup queued", str(cm.exception))
+        self.assertEqual(len(stack.usages()), 1)
 
     def test_overnight_steal_blocks_duplicate_target(self):
-        manager, pm, dm, players = _make_manager()
-        dm.get_pending_powerup_for_target.return_value = {
-            "id": 3,
-            "powerup_type": "steal_preload",
-        }
+        manager, stack = _make_manager(self)
+        stack.data_manager.log_powerup_usage("third", "steal_preload", "target", None)
         with self.assertRaises(PowerUpError) as cm:
             manager.steal("attacker", "target", question_id=None)
         self.assertIn("already being targeted", str(cm.exception))
+        self.assertEqual(len(stack.usages()), 1)
 
 
 class TestHydration(unittest.TestCase):
     def test_hydrate_jinx_preload_sets_flags(self):
-        manager, pm, dm, players = _make_manager()
-        dm.apply_pending_powerups.return_value = [
-            {
-                "user_id": "attacker",
-                "target_user_id": "target",
-                "powerup_type": "jinx_preload",
-            }
-        ]
-        manager.hydrate_pending_powerups(question_id=42)
+        manager, stack = _make_manager(self)
+        stack.data_manager.log_powerup_usage("attacker", "jinx_preload", "target", None)
+        next_day_id = stack.new_question_day()
+        manager.hydrate_pending_powerups(question_id=next_day_id)
         self.assertTrue(manager._get_daily_state("attacker").silenced)
         self.assertEqual(manager._get_daily_state("target").jinxed_by, "attacker")
+        # The queued row is promoted to the new question day
+        self.assertEqual(
+            stack.usages(), [("attacker", "jinx_preload", "target", next_day_id)]
+        )
 
     def test_hydrate_steal_preload_sets_flags(self):
-        manager, pm, dm, players = _make_manager()
-        dm.apply_pending_powerups.return_value = [
-            {
-                "user_id": "attacker",
-                "target_user_id": "target",
-                "powerup_type": "steal_preload",
-            }
-        ]
-        manager.hydrate_pending_powerups(question_id=42)
+        manager, stack = _make_manager(self)
+        stack.data_manager.log_powerup_usage(
+            "attacker", "steal_preload", "target", None
+        )
+        next_day_id = stack.new_question_day()
+        manager.hydrate_pending_powerups(question_id=next_day_id)
         state = manager._get_daily_state("attacker")
         self.assertEqual(state.stealing_from, "target")
         # Streak cost deducted at hydration time: 5 - 3 = 2
-        self.assertEqual(players["attacker"].answer_streak, 2)
+        self.assertEqual(stack.players["attacker"].answer_streak, 2)
         self.assertEqual(
             manager._get_daily_state("target").steal_attempt_by, "attacker"
         )
+        self.assertEqual(
+            stack.usages(), [("attacker", "steal_preload", "target", next_day_id)]
+        )
 
     def test_hydrate_empty_pending_is_noop(self):
-        manager, pm, dm, players = _make_manager()
-        dm.apply_pending_powerups.return_value = []
-        manager.hydrate_pending_powerups(question_id=42)
+        manager, stack = _make_manager(self)
+        manager.hydrate_pending_powerups(question_id=stack.new_question_day())
         # No state changes
         self.assertFalse(manager._get_daily_state("attacker").silenced)
+        self.assertEqual(stack.usages(), [])
+        self.assertEqual(stack.players["attacker"].answer_streak, 5)
 
 
 # ---------------------------------------------------------------------------
@@ -191,71 +159,72 @@ class TestHydration(unittest.TestCase):
 class TestRetroactiveJinx(unittest.TestCase):
     def _setup_with_answered_target(self, score_earned=100):
         """Set up a target that has already answered correctly with the given score."""
-        manager, pm, dm, players = _make_manager()
+        manager, stack = _make_manager(self)
         target_state = manager._get_daily_state("target")
         target_state.is_correct = True
         target_state.score_earned = score_earned
         target_state.bonuses = {
             "streak": 20
         }  # streak stays with target in new mechanic
-        return manager, pm, dm, players
+        return manager, stack
 
     def test_retro_jinx_transfers_share_of_score(self):
         """Retroactive jinx transfers 25% of target's total score_earned."""
-        manager, pm, dm, players = self._setup_with_answered_target(score_earned=100)
-        manager.jinx("attacker", "target", question_id=99)
+        manager, stack = self._setup_with_answered_target(score_earned=100)
+        manager.jinx("attacker", "target", question_id=stack.question_id)
         # 25% of 100 = 25 transferred
-        self.assertEqual(players["attacker"].score, 125)
-        self.assertEqual(players["target"].score, 75)
+        self.assertEqual(stack.players["attacker"].score, 125)
+        self.assertEqual(stack.players["target"].score, 75)
 
     def test_retro_jinx_silences_attacker(self):
-        manager, pm, dm, players = self._setup_with_answered_target(score_earned=100)
-        manager.jinx("attacker", "target", question_id=99)
+        manager, stack = self._setup_with_answered_target(score_earned=100)
+        manager.jinx("attacker", "target", question_id=stack.question_id)
         self.assertTrue(manager._get_daily_state("attacker").silenced)
 
     def test_retro_jinx_marks_target_jinxed_by(self):
-        manager, pm, dm, players = self._setup_with_answered_target(score_earned=100)
-        manager.jinx("attacker", "target", question_id=99)
+        manager, stack = self._setup_with_answered_target(score_earned=100)
+        manager.jinx("attacker", "target", question_id=stack.question_id)
         self.assertEqual(manager._get_daily_state("target").jinxed_by, "attacker")
 
     def test_retro_jinx_logs_normal_jinx_type(self):
-        manager, pm, dm, players = self._setup_with_answered_target(score_earned=100)
-        manager.jinx("attacker", "target", question_id=99)
-        dm.log_powerup_usage.assert_called_once_with("attacker", "jinx", "target", 99)
+        manager, stack = self._setup_with_answered_target(score_earned=100)
+        manager.jinx("attacker", "target", question_id=stack.question_id)
+        self.assertEqual(
+            stack.usages(), [("attacker", "jinx", "target", stack.question_id)]
+        )
 
     def test_retro_jinx_zero_score_no_transfer(self):
         """Retro jinx on target with 0 score_earned: no points transferred, no error.
         Link is still resolved (jinx_target cleared) to prevent double-transfer.
         """
-        manager, pm, dm, players = self._setup_with_answered_target(score_earned=0)
-        manager.jinx("attacker", "target", question_id=99)
+        manager, stack = self._setup_with_answered_target(score_earned=0)
+        manager.jinx("attacker", "target", question_id=stack.question_id)
         # No transfer; attacker is still silenced
-        self.assertEqual(players["attacker"].score, 100)
-        self.assertEqual(players["target"].score, 100)
+        self.assertEqual(stack.players["attacker"].score, 100)
+        self.assertEqual(stack.players["target"].score, 100)
         self.assertTrue(manager._get_daily_state("attacker").silenced)
-        # Link is resolved — jinx_target cleared to prevent any future double-transfer
+        # Link is resolved - jinx_target cleared to prevent any future double-transfer
         self.assertIsNone(manager._get_daily_state("attacker").jinx_target)
 
     def test_retro_jinx_rounds_down(self):
         """int(7 * 0.25) = 1 (truncates, not rounds)."""
-        manager, pm, dm, players = self._setup_with_answered_target(score_earned=7)
-        manager.jinx("attacker", "target", question_id=99)
-        self.assertEqual(players["attacker"].score, 101)
-        self.assertEqual(players["target"].score, 99)
+        manager, stack = self._setup_with_answered_target(score_earned=7)
+        manager.jinx("attacker", "target", question_id=stack.question_id)
+        self.assertEqual(stack.players["attacker"].score, 101)
+        self.assertEqual(stack.players["target"].score, 99)
 
     def test_normal_jinx_not_triggered_when_target_unanswered(self):
         """Normal path: target hasn't answered, no immediate resolution."""
-        manager, pm, dm, players = _make_manager()
-        manager.jinx("attacker", "target", question_id=99)
+        manager, stack = _make_manager(self)
+        manager.jinx("attacker", "target", question_id=stack.question_id)
         # No score changes yet
-        self.assertEqual(players["attacker"].score, 100)
-        self.assertEqual(players["target"].score, 100)
+        self.assertEqual(stack.players["attacker"].score, 100)
+        self.assertEqual(stack.players["target"].score, 100)
         self.assertEqual(manager._get_daily_state("target").jinxed_by, "attacker")
 
     def test_retro_jinx_triggered_after_on_guess(self):
         """Regression: on_guess must set is_correct so jinx sees it retroactively."""
-        manager, pm, dm, players = _make_manager()
-        dm.get_pending_multiplier.return_value = 0.0
+        manager, stack = _make_manager(self)
 
         # Target answers correctly through the normal on_guess path
         manager.on_guess(
@@ -266,66 +235,64 @@ class TestRetroactiveJinx(unittest.TestCase):
                 is_correct=True,
                 points_earned=100,
                 bonus_values={"streak": 20},
-                question_id=99,
+                question_id=stack.question_id,
             )
         )
 
         # Attacker jinxes after target has already answered
-        result = manager.jinx("attacker", "target", question_id=99)
+        result = manager.jinx("attacker", "target", question_id=stack.question_id)
 
         # Retroactive: 25% of 100 = 25 transferred
-        self.assertEqual(players["attacker"].score, 125)
-        self.assertEqual(players["target"].score, 75)
+        self.assertEqual(stack.players["attacker"].score, 125)
+        self.assertEqual(stack.players["target"].score, 75)
         self.assertIn("retroactive jinx", result)
 
 
 class TestRetroactiveSteal(unittest.TestCase):
     def _setup_with_answered_target(self, target_bonuses=None):
-        manager, pm, dm, players = _make_manager()
+        manager, stack = _make_manager(self)
         target_state = manager._get_daily_state("target")
         target_state.is_correct = True
         target_state.score_earned = 50
         target_state.bonuses = (
             target_bonuses if target_bonuses is not None else {"try": 20}
         )
-        return manager, pm, dm, players
+        return manager, stack
 
     def test_retro_steal_deducts_higher_cost(self):
-        manager, pm, dm, players = self._setup_with_answered_target()
-        manager.steal("attacker", "target", question_id=99)
-        # streak 5 − 5 (retro cost) = 0
-        self.assertEqual(players["attacker"].answer_streak, 0)
+        manager, stack = self._setup_with_answered_target()
+        manager.steal("attacker", "target", question_id=stack.question_id)
+        # streak 5 - 5 (retro cost) = 0
+        self.assertEqual(stack.players["attacker"].answer_streak, 0)
 
     def test_retro_steal_transfers_bonuses_immediately(self):
-        manager, pm, dm, players = self._setup_with_answered_target(
-            target_bonuses={"try": 20}
-        )
-        manager.steal("attacker", "target", question_id=99)
+        manager, stack = self._setup_with_answered_target(target_bonuses={"try": 20})
+        manager.steal("attacker", "target", question_id=stack.question_id)
         # try bonus of 20 transferred
-        self.assertEqual(players["attacker"].score, 120)
-        self.assertEqual(players["target"].score, 80)
+        self.assertEqual(stack.players["attacker"].score, 120)
+        self.assertEqual(stack.players["target"].score, 80)
 
     def test_retro_steal_nothing_to_steal(self):
-        manager, pm, dm, players = self._setup_with_answered_target(target_bonuses={})
-        result = manager.steal("attacker", "target", question_id=99)
+        manager, stack = self._setup_with_answered_target(target_bonuses={})
+        result = manager.steal("attacker", "target", question_id=stack.question_id)
         self.assertIn("nothing to steal", result)
         # No score changes
-        self.assertEqual(players["attacker"].score, 100)
-        self.assertEqual(players["target"].score, 100)
+        self.assertEqual(stack.players["attacker"].score, 100)
+        self.assertEqual(stack.players["target"].score, 100)
 
     def test_normal_steal_uses_lower_cost(self):
         """Normal path (target not answered): streak cost is STEAL_STREAK_COST."""
-        manager, pm, dm, players = _make_manager()
-        manager.steal("attacker", "target", question_id=99)
-        # streak 5 − 3 = 2
-        self.assertEqual(players["attacker"].answer_streak, 2)
+        manager, stack = _make_manager(self)
+        manager.steal("attacker", "target", question_id=stack.question_id)
+        # streak 5 - 3 = 2
+        self.assertEqual(stack.players["attacker"].answer_streak, 2)
 
     def test_normal_steal_no_immediate_transfer(self):
-        manager, pm, dm, players = _make_manager()
-        manager.steal("attacker", "target", question_id=99)
+        manager, stack = _make_manager(self)
+        manager.steal("attacker", "target", question_id=stack.question_id)
         # No score change yet
-        self.assertEqual(players["attacker"].score, 100)
-        self.assertEqual(players["target"].score, 100)
+        self.assertEqual(stack.players["attacker"].score, 100)
+        self.assertEqual(stack.players["target"].score, 100)
 
 
 # ---------------------------------------------------------------------------
@@ -334,10 +301,7 @@ class TestRetroactiveSteal(unittest.TestCase):
 
 
 def _make_question():
-    q = MagicMock()
-    q.answer = "correct"
-    q.clue_value = 100
-    return q
+    return Question("Q?", "correct", "Test", 100)
 
 
 def _ts(hour, minute=0):
@@ -508,9 +472,7 @@ class TestSimulatorJinxPreload(unittest.TestCase):
     ANSWER = "correct"
 
     def _make_simulator(self, initial_states, events):
-        q = MagicMock()
-        q.answer = self.ANSWER
-        q.clue_value = 100
+        q = Question("Q?", self.ANSWER, "Test", 100)
         return DailyGameSimulator(
             q, [self.ANSWER], None, events, initial_states, _make_config()
         )

@@ -142,6 +142,46 @@ class TestGameRunnerPowerupBadges(unittest.TestCase):
 
         self.assertEqual(self._player_line(leaderboard, "Player3").count("💸"), 1)
 
+    def test_same_second_correct_guesses_rank_by_insertion_order(self):
+        today = self.data_manager.get_today()
+        self._guess("p3")
+        self._guess("p1")
+        self.db.execute_update(
+            "UPDATE guesses SET guessed_at = ? WHERE daily_question_id = ?",
+            (f"{today} 10:00:00", self.daily_question_id),
+        )
+
+        leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        self.assertIn("🥇", self._player_line(leaderboard, "Player3"))
+        self.assertIn("🥈", self._player_line(leaderboard, "Player1"))
+
+    def test_same_second_as_hint_counts_as_before_hint(self):
+        today = self.data_manager.get_today()
+        self.data_manager.log_messaging_event(
+            "outgoing", "Discord", "c", "morning", "morning_message"
+        )
+        self.data_manager.log_messaging_event(
+            "outgoing", "Discord", "c", "reminder", "reminder_message"
+        )
+        self.db.execute_update(
+            "UPDATE messages SET timestamp = ? WHERE status = 'morning_message'",
+            (f"{today} 08:00:00",),
+        )
+        self.db.execute_update(
+            "UPDATE messages SET timestamp = ? WHERE status = 'reminder_message'",
+            (f"{today} 12:00:00",),
+        )
+        self._guess("p1")
+        self.db.execute_update(
+            "UPDATE guesses SET guessed_at = ? WHERE daily_question_id = ?",
+            (f"{today} 12:00:00", self.daily_question_id),
+        )
+
+        leaderboard = self.runner.get_scores_leaderboard(show_daily_bonuses=True)
+
+        self.assertIn("🧠", self._player_line(leaderboard, "Player1"))
+
 
 if __name__ == "__main__":
     unittest.main()

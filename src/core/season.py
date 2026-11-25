@@ -20,11 +20,6 @@ class Season:
     def __str__(self) -> str:
         return f"{self.season_name} ({self.start_date} to {self.end_date})"
 
-    @property
-    def is_current(self) -> bool:
-        """Check if this season is currently active."""
-        return self.is_active
-
     @classmethod
     def from_db_row(cls, row: dict) -> "Season":
         """Create Season from database row."""
@@ -49,9 +44,7 @@ class SeasonScore:
     first_answers: int = 0
     current_streak: int = 0
     best_streak: int = 0
-    shields_used: int = 0
-    double_points_used: int = 0
-    challenge_progress: dict = None  # JSON data for challenge tracking
+    challenge_progress: dict | None = None  # JSON data for challenge tracking
     final_rank: Optional[int] = None  # Set when season ends
     trophy: Optional[str] = None  # "gold", "silver", "bronze", or None
 
@@ -74,8 +67,6 @@ class SeasonScore:
             first_answers=row["first_answers"],
             current_streak=row["current_streak"],
             best_streak=row["best_streak"],
-            shields_used=row["shields_used"],
-            double_points_used=row["double_points_used"],
             challenge_progress=(
                 json.loads(row["challenge_progress"])
                 if row["challenge_progress"]

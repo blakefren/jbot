@@ -44,14 +44,6 @@ class TestSeason(unittest.TestCase):
         self.assertEqual(season.end_date, date(2026, 2, 28))
         self.assertFalse(season.is_active)
 
-    def test_is_current_property(self):
-        """Test is_current property."""
-        active_season = Season(1, "Test", date.today(), date.today(), True)
-        inactive_season = Season(2, "Test", date.today(), date.today(), False)
-
-        self.assertTrue(active_season.is_current)
-        self.assertFalse(inactive_season.is_current)
-
     def test_season_str(self):
         """Test string representation."""
         season = Season(1, "January 2026", date(2026, 1, 1), date(2026, 1, 31), True)
@@ -102,8 +94,6 @@ class TestSeasonScore(unittest.TestCase):
             "first_answers": 5,
             "current_streak": 3,
             "best_streak": 7,
-            "shields_used": 2,
-            "double_points_used": 1,
             "challenge_progress": '{"before_hint_answers": 5}',
             "final_rank": 1,
             "trophy": "gold",

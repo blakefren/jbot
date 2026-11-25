@@ -1,11 +1,8 @@
-import csv
-import os
 import re
 from contextlib import nullcontext
 
 from collections import defaultdict
-from datetime import date, datetime
-from enum import Enum
+from datetime import datetime
 from typing import Optional
 from src.core.player_manager import PlayerManager
 from src.core.subscriber import Subscriber
@@ -550,7 +547,10 @@ class GameRunner:
             players_answered_correctly_today = {
                 g["player_id"] for g in daily_correct_guesses
             }
-            daily_correct_guesses.sort(key=lambda x: x.get("guessed_at"))
+            # Tie-break same-second guesses by insertion order, like replay does.
+            daily_correct_guesses.sort(
+                key=lambda x: (x.get("guessed_at"), x.get("id") or 0)
+            )
             # Multiple correct guesses per player (e.g. after add_answer) must
             # only count once: keep each player's earliest correct guess.
             seen_players: set = set()
@@ -574,7 +574,8 @@ class GameRunner:
             emoji_before_hint = self.config.get("JBOT_EMOJI_BEFORE_HINT")
             for g in daily_correct_guesses:
                 if hint_timestamp_str:
-                    if g.get("guessed_at") < hint_timestamp_str:
+                    # Same-second guesses count as before the hint, as in replay.
+                    if g.get("guessed_at") <= hint_timestamp_str:
                         result[g["player_id"]].append(emoji_before_hint)
                 else:
                     result[g["player_id"]].append(emoji_before_hint)

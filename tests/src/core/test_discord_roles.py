@@ -10,16 +10,30 @@ project_root = os.path.abspath(
 sys.path.insert(0, project_root)
 
 import discord
+from db.database import Database
+from src.core.data_manager import DataManager
 from src.core.discord import DiscordBot
 
 
 class TestDiscordRoles(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+
+    def tearDown(self):
+        self.db.close()
+
+    def _seed_winner(self, player_id):
+        # The DB stores player IDs as TEXT, while Discord uses int IDs
+        self.data_manager.create_player(player_id, f"Player{player_id}")
+        self.data_manager.assign_role_to_player(player_id, "First Place")
+
     async def test_apply_discord_roles_type_mismatch_fix(self):
         """Test that string IDs from DB are converted to ints for Discord."""
         # Setup mocks
         bot = MagicMock(spec=DiscordBot)
         bot.config = MagicMock()
-        bot.data_manager = MagicMock()
+        bot.data_manager = self.data_manager
         # Bind the real method to the mock object
         bot.apply_discord_roles = DiscordBot.apply_discord_roles.__get__(
             bot, DiscordBot
@@ -53,31 +67,27 @@ class TestDiscordRoles(unittest.IsolatedAsyncioTestCase):
         guild.get_member.side_effect = get_member_mock
         guild.fetch_member = AsyncMock()
 
-        # DB returns STRING id (simulating actual DB behavior)
-        bot.data_manager.get_player_ids_with_role.return_value = {"12345"}
+        self._seed_winner("12345")
 
         # Run method
         await bot.apply_discord_roles(guild)
 
         # Assertions
-        # 1. get_player_ids_with_role called
-        bot.data_manager.get_player_ids_with_role.assert_called_with("First Place")
-
-        # 2. get_member called with INT 12345.
+        # 1. get_member called with INT 12345.
         # If passing string "12345", the side_effect logic might fail or strict mock comparison would show string.
         guild.get_member.assert_called_with(12345)
 
-        # 3. Member.add_roles called
+        # 2. Member.add_roles called
         member_mock.add_roles.assert_called_once()
 
-        # 4. Fetch not called because get_member succeeded
+        # 3. Fetch not called because get_member succeeded
         guild.fetch_member.assert_not_called()
 
     async def test_apply_discord_roles_fetch_fallback(self):
         """Test fallback to fetch_member if get_member returns None."""
         bot = MagicMock(spec=DiscordBot)
         bot.config = MagicMock()
-        bot.data_manager = MagicMock()
+        bot.data_manager = self.data_manager
         bot.apply_discord_roles = DiscordBot.apply_discord_roles.__get__(
             bot, DiscordBot
         )
@@ -100,8 +110,7 @@ class TestDiscordRoles(unittest.IsolatedAsyncioTestCase):
         member_mock.add_roles = AsyncMock()
         guild.fetch_member.return_value = member_mock
 
-        # DB returns string
-        bot.data_manager.get_player_ids_with_role.return_value = {"999"}
+        self._seed_winner("999")
 
         await bot.apply_discord_roles(guild)
 

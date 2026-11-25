@@ -14,8 +14,6 @@ from db.update_schema import (
     get_current_schema,
     get_target_schema,
     parse_schema,
-    compare_schemas,
-    update_schema,
     main,
     get_db_columns,
     parse_columns,
@@ -228,85 +226,6 @@ class TestParseSchema(unittest.TestCase):
         result = parse_schema(schema_sql)
         # Should handle gracefully, likely empty dict
         self.assertIsInstance(result, dict)
-
-
-class TestCompareSchemas(unittest.TestCase):
-    """Tests for compare_schemas function."""
-
-    def test_compare_schemas_finds_new_tables(self):
-        """Test that compare_schemas identifies new tables."""
-        current_schema_list = ["CREATE TABLE users (id INTEGER)"]
-        target_schema_sql = """
-        CREATE TABLE IF NOT EXISTS users (id INTEGER);
-        CREATE TABLE IF NOT EXISTS posts (id INTEGER);
-        """
-
-        new_tables, modified_tables = compare_schemas(
-            current_schema_list, target_schema_sql
-        )
-
-        self.assertIn("posts", new_tables)
-        self.assertNotIn("users", new_tables)
-
-    def test_compare_schemas_finds_modified_tables(self):
-        """Test that compare_schemas identifies modified tables."""
-        current_schema_list = ["CREATE TABLE users (id INTEGER)"]
-        target_schema_sql = """
-        CREATE TABLE IF NOT EXISTS users (id INTEGER, name TEXT);
-        """
-
-        new_tables, modified_tables = compare_schemas(
-            current_schema_list, target_schema_sql
-        )
-
-        self.assertIn("users", modified_tables)
-        self.assertIn("current", modified_tables["users"])
-        self.assertIn("target", modified_tables["users"])
-
-    def test_compare_schemas_no_differences(self):
-        """Test compare_schemas when schemas match."""
-        current_schema_list = ["CREATE TABLE users (id INTEGER)"]
-        target_schema_sql = "CREATE TABLE IF NOT EXISTS users (id INTEGER);"
-
-        new_tables, modified_tables = compare_schemas(
-            current_schema_list, target_schema_sql
-        )
-
-        self.assertEqual(new_tables, {})
-        self.assertEqual(modified_tables, {})
-
-
-class TestUpdateSchema(unittest.TestCase):
-    """Tests for update_schema function."""
-
-    def test_update_schema_creates_new_table(self):
-        """Test that update_schema creates new tables."""
-        conn = sqlite3.connect(":memory:")
-        new_schema = "CREATE TABLE new_table (id INTEGER PRIMARY KEY);"
-
-        with patch("builtins.print") as mock_print:
-            update_schema(conn, new_schema)
-
-        # Verify the table was created
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='new_table'"
-        )
-        result = cursor.fetchone()
-        self.assertIsNotNone(result)
-        conn.close()
-
-    def test_update_schema_handles_error(self):
-        """Test that update_schema handles SQL errors."""
-        conn = sqlite3.connect(":memory:")
-        invalid_schema = "INVALID SQL STATEMENT;"
-
-        with patch("builtins.print") as mock_print:
-            update_schema(conn, invalid_schema)
-            # Should print error message
-            mock_print.assert_called()
-
-        conn.close()
 
 
 class TestMain(unittest.TestCase):

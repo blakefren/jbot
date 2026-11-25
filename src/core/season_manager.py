@@ -385,16 +385,6 @@ class SeasonManager:
 
         return leaderboard
 
-    def initialize_player_for_season(self, player_id: str, season_id: int):
-        """
-        Ensure a player has a season_scores record for the given season.
-
-        Args:
-            player_id: Player's discord ID
-            season_id: Season ID
-        """
-        self.data_manager.initialize_player_season_score(player_id, season_id)
-
     def get_days_until_season_end(self, season: Season) -> int:
         """
         Calculate days remaining in the season.
@@ -445,29 +435,3 @@ class SeasonManager:
         reminder_threshold = self.config.get_season_reminder_days()
 
         return days_remaining == reminder_threshold
-
-    def get_season_summary(self, season_id: int) -> dict:
-        """
-        Get a comprehensive summary of a season.
-
-        Args:
-            season_id: Season ID
-
-        Returns:
-            Dict with season stats
-        """
-        season = self.data_manager.get_season_by_id(season_id)
-        if not season:
-            return {}
-
-        top_players = self.get_season_leaderboard(season_id, limit=10)
-        challenge = self.data_manager.get_season_challenge(season_id)
-
-        return {
-            "season": season,
-            "leaderboard": top_players,
-            "challenge": challenge,
-            "total_players": len(
-                self.data_manager.get_season_scores(season_id, limit=1000)
-            ),
-        }

@@ -20,7 +20,6 @@ from src.core.data_manager import DataManager
 from src.core.game_runner import GameRunner
 from src.core.player_manager import PlayerManager
 from src.core.roles import RolesGameMode
-from data.readers.question import Question
 from data.readers.question_selector import QuestionSelector
 
 

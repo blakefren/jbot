@@ -1,5 +1,5 @@
 import logging
-from datetime import date, timedelta, datetime
+from datetime import datetime
 from src.core.data_manager import DataManager
 from data.readers.question import Question
 from src.core.scoring import ScoreCalculator

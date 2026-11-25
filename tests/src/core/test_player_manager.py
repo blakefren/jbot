@@ -45,18 +45,6 @@ class TestPlayerManager(unittest.TestCase):
         self.assertEqual(player.score, 50)
         self.assertEqual(player.season_score, 0)
 
-    def test_set_name_updates_existing_player(self):
-        self.data_manager.create_player("123", "Old Name")
-
-        self.manager.set_name("123", "New Name")
-
-        self.assertEqual(self.data_manager.get_player("123").name, "New Name")
-
-    def test_set_name_creates_missing_player(self):
-        self.manager.set_name("456", "New Player")
-
-        self.assertEqual(self.data_manager.get_player("456").name, "New Player")
-
     def test_increment_streak_existing_player(self):
         self.data_manager.create_player("123", "Player")
         self.data_manager.set_streak("123", 4)

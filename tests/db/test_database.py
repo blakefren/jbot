@@ -241,12 +241,6 @@ class TestDatabase(unittest.TestCase):
         with self.assertRaises(AttributeError):
             self.db.execute_query("SELECT 1")
 
-    def test_get_conn(self):
-        """Test that get_conn returns the database connection."""
-        conn = self.db.get_conn()
-        self.assertIsNotNone(conn)
-        self.assertEqual(conn, self.db.conn)
-
     def test_execute_script(self):
         """Test execute_script runs a SQL script successfully."""
         script = """

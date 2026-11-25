@@ -31,15 +31,6 @@ class PlayerManager:
         self.data_manager.adjust_player_score(pid, amount)
         self.adjust_season_score(pid, amount)
 
-    def set_name(self, player_id: str, name: str):
-        """Updates a player's display name and persists it."""
-        pid = self._normalize_id(player_id)
-        player = self.data_manager.get_player(pid)
-        if player:
-            self.data_manager.update_player_name(pid, name)
-        else:
-            self.data_manager.create_player(pid, name)
-
     def increment_streak(self, player_id: str, player_name: str | None = None):
         """Increments a player's answer streak and syncs season streak."""
         pid = self._normalize_id(player_id)

@@ -82,11 +82,29 @@ class TestDataManager(unittest.TestCase):
         """Clean up after tests."""
         self.db.close()
 
-    def test_backup_database_delegates_to_db(self):
-        """backup_database() delegates to Database.backup() with the given path."""
-        self.db.backup = MagicMock()
-        self.data_manager.backup_database("/some/path/backup.db")
-        self.db.backup.assert_called_once_with("/some/path/backup.db")
+    def test_backup_database_writes_restorable_copy(self):
+        """backup_database() writes a copy of a file-backed database."""
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory(dir=os.path.dirname(__file__)) as directory:
+            source = Database(os.path.join(directory, "source.db"))
+            backup_path = os.path.join(directory, "backup.db")
+            restored = None
+            try:
+                source_manager = DataManager(source)
+                source_manager.create_player("1", "Alice")
+                source_manager.adjust_player_score("1", 42)
+
+                source_manager.backup_database(backup_path)
+
+                restored = Database(backup_path)
+                player = DataManager(restored).get_player("1")
+                self.assertEqual((player.name, player.score), ("Alice", 42))
+            finally:
+                source.close()
+                if restored:
+                    restored.close()
 
     def test_transaction_rolls_back_data_manager_operations(self):
         with self.assertRaisesRegex(RuntimeError, "abort action"):
@@ -293,6 +311,21 @@ class TestDataManager(unittest.TestCase):
         )  # Non-existent user
         self.assertEqual(len(user_history), 0)
 
+    def test_read_guess_history_orders_same_second_guesses_by_insertion(self):
+        q = Question(question="q1", answer="a1", category="cat", clue_value=100)
+        daily_id = self.data_manager.log_daily_question(q)
+        for player_id in ("456", "123", "789"):
+            self.data_manager.log_player_guess(
+                player_id, f"P{player_id}", daily_id, "a1", True
+            )
+        self.data_manager._db.execute_update(
+            "UPDATE guesses SET guessed_at = '2023-01-01 10:00:00'"
+        )
+
+        history = self.data_manager.read_guess_history()
+
+        self.assertEqual([g["player_id"] for g in history], ["456", "123", "789"])
+
     def test_read_guess_history_with_daily_question_filter(self):
         """Test read_guess_history with daily_question_id filter."""
         # Create two daily questions on different dates
@@ -419,17 +452,15 @@ class TestDataManager(unittest.TestCase):
         self.assertEqual(rows, [])
 
     def test_initialize_database(self):
-        """Test that initialize_database reads and executes the schema."""
-        with patch("builtins.open", MagicMock()) as mock_open:
-            mock_open.return_value.__enter__.return_value.read.return_value = (
-                "CREATE TABLE test (id INTEGER);"
-            )
-            mock_db = MagicMock()
-            dm = DataManager(mock_db)
-            dm.initialize_database()
-            mock_db.execute_script.assert_called_once_with(
-                "CREATE TABLE test (id INTEGER);"
-            )
+        """initialize_database recreates missing tables from the real schema."""
+        self.db.execute_script("DROP TABLE subscribers")
+
+        self.data_manager.initialize_database()
+
+        self.data_manager.save_subscriber(Subscriber("1", "Sub1", True))
+        self.assertEqual(
+            self.data_manager.get_all_subscribers(), {Subscriber("1", "Sub1", True)}
+        )
 
     def test_get_all_players(self):
         """Return all persisted players keyed by ID."""
@@ -727,43 +758,6 @@ class TestDataManagerStats(unittest.TestCase):
         self.assertNotIn("Bob", solver_names)
         self.assertIn("David", solver_names)
 
-    def test_get_guess_counts_per_player(self):
-        """Test getting guess counts per player."""
-        counts = self.data_manager.get_guess_counts_per_player(1)
-        self.assertEqual(len(counts), 4)
-        # Order is by guess_count DESC
-        counts_dict = {item["name"]: item["guess_count"] for item in counts}
-        self.assertEqual(counts_dict["Charlie"], 3)
-        self.assertEqual(counts_dict["Bob"], 2)
-        self.assertEqual(counts_dict["Alice"], 1)
-        self.assertEqual(counts_dict["David"], 1)
-
-    def test_get_most_common_guesses(self):
-        """Test getting most common incorrect guesses."""
-        common_guesses = self.data_manager.get_most_common_guesses(1)
-        self.assertEqual(len(common_guesses), 3)
-        self.assertEqual(common_guesses[0]["guess_text"], "wrong")
-        self.assertEqual(common_guesses[0]["count"], 2)
-
-    def test_get_craziest_guess(self):
-        """Test getting the craziest (longest) guess."""
-        crazy_guess = self.data_manager.get_craziest_guess(1)
-        self.assertIsNotNone(crazy_guess)
-        self.assertEqual(crazy_guess["player_name"], "Charlie")
-        self.assertEqual(crazy_guess["guess_text"], "the longest guess of them all")
-
-    def test_get_solvers_before_hint(self):
-        """Test getting solvers before the hint."""
-        solvers = self.data_manager.get_solvers_before_hint(1)
-        self.assertEqual(len(solvers), 1)
-        self.assertEqual(solvers[0]["name"], "Alice")
-
-    def test_get_solvers_after_hint(self):
-        """Test getting solvers who only guessed after the hint."""
-        solvers = self.data_manager.get_solvers_after_hint(1)
-        self.assertEqual(len(solvers), 1)
-        self.assertEqual(solvers[0]["name"], "David")
-
 
 class TestDataManagerNoHint(unittest.TestCase):
     """Test cases for when there's no hint timestamp."""
@@ -793,15 +787,8 @@ class TestDataManagerNoHint(unittest.TestCase):
     def tearDown(self):
         self.db.close()
 
-    def test_get_solvers_before_hint_no_hint(self):
-        """Test that get_solvers_before_hint returns empty list when no hint exists."""
-        result = self.data_manager.get_solvers_before_hint(1)
-        self.assertEqual(result, [])
-
-    def test_get_solvers_after_hint_no_hint(self):
-        """Test that get_solvers_after_hint returns empty list when no hint exists."""
-        result = self.data_manager.get_solvers_after_hint(1)
-        self.assertEqual(result, [])
+    def test_get_hint_sent_timestamp_returns_none_without_hint(self):
+        self.assertIsNone(self.data_manager.get_hint_sent_timestamp(1))
 
 
 class TestDataManagerTimezone(unittest.TestCase):
@@ -1111,8 +1098,8 @@ class TestDataManagerIntegration(unittest.TestCase):
         # Use DataManager's timezone-aware date instead of system date
         self.assertEqual(last_date, self.data_manager.get_today())
 
-    def test_get_correct_guess_count(self):
-        """Test counting correct guesses for a daily question."""
+    def test_get_correct_solver_count(self):
+        """Counts unique correct solvers, not total correct guesses."""
         # Create question
         q = Question("Q?", "A", "Cat", 100, "test", "Hint")
         dq_id = self.data_manager.log_daily_question(q)
@@ -1123,16 +1110,17 @@ class TestDataManagerIntegration(unittest.TestCase):
         self.data_manager.create_player("p3", "Player3")
 
         # Initially 0
-        count = self.data_manager.get_correct_guess_count(dq_id)
+        count = self.data_manager.get_correct_solver_count(dq_id)
         self.assertEqual(count, 0)
 
         # Add guesses
         self.data_manager.log_player_guess("p1", "Player1", dq_id, "A", True)
+        self.data_manager.log_player_guess("p1", "Player1", dq_id, "a", True)
         self.data_manager.log_player_guess("p2", "Player2", dq_id, "B", False)
         self.data_manager.log_player_guess("p3", "Player3", dq_id, "A", True)
 
         # Check count
-        count = self.data_manager.get_correct_guess_count(dq_id)
+        count = self.data_manager.get_correct_solver_count(dq_id)
         self.assertEqual(count, 2)
 
     def test_get_previous_daily_question_id(self):
@@ -1249,108 +1237,6 @@ class TestDataManagerIntegration(unittest.TestCase):
         solvers = self.data_manager.get_first_try_solvers(dq_id)
         self.assertEqual(len(solvers), 1)
         self.assertEqual(solvers[0]["id"], "p1")
-
-    def test_get_guess_counts_per_player(self):
-        """Test counting unique guesses per player."""
-        # Create question
-        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
-        dq_id = self.data_manager.log_daily_question(q)
-
-        # Create players
-        self.data_manager.create_player("p1", "Player1")
-        self.data_manager.create_player("p2", "Player2")
-
-        # p1 makes 3 unique guesses
-        self.data_manager.log_player_guess("p1", "Player1", dq_id, "A", False)
-        self.data_manager.log_player_guess("p1", "Player1", dq_id, "B", False)
-        self.data_manager.log_player_guess("p1", "Player1", dq_id, "C", True)
-
-        # p2 makes 1 guess
-        self.data_manager.log_player_guess("p2", "Player2", dq_id, "A", True)
-
-        # Get counts
-        counts = self.data_manager.get_guess_counts_per_player(dq_id)
-        self.assertEqual(len(counts), 2)
-
-        # Ordered by count descending
-        self.assertEqual(counts[0]["name"], "Player1")
-        self.assertEqual(counts[0]["guess_count"], 3)
-        self.assertEqual(counts[1]["name"], "Player2")
-        self.assertEqual(counts[1]["guess_count"], 1)
-
-    def test_get_most_common_guesses(self):
-        """Test finding most common incorrect guesses."""
-        # Create question
-        q = Question("Q?", "correct", "Cat", 100, "test", "Hint")
-        dq_id = self.data_manager.log_daily_question(q)
-
-        # Create players
-        for i in range(5):
-            self.data_manager.create_player(f"p{i}", f"Player{i}")
-
-        # Multiple people guess "wrong1"
-        self.data_manager.log_player_guess("p0", "Player0", dq_id, "wrong1", False)
-        self.data_manager.log_player_guess("p1", "Player1", dq_id, "wrong1", False)
-        self.data_manager.log_player_guess("p2", "Player2", dq_id, "wrong1", False)
-
-        # Some guess "wrong2"
-        self.data_manager.log_player_guess("p3", "Player3", dq_id, "wrong2", False)
-        self.data_manager.log_player_guess("p4", "Player4", dq_id, "wrong2", False)
-
-        # Get common guesses
-        common = self.data_manager.get_most_common_guesses(dq_id)
-        self.assertGreaterEqual(len(common), 2)
-
-        # Most common first
-        self.assertEqual(common[0]["guess_text"], "wrong1")
-        self.assertEqual(common[0]["count"], 3)
-        self.assertEqual(common[1]["guess_text"], "wrong2")
-        self.assertEqual(common[1]["count"], 2)
-
-    def test_get_craziest_guess(self):
-        """Test finding the longest/craziest guess."""
-        # Create question
-        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
-        dq_id = self.data_manager.log_daily_question(q)
-
-        # Create players
-        self.data_manager.create_player("p1", "Player1")
-        self.data_manager.create_player("p2", "Player2")
-
-        # Make guesses of different lengths
-        self.data_manager.log_player_guess("p1", "Player1", dq_id, "short", False)
-        self.data_manager.log_player_guess(
-            "p2", "Player2", dq_id, "this is a very long guess", False
-        )
-
-        # Get craziest
-        craziest = self.data_manager.get_craziest_guess(dq_id)
-        self.assertIsNotNone(craziest)
-        self.assertEqual(craziest["player_name"], "Player2")
-        self.assertEqual(craziest["guess_text"], "this is a very long guess")
-
-    def test_mark_guess_as_correct(self):
-        """Test manually marking a specific guess as correct."""
-        # Create question
-        q = Question("Q?", "A", "Cat", 100, "test", "Hint")
-        dq_id = self.data_manager.log_daily_question(q)
-
-        # Create player and make incorrect guess
-        self.data_manager.create_player("p1", "Player1")
-        self.data_manager.log_player_guess("p1", "Player1", dq_id, "B", False)
-
-        # Get the guess ID
-        query = "SELECT id FROM guesses WHERE player_id = ?"
-        result = self.db.execute_query(query, ("p1",))
-        guess_id = result[0]["id"]
-
-        # Mark as correct
-        self.data_manager.mark_guess_as_correct(guess_id)
-
-        # Verify
-        query = "SELECT is_correct FROM guesses WHERE id = ?"
-        result = self.db.execute_query(query, (guess_id,))
-        self.assertEqual(result[0]["is_correct"], 1)
 
     def test_clear_stale_rest_multipliers(self):
         """Stale multipliers (no rest today) are cleared; today's rest multiplier is preserved."""
@@ -1749,22 +1635,39 @@ class TestRollbackQuestionDay(unittest.TestCase):
 
 
 class TestPowerUpManagerRollback(unittest.TestCase):
-    """Unit tests for PowerUpManager.rollback_to_snapshot."""
+    """Integration tests for PowerUpManager.rollback_to_snapshot on a real DB."""
 
     def setUp(self):
-        self.mock_player_manager = MagicMock()
-        self.mock_data_manager = MagicMock()
+        from src.core.player_manager import PlayerManager
+        from src.core.powerup import PowerUpManager
+        from tests.src.core._powerup_helpers import make_config
 
-        with patch("src.core.powerup.ConfigReader"):
-            from src.core.powerup import PowerUpManager
+        self.db = Database(":memory:")
+        self.data_manager = DataManager(self.db)
+        self.player_manager = PlayerManager(self.data_manager)
+        self.data_manager.create_player("player1", "Player1")
+        self.data_manager.adjust_player_score("player1", 200)
+        self.data_manager.set_streak("player1", 7)
+        # Logging the question takes the player snapshot
+        self.dq_id = self.data_manager.log_daily_question(
+            Question("What?", "42", "Math", 10)
+        )
+        # ConfigReader is an external boundary
+        self.powerup_manager = PowerUpManager(
+            self.player_manager, self.data_manager, make_config()
+        )
 
-            self.powerup_manager = PowerUpManager(
-                self.mock_player_manager, self.mock_data_manager
-            )
+    def tearDown(self):
+        self.db.close()
 
-    def test_rollback_calls_data_manager_rollback(self):
-        self.powerup_manager.rollback_to_snapshot(42)
-        self.mock_data_manager.rollback_question_day.assert_called_once_with(42)
+    def test_rollback_restores_persisted_player_state(self):
+        self.data_manager.adjust_player_score("player1", 50)
+        self.data_manager.increment_streak("player1")
+
+        self.powerup_manager.rollback_to_snapshot(self.dq_id)
+
+        player = self.data_manager.get_player("player1")
+        self.assertEqual((player.score, player.answer_streak), (200, 7))
 
     def test_rollback_clears_in_memory_daily_state(self):
         from src.core.state import DailyPlayerState
@@ -1772,7 +1675,7 @@ class TestPowerUpManagerRollback(unittest.TestCase):
         self.powerup_manager.daily_state["player1"] = DailyPlayerState()
         self.powerup_manager.daily_state["player2"] = DailyPlayerState()
 
-        self.powerup_manager.rollback_to_snapshot(42)
+        self.powerup_manager.rollback_to_snapshot(self.dq_id)
 
         self.assertEqual(self.powerup_manager.daily_state, {})
 
@@ -1781,6 +1684,7 @@ class TestGameRunnerRollbackOnSkip(unittest.TestCase):
     """Tests that _setup_new_question triggers rollback when force_new=True."""
 
     def setUp(self):
+        # ConfigReader is an external boundary
         self.config_patcher = patch("src.core.game_runner.ConfigReader")
         MockConfig = self.config_patcher.start()
         self.addCleanup(self.config_patcher.stop)
@@ -1809,52 +1713,68 @@ class TestGameRunnerRollbackOnSkip(unittest.TestCase):
         }
         cfg.get.side_effect = lambda k, d=None: defaults.get(k, d)
         cfg.get_bool.side_effect = lambda k, d=False: False
+        cfg.is_seasons_enabled.return_value = False
 
-        self.mock_dm = MagicMock()
+        self.db = Database(":memory:")
+        self.addCleanup(self.db.close)
+        self.dm = DataManager(self.db)
+        # The question selector fronts the dataset / Gemini boundary
         self.mock_qs = MagicMock()
+        self.mock_qs.get_hint_from_gemini.return_value = None
         from src.core.game_runner import GameRunner
 
-        self.gr = GameRunner(self.mock_qs, self.mock_dm)
+        self.gr = GameRunner(self.mock_qs, self.dm)
 
-        # Replace the automatically-created PowerUpManager with a mock.
-        self.mock_powerup = MagicMock()
-        self.gr.managers["powerup"] = self.mock_powerup
+        self.dm.create_player("alice", "Alice")
+        self.dm.adjust_player_score("alice", 200)
+        self.dm.set_streak("alice", 7)
 
-    def _wire_new_question(self, new_id=2):
-        from data.readers.question import Question
-
-        q = Question("Q?", "A", "C", 10, "s", "h")
-        q._is_valid = True
+    def _wire_new_question(self, text="Q?"):
+        q = Question(text, "A", "C", 10, "h", "s")
         self.mock_qs.get_random_question.return_value = q
-        self.mock_dm.get_used_question_hashes.return_value = set()
-        self.mock_dm.log_daily_question.return_value = new_id
-        self.mock_dm.get_todays_daily_question.return_value = (q, new_id, new_id)
         return q
 
-    def test_skip_calls_rollback_with_old_question_id(self):
-        self.gr.daily_question_id = 1  # Existing active question.
-        self._wire_new_question(new_id=2)
+    def _alice(self):
+        player = self.dm.get_player("alice")
+        return player.score, player.answer_streak
 
-        self.gr._setup_new_question(force_new=True)
+    def _start_question_and_earn_points(self):
+        """Start the day's question (snapshot at 200/7), then alice earns 50/+1."""
+        self._wire_new_question("First?")
+        self.assertTrue(self.gr._setup_new_question())
+        self.dm.adjust_player_score("alice", 50)
+        self.dm.increment_streak("alice")
+        self.assertEqual(self._alice(), (250, 8))
 
-        self.mock_powerup.rollback_to_snapshot.assert_called_once_with(1)
+    def test_skip_rolls_back_player_state_to_old_question_snapshot(self):
+        self._start_question_and_earn_points()
+        old_question_id = self.gr.daily_question_id
+        self._wire_new_question("Replacement?")
 
-    def test_fresh_day_does_not_call_rollback(self):
+        self.assertTrue(self.gr._setup_new_question(force_new=True))
+
+        self.assertEqual(self._alice(), (200, 7))
+        self.assertNotEqual(self.gr.daily_question_id, old_question_id)
+        self.assertEqual(self.gr.daily_q.question, "Replacement?")
+
+    def test_fresh_day_does_not_roll_back(self):
+        self._start_question_and_earn_points()
         self.gr.daily_question_id = None  # No active question (fresh day).
-        self._wire_new_question(new_id=1)
+        self._wire_new_question("Second?")
 
-        self.gr._setup_new_question(force_new=False)
+        self.assertTrue(self.gr._setup_new_question(force_new=False))
 
-        self.mock_powerup.rollback_to_snapshot.assert_not_called()
+        self.assertEqual(self._alice(), (250, 8))
 
     def test_force_new_without_existing_question_skips_rollback(self):
         """force_new=True but daily_question_id is None — rollback is a no-op."""
+        self._start_question_and_earn_points()
         self.gr.daily_question_id = None
-        self._wire_new_question(new_id=1)
+        self._wire_new_question("Replacement?")
 
-        self.gr._setup_new_question(force_new=True)
+        self.assertTrue(self.gr._setup_new_question(force_new=True))
 
-        self.mock_powerup.rollback_to_snapshot.assert_not_called()
+        self.assertEqual(self._alice(), (250, 8))
 
 
 if __name__ == "__main__":

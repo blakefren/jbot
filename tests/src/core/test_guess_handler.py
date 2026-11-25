@@ -1,43 +1,89 @@
 import unittest
 import sqlite3
-from datetime import date
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from src.core.events import GuessContext
-from src.core.guess_handler import GuessHandler, AlreadyAnsweredCorrectlyError
+from src.core.guess_handler import (
+    GuessHandler,
+    AlreadyAnsweredCorrectlyError,
+    JinxedError,
+)
 from src.core.data_manager import DataManager
 from src.core.player_manager import PlayerManager
+from src.core.powerup import PowerUpManager
+from src.core.season_manager import SeasonManager
 from db.database import Database
 from data.readers.question import Question
-from tests.src.core._powerup_helpers import make_config
+from tests.src.core._powerup_helpers import make_config, make_stack
+
+
+class _RecordingManager:
+    """Stand-in for a pluggable game manager (e.g. PowerUpManager).
+
+    The GuessHandler `managers` mapping is a collaborator seam rather than a data
+    boundary, so a tiny recording fake keeps the context-passing assertions
+    independent of any particular manager while everything else stays real.
+    """
+
+    def __init__(self):
+        self.contexts = []
+
+    def can_answer(self, player_id, hint_sent=False):
+        return True, ""
+
+    def on_guess(self, ctx):
+        self.contexts.append(ctx)
+        return []
 
 
 class TestGuessHandler(unittest.TestCase):
+    PLAYERS = [
+        ("1", "PlayerOne", 0, 0),
+        ("2", "PlayerTwo", 0, 0),
+        ("3", "PlayerThree", 0, 0),
+        ("4", "PlayerFour", 0, 0),
+        ("5", "PlayerFive", 0, 0),
+        ("6", "PlayerSix", 0, 0),
+        ("o1", "Other1", 0, 0),
+        ("o2", "Other2", 0, 0),
+        ("o3", "Other3", 0, 0),
+    ]
+
     def setUp(self):
-        self.data_manager = MagicMock()
         self.daily_question = Question(
             "Test Question", "Test Answer", "Test Category", 100, "Test Hint"
         )
-        self.daily_question_id = 123
+        self.stack = make_stack(self, self.PLAYERS, question=self.daily_question)
+        self.data_manager = self.stack.data_manager
+        self.player_manager = self.stack.player_manager
+        self.daily_question_id = self.stack.question_id
+        self.config = make_config()
+        self.recorder = _RecordingManager()
+        self.guess_handler = self._make_handler()
 
-        self.player_manager = MagicMock()
-        self.managers = {"player": self.player_manager, "test_manager": MagicMock()}
+    def _make_handler(self, **overrides):
+        kwargs = dict(
+            daily_question=self.daily_question,
+            daily_question_id=self.daily_question_id,
+            managers={"recorder": self.recorder},
+            config=self.config,
+            question_db_id=self.stack.question_db_id,
+        )
+        kwargs.update(overrides)
+        return GuessHandler(self.data_manager, self.player_manager, **kwargs)
 
-        # Mock can_answer for all managers
-        self.managers["test_manager"].can_answer.return_value = (True, "")
-        self.player_manager.can_answer.return_value = (True, "")
+    def _seed_solvers(self, count):
+        """Make `count` other players answer today's question correctly first."""
+        for index in range(1, count + 1):
+            self.stack.mark_answered_today(f"o{index}")
 
-        # Default return value for get_correct_guess_count to avoid TypeError in ScoreCalculator
-        self.data_manager.get_correct_guess_count.return_value = 0
-        # Default return value for get_correct_solver_count (new method for counting unique players)
-        self.data_manager.get_correct_solver_count.return_value = 0
-        self.data_manager.get_today.return_value = date.today()
-
-        self.guess_handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_question,
-            self.daily_question_id,
-            self.managers,
+    def _log_guess(self, player_id, guess, is_correct, daily_question_id=None):
+        player = self.player_manager.get_player(player_id)
+        self.data_manager.log_player_guess(
+            player_id,
+            player.name,
+            daily_question_id or self.daily_question_id,
+            guess,
+            is_correct,
         )
 
     def test_handle_guess_correct(self):
@@ -45,28 +91,7 @@ class TestGuessHandler(unittest.TestCase):
         player_id = 1
         player_name = "PlayerOne"
         guess = "Test Answer"
-        history = []
-
-        self.data_manager.read_guess_history.side_effect = lambda user_id: [
-            row for row in history if row["user_id"] == str(user_id)
-        ]
-
-        def persist_guess(user_id, player_name, question_id, guess_text, is_correct):
-            history.append(
-                {
-                    "user_id": str(user_id),
-                    "daily_question_id": question_id,
-                    "guess_text": guess_text,
-                    "is_correct": is_correct,
-                }
-            )
-
-        self.data_manager.log_player_guess.side_effect = persist_guess
-
-        # No direct Player methods should be required; manager handles streaks
-        self.player_manager.get_player.return_value = None
-        self.data_manager.get_correct_guess_count.return_value = 1  # Not first
-        self.data_manager.get_correct_solver_count.return_value = 1  # Not first
+        self._seed_solvers(1)  # Not first
 
         is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
             player_id, player_name, guess
@@ -74,15 +99,22 @@ class TestGuessHandler(unittest.TestCase):
 
         self.assertTrue(is_correct)
         self.assertEqual(num_guesses, 1)
+        history = self.data_manager.read_guess_history(
+            user_id="1", daily_question_id=self.daily_question_id
+        )
+        self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["guess_text"], guess.lower())
         self.assertTrue(history[0]["is_correct"])
 
-        # Streak should be incremented here
-        self.player_manager.increment_streak.assert_called_once()
+        # Streak is incremented and the score persisted
+        player = self.player_manager.get_player("1")
+        self.assertEqual(player.answer_streak, 1)
+        self.assertGreater(points, 0)
+        self.assertEqual(player.score, points)
 
-        # Check that on_guess was called with a GuessContext
-        self.managers["test_manager"].on_guess.assert_called_once()
-        ctx = self.managers["test_manager"].on_guess.call_args[0][0]
+        # Managers receive a GuessContext describing the guess
+        self.assertEqual(len(self.recorder.contexts), 1)
+        ctx = self.recorder.contexts[0]
         self.assertIsInstance(ctx, GuessContext)
         self.assertEqual(ctx.player_id, player_id)
         self.assertEqual(ctx.player_name, player_name)
@@ -94,25 +126,6 @@ class TestGuessHandler(unittest.TestCase):
         player_id = 2
         player_name = "PlayerTwo"
         guess = "Wrong Answer"
-        history = []
-
-        self.data_manager.read_guess_history.side_effect = lambda user_id: [
-            row for row in history if row["user_id"] == str(user_id)
-        ]
-
-        def persist_guess(user_id, player_name, question_id, guess_text, is_correct):
-            history.append(
-                {
-                    "user_id": str(user_id),
-                    "daily_question_id": question_id,
-                    "guess_text": guess_text,
-                    "is_correct": is_correct,
-                }
-            )
-
-        self.data_manager.log_player_guess.side_effect = persist_guess
-
-        self.player_manager.get_player.return_value = None
 
         is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
             player_id, player_name, guess
@@ -120,14 +133,20 @@ class TestGuessHandler(unittest.TestCase):
 
         self.assertFalse(is_correct)
         self.assertEqual(num_guesses, 1)
+        history = self.data_manager.read_guess_history(
+            user_id="2", daily_question_id=self.daily_question_id
+        )
+        self.assertEqual(len(history), 1)
         self.assertEqual(history[0]["guess_text"], guess.lower())
         self.assertFalse(history[0]["is_correct"])
 
-        # Verify streak logic
-        self.player_manager.increment_streak.assert_not_called()
+        # Verify streak logic: nothing is scored or incremented
+        player = self.player_manager.get_player("2")
+        self.assertEqual(player.answer_streak, 0)
+        self.assertEqual(player.score, 0)
 
-        self.managers["test_manager"].on_guess.assert_called_once()
-        ctx = self.managers["test_manager"].on_guess.call_args[0][0]
+        self.assertEqual(len(self.recorder.contexts), 1)
+        ctx = self.recorder.contexts[0]
         self.assertIsInstance(ctx, GuessContext)
         self.assertEqual(ctx.player_id, player_id)
         self.assertEqual(ctx.player_name, player_name)
@@ -136,115 +155,84 @@ class TestGuessHandler(unittest.TestCase):
 
     def test_handle_guess_already_answered_correctly(self):
         """Test that an error is raised if a player has already answered correctly."""
-        player_id = 3
-        player_name = "PlayerThree"
-        guess = "Another Answer"
-
-        self.data_manager.read_guess_history.return_value = [
-            {"daily_question_id": self.daily_question_id, "is_correct": True}
-        ]
+        self._log_guess("3", "test answer", True)
 
         with self.assertRaises(AlreadyAnsweredCorrectlyError):
-            self.guess_handler.handle_guess(player_id, player_name, guess)
+            self.guess_handler.handle_guess(3, "PlayerThree", "Another Answer")
+
+        self.assertEqual(len(self.data_manager.read_guess_history(user_id="3")), 1)
 
     def test_get_player_guesses(self):
         """Test retrieving a player's guesses for the current question."""
-        player_id = 4
-        self.data_manager.read_guess_history.return_value = [
-            {"daily_question_id": self.daily_question_id, "guess_text": "guess1"},
-            {"daily_question_id": self.daily_question_id, "guess_text": "guess2"},
-            {"daily_question_id": 999, "guess_text": "old_guess"},  # Not for today
-        ]
+        old_question_id = self.daily_question_id
+        self._log_guess("4", "old_guess", False)  # Not for today's question
+        self.daily_question_id = self.stack.new_question_day(
+            Question("New Question", "New Answer", "Test Category", 100)
+        )
+        self._log_guess("4", "guess1", False)
+        self._log_guess("4", "guess2", False)
+        self.assertNotEqual(old_question_id, self.daily_question_id)
 
-        guesses = self.guess_handler.get_player_guesses(player_id)
+        guesses = self._make_handler().get_player_guesses(4)
         self.assertEqual(len(guesses), 2)
         self.assertIn("guess1", guesses)
         self.assertIn("guess2", guesses)
 
     def test_has_answered_correctly_today_true(self):
         """Test checking if a player has answered correctly today when they have."""
-        player_id = 5
-        self.data_manager.read_guess_history.return_value = [
-            {"daily_question_id": self.daily_question_id, "is_correct": True}
-        ]
+        self._log_guess("5", "test answer", True)
 
-        self.assertTrue(self.guess_handler.has_answered_correctly_today(player_id))
+        self.assertTrue(self.guess_handler.has_answered_correctly_today(5))
 
     def test_has_answered_correctly_today_false(self):
         """Test checking if a player has answered correctly today when they have not."""
-        player_id = 6
-        self.data_manager.read_guess_history.return_value = [
-            {"daily_question_id": self.daily_question_id, "is_correct": False}
-        ]
+        self._log_guess("6", "wrong", False)
 
-        self.assertFalse(self.guess_handler.has_answered_correctly_today(player_id))
+        self.assertFalse(self.guess_handler.has_answered_correctly_today(6))
+
+    def test_has_answered_correctly_today_ignores_other_questions(self):
+        """A correct answer to an earlier question does not count for today's."""
+        self.stack.answer_on_earlier_day("6", days_ago=1)
+
+        self.assertFalse(self.guess_handler.has_answered_correctly_today(6))
 
     def test_get_player_guesses_no_daily_question_id(self):
         """Test get_player_guesses returns empty list when no daily_question_id."""
-        handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_question,
-            daily_question_id=None,  # No daily question ID
-            managers=self.managers,
-        )
-        result = handler.get_player_guesses(player_id=123)
+        self._log_guess("4", "guess1", False)
+        handler = self._make_handler(daily_question_id=None)
+        result = handler.get_player_guesses(player_id=4)
         self.assertEqual(result, [])
 
     def test_has_answered_correctly_today_no_daily_question_id(self):
         """Test has_answered_correctly_today returns False when no daily_question_id."""
-        handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_question,
-            daily_question_id=None,  # No daily question ID
-            managers=self.managers,
-        )
-        result = handler.has_answered_correctly_today(player_id=123)
+        self._log_guess("5", "test answer", True)
+        handler = self._make_handler(daily_question_id=None)
+        result = handler.has_answered_correctly_today(player_id=5)
         self.assertFalse(result)
 
     def test_handle_guess_no_daily_question(self):
         """Test handle_guess returns False when there's no daily question."""
-        handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            daily_question=None,  # No daily question
-            daily_question_id=None,
-            managers=self.managers,
-        )
+        handler = self._make_handler(daily_question=None, daily_question_id=None)
         result, num_guesses, points, bonuses = handler.handle_guess(
-            123, "Player", "guess"
+            1, "PlayerOne", "guess"
         )
         self.assertFalse(result)
         self.assertEqual(num_guesses, 0)
+        self.assertEqual(self.data_manager.read_guess_history(), [])
 
-    def test_handle_guess_manager_on_guess_calls_with_context(self):
-        """Test that managers are called with a GuessContext."""
-        mock_manager = MagicMock()
-        mock_manager.on_guess.return_value = []
-        mock_manager.can_answer.return_value = (True, "")
+    def test_handle_guess_blocked_for_silenced_player(self):
+        """A jinxed player cannot guess before the hint; the guess is not recorded."""
+        powerups = PowerUpManager(self.player_manager, self.data_manager, self.config)
+        powerups._get_daily_state("1").silenced = True
+        handler = self._make_handler(managers={"powerup": powerups})
 
-        local_player_manager = MagicMock()
-        mock_player = MagicMock()
-        mock_player.answer_streak = 1
-        mock_player.lifetime_best_streak = 0
-        local_player_manager.get_player.return_value = mock_player
+        with self.assertRaises(JinxedError):
+            handler.handle_guess(1, "PlayerOne", "Test Answer")
+        self.assertEqual(self.data_manager.read_guess_history(user_id="1"), [])
 
-        handler = GuessHandler(
-            self.data_manager,
-            local_player_manager,
-            self.daily_question,
-            self.daily_question_id,
-            managers={"test": mock_manager},
-        )
-
-        self.data_manager.read_guess_history.return_value = []
-        handler.handle_guess(1, "Player", "Test Answer")
-
-        mock_manager.on_guess.assert_called_once()
-        ctx = mock_manager.on_guess.call_args[0][0]
-        self.assertIsInstance(ctx, GuessContext)
-        self.assertTrue(ctx.is_correct)
+        self.stack.send_hint()
+        is_correct, _, _, _ = handler.handle_guess(1, "PlayerOne", "Test Answer")
+        self.assertTrue(is_correct)
 
     def test_handle_guess_streak_increment(self):
         """Test that streak is incremented upon correct guess."""
@@ -252,36 +240,29 @@ class TestGuessHandler(unittest.TestCase):
         player_name = "PlayerOne"
         guess = "Test Answer"
 
-        # Mock player with existing streak
-        mock_player = MagicMock()
-        mock_player.answer_streak = 5
-        mock_player.lifetime_best_streak = 5
-        self.player_manager.get_player.return_value = mock_player
-
-        # Mock last correct guess date to be yesterday
-        from datetime import date, timedelta
-
-        self.data_manager.get_last_correct_guess_date.return_value = (
-            date.today() - timedelta(days=1)
+        # Player with an existing streak who last answered yesterday
+        self.data_manager.update_lifetime_stats(
+            "1", answer_streak=5, lifetime_best_streak=5
         )
+        self.stack.answer_on_earlier_day("1", days_ago=1)
 
-        # Mock guess history
-        self.data_manager.read_guess_history.return_value = []
-
-        # Ensure no fastest bonus for simple math check
-        self.data_manager.get_correct_guess_count.return_value = 10
-        self.data_manager.get_correct_solver_count.return_value = 10
+        # Hint already sent and three faster solvers: no hint or fastest bonus
+        self.stack.send_hint()
+        self._seed_solvers(3)
 
         is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
             player_id, player_name, guess
         )
 
         self.assertTrue(is_correct)
+        player = self.player_manager.get_player("1")
         # Streak should be incremented
-        self.player_manager.increment_streak.assert_called_once()
+        self.assertEqual(player.answer_streak, 6)
+        self.assertEqual(player.lifetime_best_streak, 6)
         # Bonus should be based on new streak (6)
         # 100 (base) + 20 (first try) + 25 (streak: min(6 * 5, 25)) = 145
         self.assertEqual(points, 145)
+        self.assertEqual(player.score, 145)
         self.assertTrue(any("6-day streak!" in msg for msg in bonuses))
 
     def test_handle_guess_streak_no_double_increment(self):
@@ -290,23 +271,16 @@ class TestGuessHandler(unittest.TestCase):
         player_name = "PlayerOne"
         guess = "Test Answer"
 
-        # Mock player with existing streak (already incremented today)
-        mock_player = MagicMock()
-        mock_player.answer_streak = 6
-        mock_player.lifetime_best_streak = 6
-        self.player_manager.get_player.return_value = mock_player
+        # Player with existing streak that was already incremented today by an
+        # earlier (skipped) question
+        self.data_manager.update_lifetime_stats(
+            "1", answer_streak=6, lifetime_best_streak=6
+        )
+        self.stack.answer_on_earlier_day("1", days_ago=0)
 
-        # Mock last correct guess date to be TODAY
-        from datetime import date
-
-        self.data_manager.get_last_correct_guess_date.return_value = date.today()
-
-        # Mock guess history (empty for this NEW question)
-        self.data_manager.read_guess_history.return_value = []
-
-        # Ensure no fastest bonus
-        self.data_manager.get_correct_guess_count.return_value = 10
-        self.data_manager.get_correct_solver_count.return_value = 10
+        # Hint already sent and three faster solvers: no hint or fastest bonus
+        self.stack.send_hint()
+        self._seed_solvers(3)
 
         is_correct, num_guesses, points, bonuses = self.guess_handler.handle_guess(
             player_id, player_name, guess
@@ -314,195 +288,96 @@ class TestGuessHandler(unittest.TestCase):
 
         self.assertTrue(is_correct)
         # Streak should NOT be incremented again
-        self.player_manager.increment_streak.assert_not_called()
+        player = self.player_manager.get_player("1")
+        self.assertEqual(player.answer_streak, 6)
         # Bonus should still be awarded based on current streak (6)
         # 100 (base) + 20 (first try) + 25 (streak: min(6 * 5, 25)) = 145
         self.assertEqual(points, 145)
+        self.assertEqual(player.score, 145)
         self.assertTrue(any("6-day streak!" in msg for msg in bonuses))
 
     def test_handle_guess_before_hint_bonus(self):
         """Test that bonus points are awarded if guess is before hint."""
-        from datetime import datetime, time
+        from datetime import time
         from zoneinfo import ZoneInfo
 
-        # Setup timezone and times
-        tz = ZoneInfo("UTC")
-        reminder_time = time(12, 0, tzinfo=tz)
+        handler = self._make_handler(reminder_time=time(12, 0, tzinfo=ZoneInfo("UTC")))
+        # One faster solver and no hint sent yet - player should get before-hint bonus
+        self._seed_solvers(1)
 
-        # Create handler with reminder_time
-        handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_question,
-            self.daily_question_id,
-            self.managers,
-            reminder_time=reminder_time,
+        is_correct, num_guesses, points, bonuses = handler.handle_guess(
+            1, "PlayerOne", "Test Answer"
         )
 
-        # Mock current time to be before reminder_time
-        with patch("src.core.guess_handler.datetime") as mock_datetime:
-            # Mock now() to return 10:00 AM
-            mock_now = datetime(2023, 1, 1, 10, 0, tzinfo=tz)
-            mock_datetime.now.return_value = mock_now
+        self.assertTrue(is_correct)
+        # Base points (100) + First Try (20) + Before Hint Bonus (10) + 2nd Fastest (5) = 135
+        self.assertEqual(points, 135)
+        self.assertTrue(any("Pre-hint!" in msg for msg in bonuses))
 
-            # Mock other dependencies
-            self.player_manager.get_player.return_value = None
-            self.data_manager.get_correct_guess_count.return_value = 1
-            self.data_manager.get_correct_solver_count.return_value = 1
-            self.data_manager.read_guess_history.return_value = []
-            # No hint sent yet — player should get before-hint bonus
-            self.data_manager.get_hint_sent_timestamp.return_value = None
-
-            is_correct, num_guesses, points, bonuses = handler.handle_guess(
-                1, "Player", "Test Answer"
-            )
-
-            self.assertTrue(is_correct)
-            # Base points (100) + First Try (20) + Before Hint Bonus (10) + 2nd Fastest (5) = 135
-            self.assertEqual(points, 135)
-            self.assertTrue(any("Pre-hint!" in msg for msg in bonuses))
-
-    def _make_correct_guess_setup(self):
-        """Helper: configure mocks for a clean first-correct-answer scenario."""
-        from datetime import timedelta
-
-        mock_player = MagicMock()
-        mock_player.answer_streak = 0
-        mock_player.lifetime_best_streak = 0
-        self.player_manager.get_player.return_value = mock_player
-        self.data_manager.get_correct_guess_count.return_value = 0  # first answer
-        self.data_manager.get_correct_solver_count.return_value = 0  # first answer
-        self.data_manager.get_last_correct_guess_date.return_value = (
-            date.today() - timedelta(days=1)
+    def _make_season_handler(self, seasons_enabled):
+        config = make_config()
+        config.is_seasons_enabled.return_value = seasons_enabled
+        season_id = self.data_manager.create_season(
+            "Test Season", "2000-01-01", "2999-12-31"
         )
-        self.data_manager.read_guess_history.return_value = []
-        self.data_manager.get_hint_sent_timestamp.return_value = None
-        self.data_manager.get_today.return_value = date.today()
-        self.data_manager.get_alternative_answers.return_value = []
+        handler = self._make_handler(
+            season_manager=SeasonManager(self.data_manager, config)
+        )
+        return handler, season_id
 
     def test_season_stats_updated_when_seasons_enabled(self):
-        """Season stat methods are called when seasons flag is on and answer is correct."""
-        self._make_correct_guess_setup()
-
-        mock_season = MagicMock()
-        mock_season.season_id = 42
-        self.data_manager.get_current_season.return_value = mock_season
-
-        mock_season_manager = MagicMock()
-        mock_season_manager.enabled = True
-
-        handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_question,
-            self.daily_question_id,
-            self.managers,
-            season_manager=mock_season_manager,
-        )
+        """Season stats are recorded when seasons flag is on and answer is correct."""
+        handler, season_id = self._make_season_handler(True)
 
         is_correct, _, points, _ = handler.handle_guess(1, "Alice", "Test Answer")
 
         self.assertTrue(is_correct)
-        # correct_answers, first_answers, questions_answered incremented
-        self.assertGreaterEqual(self.data_manager.increment_season_stat.call_count, 2)
-        stat_names = [
-            call.args[2]
-            for call in self.data_manager.increment_season_stat.call_args_list
-        ]
-        self.assertIn("correct_answers", stat_names)
-        self.assertIn("first_answers", stat_names)
-        # Note: season points and streak are now handled internally by
-        # player_manager.update_score() and player_manager.increment_streak()
+        season_score = self.data_manager.get_player_season_score("1", season_id)
+        self.assertEqual(season_score.correct_answers, 1)
+        self.assertEqual(season_score.first_answers, 1)
+        self.assertEqual(season_score.questions_answered, 1)
+        # Season points and streak are handled by update_score()/increment_streak()
+        self.assertEqual(season_score.points, points)
+        self.assertEqual(season_score.current_streak, 1)
 
     def test_season_stats_not_updated_when_seasons_disabled(self):
-        """Season stat methods are NOT called when the seasons flag is off."""
-        self._make_correct_guess_setup()
-
-        mock_season_manager = MagicMock()
-        mock_season_manager.enabled = False
-
-        handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_question,
-            self.daily_question_id,
-            self.managers,
-            season_manager=mock_season_manager,
-        )
+        """Season stat counters are NOT updated when the seasons flag is off."""
+        handler, season_id = self._make_season_handler(False)
 
         is_correct, _, _, _ = handler.handle_guess(1, "Alice", "Test Answer")
 
         self.assertTrue(is_correct)
-        self.data_manager.increment_season_stat.assert_not_called()
+        season_score = self.data_manager.get_player_season_score("1", season_id)
+        if season_score is not None:
+            self.assertEqual(season_score.correct_answers, 0)
+            self.assertEqual(season_score.first_answers, 0)
+            self.assertEqual(season_score.questions_answered, 0)
 
     def test_lifetime_stats_always_updated_on_correct_answer(self):
         """Lifetime stat increments fire on a correct answer regardless of seasons flag."""
-        self._make_correct_guess_setup()
-
         # No season_manager
-        handler = GuessHandler(
-            self.data_manager,
-            self.player_manager,
-            self.daily_question,
-            self.daily_question_id,
-            self.managers,
-        )
-
-        is_correct, _, _, _ = handler.handle_guess(1, "Alice", "Test Answer")
+        is_correct, _, _, _ = self.guess_handler.handle_guess(1, "Alice", "Test Answer")
 
         self.assertTrue(is_correct)
-        lifetime_calls = [
-            call.args[1]
-            for call in self.data_manager.increment_lifetime_stat.call_args_list
-        ]
-        self.assertIn("lifetime_correct", lifetime_calls)
-        self.assertIn("lifetime_questions", lifetime_calls)
-        self.assertIn("lifetime_first_answers", lifetime_calls)
+        player = self.player_manager.get_player("1")
+        self.assertEqual(player.lifetime_correct, 1)
+        self.assertEqual(player.lifetime_questions, 1)
+        self.assertEqual(player.lifetime_first_answers, 1)
+        self.assertEqual(player.lifetime_best_streak, 1)
 
     def test_fastest_badge_counts_unique_players_not_total_guesses(self):
         """Award rank two after one player's wrong and correct guesses."""
-        from src.core.data_manager import DataManager
-        from src.core.player_manager import PlayerManager
-        from db.database import Database
-        from tests.src.core._powerup_helpers import make_config
+        handler = self._make_handler(managers={})
 
-        db = Database(":memory:")
-        try:
-            data_manager = DataManager(db)
-            player_manager = PlayerManager(data_manager)
-            for player_id, name in (("1", "PlayerA"), ("2", "PlayerB")):
-                player_manager.get_or_create_player(player_id, name)
+        handler.handle_guess("1", "PlayerOne", "wrong answer")
+        handler.handle_guess("1", "PlayerOne", "Test Answer")
+        _, _, player_b_points, player_b_messages = handler.handle_guess(
+            "2", "PlayerTwo", "Test Answer"
+        )
 
-            question = Question("Test Q", "Test Answer", "Test", 100)
-            daily_question_id = data_manager.log_daily_question(question)
-            _, _, question_db_id = data_manager.get_todays_daily_question()
-            config = make_config()
-
-            def make_handler():
-                return GuessHandler(
-                    data_manager,
-                    player_manager,
-                    question,
-                    daily_question_id,
-                    managers={},
-                    config=config,
-                    question_db_id=question_db_id,
-                )
-
-            handler = make_handler()
-            handler.handle_guess("1", "PlayerA", "wrong answer")
-            handler.handle_guess("1", "PlayerA", "Test Answer")
-            _, _, player_b_points, player_b_messages = make_handler().handle_guess(
-                "2", "PlayerB", "Test Answer"
-            )
-
-            self.assertEqual(player_b_points, 135)
-            self.assertTrue(
-                any("2nd Fastest" in message for message in player_b_messages)
-            )
-            self.assertEqual(len(data_manager.read_guess_history("1")), 2)
-        finally:
-            db.close()
+        self.assertEqual(player_b_points, 135)
+        self.assertTrue(any("2nd Fastest" in message for message in player_b_messages))
+        self.assertEqual(len(self.data_manager.read_guess_history("1")), 2)
 
 
 class TestGuessHandlerSQLiteWorkflow(unittest.TestCase):
@@ -574,8 +449,6 @@ class TestGuessHandlerSQLiteWorkflow(unittest.TestCase):
         self.assertEqual(player.lifetime_correct, 0)
 
     def test_powerup_state_restores_when_guess_transaction_fails(self):
-        from src.core.powerup import PowerUpManager
-
         self.data_manager.increment_pending_multiplier("1", 0.2)
         powerups = PowerUpManager(self.player_manager, self.data_manager, make_config())
         handler = GuessHandler(
