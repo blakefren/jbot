@@ -82,30 +82,6 @@ class TestDataManager(unittest.TestCase):
         """Clean up after tests."""
         self.db.close()
 
-    def test_backup_database_writes_restorable_copy(self):
-        """backup_database() writes a copy of a file-backed database."""
-        import os
-        import tempfile
-
-        with tempfile.TemporaryDirectory(dir=os.path.dirname(__file__)) as directory:
-            source = Database(os.path.join(directory, "source.db"))
-            backup_path = os.path.join(directory, "backup.db")
-            restored = None
-            try:
-                source_manager = DataManager(source)
-                source_manager.create_player("1", "Alice")
-                source_manager.adjust_player_score("1", 42)
-
-                source_manager.backup_database(backup_path)
-
-                restored = Database(backup_path)
-                player = DataManager(restored).get_player("1")
-                self.assertEqual((player.name, player.score), ("Alice", 42))
-            finally:
-                source.close()
-                if restored:
-                    restored.close()
-
     def test_transaction_rolls_back_data_manager_operations(self):
         with self.assertRaisesRegex(RuntimeError, "abort action"):
             with self.data_manager.transaction():

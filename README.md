@@ -44,7 +44,7 @@ The bot is deployed to [Railway](https://railway.app) with GitHub auto-deploys. 
 ### Architecture
 
 - **Code**: Railway builds the Docker image from the `main` branch on each push.
-- **Database**: Stored on a Railway volume at `/data/jbot.db`. On startup, `entrypoint.sh` restores the latest replica from the bucket; on shutdown/crash, Litestream has already been streaming WAL changes continuously.
+- **Database**: Stored on a Railway volume at `/data/jbot.db`. On startup, `entrypoint.sh` uses an existing local DB as-is; otherwise it restores the latest replica from the bucket, and refuses to start an empty database if the bucket cannot be reached (see Bootstrapping below). On shutdown/crash, Litestream has already been streaming WAL changes continuously. There is no separate nightly backup; Litestream replication is the backup.
 - **Datasets**: `entrypoint.sh` runs `scripts/sync_datasets.py`; when S3 settings are configured, missing files are downloaded into `JBOT_DATASETS_DIR/datasets/`. Existing local files are skipped. Local development still requires manually downloaded datasets; see [Datasets](#datasets).
 - **Replication**: Litestream streams WAL changes to a Railway Bucket (S3-compatible) in real time.
 
@@ -66,13 +66,18 @@ The bot is deployed to [Railway](https://railway.app) with GitHub auto-deploys. 
 
 ### Bootstrapping the Database
 
-On the very first deploy, there is no replica in the bucket yet. `entrypoint.sh` handles this:
+On startup, `entrypoint.sh` decides what to do with the database:
 
-1. Litestream tries to restore from the bucket — fails (empty bucket).
-2. Falls back to seeding from `/app/db/jbot.db` if present in the image.
-3. Litestream starts replicating from that seed going forward.
+1. If a local DB exists at `JBOT_DB_PATH`, it is used as-is. S3 is not contacted, so a bucket outage does not stop the bot.
+2. Otherwise it asks Litestream for the replica's history (`litestream ltx`). If S3 cannot be reached, it retries 3 times, 30 seconds apart, then **exits without starting**. A bucket outage therefore never creates an empty database.
+3. If the replica has history, it is restored.
+4. If the replica is confirmed empty, the bot starts a new database (seeded from `/app/db/jbot.db` only if that file is in the image, which the `.dockerignore` `**/*.db` rule normally prevents).
 
-`db/jbot.db` is **not** committed to the repo under normal circumstances. To bootstrap a new deployment, upload your local database to the bucket first using an S3-compatible tool (e.g. `boto3`, `awscli` pointed at the `LITESTREAM_ENDPOINT`), then deploy. Litestream will restore from the bucket on startup and the seed fallback will not be needed.
+Litestream replicates from whichever database was started.
+
+**Bootstrapping a new deployment:** upload your local database to the bucket before the first deploy, using an S3-compatible tool (e.g. `boto3`, `awscli` pointed at `LITESTREAM_ENDPOINT`). Startup then restores from the bucket.
+
+**Setting `JBOT_ALLOW_EMPTY_START=1`** skips the replica check and starts an empty database. Litestream will replicate that empty database over any existing S3 history. Use it only when you deliberately want to replace remote history.
 
 **If you need to re-bootstrap** (e.g. the volume was wiped or the bucket has a corrupt/empty replica):
 

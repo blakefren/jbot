@@ -135,7 +135,7 @@ As your partner, I will adhere to the following principles:
         - **Behavior**: `JBOT_TAG_UNANSWERED_PLAYERS` — whether to @-mention players who haven't answered in the reminder message
         - **Emojis**: `JBOT_EMOJI_*` keys for all in-game emoji (fastest, streak, before-hint, jinxed, silenced, rest, etc.)
         - **Discord**: Bot tokens, role names (in `.env`)
-        - **Infrastructure**: `JBOT_DB_PATH` (database file path), `JBOT_DATASETS_DIR` (base directory for dataset resolution, defaults to project root), `JBOT_BACKUP_RETENTION_DAYS` (in `.env`)
+        - **Infrastructure**: `JBOT_DB_PATH` (database file path), `JBOT_DATASETS_DIR` (base directory for dataset resolution, defaults to project root) (in `.env`)
 *   **Database Management**: The database schema is defined in `db/schema.sql`. To modify the database, I will update `db/schema.sql` and run `python db/update_schema.py` to apply the changes to the local `jbot.db`. The update script performs intelligent diffing and migration of schema changes.
     - **Migration Safety**: `update_schema.py` compares current database against `schema.sql`, applies changes incrementally
     - **Verification**: After migration, run `python db/verify_schema.py` to ensure schema matches expectations
@@ -161,7 +161,6 @@ The bot is deployed to [Railway](https://railway.app) with GitHub auto-deploys.
     ```
     /data/
       jbot.db              # Database
-      backups/             # Daily DB backups (auto-managed)
       datasets/            # Question datasets (CSV/TSV)
     ```
 *   **Key Environment Variables** (set in Railway dashboard):
@@ -170,8 +169,7 @@ The bot is deployed to [Railway](https://railway.app) with GitHub auto-deploys.
 *   **Path Resolution**:
     - `Database.__init__` uses the `db_path` parameter directly if absolute, otherwise resolves relative to project root
     - `ConfigReader.get_dataset_path()` resolves dataset paths from `sources.toml` relative to `JBOT_DATASETS_DIR` (or project root if unset)
-    - Backups are stored in a `backups/` directory next to the database file
-*   **Data Migration**: Question datasets are pulled from S3-compatible storage at startup by `scripts/sync_datasets.py`, and the database is restored from Litestream replication by `entrypoint.sh` (see `litestream.yml`). Use `python db/restore_db.py` to get a local copy of the production DB.
+*   **Data Migration**: Question datasets are pulled from S3-compatible storage at startup by `scripts/sync_datasets.py`. `entrypoint.sh` restores the database from Litestream replication (see `litestream.yml`) and refuses to start an empty database when the replica cannot be reached, unless `JBOT_ALLOW_EMPTY_START=1` is set. An existing local DB is used without contacting S3. Use `python db/restore_db.py` to get a local copy of the production DB.
 *   **Monitoring**: `railway logs` for live logs, `railway ssh` for shell access.
 
 ## Testing Strategy

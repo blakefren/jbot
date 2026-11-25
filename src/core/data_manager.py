@@ -117,15 +117,6 @@ class DataManager:
         """Return a transaction context for grouping DataManager operations."""
         return self._db.transaction()
 
-    def backup_database(self, dest_path: str):
-        """
-        Creates a safe backup of the database to dest_path.
-
-        Args:
-            dest_path (str): Full path for the backup file.
-        """
-        self._db.backup(dest_path)
-
     def load_players(self) -> dict:
         """
         Reads the players table and returns a dictionary of Player objects keyed by discord_id.
